@@ -81,6 +81,7 @@ class Settings(BaseSettings):
         env_nested_delimiter="__",
         env_prefix="APP_CONFIG__",
     )
+
     run: RunConfig = RunConfig()
     gunicorn: GunicornConfig = GunicornConfig()
     logging: LoggingConfig = LoggingConfig()
@@ -90,3 +91,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+print(str(settings))
