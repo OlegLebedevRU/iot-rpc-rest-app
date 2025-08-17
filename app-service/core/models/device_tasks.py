@@ -5,7 +5,7 @@ from typing import Any
 
 from sqlalchemy import Column, Integer, String, select, delete, Uuid, BigInteger, ForeignKey, update, Row, Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from core.models import Base
 from core.models.const import TaskStatus, TaskTTL
@@ -13,10 +13,13 @@ from core.schemas.device_tasks import TaskCreate, TaskRequest
 
 
 class Device(Base):
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[int] = mapped_column(Integer, unique=True)
+    sn: Mapped[str] = mapped_column(String,default="default serial number")
     #__tablename__ = "tb_devices"
-    id = Column(Integer, primary_key=True)
-    device_id = Column(Integer, unique=True)
-    sn = Column(String, unique=True, default="default serial number")
+    # id = Column(Integer, primary_key=True)
+    # device_id = Column(Integer, unique=True)
+    # sn = Column(String, unique=True, default="default serial number")
 
     @classmethod
     async def get_device_sn(cls, session: AsyncSession, device_id: int | None = 0) -> str | None:
@@ -30,12 +33,12 @@ class Device(Base):
         return resp
 
 
-class PersistentVariables(Base):
-    __tablename__ = "tb_variables"
-    id = Column(Integer, primary_key=True)
-    var_key = Column(String, nullable=False)
-    var_val = Column(String, default="NULL")
-    var_typ = Column(String, default="STR")
+class PersistentVariable(Base):
+    #__tablename__ = "tb_variables"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    var_key: Mapped[str] = mapped_column(String, nullable=False)
+    var_val: Mapped[str] = mapped_column(String, default="NULL")
+    var_typ: Mapped[str] = mapped_column(String, default="STR")
 
     @classmethod
     async def get_data(cls, session: AsyncSession, key_val: str | None = "DEFAULT") -> Any:
@@ -65,26 +68,26 @@ class PersistentVariables(Base):
         pass
 
 
-class DeviceTask(Base):
-    __tablename__ = "tb_dev_tasks"
-    id = Column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
-    device_id = Column(Integer, index=True, nullable=False)
+class DevTask(Base):
+    #__tablename__ = "tb_dev_tasks"
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
+    device_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
 
-    type = Column(Integer, default=0)
-    create_ns = Column(BigInteger)
+    type: Mapped[int] = mapped_column(Integer, default=0)
+    create_ns: Mapped[int] = mapped_column(BigInteger)
 
 
-class DeviceTaskPayload(Base):
-    __tablename__ = "tb_dev_tasks_payload"
+class DevTaskPayload(Base):
+    #__tablename__ = "tb_dev_tasks_payload"
     id = Column(Integer, primary_key=True)
     task_id = Column(Uuid, ForeignKey("tb_dev_tasks.id"))
     payload = Column(String)
 
 
-class DeviceTaskStatus(Base):
+class DevTaskStatus(Base):
     __tablename__ = "tb_dev_tasks_status"
     id = Column(Integer, primary_key=True)
-    task_id = Column(Uuid, ForeignKey("tb_dev_tasks.id"), index=True)
+    task_id = Column(Uuid, ForeignKey(DevTask.id), index=True)
     priority = Column(Integer, index=True, default=0)
     status = Column(Integer, index=True, nullable=False)
     ttl = Column(Integer, default=TaskTTL.MIN_TTL)
@@ -107,7 +110,7 @@ class DeviceTaskStatus(Base):
         return
 
 
-class DeviceTaskResult(Base):
+class DevTaskResult(Base):
     __tablename__ = "tb_dev_tasks_result"
     id = Column(Integer, primary_key=True)
     task_id = Column(Uuid, ForeignKey("tb_dev_tasks.id"))
@@ -119,15 +122,15 @@ class DeviceTaskResult(Base):
 
 class TaskRepository:
     @classmethod
-    async def create_task(cls, session: AsyncSession, task: TaskCreate) -> DeviceTask:
+    async def create_task(cls, session: AsyncSession, task: TaskCreate) -> DevTask:
         db_uuid = uuid.uuid4()
         db_time_ns = time.time_ns()
-        db_task = DeviceTask(id=db_uuid, create_ns=db_time_ns,
+        db_task = DevTask(id=db_uuid, create_ns=db_time_ns,
                              **task.model_dump(include={'device_id', 'type'}))  # item.model_dump()
-        db_task_payload = DeviceTaskPayload(task_id=db_uuid, **task.model_dump(mode='json', include={'payload'}))
+        db_task_payload = DevTaskPayload(task_id=db_uuid, **task.model_dump(mode='json', include={'payload'}))
 
         # return db_task
-        db_task_status = DeviceTaskStatus(task_id=db_uuid, status=TaskStatus.READY,
+        db_task_status = DevTaskStatus(task_id=db_uuid, status=TaskStatus.READY,
                                           **task.model_dump(include={'ttl', 'priority'}))
         session.add(db_task)
         session.add(db_task_payload)
@@ -142,14 +145,14 @@ class TaskRepository:
     @classmethod
     async def get_task(cls, session: AsyncSession, id: TaskRequest) -> Row[tuple[
         str, int, int, int, int, int, str]] | None:
-        task = await session.execute(select(DeviceTask.id.label('id'), DeviceTask.type.label('type'),
-                                            DeviceTask.device_id.label('device_id'),
-                                            DeviceTaskStatus.priority.label('priority'),
-                                            DeviceTaskStatus.status.label('status'), DeviceTaskStatus.ttl.label('ttl'),
-                                            DeviceTaskResult.result.label('result'))
-                                     .where(DeviceTask.id == id.id)
-                                     .join(DeviceTaskStatus, DeviceTask.id == DeviceTaskStatus.task_id)
-                                     .join(DeviceTaskResult, DeviceTask.id == DeviceTaskResult.task_id, isouter=True))
+        task = await session.execute(select(DevTaskResult.id.label('id'), DevTaskResult.type.label('type'),
+                                            DevTaskResult.device_id.label('device_id'),
+                                            DevTaskStatus.priority.label('priority'),
+                                            DevTaskStatus.status.label('status'), DevTaskStatus.ttl.label('ttl'),
+                                            DevTaskResult.result.label('result'))
+                                     .where(DevTaskResult.id == id.id)
+                                     .join(DevTaskStatus, DevTaskResult.id == DevTaskStatus.task_id)
+                                     .join(DevTaskResult, DevTaskResult.id == DevTaskResult.task_id, isouter=True))
         resp = task.first()
         # print(resp[2])
         return resp
@@ -157,12 +160,12 @@ class TaskRepository:
     @classmethod
     async def get_tasks(cls, session: AsyncSession, device_id: int | None = 0) -> Sequence[
         Row[tuple[str, int, int, int, int, int]]]:
-        task = await session.execute(select(DeviceTask.id.label('id'), DeviceTask.type.label('type'),
-                                            DeviceTask.device_id.label('device_id'),
-                                            DeviceTaskStatus.priority.label('priority'),
-                                            DeviceTaskStatus.status.label('status'), DeviceTaskStatus.ttl.label('ttl'))
-                                     .where(DeviceTask.device_id == device_id)
-                                     .join(DeviceTaskStatus, DeviceTask.id == DeviceTaskStatus.task_id)
+        task = await session.execute(select(DevTask.id.label('id'), DevTask.type.label('type'),
+                                            DevTask.device_id.label('device_id'),
+                                            DevTaskStatus.priority.label('priority'),
+                                            DevTaskStatus.status.label('status'), DevTaskStatus.ttl.label('ttl'))
+                                     .where(DevTask.device_id == device_id)
+                                     .join(DevTaskStatus, DevTask.id == DevTaskStatus.task_id)
                                      .limit(int(os.getenv('DATABASE_LIMIT_TASKS_RESULT', "100"))))
 
         return task.all()
