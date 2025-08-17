@@ -7,16 +7,13 @@ from sqlalchemy import Column, Integer, String, select, delete, Uuid, BigInteger
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 
+from core.models import Base
 from core.models.const import TaskStatus, TaskTTL
 from core.schemas.device_tasks import TaskCreate, TaskRequest
 
 
-class Base(DeclarativeBase):
-    pass
-
-
-class Devices(Base):
-    __tablename__ = "tb_devices"
+class Device(Base):
+    #__tablename__ = "tb_devices"
     id = Column(Integer, primary_key=True)
     device_id = Column(Integer, unique=True)
     sn = Column(String, unique=True, default="default serial number")

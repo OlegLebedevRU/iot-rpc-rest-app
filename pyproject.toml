@@ -5,7 +5,9 @@ description = "Iot Async-RPC Core app"
 requires-python = ">=3.13"
 dependencies = [
     "aio-pika>=9.5.7",
+    "alembic>=1.16.4",
     "asyncpg>=0.30.0",
+    "black>=25.1.0",
     "fastapi>=0.116.1",
     "faststream>=0.5.48",
     "gunicorn>=23.0.0",
