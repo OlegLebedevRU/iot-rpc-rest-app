@@ -11,6 +11,7 @@ dependencies = [
     "fastapi>=0.116.1",
     "faststream>=0.5.48",
     "gunicorn>=23.0.0",
+    "orjson>=3.11.2",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "sqlalchemy>=2.0.43",

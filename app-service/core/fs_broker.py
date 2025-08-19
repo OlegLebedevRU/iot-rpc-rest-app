@@ -8,9 +8,9 @@ from faststream.rabbit import RabbitBroker
 from core.config import settings
 
 broker = RabbitBroker(
-    settings.faststream.url,
+    str(settings.faststream.url),
 )
 
 task_registered = broker.publisher(
-    "tasks.{task_id}.created",
+    routing_key="device.a3b0000000c99999d250813.task",
 )

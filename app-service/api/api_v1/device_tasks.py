@@ -7,6 +7,7 @@ from fastapi import (
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core import settings
 from core.fs_broker import task_registered
 from core.models import db_helper
 from core.schemas.device_tasks import (
@@ -19,7 +20,9 @@ TaskResponseResult
 #from crud import users as users_crud
 
 log = logging.getLogger(__name__)
-router = APIRouter(tags=["Users"])
+router = APIRouter(
+    prefix=settings.api.v1.device_tasks,
+    tags=["Device tasks"],)
 
 #
 # @router.get("", response_model=list[UserRead])
@@ -34,22 +37,22 @@ router = APIRouter(tags=["Users"])
 #     return users
 #
 #
-# @router.post("", response_model=UserRead)
-# async def create_user(
-#     session: Annotated[
-#         AsyncSession,
-#         Depends(db_helper.session_getter),
-#     ],
-#     user_create: UserCreate,
-# ):
-#     user = await users_crud.create_user(
-#         session=session,
-#         user_create=user_create,
-#     )
-#     log.info("Created user %s", user.id)
-#     await user_registered.publish(
-#         subject=f"users.{user.id}.created",
-#         message=None,
-#     )
-#     # await send_welcome_email.kiq(user_id=user.id)
-#     return user
+@router.post("", response_model=None)
+async def create_user(
+    session: Annotated[
+        AsyncSession,
+        Depends(db_helper.session_getter),
+    ],
+    task_create: TaskCreate,
+):
+    # user = await users_crud.create_user(
+    #     session=session,
+    #     user_create=user_create,
+    # )
+    log.info("Created task %s", 1)
+    await task_registered.publish(
+        exchange="amq.topic",
+        message="from api with amqp publish"
+    )
+    # await send_welcome_email.kiq(user_id=user.id)
+    return

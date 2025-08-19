@@ -55,7 +55,7 @@ class ApiPrefix(BaseModel):
     v1: ApiV1Prefix = ApiV1Prefix()
 
 class FastStreamConfig(BaseModel):
-    url: AmqpDsn = "amqp://guest:guest@localhost:5672//"
+    url: AmqpDsn
     #log_format: str = WORKER_LOG_DEFAULT_FORMAT
 
 class DatabaseConfig(BaseModel):
@@ -86,7 +86,7 @@ class Settings(BaseSettings):
     gunicorn: GunicornConfig = GunicornConfig()
     logging: LoggingConfig = LoggingConfig()
     api: ApiPrefix = ApiPrefix()
-    faststream: FastStreamConfig = FastStreamConfig()
+    faststream: FastStreamConfig
     db: DatabaseConfig
 
 

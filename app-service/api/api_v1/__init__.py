@@ -8,6 +8,5 @@ router = APIRouter(
     prefix=settings.api.v1.prefix,
 )
 router.include_router(
-    device_tasks_router,
-    prefix=settings.api.v1.device_tasks,
+    device_tasks_router
 )
