@@ -5,6 +5,7 @@ from fastapi import (
     APIRouter,
     Depends,
 )
+from faststream.rabbit import ExchangeType
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
@@ -38,7 +39,7 @@ router = APIRouter(
 #
 #
 @router.post("", response_model=None)
-async def create_user(
+async def create_task(
     session: Annotated[
         AsyncSession,
         Depends(db_helper.session_getter),
@@ -50,9 +51,11 @@ async def create_user(
     #     user_create=user_create,
     # )
     log.info("Created task %s", 1)
+    t=repr(task_create)
     await task_registered.publish(
-        exchange="amq.topic",
-        message="from api with amqp publish"
+        exchange="amq.topic", #type=ExchangeType.TOPIC,
+        routing_key="srv.a3b0000000c99999d250813.task",
+        message=f"from api with amqp publish, task ={t}"
     )
     # await send_welcome_email.kiq(user_id=user.id)
     return

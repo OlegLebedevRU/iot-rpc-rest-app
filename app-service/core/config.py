@@ -1,6 +1,7 @@
 import logging
 from typing import Literal
 
+from faststream.rabbit import RabbitQueue
 from pydantic import AmqpDsn
 from pydantic import BaseModel
 from pydantic import PostgresDsn
@@ -72,7 +73,10 @@ class DatabaseConfig(BaseModel):
         "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
         "pk": "pk_%(table_name)s",
     }
-
+class RabbitQXConfig(BaseModel):
+    x_name:str ="amq.topic"
+    dev_queue_name:str = "dev"
+    routing_key_dev_req:str="dev.*req"
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -88,7 +92,7 @@ class Settings(BaseSettings):
     api: ApiPrefix = ApiPrefix()
     faststream: FastStreamConfig
     db: DatabaseConfig
-
+    rmq:RabbitQXConfig= RabbitQXConfig()
 
 settings = Settings()
 print(str(settings))

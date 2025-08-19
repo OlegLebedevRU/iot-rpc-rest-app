@@ -5,6 +5,7 @@ import uvicorn
 from core.config import settings
 
 from api import router as api_router
+from core.fs_broker import fs_router
 
 from create_api_app import create_app
 
@@ -20,7 +21,9 @@ main_app = create_app(
 main_app.include_router(
     api_router,
 )
-
+main_app.include_router(
+    fs_router,
+)
 
 if __name__ == "__main__":
     uvicorn.run(

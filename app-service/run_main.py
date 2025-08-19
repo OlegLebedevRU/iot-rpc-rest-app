@@ -2,7 +2,7 @@ __all__ = (
     "main_app",
     "main",
 )
-
+from multiprocessing import Process
 from core.config import settings
 from core.gunicorn import Application, get_app_options
 from main import main_app
@@ -22,4 +22,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    p = Process(target=main)
+    p.start()
+    p.join()
+    #main()

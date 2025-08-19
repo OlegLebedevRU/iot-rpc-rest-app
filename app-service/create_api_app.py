@@ -2,6 +2,7 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
+import aio_pika
 from fastapi import FastAPI
 from fastapi.openapi.docs import (
     get_redoc_html,
@@ -9,33 +10,44 @@ from fastapi.openapi.docs import (
     get_swagger_ui_oauth2_redirect_html,
 )
 from fastapi.responses import ORJSONResponse
+from faststream.rabbit import ExchangeType, RabbitExchange, RabbitQueue, RabbitMessage
+
 from starlette.responses import HTMLResponse
 
+from core.fs_broker import fs_router
 # from core import broker
-from core.fs_broker import broker
+#from core.fs_broker import broker
 from core.models import db_helper
 
 log = logging.getLogger(__name__)
 
 
+
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    await fs_router.broker.start()
+
     # # startup
     # if not broker.is_worker_process:
     #     await broker.startup()
 
     # FastStream broker
-    await broker.start()
+   # await broker.start()
 
     yield
     # shutdown
     await db_helper.dispose()
 
     # FastStream broker
-    await broker.stop()
+    await fs_router.broker.stop()
 
     # if not broker.is_worker_process:
+
+
     #     await broker.shutdown()
+
 
 
 def register_static_docs_routes(app: FastAPI) -> None:
