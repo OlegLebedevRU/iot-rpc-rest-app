@@ -1,12 +1,9 @@
 import os
 import time
 import uuid
-from typing import Any
-
-from sqlalchemy import Column, Integer, String, select, delete, Uuid, BigInteger, ForeignKey, update, Row, Sequence
+from sqlalchemy import Integer, String, select, delete, Uuid, BigInteger, ForeignKey, update, Row, Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-
+from sqlalchemy.orm import Mapped, mapped_column
 from core.models import Base
 from core.models.common import TaskStatus, TaskTTL
 from core.schemas.device_tasks import TaskCreate, TaskRequest
@@ -69,8 +66,6 @@ class TaskRepository:
         db_task = DevTask(id=db_uuid, create_ns=db_time_ns,
                              **task.model_dump(include={'device_id', 'type'}))  # item.model_dump()
         db_task_payload = DevTaskPayload(task_id=db_uuid, **task.model_dump(mode='json', include={'payload'}))
-
-        # return db_task
         db_task_status = DevTaskStatus(task_id=db_uuid, status=TaskStatus.READY,
                                           **task.model_dump(include={'ttl', 'priority'}))
         session.add(db_task)
@@ -78,9 +73,6 @@ class TaskRepository:
         session.add(db_task_status)
         await session.flush()
         await session.commit()
-        # db.refresh(db_task)
-        # db.refresh(db_task_payload)
-        # db.refresh(db_task_status)
         return db_task
 
     @classmethod
