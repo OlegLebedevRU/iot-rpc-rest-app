@@ -11,33 +11,28 @@ from core.models import Base
 from core.models.common import TaskStatus, TaskTTL
 from core.schemas.device_tasks import TaskCreate, TaskRequest
 
-
-
-
 class DevTask(Base):
     #__tablename__ = "tb_dev_tasks"
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
     device_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
-
     type: Mapped[int] = mapped_column(Integer, default=0)
     create_ns: Mapped[int] = mapped_column(BigInteger)
 
-
 class DevTaskPayload(Base):
     #__tablename__ = "tb_dev_tasks_payload"
-    id = Column(Integer, primary_key=True)
-    task_id = Column(Uuid, ForeignKey(DevTask.id))
-    payload = Column(String)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(DevTask.id))
+    payload: Mapped[str] = mapped_column(String)
 
 
 class DevTaskStatus(Base):
     __tablename__ = "tb_dev_tasks_status"
-    id = Column(Integer, primary_key=True)
-    task_id = Column(Uuid, ForeignKey(DevTask.id), index=True)
-    priority = Column(Integer, index=True, default=0)
-    status = Column(Integer, index=True, nullable=False)
-    ttl = Column(Integer, default=TaskTTL.MIN_TTL)
-
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(DevTask.id), index=True)
+    priority: Mapped[int] = mapped_column(Integer, index=True, default=0)
+    status: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    ttl: Mapped[int] = mapped_column(Integer, default=TaskTTL.MIN_TTL)
+    pending_ns: Mapped[int] = mapped_column(BigInteger,default=0)
     @classmethod
     async def ttl_decr(cls, session: AsyncSession, delta_ttl: int | None = 1):
         await session.execute(update(cls)
@@ -58,9 +53,9 @@ class DevTaskStatus(Base):
 
 class DevTaskResult(Base):
     #__tablename__ = "tb_dev_tasks_result"
-    id = Column(Integer, primary_key=True)
-    task_id = Column(Uuid, ForeignKey(DevTask.id))
-    result = Column(String)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    task_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(DevTask.id))
+    result: Mapped[str] = mapped_column(String)
 
 
 # .limit(os.getenv('DATABASE_LIMIT_TASKS_RESULT')))
