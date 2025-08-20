@@ -1,4 +1,16 @@
 services:
+  app1:
+    build:
+      dockerfile: ./docker-files/app-service/Dockerfile
+      context: ./
+    environment:
+      APP_CONFIG__DB__URL: postgresql+asyncpg://user:password@pg:5432/postgres
+      APP_CONFIG__DB__ECHO: 0
+      APP_CONFIG__GUNICORN__WORKERS: 1
+      APP_CONFIG__FASTSTREAM__URL: amqp://user:root@rabbitmq:5672//
+    depends_on:
+        pg:
+          condition: service_healthy
   rabbitmq:
     image: rabbitmq:4-management-alpine
     hostname: rabbitmq
@@ -10,14 +22,14 @@ services:
       - "1883:1883"
       #- "8883:8883" ssl listener
     environment:
-      RABBITMQ_DEFAULT_USER: "guest"
-      RABBITMQ_DEFAULT_PASS: "guest"
+      RABBITMQ_DEFAULT_USER: "user"
+      RABBITMQ_DEFAULT_PASS: "root"
+    configs:
+      - source: plugins
+        target: /etc/rabbitmq/enabled_plugins
     volumes:
       - rabbitmq-data:/var/lib/rabbitmq
       # -  config volume
-    command:
-      - rabbitmq-plugins enable rabbitmq_mqtt
-
   pg:
     image: postgres
     environment:
@@ -35,21 +47,37 @@ services:
       timeout: 3s
       retries: 3
 
-  adminer:
-    image: adminer
-    ports:
-      - "8080:8080"
+  # adminer:
+    # image: adminer
+    # ports:
+      # - "8080:8080"
 
   pgadmin:
     image: dpage/pgadmin4
     environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.org
+      PGADMIN_DEFAULT_EMAIL: info@platerra.ru
       PGADMIN_DEFAULT_PASSWORD: admin
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
       - "5050:80"
-
-
+  nginx:
+    build:
+      dockerfile: ./docker-files/nginx-jwt/Dockerfile
+      args:
+        CONF_FILE: nginx-config/local-light/nginx.conf
+      context: ./
+    ports:
+        - "80:80"
+  avahi:
+    image: ydkn/avahi
+    hostname: $HOSTNAME
+    network_mode: host
+    volumes:
+      - ./avahi-services:/etc/avahi/services:ro
+    restart: always
+configs:
+  plugins:
+    content: "[rabbitmq_management, rabbitmq_mqtt]."  
 volumes:
   pgdata:
   rabbitmq-data:

@@ -22,7 +22,7 @@ def main():
 
 
 if __name__ == "__main__":
-    p = Process(target=main)
-    p.start()
-    p.join()
-    #main()
+    # p = Process(target=main)
+    # p.start()
+    # p.join()
+    main()
