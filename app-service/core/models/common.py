@@ -30,14 +30,14 @@ class PersistentVariable(Base):
     var_typ: Mapped[str] = mapped_column(String, default="STR")
 
     @classmethod
-    async def get_data(cls, session: AsyncSession, key_val: str | None = "DEFAULT") -> Any:
+    async def get_data(cls, session: AsyncSession, key_val: str | None = "DEFAULT") -> tuple:
         data = await session.execute(select(cls.var_val.label('var_val'), cls.var_typ.label('var_typ'))
                                      .where(cls.var_key == key_val))
         r = data.first()
         if r:
             resp = r[0]
         else:
-            resp = "NULL"
+            resp = "NULL","STR"
         return resp
 
     @classmethod
@@ -45,7 +45,7 @@ class PersistentVariable(Base):
                           key_val: str | None = "DEFAULT",
                           val_var: str | None = "NULL",
                           val_typ: str | None = "STR"
-                          ):
+                          ) -> None:
         await session.execute(delete(cls)
                               .where(cls.var_key == key_val))
         await session.flush()
@@ -54,4 +54,4 @@ class PersistentVariable(Base):
         session.add(var)
         await session.flush()
         await session.commit()
-        pass
+
