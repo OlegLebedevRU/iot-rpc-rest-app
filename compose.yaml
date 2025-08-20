@@ -14,7 +14,7 @@ services:
       watch:
         # Sync the working directory with the `/app` directory in the container
         - action: sync
-          path: .
+          path: app-service
           target: /app
           # Exclude the project virtual environment — it could be for a
           # different platform in the container
