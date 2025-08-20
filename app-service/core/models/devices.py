@@ -8,7 +8,7 @@ from core.models import Base
 class Device(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     device_id: Mapped[int] = mapped_column(Integer, unique=True)
-    sn: Mapped[str] = mapped_column(String,default="a0b9999901c11111d250820")
+    sn: Mapped[str] = mapped_column(String,nullable=True)
     #__tablename__ = "tb_devices"
     # id = Column(Integer, primary_key=True)
     # device_id = Column(Integer, unique=True)
@@ -25,8 +25,19 @@ class Device(Base):
             resp = None
         return resp
 
-class DeviceConnect(Base):
+    @classmethod
+    async def get_device_id(cls, session: AsyncSession, sn: str | None = "") -> int | None:
+        data = await session.execute(select(cls.device_id.label('device_id'))
+                                     .where(cls.sn == sn))
+        r = data.first()
+        if r:
+            resp = r[0]
+        else:
+            resp = None
+        return resp
+
+class DeviceConnection(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    device_id: Mapped[int] = mapped_column(Integer, ForeignKey(Device.device_id))
+    device_id: Mapped[int] = mapped_column(Integer, ForeignKey(Device.device_id),unique=True)
     connected_ns: Mapped[int] = mapped_column(BigInteger)
     checked_ns: Mapped[int] = mapped_column(BigInteger)
