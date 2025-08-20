@@ -4,13 +4,18 @@ __all__ = (
     "fs_router"
 )
 
+import logging
+
 from aio_pika import RobustExchange,RobustQueue
 from fastapi import FastAPI
 from faststream.rabbit import ExchangeType, RabbitQueue, RabbitExchange
+
 from faststream.rabbit.fastapi import RabbitRouter, RabbitMessage
 from core.config import settings
 
-fs_router = RabbitRouter(str(settings.faststream.url),)
+fs_router = RabbitRouter(str(settings.faststream.url),
+                         log_level=settings.logging.log_level_value,
+                         log_fmt=settings.logging.log_format,)
 task_registered = fs_router.publisher()
 
 def broker():

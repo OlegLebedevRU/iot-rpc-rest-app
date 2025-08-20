@@ -76,7 +76,7 @@ class DatabaseConfig(BaseModel):
 class RabbitQXConfig(BaseModel):
     x_name:str ="amq.topic"
     dev_queue_name:str = "dev"
-    routing_key_dev_req:str="dev.*req"
+    routing_key_dev_req:str="dev.*.req"
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
