@@ -8,6 +8,22 @@ services:
       APP_CONFIG__DB__ECHO: 0
       APP_CONFIG__GUNICORN__WORKERS: 1
       APP_CONFIG__FASTSTREAM__URL: amqp://user:root@rabbitmq:5672//
+    develop:
+      # Create a `watch` configuration to update the app
+      # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
+      watch:
+        # Sync the working directory with the `/app` directory in the container
+        - action: sync
+          path: .
+          target: /app
+          # Exclude the project virtual environment — it could be for a
+          # different platform in the container
+          ignore:
+            - .venv/
+
+        # Rebuild the image if dependencies change by checking uv.lock
+        - action: rebuild
+          path: ./uv.lock
     depends_on:
         pg:
           condition: service_healthy
