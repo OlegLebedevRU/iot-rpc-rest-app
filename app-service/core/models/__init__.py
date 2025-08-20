@@ -3,9 +3,11 @@ __all__ = (
     "Base",
     "Device",
     "TaskRepository",
+    "DeviceConnect",
 )
 
 from .db_helper import db_helper
 from .base import Base
 from .device_tasks import TaskRepository
-from .device_tasks import Device
+from .devices import Device
+from .devices import DeviceConnect

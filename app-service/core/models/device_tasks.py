@@ -12,26 +12,6 @@ from core.models.const import TaskStatus, TaskTTL
 from core.schemas.device_tasks import TaskCreate, TaskRequest
 
 
-class Device(Base):
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    device_id: Mapped[int] = mapped_column(Integer, unique=True)
-    sn: Mapped[str] = mapped_column(String,default="default serial number")
-    #__tablename__ = "tb_devices"
-    # id = Column(Integer, primary_key=True)
-    # device_id = Column(Integer, unique=True)
-    # sn = Column(String, unique=True, default="default serial number")
-
-    @classmethod
-    async def get_device_sn(cls, session: AsyncSession, device_id: int | None = 0) -> str | None:
-        data = await session.execute(select(cls.sn.label('sn'))
-                                     .where(cls.device_id == device_id))
-        r = data.first()
-        if r:
-            resp = r[0]
-        else:
-            resp = None
-        return resp
-
 
 class PersistentVariable(Base):
     #__tablename__ = "tb_variables"
@@ -80,7 +60,7 @@ class DevTask(Base):
 class DevTaskPayload(Base):
     #__tablename__ = "tb_dev_tasks_payload"
     id = Column(Integer, primary_key=True)
-    task_id = Column(Uuid, ForeignKey("tb_dev_tasks.id"))
+    task_id = Column(Uuid, ForeignKey(DevTask.id))
     payload = Column(String)
 
 
@@ -111,9 +91,9 @@ class DevTaskStatus(Base):
 
 
 class DevTaskResult(Base):
-    __tablename__ = "tb_dev_tasks_result"
+    #__tablename__ = "tb_dev_tasks_result"
     id = Column(Integer, primary_key=True)
-    task_id = Column(Uuid, ForeignKey("tb_dev_tasks.id"))
+    task_id = Column(Uuid, ForeignKey(DevTask.id))
     result = Column(String)
 
 
@@ -145,14 +125,14 @@ class TaskRepository:
     @classmethod
     async def get_task(cls, session: AsyncSession, id: TaskRequest) -> Row[tuple[
         str, int, int, int, int, int, str]] | None:
-        task = await session.execute(select(DevTaskResult.id.label('id'), DevTaskResult.type.label('type'),
-                                            DevTaskResult.device_id.label('device_id'),
+        task = await session.execute(select(DevTask.id.label('id'), DevTask.type.label('type'),
+                                            DevTask.device_id.label('device_id'),
                                             DevTaskStatus.priority.label('priority'),
                                             DevTaskStatus.status.label('status'), DevTaskStatus.ttl.label('ttl'),
                                             DevTaskResult.result.label('result'))
-                                     .where(DevTaskResult.id == id.id)
-                                     .join(DevTaskStatus, DevTaskResult.id == DevTaskStatus.task_id)
-                                     .join(DevTaskResult, DevTaskResult.id == DevTaskResult.task_id, isouter=True))
+                                     .where(DevTask.id == id.id)
+                                     .join(DevTaskStatus, DevTask.id == DevTaskStatus.task_id)
+                                     .join(DevTaskResult, DevTask.id == DevTaskResult.task_id, isouter=True))
         resp = task.first()
         # print(resp[2])
         return resp
