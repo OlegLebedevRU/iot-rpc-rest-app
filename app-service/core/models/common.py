@@ -30,14 +30,14 @@ class PersistentVariable(Base):
     var_typ: Mapped[str] = mapped_column(String, default="STR")
 
     @classmethod
-    async def get_data(cls, session: AsyncSession, key_val: str | None = "DEFAULT") -> tuple:
+    async def get_data(cls, session: AsyncSession, key_val: str | None = "DEFAULT") -> tuple | None:
         data = await session.execute(select(cls.var_val.label('var_val'), cls.var_typ.label('var_typ'))
                                      .where(cls.var_key == key_val))
         r = data.first()
         if r:
             resp = r[0]
         else:
-            resp = "NULL","STR"
+            resp = None
         return resp
 
     @classmethod
