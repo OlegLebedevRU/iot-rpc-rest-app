@@ -9,7 +9,7 @@ from faststream.rabbit import ExchangeType
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
-from core.fs_broker import task_registered
+from core.fs_broker import task_registered, topic_publisher
 from core.models import db_helper
 from core.schemas.device_tasks import (
     TaskCreate,
@@ -52,8 +52,7 @@ async def create_task(
     # )
     log.info("Created task %s", 1)
     t=repr(task_create)
-    await task_registered.publish(
-        exchange="amq.topic", #type=ExchangeType.TOPIC,
+    await topic_publisher.publish(
         routing_key="srv.a3b0000000c99999d250813.task",
         message=f"from api with amqp publish, task ={t}"
     )
