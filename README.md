@@ -4,6 +4,7 @@
 
 ### Concepts:
 
+- Iot is lifetime 'Loose Coupling' in Event-Driven Systems
 - Remote calls are usually orders of magnitude slower and less reliable
 - The call is a POST request to REST-API, with parameters pushed on to the core stack (server-side persistent storage)
 - A combination of request/response and polling methods on remote machines
