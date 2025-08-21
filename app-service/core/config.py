@@ -11,6 +11,7 @@ from pydantic_settings import (
 )
 
 
+
 LOG_DEFAULT_FORMAT = (
     "[%(asctime)s.%(msecs)03d] %(module)10s:%(lineno)-3d %(levelname)-7s - %(message)s"
 )
@@ -73,10 +74,31 @@ class DatabaseConfig(BaseModel):
         "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
         "pk": "pk_%(table_name)s",
     }
+class RoutingKey():
+    def __init__(self, prefix, sn, suffix):
+        self.prefix = prefix
+        self.sn = sn
+        self.suffix = suffix
+
+    def __str__(self):
+        return f"{self.prefix}.{self.sn}.{self.suffix}"
+
+    def __repr__(self):
+        return f"{self.prefix}.{self.sn}.{self.suffix}"
+
+
 class RabbitQXConfig(BaseModel):
     x_name:str ="amq.topic"
-    dev_queue_name:str = "dev"
-    routing_key_dev_req:str="dev.*.req"
+    req_queue_name:str = "req"
+    ack_queue_name: str = "ack"
+    res_queue_name: str = "res"
+    prefix_dev:str = "dev"
+    prefix_srv: str = "srv"
+    suffix_task:str = "tsk"
+    routing_key_dev_ack: str = str(RoutingKey(prefix="dev", sn="*", suffix="ack"))
+    routing_key_dev_req: str = str(RoutingKey(prefix="dev", sn="*", suffix="req"))
+    routing_key_dev_res: str = str(RoutingKey(prefix="dev", sn="*", suffix="res"))
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(

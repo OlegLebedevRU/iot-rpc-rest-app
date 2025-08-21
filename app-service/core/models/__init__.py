@@ -4,6 +4,7 @@ __all__ = (
     "Device",
     "TaskRepository",
     "DeviceConnection",
+
 )
 
 from .db_helper import db_helper

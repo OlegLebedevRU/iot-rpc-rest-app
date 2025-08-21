@@ -28,11 +28,11 @@ rx=RabbitExchange(
             type=ExchangeType.TOPIC,
             declare=False
         )
-dq=RabbitQueue(name=settings.rmq.dev_queue_name, durable=True)
+q_req=RabbitQueue(name=settings.rmq.req_queue_name, durable=True)
 @fs_router.after_startup
 async def declare_exchange(app: FastAPI):
     amq_ex: RobustExchange = await broker().declare_exchange(rx)
-    dev_queue: RobustQueue = await broker().declare_queue(dq)
+    dev_queue: RobustQueue = await broker().declare_queue(q_req)
     await dev_queue.bind(
         exchange=amq_ex,
         routing_key=settings.rmq.routing_key_dev_req  # Optional parameter
@@ -40,7 +40,7 @@ async def declare_exchange(app: FastAPI):
     topic_publisher.exchange = rx
 #test_broker = broker()
 
-@fs_router.subscriber(dq)
+@fs_router.subscriber(q_req)
 async def req(body : str,
                msg: RabbitMessage):
      print(body, msg.raw_message.routing_key[4:-4])

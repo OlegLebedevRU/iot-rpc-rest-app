@@ -9,6 +9,7 @@ from faststream.rabbit import ExchangeType
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
+from core.config import RoutingKey
 from core.fs_broker import task_registered, topic_publisher
 from core.models import db_helper
 from core.schemas.device_tasks import (
@@ -52,8 +53,10 @@ async def create_task(
     # )
     log.info("Created task %s", 1)
     t=repr(task_create)
+    rk=RoutingKey(settings.rmq.prefix_srv,
+                  "a3b0000000c99999d250813", settings.rmq.suffix_task)
     await topic_publisher.publish(
-        routing_key="srv.a3b0000000c99999d250813.task",
+        routing_key=  str(rk),#"srv.a3b0000000c99999d250813.task",
         message=f"from api with amqp publish, task ={t}"
     )
     # await send_welcome_email.kiq(user_id=user.id)
