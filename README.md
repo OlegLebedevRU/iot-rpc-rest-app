@@ -2,6 +2,15 @@
 
 { [Remote embedded worker],... } <--> [Core] <--> [REST operator]
 
+### Concepts:
+
+- Remote calls are usually orders of magnitude slower and less reliable
+- The call is a POST request to REST-API, with parameters pushed on to the core stack (server-side persistent storage)
+- A combination of request/response and polling methods on remote machines
+- Iot: lightweight protocol MQTT 5.0 for swarm control
+- Event processing at the core level
+- Persistent event queues
+
 ### Services:
 
 - PostgreSQL
