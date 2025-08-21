@@ -20,6 +20,7 @@ class TaskStatus(int, Enum):
     EXPIRED = 4
     DELETED = 5
     FAILED = 6
+    UNDEFINED = 7
 
 
 class PersistentVariable(Base):
