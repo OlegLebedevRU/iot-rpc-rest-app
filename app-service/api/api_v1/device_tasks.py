@@ -5,12 +5,10 @@ from fastapi import (
     APIRouter,
     Depends,
 )
-from faststream.rabbit import ExchangeType
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from core import settings
 from core.config import RoutingKey
-
+from core.crud.dev_tasks_repo import TasksRepository
 from core.models import db_helper
 from core.schemas.device_tasks import (
     TaskCreate,
@@ -41,7 +39,7 @@ router = APIRouter(
 #     return users
 #
 #
-@router.post("", response_model=None)
+@router.post("/device-tasks/", response_model=TaskResponse)
 async def create_task(
     session: Annotated[
         AsyncSession,
@@ -49,11 +47,11 @@ async def create_task(
     ],
     task_create: TaskCreate,
 ):
-    # user = await users_crud.create_user(
-    #     session=session,
-    #     user_create=user_create,
-    # )
-    log.info("Created task %s", 1)
+    task = await TasksRepository.create_task(
+        session=session,
+        task=task_create,
+    )
+    log.info("Created task %s", task)
     t=repr(task_create)
     rk=RoutingKey(settings.rmq.prefix_srv,
                   "a3b0000000c99999d250813", settings.rmq.suffix_task)
@@ -62,4 +60,4 @@ async def create_task(
         message=f"from api with amqp publish, task ={t}"
     )
     # await send_welcome_email.kiq(user_id=user.id)
-    return
+    return task

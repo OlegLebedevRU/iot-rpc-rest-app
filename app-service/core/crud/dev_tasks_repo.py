@@ -11,7 +11,7 @@ from core.models.device_tasks import DevTaskStatus, DevTask, DevTaskResult, DevT
 from core.schemas.device_tasks import TaskRequest, TaskCreate, TaskResponseStatus, TaskResponse
 
 
-class TasksRepository:
+class TasksRepository():
     @classmethod
     async def create_task(cls, session: AsyncSession, task: TaskCreate) -> TaskResponse | None:
         db_uuid = uuid.uuid4()
