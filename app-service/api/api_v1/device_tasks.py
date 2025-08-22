@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
 from core.config import RoutingKey
-from core.fs_broker import task_registered, topic_publisher
+
 from core.models import db_helper
 from core.schemas.device_tasks import (
     TaskCreate,
@@ -19,6 +19,8 @@ TaskResponse,
 TaskRequest,
 TaskResponseResult
 )
+from core.topology import topic_publisher
+
 #from crud import users as users_crud
 
 log = logging.getLogger(__name__)

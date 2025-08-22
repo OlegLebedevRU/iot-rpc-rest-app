@@ -4,6 +4,8 @@ import uuid
 from sqlalchemy import Integer, String, select, delete, Uuid, BigInteger, ForeignKey, update, Row, Sequence
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
+
+from core import settings
 from core.models import Base
 from core.models.common import TaskStatus, TaskTTL
 from core.schemas.device_tasks import TaskCreate, TaskRequest
@@ -12,7 +14,7 @@ class DevTask(Base):
     #__tablename__ = "tb_dev_tasks"
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
     device_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
-    type: Mapped[int] = mapped_column(Integer, default=0)
+    method_code: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[int] = mapped_column(Integer)
 
 class DevTaskPayload(Base):
@@ -48,7 +50,7 @@ class TaskRepository:
         db_uuid = uuid.uuid4()
         db_time_at = time.time()
         db_task = DevTask(id=db_uuid, created_at=db_time_at,
-                             **task.model_dump(include={'device_id', 'type'}))  # item.model_dump()
+                             **task.model_dump(include={'device_id', 'method_code'}))  # item.model_dump()
         db_task_payload = DevTaskPayload(task_id=db_uuid, **task.model_dump(mode='json', include={'payload'}))
         db_task_status = DevTaskStatus(task_id=db_uuid, status=TaskStatus.READY,
                                           **task.model_dump(include={'ttl', 'priority'}))
@@ -62,7 +64,7 @@ class TaskRepository:
     @classmethod
     async def get_task(cls, session: AsyncSession, id: TaskRequest) -> Row[tuple[
         str, int, int, int, int, int, int, str]] | None:
-        task = await session.execute(select(DevTask.id.label('id'), DevTask.type.label('type'),
+        task = await session.execute(select(DevTask.id.label('id'), DevTask.method_code.label('method_code'),
                                             DevTask.device_id.label('device_id'),
                                             DevTask.created_at.label('created_at'),
                                             DevTaskStatus.priority.label('priority'),
@@ -79,13 +81,13 @@ class TaskRepository:
     @classmethod
     async def get_tasks(cls, session: AsyncSession, device_id: int | None = 0) -> Sequence[
         Row[tuple[str, int, int, int, int, int]]]:
-        task = await session.execute(select(DevTask.id.label('id'), DevTask.type.label('type'),
+        task = await session.execute(select(DevTask.id.label('id'), DevTask.method_code.label('method_code'),
                                             DevTask.device_id.label('device_id'),
                                             DevTaskStatus.priority.label('priority'),
                                             DevTaskStatus.status.label('status'), DevTaskStatus.ttl.label('ttl'))
                                      .where(DevTask.device_id == device_id)
                                      .join(DevTaskStatus, DevTask.id == DevTaskStatus.task_id)
-                                     .limit(int(os.getenv('DATABASE_LIMIT_TASKS_RESULT', "100"))))
+                                     .limit(settings.db.limit_tasks_result))
 
         return task.all()
 

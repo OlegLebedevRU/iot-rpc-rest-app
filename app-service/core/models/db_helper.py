@@ -45,10 +45,14 @@ class DatabaseHelper:
             yield session
 
 
-db_helper = DatabaseHelper(
+db_h = DatabaseHelper(
     url=str(settings.db.url),
     echo=settings.db.echo,
     echo_pool=settings.db.echo_pool,
     pool_size=settings.db.pool_size,
     max_overflow=settings.db.max_overflow,
 )
+def db_init ():
+    return db_h
+
+db_helper = db_init()

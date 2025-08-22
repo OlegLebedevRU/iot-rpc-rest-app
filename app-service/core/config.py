@@ -89,15 +89,23 @@ class RoutingKey():
 
 class RabbitQXConfig(BaseModel):
     x_name:str ="amq.topic"
-    req_queue_name:str = "req"
-    ack_queue_name: str = "ack"
-    res_queue_name: str = "res"
+
     prefix_dev:str = "dev"
     prefix_srv: str = "srv"
+    # core -> dev
     suffix_task:str = "tsk"
+    suffix_event_ack: str = "eva"
+    suffix_response: str = "rsp"
+    suffix_result_ack: str = "rac"
+    # dev -> core
+    req_queue_name: str = "req"
+    ack_queue_name: str = "ack"
+    res_queue_name: str = "res"
+    evt_queue_name: str = "evt"
     routing_key_dev_ack: str = str(RoutingKey(prefix="dev", sn="*", suffix="ack"))
-    routing_key_dev_req: str = str(RoutingKey(prefix="dev", sn="*", suffix="req"))
-    routing_key_dev_res: str = str(RoutingKey(prefix="dev", sn="*", suffix="res"))
+    routing_key_dev_request: str = str(RoutingKey(prefix="dev", sn="*", suffix="req"))
+    routing_key_dev_result: str = str(RoutingKey(prefix="dev", sn="*", suffix="res"))
+    routing_key_dev_event: str = str(RoutingKey(prefix="dev", sn="*", suffix="evt"))
 
 
 class Settings(BaseSettings):
@@ -116,5 +124,8 @@ class Settings(BaseSettings):
     db: DatabaseConfig
     rmq:RabbitQXConfig= RabbitQXConfig()
 
-settings = Settings()
-print(str(settings))
+settn = Settings()
+print(str(settn))
+def settn_get():
+    return settn
+settings = settn_get()

@@ -7,10 +7,10 @@ from pydantic import BaseModel, Field, JsonValue, field_validator, UUID4
 # Pydantic model for request data
 class TaskCreate(BaseModel):
     device_id: int
-    type: int = Field(
+    method_code: int = Field(
         0,
-        title='Task type',
-        description='this is the value of type',
+        title='Task method code ref',
+        description='this is the value of method code',
         ge=0,
         lt=65535,
     )
@@ -53,7 +53,7 @@ class TaskResponse(BaseModel):
 
 class TaskResponseStatus(BaseModel):
     id: UUID4
-    type: int
+    method_code: int
     device_id: int
     priority: int
     status: int
