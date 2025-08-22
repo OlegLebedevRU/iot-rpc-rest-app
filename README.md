@@ -1,6 +1,6 @@
 # Iot Async-RPC Core
 
-{ [Remote embedded worker],... } <--> [Core] <--> [REST operator]
+[**Swarm of devices**] <--> [**Core**] <--> [**Control center**]
 
 ### Concepts:
 
