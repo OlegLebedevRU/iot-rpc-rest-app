@@ -16,7 +16,7 @@ See systemd documentation to learn about the supported limits and other directiv
 With Docker
 To configure kernel limits for Docker containers, use the "default-ulimits" key in Docker daemon configuration file. The file has to be installed on Docker hosts at /etc/docker/daemon.json:
 
-{
+`{
   "default-ulimits": {
     "nofile": {
       "Name": "nofile",
@@ -24,4 +24,4 @@ To configure kernel limits for Docker containers, use the "default-ulimits" key 
       "Soft": 64000
     }
   }
-}
+}`
