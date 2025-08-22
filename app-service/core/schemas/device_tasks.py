@@ -57,6 +57,7 @@ class TaskResponseStatus(BaseModel):
     device_id: int
     priority: int
     status: int
+    pending_at: int
     ttl: int
 
 

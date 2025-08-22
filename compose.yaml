@@ -44,7 +44,9 @@ services:
       - source: plugins
         target: /etc/rabbitmq/enabled_plugins
     volumes:
-      - rabbitmq-data:/var/lib/rabbitmq
+      - ./rmq/rabbitmq-data:/var/lib/rabbitmq
+      - ./rmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rmq/definitions.json:/etc/rabbitmq/definitions.json:ro
       # -  config volume
   pg:
     image: postgres
