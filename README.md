@@ -40,6 +40,7 @@
 
 - X.509 https://datatracker.ietf.org/group/pkix/about/
 - Rabbit MQ MQTT X.509 Auth https://www.rabbitmq.com/docs/mqtt#tls-certificate-authentication
+- RabbitMQ Topic Auth (adopt ACL) https://www.rabbitmq.com/docs/access-control#topic-authorisation
 - FastAPI lifespan events https://fastapi.tiangolo.com/advanced/events/#lifespan-function
 - SQLAlchemy create engine https://docs.sqlalchemy.org/en/20/core/engines.html#sqlalchemy.create_engine
 - Python typing https://docs.python.org/3/library/typing.html
