@@ -1,9 +1,9 @@
 import logging
-from typing import Annotated
+from typing import Annotated, List
 
 from fastapi import (
     APIRouter,
-    Depends,
+    Depends, HTTPException,
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 from core import settings
@@ -60,4 +60,26 @@ async def create_task(
         message=f"from api with amqp publish, task ={t}"
     )
     # await send_welcome_email.kiq(user_id=user.id)
+    return task
+
+@router.get("/device-tasks/{id}", response_model=TaskResponseResult)
+async def get_task(session: Annotated[
+        AsyncSession,
+        Depends(db_helper.session_getter),
+    ],
+    id: TaskRequest,
+):  #TaskResponseStatus:
+    task = await TasksRepository.get_task(session, id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return task
+
+
+@router.get("/device-tasks", response_model=List[TaskResponseStatus],
+            description="Tasks search by device_id with limit = " )
+async def get_tasks(session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
+                    deviceid: int | None = 0):  #TaskResponseStatus:
+    task = await TasksRepository.get_tasks(session, deviceid)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Item not found")
     return task
