@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped
 from core import settings
 from core.models.common import TaskStatus
 from core.models.device_tasks import DevTaskStatus, DevTask, DevTaskResult, DevTaskPayload
-from core.schemas.device_tasks import TaskRequest, TaskCreate, TaskResponseStatus, TaskResponse
+from core.schemas.device_tasks import TaskRequest, TaskCreate, TaskResponseStatus, TaskResponse, TaskResponseResult
 
 
 class TasksRepository():
@@ -31,7 +31,7 @@ class TasksRepository():
         return TaskResponse(id=db_task.id)
 
     @classmethod
-    async def get_task(cls, session: AsyncSession, id: TaskRequest) -> TaskResponseStatus | None:
+    async def get_task(cls, session: AsyncSession, id: TaskRequest) -> TaskResponseResult | None:
         query = (select(DevTask,DevTaskStatus,DevTaskResult)
                  .join(DevTaskStatus)
                  .join(DevTaskResult, isouter=True)
@@ -41,14 +41,16 @@ class TasksRepository():
         if resp is None:
             return None
         # print(resp[2])
-        task: TaskResponseStatus = TaskResponseStatus(
+        task: TaskResponseResult = TaskResponseResult(
             id=resp.id
             , method_code=resp.method_code
             , device_id=resp.device_id
             , priority=resp.priority
             , status=resp.status
             , pending_at=resp.pending.at
-            , ttl=resp.ttl)
+            , ttl=resp.ttl
+            , result = resp.result
+        )
         return task
 
     @classmethod
