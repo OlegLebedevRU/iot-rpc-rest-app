@@ -1,5 +1,5 @@
 import logging
-from typing import Annotated, List
+from typing import Annotated, List, Sequence
 
 from fastapi import (
     APIRouter,
@@ -75,11 +75,11 @@ async def get_task(session: Annotated[
     return task
 
 
-@router.get("/device-tasks", response_model=List[TaskResponseStatus],
+@router.get("/device-tasks", response_model=Sequence[TaskResponseStatus],
             description="Tasks search by device_id with limit = " )
 async def get_tasks(session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
                     deviceid: int | None = 0):  #TaskResponseStatus:
-    task = await TasksRepository.get_tasks(session, deviceid)
+    task:Sequence[TaskResponseStatus] = await TasksRepository.get_tasks(session, deviceid)
     if task is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return task

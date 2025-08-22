@@ -1,5 +1,6 @@
 import time
 import uuid
+from typing import List
 
 from sqlalchemy import Sequence, Row, select, update
 from sqlalchemy.ext.asyncio.session import AsyncSession
