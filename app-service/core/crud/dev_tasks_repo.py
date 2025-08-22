@@ -55,16 +55,14 @@ class TasksRepository():
 
     @classmethod
     async def get_tasks(cls, session: AsyncSession, device_id: int | None = 0) -> Sequence[
-        Row[tuple[str, int, int, int, int, int]]]:
-        task = await session.execute(select(DevTask.id.label('id'), DevTask.method_code.label('method_code'),
-                                            DevTask.device_id.label('device_id'),
-                                            DevTaskStatus.priority.label('priority'),
-                                            DevTaskStatus.status.label('status'), DevTaskStatus.ttl.label('ttl'))
-                                     .where(DevTask.device_id == device_id)
-                                     .join(DevTaskStatus, DevTask.id == DevTaskStatus.task_id)
-                                     .limit(settings.db.limit_tasks_result))
+        TaskResponseStatus]:
+        query = (select(DevTask, DevTaskStatus, DevTaskResult)
+                 .join(DevTaskStatus)
+                 .where(DevTask.device_id == device_id))
+        t = await session.execute(query)
+        resp = t.all()
 
-        return task.all()
+        return resp
 
     @classmethod
     async def tasks_ttl_update(cls, session: AsyncSession, delta_ttl: int | None = 1):
