@@ -1,19 +1,19 @@
 import time
 import uuid
 
-from sqlalchemy import Sequence, Row, select
+from sqlalchemy import Sequence, Row, select, update
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import Mapped
 
 from core import settings
 from core.models.common import TaskStatus
 from core.models.device_tasks import DevTaskStatus, DevTask, DevTaskResult, DevTaskPayload
-from core.schemas.device_tasks import TaskRequest, TaskCreate, TaskResponseStatus
+from core.schemas.device_tasks import TaskRequest, TaskCreate, TaskResponseStatus, TaskResponse
 
 
 class TasksRepository:
     @classmethod
-    async def create_task(cls, session: AsyncSession, task: TaskCreate) -> DevTask:
+    async def create_task(cls, session: AsyncSession, task: TaskCreate) -> TaskResponse | None:
         db_uuid = uuid.uuid4()
         db_time_at = time.time()
         db_task = DevTask(id=db_uuid, created_at=db_time_at,
@@ -24,8 +24,11 @@ class TasksRepository:
         session.add(db_task)
         session.add(db_task_payload)
         session.add(db_task_status)
-        await session.commit()
-        return db_task
+        try:
+            await session.commit()
+        except:
+            return None
+        return TaskResponse(id=db_task.id)
 
     @classmethod
     async def get_task(cls, session: AsyncSession, id: TaskRequest) -> TaskResponseStatus | None:
@@ -40,10 +43,12 @@ class TasksRepository:
         # print(resp[2])
         task: TaskResponseStatus = TaskResponseStatus(
             id=resp.id
-        , method_code=resp.method_code
+            , method_code=resp.method_code
             , device_id=resp.device_id
             , priority=resp.priority
-            , status=resp.status, pending_at=resp.pending.at, ttl=resp.ttl)
+            , status=resp.status
+            , pending_at=resp.pending.at
+            , ttl=resp.ttl)
         return task
 
     @classmethod
