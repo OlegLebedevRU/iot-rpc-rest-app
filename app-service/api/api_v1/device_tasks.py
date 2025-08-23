@@ -41,7 +41,7 @@ router = APIRouter(
 #     return users
 #
 #
-@router.post("/device-tasks/", response_model=TaskResponse)
+@router.post("/", response_model=TaskResponse)
 async def create_task(
     session: Annotated[
         AsyncSession,
@@ -64,20 +64,20 @@ async def create_task(
     # await send_welcome_email.kiq(user_id=user.id)
     return task
 
-@router.get("/device-tasks/{id}", response_model=TaskResponseResult)
-async def get_task(session: Annotated[
+@router.get("/{id}", response_model=TaskResponseResult)
+async def get_task(id: UUID4, session: Annotated[
         AsyncSession,
         Depends(db_helper.session_getter),
     ],
-    id: uuid.UUID,
-):  #TaskResponseStatus:
+
+                   ):  #TaskResponseStatus:
     task = await TasksRepository.get_task(session, id)
     if task is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return task
 
 
-@router.get("/device-tasks", response_model=Sequence[TaskResponseStatus],
+@router.get("/", response_model=Sequence[TaskResponseStatus],
             description="Tasks search by device_id with limit = " )
 async def get_tasks(session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
                     deviceid: int | None = 0):  #TaskResponseStatus:

@@ -63,7 +63,7 @@ class TaskResponseStatus(BaseModel):
 
 class TaskResponseResult(TaskResponseStatus):
     result: str
-    model_config = ConfigDict(from_attributes=True)
+    #model_config = ConfigDict(from_attributes=True)
     @field_validator('result', mode='before')
     @classmethod
     def is_exist(cls, value: str | None) -> str:
