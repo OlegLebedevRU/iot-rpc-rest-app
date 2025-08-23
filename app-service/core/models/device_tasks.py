@@ -14,22 +14,23 @@ class DevTask(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, index=True, default=uuid.uuid4)
     device_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     method_code: Mapped[int] = mapped_column(Integer, default=0)
+    #priority: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[int] = mapped_column(Integer)
-    payload = relationship(
-        "DevTaskPayload", backref=backref("one_task_payload", cascade="all, delete-orphan")
-    )
-    status = relationship(
-        "DevTaskStatus", backref=backref("one_task_status", cascade="all, delete-orphan")
-    )
-    result = relationship(
-        "DevTaskResult", backref=backref("one_task_result", cascade="all, delete-orphan")
-    )
+    # payload = relationship(
+    #     "DevTaskPayload", backref=backref("task_payload", single_parent=True, cascade="all, delete-orphan")
+    # )
+    # status = relationship(
+    #     "DevTaskStatus", backref=backref("task_status", single_parent=True,cascade="all, delete-orphan")
+    # )
+    # result = relationship(
+    #     "DevTaskResult", backref=backref("task_result", single_parent=True,cascade="all, delete-orphan")
+    # )
 class DevTaskPayload(Base):
     #__tablename__ = "tb_dev_tasks_payload"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     task_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(DevTask.id))
     payload: Mapped[str] = mapped_column(String)
-    one_task_payload = relationship("DevTask", cascade="all, delete-orphan")
+    one_task_payload = relationship("DevTask", single_parent=True,cascade="all, delete-orphan")
 
 class DevTaskStatus(Base):
     __tablename__ = "tb_dev_tasks_status"
@@ -39,7 +40,7 @@ class DevTaskStatus(Base):
     status: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     ttl: Mapped[int] = mapped_column(Integer, default=TaskTTL.MIN_TTL)
     pending_at: Mapped[int] = mapped_column(Integer,default=0)
-    one_task_status = relationship("DevTask", cascade="all, delete-orphan")
+    one_task_status = relationship("DevTask", single_parent=True,cascade="all, delete-orphan")
 
 
 class DevTaskResult(Base):
@@ -47,5 +48,5 @@ class DevTaskResult(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     task_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(DevTask.id))
     result: Mapped[str] = mapped_column(String)
-    one_task_result = relationship("DevTask", cascade="all, delete-orphan")
+    one_task_result = relationship("DevTask", single_parent=True,cascade="all, delete-orphan")
 

@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from pydantic import BaseModel, Field, JsonValue, field_validator, UUID4
+from pydantic import BaseModel, Field, JsonValue, field_validator, UUID4, ConfigDict
 
 
 # Pydantic model for request data
@@ -59,10 +59,11 @@ class TaskResponseStatus(BaseModel):
     status: int
     pending_at: int
     ttl: int
-
+    model_config = ConfigDict(from_attributes=True)
 
 class TaskResponseResult(TaskResponseStatus):
     result: str
+    model_config = ConfigDict(from_attributes=True)
     @field_validator('result', mode='before')
     @classmethod
     def is_exist(cls, value: str | None) -> str:

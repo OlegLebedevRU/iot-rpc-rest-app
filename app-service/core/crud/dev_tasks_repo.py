@@ -2,7 +2,7 @@ import time
 import uuid
 from typing import List
 
-from sqlalchemy import Sequence, Row, select, update
+from sqlalchemy import Sequence, Row, select, update, UUID
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import Mapped
 
@@ -33,24 +33,32 @@ class TasksRepository():
 
     @classmethod
     async def get_task(cls, session: AsyncSession, id: TaskRequest) -> TaskResponseResult | None:
-        query = (select(DevTask,DevTaskStatus,DevTaskResult)
+        query = (select(DevTask.id.label('id'),DevTask.method_code.label('method_code'),
+                        DevTask.device_id.label('device_id'),DevTaskStatus.priority.label('priority'),
+                        DevTaskStatus.status.label('status'),DevTaskStatus.pending_at.label('pending_at'),
+                        DevTaskStatus.ttl.label('ttl'),
+                        DevTaskResult.result.label('result'))
                  .join(DevTaskStatus)
                  .join(DevTaskResult, isouter=True)
-                 .where(DevTask.id == id.id))
+                 .where(DevTask.id == id))
         t = await session.execute(query)
         resp = t.first()
+        print(str(resp))
+        print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
         if resp is None:
             return None
         # print(resp[2])
-        task: TaskResponseResult = TaskResponseResult(
-            id=resp.id
-            , method_code=resp.method_code
-            , device_id=resp.device_id
-            , priority=resp.priority
-            , status=resp.status
-            , pending_at=resp.pending.at
-            , ttl=resp.ttl
-            , result = resp.result
+        task: TaskResponseResult = TaskResponseResult( #.model_validate(resp,from_attributes=True
+
+
+            id=resp[0]
+            , method_code=resp[1]
+            , device_id=resp[2]
+            , priority=resp[3]
+            , status=resp[4]
+            , pending_at=resp[5]
+            , ttl=resp[6]
+            , result = resp[7]
         )
         return task
 

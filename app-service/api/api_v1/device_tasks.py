@@ -1,10 +1,12 @@
 import logging
+import uuid
 from typing import Annotated, List, Sequence
 
 from fastapi import (
     APIRouter,
     Depends, HTTPException,
 )
+from pydantic import UUID4
 from sqlalchemy.ext.asyncio import AsyncSession
 from core import settings
 from core.config import RoutingKey
@@ -67,7 +69,7 @@ async def get_task(session: Annotated[
         AsyncSession,
         Depends(db_helper.session_getter),
     ],
-    id: TaskRequest,
+    id: uuid.UUID,
 ):  #TaskResponseStatus:
     task = await TasksRepository.get_task(session, id)
     if task is None:

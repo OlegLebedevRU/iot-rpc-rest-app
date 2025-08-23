@@ -9,9 +9,9 @@ class Device(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     device_id: Mapped[int] = mapped_column(Integer, unique=True)
     sn: Mapped[str] = mapped_column(String,nullable=True)
-    conn = relationship(
-        "DeviceConnection", backref=backref("dev_conn", cascade="all, delete-orphan")
-    )
+    # conn = relationship(
+    #     "DeviceConnection", backref=backref("d_conn", single_parent=True, cascade="all, delete-orphan")
+    # )
     #__tablename__ = "tb_devices"
     # id = Column(Integer, primary_key=True)
     # device_id = Column(Integer, unique=True)
@@ -22,4 +22,4 @@ class DeviceConnection(Base):
     device_id: Mapped[int] = mapped_column(Integer, ForeignKey(Device.device_id),unique=True)
     connected_at: Mapped[int] = mapped_column(Integer)
     checked_at: Mapped[int] = mapped_column(Integer)
-    dev_conn = relationship("Device", cascade="all, delete-orphan")
+    dev_conn = relationship("Device", single_parent=True,cascade="all, delete-orphan")

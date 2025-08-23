@@ -59,9 +59,9 @@ async def req(body : str,
         task_id = None
 
     print(body, msg.raw_message.routing_key[4:-4])
-    print(msg)
+    #print(msg)
     # print(str(msg.raw_message.headers['x-reply-to-topic']))
-    # print(str(uuid.UUID(bytes=msg.raw_message.headers['x-correlation-id'])))
+    print(str(uuid.UUID(bytes=msg.raw_message.headers['x-correlation-id'])))
     #return f"Received and responsed from app: {body}"
     #msg.raw_message.headers['x-reply-to-topic']
     await topic_publisher.publish(
