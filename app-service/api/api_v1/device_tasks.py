@@ -89,7 +89,7 @@ async def get_tasks(session: Annotated[AsyncSession, Depends(db_helper.session_g
 
 @router.delete("/{id}", response_model=TaskResponseDeleted,
                description = "soft delete")
-async def get_task(id: UUID4, session: Annotated[
+async def delete_task(id: UUID4, session: Annotated[
         AsyncSession,
         Depends(db_helper.session_getter),
     ],
