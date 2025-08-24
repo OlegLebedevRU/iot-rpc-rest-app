@@ -10,7 +10,8 @@ from sqlalchemy.orm import Mapped
 from core import settings
 from core.models.common import TaskStatus
 from core.models.device_tasks import DevTaskStatus, DevTask, DevTaskResult, DevTaskPayload
-from core.schemas.device_tasks import TaskRequest, TaskCreate, TaskResponseStatus, TaskResponse, TaskResponseResult
+from core.schemas.device_tasks import TaskRequest, TaskCreate, TaskResponseStatus, TaskResponse, TaskResponseResult, \
+    TaskResponseDeleted
 
 
 class TasksRepository():
@@ -42,7 +43,7 @@ class TasksRepository():
                         DevTaskResult.result.label('result'))
                  .join(DevTaskStatus)
                  .join(DevTaskResult, isouter=True)
-                 .where(DevTask.id == id))
+                 .where(DevTask.id == id, DevTask.is_deleted==False))
         t = await session.execute(query)
         resp = t.mappings().one_or_none()
         #print(str(resp))
@@ -50,19 +51,7 @@ class TasksRepository():
         if resp is None:
             return None
         # print(resp[2])
-        task: TaskResponseResult = TaskResponseResult.model_validate((resp)
-
-
-            # id=resp.id
-            # , method_code=resp[1]
-            # , device_id=resp[2]
-            # , priority=resp[3]
-            # , status=resp[4]
-            # , pending_at=resp[5]
-            # , ttl=resp[6]
-            # , result = resp[7]
-            #resp
-        )
+        task: TaskResponseResult = TaskResponseResult.model_validate(resp)
         return task
 
     @classmethod
@@ -76,7 +65,7 @@ class TasksRepository():
 
                  .join(DevTaskStatus)
                  .join(DevTaskResult, isouter=True)
-                 .where(DevTask.device_id == device_id)
+                 .where(DevTask.device_id == device_id, DevTask.is_deleted==False)
                  .limit(settings.db.limit_tasks_result))
         t = await session.execute(query)
         resp = t.mappings().all()
@@ -84,19 +73,30 @@ class TasksRepository():
         return resp
 
     @classmethod
+    async def delete_task(cls, session: AsyncSession, id: UUID4) -> TaskResponseDeleted | None:
+        db_time_at = int(time.time())
+        q1 = update(DevTask).where(DevTask.id == id).values(is_deleted=True, deleted_at=db_time_at)
+        q2 = (update(DevTaskStatus).where(DevTaskStatus.task_id == id)
+              .values(status=TaskStatus.DELETED))
+        await session.execute(q1)
+        await session.execute(q2)
+        await session.commit()
+        return TaskResponseDeleted(id=id, deleted_at=db_time_at)
+
+
+    @classmethod
     async def tasks_ttl_update(cls, session: AsyncSession, delta_ttl: int | None = 1):
         await session.execute(update(DevTaskStatus)
-                              .where(DevTaskStatus.status < TaskStatus.DONE)
-                              .where(DevTaskStatus.ttl > (delta_ttl-1))
+                              .where(DevTaskStatus.status < TaskStatus.DONE,
+                                     DevTaskStatus.ttl > (delta_ttl-1))
                               .values(ttl=DevTaskStatus.ttl - delta_ttl))
         await session.flush()
         await session.commit()
         # except OperationalError as e:
         await session.execute(update(DevTaskStatus)
-                              .where(DevTaskStatus.status < TaskStatus.DONE)
-                              .where(DevTaskStatus.ttl <= (delta_ttl-1))
+                              .where(DevTaskStatus.status < TaskStatus.DONE,
+                                     DevTaskStatus.ttl <= (delta_ttl-1))
                               .values(status=TaskStatus.EXPIRED, ttl=0))
-        await session.flush()
         await session.commit()
         return
 
@@ -112,6 +112,5 @@ class TasksRepository():
             return False
         await session.execute(qur)
         # except OperationalError as e:
-        await session.flush()
         await session.commit()
         return True

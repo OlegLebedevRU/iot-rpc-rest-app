@@ -15,9 +15,9 @@ from core.models import db_helper
 from core.schemas.device_tasks import (
     TaskCreate,
     TaskResponseStatus,
-TaskResponse,
-TaskRequest,
-TaskResponseResult
+    TaskResponse,
+    TaskRequest,
+    TaskResponseResult, TaskResponseDeleted
 )
 from core.topology import topic_publisher
 
@@ -82,6 +82,20 @@ async def get_task(id: UUID4, session: Annotated[
 async def get_tasks(session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
                     device_id: int | None = 0):  #TaskResponseStatus:
     task:Sequence[TaskResponseStatus] = await TasksRepository.get_tasks(session, device_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Item not found")
+    return task
+
+
+@router.delete("/{id}", response_model=TaskResponseDeleted,
+               description = "soft delete")
+async def get_task(id: UUID4, session: Annotated[
+        AsyncSession,
+        Depends(db_helper.session_getter),
+    ],
+
+                   ):  #TaskResponseStatus:
+    task = await TasksRepository.delete_task(session, id)
     if task is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return task

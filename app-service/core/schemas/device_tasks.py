@@ -51,6 +51,9 @@ class TaskResponse(BaseModel):
     id: UUID4
     created_at: int
 
+class TaskResponseDeleted(BaseModel):
+    id: UUID4
+    deleted_at: int
 
 class TaskResponseStatus(BaseModel):
     id: UUID4
