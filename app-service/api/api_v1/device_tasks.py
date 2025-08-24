@@ -78,10 +78,10 @@ async def get_task(id: UUID4, session: Annotated[
 
 
 @router.get("/", response_model=Sequence[TaskResponseStatus],
-            description="Tasks search by device_id with limit = " )
+            description=f"Tasks search by device_id with limit = {settings.db.limit_tasks_result}" )
 async def get_tasks(session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
-                    deviceid: int | None = 0):  #TaskResponseStatus:
-    task:Sequence[TaskResponseStatus] = await TasksRepository.get_tasks(session, deviceid)
+                    device_id: int | None = 0):  #TaskResponseStatus:
+    task:Sequence[TaskResponseStatus] = await TasksRepository.get_tasks(session, device_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return task

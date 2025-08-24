@@ -1,6 +1,6 @@
 import time
 import uuid
-from sqlalchemy import Integer, String, select, delete, Uuid, BigInteger, ForeignKey, update, Row, Sequence
+from sqlalchemy import Integer, String, select, delete, Uuid, BigInteger, ForeignKey, update, Row, Sequence, Boolean
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 
@@ -16,6 +16,8 @@ class DevTask(Base):
     method_code: Mapped[int] = mapped_column(Integer, default=0)
     #priority: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[int] = mapped_column(Integer)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    deleted_at: Mapped[int] = mapped_column(Integer, default=0)
     # payload = relationship(
     #     "DevTaskPayload", backref=backref("task_payload", single_parent=True, cascade="all, delete-orphan")
     # )

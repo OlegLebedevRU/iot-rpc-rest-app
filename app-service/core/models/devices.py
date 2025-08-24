@@ -1,4 +1,4 @@
-from sqlalchemy import Integer, String, select, ForeignKey, BigInteger
+from sqlalchemy import Integer, String, select, ForeignKey, BigInteger, Boolean
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 
@@ -9,6 +9,8 @@ class Device(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     device_id: Mapped[int] = mapped_column(Integer, unique=True)
     sn: Mapped[str] = mapped_column(String,nullable=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    deleted_at: Mapped[int] = mapped_column(Integer, default=0)
     # conn = relationship(
     #     "DeviceConnection", backref=backref("d_conn", single_parent=True, cascade="all, delete-orphan")
     # )

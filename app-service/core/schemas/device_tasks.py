@@ -49,12 +49,14 @@ class TaskRequest(BaseModel):
 
 class TaskResponse(BaseModel):
     id: UUID4
+    created_at: int
 
 
 class TaskResponseStatus(BaseModel):
     id: UUID4
     method_code: int
     device_id: int
+    created_at: int
     priority: int
     status: int
     pending_at: int
