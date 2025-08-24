@@ -19,7 +19,7 @@ from core.schemas.device_tasks import (
     TaskRequest,
     TaskResponseResult, TaskResponseDeleted
 )
-from core.topology import topic_publisher
+from core.topology.fs_queues import topic_publisher
 
 #from crud import users as users_crud
 

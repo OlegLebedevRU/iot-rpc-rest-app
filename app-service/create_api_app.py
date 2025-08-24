@@ -1,23 +1,58 @@
 import logging
+import time
 from contextlib import asynccontextmanager
+from sched import scheduler
 from typing import AsyncGenerator
 import aio_pika
-from fastapi import FastAPI
+from apscheduler.jobstores.memory import MemoryJobStore
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.interval import IntervalTrigger
+from fastapi import FastAPI, Depends
 from fastapi.openapi.docs import (
     get_redoc_html,
     get_swagger_ui_html,
     get_swagger_ui_oauth2_redirect_html,
 )
 from fastapi.responses import ORJSONResponse
+from fastapi_injectable import injectable
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.annotation import Annotated
 from starlette.responses import HTMLResponse
-from core.fs_broker import broker
-from core.models import db_helper
+
+from core.crud.dev_tasks_repo import TasksRepository
+from core.fs_broker import broker, fs_router
+from core.models import db_helper, DevTaskStatus
+from core.models.common import PersistentVariable
+
+from core.topology.fs_queues import def_x, act_ttl
 
 log = logging.getLogger(__name__)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    scheduler = AsyncIOScheduler()
+    scheduler.configure(
+        jobstores={
+            'default': MemoryJobStore()
+        #    'default': SQLAlchemyJobStore(url=db_url2)
+        })
+    try:
+        scheduler.add_job(
+            act_ttl,
+            args=[1],
+            coalesce=True,
+            #misfire_grace_time=10,
+            trigger=IntervalTrigger(minutes=1),
+            id='ttl_update_job'
+            , replace_existing=True
+        )
+        scheduler.start()
+    except Exception as e:
+        print(f'Исключение scheduler: {str(e)}')
+
     #await broker().start()
+# 'default': MemoryJobStore()
 
     # # startup
     # if not broker.is_worker_process:
@@ -29,14 +64,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
     # shutdown
     await db_helper.dispose()
+    scheduler.shutdown()
 
     # FastStream broker
-    #await broker().stop()
+   # await broker().stop()
 
     # if not broker.is_worker_process:
 
 
-    #     await broker.shutdown()
+    await broker().stop()
 
 
 

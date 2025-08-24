@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import Mapped
 
 from core import settings
-from core.models.common import TaskStatus
+from core.models import db_helper
+from core.models.common import TaskStatus, PersistentVariable
 from core.models.device_tasks import DevTaskStatus, DevTask, DevTaskResult, DevTaskPayload
 from core.schemas.device_tasks import TaskRequest, TaskCreate, TaskResponseStatus, TaskResponse, TaskResponseResult, \
     TaskResponseDeleted
@@ -77,7 +78,7 @@ class TasksRepository():
         db_time_at = int(time.time())
         q1 = update(DevTask).where(DevTask.id == id).values(is_deleted=True, deleted_at=db_time_at)
         q2 = (update(DevTaskStatus).where(DevTaskStatus.task_id == id)
-              .values(status=TaskStatus.DELETED))
+              .values(status=TaskStatus.DELETED, ttl=0))
         await session.execute(q1)
         await session.execute(q2)
         await session.commit()
@@ -86,6 +87,7 @@ class TasksRepository():
 
     @classmethod
     async def tasks_ttl_update(cls, session: AsyncSession, delta_ttl: int | None = 1):
+
         await session.execute(update(DevTaskStatus)
                               .where(DevTaskStatus.status < TaskStatus.DONE,
                                      DevTaskStatus.ttl > (delta_ttl-1))
@@ -94,7 +96,8 @@ class TasksRepository():
         await session.commit()
         # except OperationalError as e:
         await session.execute(update(DevTaskStatus)
-                              .where(DevTaskStatus.status < TaskStatus.DONE,
+                              .where(DevTask.is_deleted==False,
+                                     DevTaskStatus.status < TaskStatus.DONE,
                                      DevTaskStatus.ttl <= (delta_ttl-1))
                               .values(status=TaskStatus.EXPIRED, ttl=0))
         await session.commit()
@@ -106,6 +109,9 @@ class TasksRepository():
             pending_time = time.time()
             qur = (update(DevTaskStatus).where(DevTaskStatus.task_id == task_id)
                    .values(status=status,pending_at=int(pending_time)))
+        elif status == TaskStatus.DELETED:
+            qur = update(DevTaskStatus).where(DevTaskStatus.task_id == task_id,
+                                              DevTaskStatus.status < TaskStatus.DONE).values(status=status)
         elif status < TaskStatus.UNDEFINED:
             qur = update(DevTaskStatus).where(DevTaskStatus.task_id == task_id).values(status=status)
         else:
@@ -114,3 +120,22 @@ class TasksRepository():
         # except OperationalError as e:
         await session.commit()
         return True
+    @classmethod
+    async def update_ttl(cls, session: AsyncSession, step_ttl:int):
+        # session = await anext(db_helper.session_getter())
+        # async with db_helper.session_getter() as session:
+        # saved_min = await PersistentVariables.get_data(session, "saved_time_minutes")
+        data = await PersistentVariable.get_data(session, "saved_time_minutes")
+        tn = int(time.time()) // 60
+        if data is not None:
+            if data.var_val.isdigit():
+                delta_ttl = tn - int(data.var_val)
+                if delta_ttl <= 0:
+                    delta_ttl = step_ttl
+            else:
+                delta_ttl = step_ttl
+        else:
+            delta_ttl = step_ttl
+        await TasksRepository.tasks_ttl_update(session, delta_ttl)
+        await PersistentVariable.upsert_data(session, "saved_time_minutes", str(tn), "INT32")
+        return

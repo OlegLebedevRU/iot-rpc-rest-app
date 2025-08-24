@@ -1,6 +1,6 @@
 from typing import Any
 
-from sqlalchemy import Enum, Integer, String, select, delete
+from sqlalchemy import Enum, Integer, String, select, delete, RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -31,15 +31,12 @@ class PersistentVariable(Base):
     var_typ: Mapped[str] = mapped_column(String, default="STR")
 
     @classmethod
-    async def get_data(cls, session: AsyncSession, key_val: str | None = "DEFAULT") -> tuple | None:
+    async def get_data(cls, session: AsyncSession, key_val: str | None = "DEFAULT") -> RowMapping | None:
         data = await session.execute(select(cls.var_val.label('var_val'), cls.var_typ.label('var_typ'))
                                      .where(cls.var_key == key_val))
-        r = data.first()
-        if r:
-            resp = r[0]
-        else:
-            resp = None
-        return resp
+        r = data.mappings().one_or_none()
+
+        return r
 
     @classmethod
     async def upsert_data(cls, session: AsyncSession,
