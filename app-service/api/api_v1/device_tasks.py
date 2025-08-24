@@ -92,9 +92,7 @@ async def get_tasks(session: Annotated[AsyncSession, Depends(db_helper.session_g
 async def delete_task(id: UUID4, session: Annotated[
         AsyncSession,
         Depends(db_helper.session_getter),
-    ],
-
-                   ):  #TaskResponseStatus:
+    ],):  #TaskResponseStatus:
     task = await TasksRepository.delete_task(session, id)
     if task is None:
         raise HTTPException(status_code=404, detail="Item not found")
