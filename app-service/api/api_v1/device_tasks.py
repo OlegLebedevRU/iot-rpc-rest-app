@@ -19,7 +19,7 @@ from core.schemas.device_tasks import (
     TaskRequest,
     TaskResponseResult, TaskResponseDeleted
 )
-from core.topology.fs_queues import topic_publisher
+from core.topologys.fs_queues import topic_publisher
 
 #from crud import users as users_crud
 
@@ -58,8 +58,10 @@ async def create_task(
     rk=RoutingKey(settings.rmq.prefix_srv,
                   "a3b0000000c99999d250813", settings.rmq.suffix_task)
     await topic_publisher.publish(
-        routing_key=  str(rk),#"srv.a3b0000000c99999d250813.task",
-        message=f"from api with amqp publish, task ={t}"
+        routing_key=  str(rk),#"srv.a3b0000000c99999d250813.tsk",
+        message=f"from api with amqp publish, task ={t}",
+        exchange="amq.topic"
+        #correlation_id=task.id.bytes
     )
     # await send_welcome_email.kiq(user_id=user.id)
     return task

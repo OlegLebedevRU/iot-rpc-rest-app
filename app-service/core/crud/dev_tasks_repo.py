@@ -96,7 +96,7 @@ class TasksRepository():
         await session.commit()
         # except OperationalError as e:
         await session.execute(update(DevTaskStatus)
-                              .where(DevTask.is_deleted==False,
+                              .where(
                                      DevTaskStatus.status < TaskStatus.DONE,
                                      DevTaskStatus.ttl <= (delta_ttl-1))
                               .values(status=TaskStatus.EXPIRED, ttl=0))

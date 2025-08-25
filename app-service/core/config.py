@@ -107,6 +107,10 @@ class RabbitQXConfig(BaseModel):
     routing_key_dev_result: str = str(RoutingKey(prefix="dev", sn="*", suffix="res"))
     routing_key_dev_event: str = str(RoutingKey(prefix="dev", sn="*", suffix="evt"))
 
+class JobTtlConfig(BaseModel):
+    tick_interval:int = 1
+    id_name: str = "ttl_update_job"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -123,6 +127,7 @@ class Settings(BaseSettings):
     faststream: FastStreamConfig
     db: DatabaseConfig
     rmq:RabbitQXConfig= RabbitQXConfig()
+    ttl_job:JobTtlConfig = JobTtlConfig()
 
 settn = Settings()
 print(str(settn))

@@ -1,33 +1,24 @@
 import logging
-import time
 from contextlib import asynccontextmanager
-from sched import scheduler
 from typing import AsyncGenerator
-import aio_pika
 from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI
 from fastapi.openapi.docs import (
     get_redoc_html,
     get_swagger_ui_html,
     get_swagger_ui_oauth2_redirect_html,
 )
 from fastapi.responses import ORJSONResponse
-from fastapi_injectable import injectable
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.annotation import Annotated
 from starlette.responses import HTMLResponse
 
-from core.crud.dev_tasks_repo import TasksRepository
-from core.fs_broker import broker, fs_router
-from core.models import db_helper, DevTaskStatus
-from core.models.common import PersistentVariable
-
-from core.topology.fs_queues import def_x, act_ttl
+from core import settings
+from core.fs_broker import broker
+from core.models import db_helper
+from core.topologys.fs_queues import act_ttl
 
 log = logging.getLogger(__name__)
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -40,11 +31,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         scheduler.add_job(
             act_ttl,
-            args=[1],
+            args=[settings.ttl_job.tick_interval],
             coalesce=True,
             #misfire_grace_time=10,
-            trigger=IntervalTrigger(minutes=1),
-            id='ttl_update_job'
+            trigger=IntervalTrigger(minutes=settings.ttl_job.tick_interval),
+            id=settings.ttl_job.id_name
             , replace_existing=True
         )
         scheduler.start()
@@ -72,7 +63,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # if not broker.is_worker_process:
 
 
-    await broker().stop()
+    #await broker().stop()
 
 
 
