@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import Annotated
 
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 
 from core import settings
-from core.config import RoutingKey
+from core.config import RoutingKey, TaskProcessingConfig
 from core.crud.dev_tasks_repo import TasksRepository
 from core.fs_broker import fs_router, broker
 from core.models import db_helper
@@ -67,41 +68,64 @@ async def declare_x_q():
  # {'x-correlation-id': b'\x96\xce\xe8\xd2\xf4\x1fK_\x81\xcc|w\x0bu\x92\xae',
 # 'x-reply-to-topic': 'srv.a3b0000000c99999d250813.rsp'}
 
+@fs_router.subscriber(q_ack)
+async def ack(body: str,
+              msg: RabbitMessage, session: Annotated[AsyncSession, Depends(db_helper.session_getter)],):
+    sn = msg.raw_message.routing_key[4:-4]
+    logging.info(f"on_message <dev.{sn}.ack>, body = {body}")
+    try:
+        task_id = uuid.UUID(bytes=msg.raw_message.headers['x-correlation-id'])
+        logging.info(f"srv - in ack exist corr data =  {task_id}")
+        if task_id == settings.task_proc_cfg.zero_corr_id:
+            task_id = None
+    except (TypeError, ValueError, KeyError) as e:
+        logging.info(f"srv - in ack from device no corr data, exception = {e}")
+        task_id = None
+    if task_id is not None:
+        await TasksRepository.task_status_update(session, task_id, TaskStatus.PENDING)
+
+    pass
+
+
 @fs_router.subscriber(q_req)
 async def req(body: str,
               msg: RabbitMessage, session: Annotated[AsyncSession, Depends(db_helper.session_getter)],):
     sn = msg.raw_message.routing_key[4:-4]
+    logging.info(f"on_message <dev.{sn}.req>, body = {body}")
     try:
         task_id = uuid.UUID(bytes=msg.raw_message.headers['x-correlation-id'])
-        print(f"corr data =  {task_id}")
-
+        logging.info(f"srv - in request exist corr data =  {task_id}")
+        if task_id == settings.task_proc_cfg.zero_corr_id:
+            task_id = None
     except (TypeError, ValueError, KeyError) as e:
-        print(f"no corr data, exception = {e}")
+        logging.info(f"srv - in request from device no corr data, exception = {e}")
         task_id = None
-    print(body, sn)
+
     # print(str(msg.raw_message.headers['x-reply-to-topic']))
     task = await TasksRepository.select_task(session, task_id, sn)
     if task is not None:
         t_resp = task.model_dump_json()
-        print(f"task select = {t_resp}")
+        logging.info(f"srv task select = {t_resp}")
+        corr_id = task.id
     else:
-        t_resp = None
-        print("task select = None")
+        t_resp = settings.task_proc_cfg.nop_resp
+        logging.info("srv task select = None")
+        corr_id=settings.task_proc_cfg.zero_corr_id
     await topic_publisher.publish(
         routing_key=str(RoutingKey(prefix=topology.prefix_srv,
                                    sn=sn,
                                    suffix=topology.suffix_response)),
         message=t_resp,
-        correlation_id=task.id,#msg.raw_message.headers['x-correlation-id'], #task_id.bytes,
-        exchange="amq.topic"
+        correlation_id=corr_id,#msg.raw_message.headers['x-correlation-id'], #task_id.bytes,
+        exchange=settings.rmq.x_name
     )
-    await TasksRepository.task_status_update(session, task.id, TaskStatus.LOCK)
+    if task is not None:
+        await TasksRepository.task_status_update(session, task.id, TaskStatus.LOCK)
 
 @fs_router.subscriber(q_jobs)
 async def jobs_parse(msg: str, session: Annotated[AsyncSession, Depends(db_helper.session_getter),], ):
     await TasksRepository.update_ttl(session, 1)
-    print(msg)
-
+    logging.info(f"subscribe job event  {msg}")
 
 async def act_ttl(step:int):
     await job_publisher.publish(message="ttl_decrement", routing_key="core_jobs")

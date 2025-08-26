@@ -1,7 +1,6 @@
 import logging
 import uuid
 from typing import Annotated, List, Sequence
-
 from fastapi import (
     APIRouter,
     Depends, HTTPException,
@@ -11,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core import settings
 from core.config import RoutingKey
 from core.crud.dev_tasks_repo import TasksRepository
+from core.crud.device_repo import DeviceRepo
 from core.models import db_helper
 from core.schemas.device_tasks import (
     TaskCreate,
@@ -28,19 +28,6 @@ router = APIRouter(
     prefix=settings.api.v1.device_tasks,
     tags=["Device tasks"],)
 
-#
-# @router.get("", response_model=list[UserRead])
-# async def get_users(
-#     # session: AsyncSession = Depends(db_helper.session_getter),
-#     session: Annotated[
-#         AsyncSession,
-#         Depends(db_helper.session_getter),
-#     ],
-# ):
-#     users = await users_crud.get_all_users(session=session)
-#     return users
-#
-#
 @router.post("/", response_model=TaskResponse)
 async def create_task(
     session: Annotated[
@@ -49,18 +36,21 @@ async def create_task(
     ],
     task_create: TaskCreate,
 ):
+    sn = await DeviceRepo.get_device_sn(session, task_create.device_id)
+    if sn is None:
+        log.info(f"trying to create task failed - device_id not found = {task_create.device_id}")
+        raise HTTPException(status_code=404, detail="device_id not found")
     task = await TasksRepository.create_task(
         session=session,
         task=task_create,
     )
     log.info("Created task %s", task)
-    t=repr(task_create)
     rk=RoutingKey(settings.rmq.prefix_srv,
-                  "a3b0000000c99999d250813", settings.rmq.suffix_task)
+                  sn, settings.rmq.suffix_task)
     await topic_publisher.publish(
         routing_key=  str(rk),#"srv.a3b0000000c99999d250813.tsk",
-        message=f"from api with amqp publish, task ={t}",
-        exchange="amq.topic",
+        message=task,
+        exchange=settings.rmq.x_name,
         correlation_id=task.id
     )
     # await send_welcome_email.kiq(user_id=user.id)

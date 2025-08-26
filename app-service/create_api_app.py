@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         scheduler.start()
     except Exception as e:
-        print(f'Исключение scheduler: {str(e)}')
+        logging.info(f'Исключение scheduler: {str(e)}')
 
     #await broker().start()
 # 'default': MemoryJobStore()
@@ -58,7 +58,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler.shutdown()
 
     # FastStream broker
-   # await broker().stop()
+    await broker().stop()
 
     # if not broker.is_worker_process:
 

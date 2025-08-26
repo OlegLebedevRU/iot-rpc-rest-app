@@ -1,3 +1,4 @@
+import logging
 import time
 import uuid
 from typing import List
@@ -30,6 +31,7 @@ class TasksRepository():
         session.add(db_task_status)
         try:
             await session.commit()
+            logging.info(f"commited new task {db_uuid}")
         except:
             return None
         return TaskResponse(id=db_task.id, created_at=db_time_at)
@@ -80,10 +82,12 @@ class TasksRepository():
                      .join(DevTaskStatus).join(DevTaskPayload)
                      .where(DevTask.device_id == subq.c.device_id,
                             DevTask.is_deleted==False,DevTaskStatus.status <TaskStatus.LOCK)
-                     .order_by(desc(DevTaskStatus.priority), DevTask.id)
+                     .order_by(desc(DevTaskStatus.priority), DevTask.created_at)
                      .limit(1))
 
         t = await session.execute(query)
+        if t is None:
+            return None
         resp = t.mappings().one_or_none()
         #print(str(resp))
         #print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
@@ -120,6 +124,7 @@ class TasksRepository():
         await session.execute(q1)
         await session.execute(q2)
         await session.commit()
+        logging.info(f"deleted task {id}")
         return TaskResponseDeleted(id=id, deleted_at=db_time_at)
 
 
@@ -142,7 +147,9 @@ class TasksRepository():
         return
 
     @classmethod
-    async def task_status_update(cls, session: AsyncSession, task_id: Mapped[uuid.UUID], status:int) -> bool:
+    async def task_status_update(cls, session: AsyncSession, task_id: Mapped[uuid.UUID] | None, status:int) -> bool:
+        if task_id is None:
+            return True
         if status in [TaskStatus.PENDING, TaskStatus.LOCK, TaskStatus.DONE]:
             pending_time = time.time()
             qur = (update(DevTaskStatus).where(DevTaskStatus.task_id == task_id)

@@ -53,6 +53,7 @@ db_h = DatabaseHelper(
     max_overflow=settings.db.max_overflow,
 )
 def db_init ():
+    log.info("db init")
     return db_h
 
 db_helper = db_init()

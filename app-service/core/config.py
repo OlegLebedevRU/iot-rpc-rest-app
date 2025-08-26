@@ -1,8 +1,9 @@
 import logging
+import uuid
 from typing import Literal
 
 from faststream.rabbit import RabbitQueue
-from pydantic import AmqpDsn
+from pydantic import AmqpDsn, UUID4
 from pydantic import BaseModel
 from pydantic import PostgresDsn
 from pydantic_settings import (
@@ -111,6 +112,9 @@ class JobTtlConfig(BaseModel):
     tick_interval:int = 1
     id_name: str = "ttl_update_job"
 
+class TaskProcessingConfig(BaseModel):
+    zero_corr_id: UUID4 = uuid.UUID(int=0)
+    nop_resp: bytes = b"{\"method_code\":0}"
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -128,6 +132,7 @@ class Settings(BaseSettings):
     db: DatabaseConfig
     rmq:RabbitQXConfig= RabbitQXConfig()
     ttl_job:JobTtlConfig = JobTtlConfig()
+    task_proc_cfg: TaskProcessingConfig = TaskProcessingConfig()
 
 settn = Settings()
 print(str(settn))
