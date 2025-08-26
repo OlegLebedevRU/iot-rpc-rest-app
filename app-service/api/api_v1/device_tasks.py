@@ -60,8 +60,8 @@ async def create_task(
     await topic_publisher.publish(
         routing_key=  str(rk),#"srv.a3b0000000c99999d250813.tsk",
         message=f"from api with amqp publish, task ={t}",
-        exchange="amq.topic"
-        #correlation_id=task.id.bytes
+        exchange="amq.topic",
+        correlation_id=task.id
     )
     # await send_welcome_email.kiq(user_id=user.id)
     return task

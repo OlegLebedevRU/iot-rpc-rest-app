@@ -3,16 +3,16 @@ import uuid
 from typing import List
 
 from pydantic import UUID4
-from sqlalchemy import Sequence, Row, select, update, UUID
+from sqlalchemy import Sequence, Row, select, update, UUID, desc
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import Mapped
 
 from core import settings
-from core.models import db_helper
+from core.models import db_helper, Device
 from core.models.common import TaskStatus, PersistentVariable
 from core.models.device_tasks import DevTaskStatus, DevTask, DevTaskResult, DevTaskPayload
 from core.schemas.device_tasks import TaskRequest, TaskCreate, TaskResponseStatus, TaskResponse, TaskResponseResult, \
-    TaskResponseDeleted
+    TaskResponseDeleted, TaskResponsePayload
 
 
 class TasksRepository():
@@ -53,6 +53,44 @@ class TasksRepository():
             return None
         # print(resp[2])
         task: TaskResponseResult = TaskResponseResult.model_validate(resp)
+        return task
+
+    @classmethod
+    async def select_task(cls, session: AsyncSession, t_req: TaskRequest = None, sn : str = None) -> TaskResponsePayload | None:
+        if t_req is not None:
+            query = (select(DevTask.id.label('id'),DevTask.method_code.label('method_code'),
+                            DevTask.device_id.label('device_id'),DevTask.created_at.label('created_at'),
+                            DevTaskStatus.priority.label('priority'),
+                            DevTaskStatus.status.label('status'),DevTaskStatus.pending_at.label('pending_at'),
+                            DevTaskStatus.ttl.label('ttl'),
+                            DevTaskPayload.payload.label('payload'))
+                     .join(DevTaskStatus)
+                     .join(DevTaskPayload)
+                     .where(DevTask.id == t_req,
+                            DevTask.is_deleted==False,
+                            DevTaskStatus.status <TaskStatus.DONE))
+        else:
+            subq = select(Device).where( Device.sn==sn).subquery()
+            query = (select(DevTask.id.label('id'),DevTask.method_code.label('method_code'),
+                            DevTask.device_id.label('device_id'),DevTask.created_at.label('created_at'),
+                            DevTaskStatus.priority.label('priority'),
+                            DevTaskStatus.status.label('status'),DevTaskStatus.pending_at.label('pending_at'),
+                            DevTaskStatus.ttl.label('ttl'),
+                            DevTaskPayload.payload.label('payload'))
+                     .join(DevTaskStatus).join(DevTaskPayload)
+                     .where(DevTask.device_id == subq.c.device_id,
+                            DevTask.is_deleted==False,DevTaskStatus.status <TaskStatus.LOCK)
+                     .order_by(desc(DevTaskStatus.priority), DevTask.id)
+                     .limit(1))
+
+        t = await session.execute(query)
+        resp = t.mappings().one_or_none()
+        #print(str(resp))
+        #print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
+        if resp is None:
+            return None
+        # print(resp[2])
+        task: TaskResponsePayload = TaskResponsePayload.model_validate(resp)
         return task
 
     @classmethod

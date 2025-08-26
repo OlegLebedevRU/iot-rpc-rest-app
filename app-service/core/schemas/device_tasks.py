@@ -1,7 +1,8 @@
 import json
-from typing import Any
+import uuid
+from typing import Any, Annotated
 
-from pydantic import BaseModel, Field, JsonValue, field_validator, UUID4, ConfigDict
+from pydantic import BaseModel, Field, JsonValue, field_validator, UUID4, ConfigDict, AfterValidator
 
 
 # Pydantic model for request data
@@ -44,7 +45,7 @@ class TaskCreate(BaseModel):
 
 # Pydantic model for response data
 class TaskRequest(BaseModel):
-    id: UUID4
+    id: UUID4 | Annotated[str, AfterValidator(lambda x: uuid.UUID(x, version=4))]
 
 
 class TaskResponse(BaseModel):
@@ -75,3 +76,6 @@ class TaskResponseResult(TaskResponseStatus):
         if value is None:
             value = "{}"
         return value
+
+class TaskResponsePayload(TaskResponseStatus):
+    payload: str

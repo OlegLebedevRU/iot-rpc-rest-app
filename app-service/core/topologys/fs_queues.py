@@ -13,6 +13,7 @@ from core.config import RoutingKey
 from core.crud.dev_tasks_repo import TasksRepository
 from core.fs_broker import fs_router, broker
 from core.models import db_helper
+from core.models.common import TaskStatus
 
 job_publisher = fs_router.publisher()
 topic_publisher = fs_router.publisher()
@@ -68,26 +69,33 @@ async def declare_x_q():
 
 @fs_router.subscriber(q_req)
 async def req(body: str,
-              msg: RabbitMessage):
+              msg: RabbitMessage, session: Annotated[AsyncSession, Depends(db_helper.session_getter)],):
+    sn = msg.raw_message.routing_key[4:-4]
     try:
         task_id = uuid.UUID(bytes=msg.raw_message.headers['x-correlation-id'])
         print(f"corr data =  {task_id}")
+
     except (TypeError, ValueError, KeyError) as e:
         print(f"no corr data, exception = {e}")
         task_id = None
-
-    print(body, msg.raw_message.routing_key[4:-4])
-    # print(msg)
+    print(body, sn)
     # print(str(msg.raw_message.headers['x-reply-to-topic']))
-    print(str(uuid.UUID(bytes=msg.raw_message.headers['x-correlation-id'])))
-    # return f"Received and responsed from app: {body}"
-    # msg.raw_message.headers['x-reply-to-topic']
+    task = await TasksRepository.select_task(session, task_id, sn)
+    if task is not None:
+        t_resp = task.model_dump_json()
+        print(f"task select = {t_resp}")
+    else:
+        t_resp = None
+        print("task select = None")
     await topic_publisher.publish(
         routing_key=str(RoutingKey(prefix=topology.prefix_srv,
-                                   sn=msg.raw_message.routing_key[4:-4],
+                                   sn=sn,
                                    suffix=topology.suffix_response)),
-        message=f"response, req body ={body}"
+        message=t_resp,
+        correlation_id=task.id,#msg.raw_message.headers['x-correlation-id'], #task_id.bytes,
+        exchange="amq.topic"
     )
+    await TasksRepository.task_status_update(session, task.id, TaskStatus.LOCK)
 
 @fs_router.subscriber(q_jobs)
 async def jobs_parse(msg: str, session: Annotated[AsyncSession, Depends(db_helper.session_getter),], ):
