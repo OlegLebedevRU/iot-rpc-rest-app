@@ -1,8 +1,8 @@
-"""create all table
+"""change time metrics in models. Datetime mapped TIMESTAMP(timezone=True)
 
-Revision ID: ec809f7d6f20
+Revision ID: d07752fb05ce
 Revises:
-Create Date: 2025-08-23 17:39:23.694096
+Create Date: 2025-08-27 21:40:44.087221
 
 """
 
@@ -10,10 +10,10 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-
+from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = "ec809f7d6f20"
+revision: str = "d07752fb05ce"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -27,7 +27,16 @@ def upgrade() -> None:
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("device_id", sa.Integer(), nullable=False),
         sa.Column("method_code", sa.Integer(), nullable=False),
-        sa.Column("created_at", sa.Integer(), nullable=False),
+        sa.Column(
+            "created_at",
+            postgresql.TIMESTAMP(timezone=True),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+            nullable=False,
+        ),
+        sa.Column("is_deleted", sa.Boolean(), nullable=False),
+        sa.Column(
+            "deleted_at", postgresql.TIMESTAMP(timezone=True), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_tb_dev_tasks")),
     )
     op.create_index(
@@ -44,6 +53,16 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("device_id", sa.Integer(), nullable=False),
         sa.Column("sn", sa.String(), nullable=True),
+        sa.Column(
+            "created_at",
+            postgresql.TIMESTAMP(timezone=True),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+            nullable=False,
+        ),
+        sa.Column("is_deleted", sa.Boolean(), nullable=False),
+        sa.Column(
+            "deleted_at", postgresql.TIMESTAMP(timezone=True), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_tb_devices")),
         sa.UniqueConstraint("device_id", name=op.f("uq_tb_devices_device_id")),
     )
@@ -86,7 +105,12 @@ def upgrade() -> None:
         sa.Column("priority", sa.Integer(), nullable=False),
         sa.Column("status", sa.Integer(), nullable=False),
         sa.Column("ttl", sa.Integer(), nullable=False),
-        sa.Column("pending_at", sa.Integer(), nullable=False),
+        sa.Column(
+            "pending_at", postgresql.TIMESTAMP(timezone=True), nullable=False
+        ),
+        sa.Column(
+            "locked_at", postgresql.TIMESTAMP(timezone=True), nullable=False
+        ),
         sa.ForeignKeyConstraint(
             ["task_id"],
             ["tb_dev_tasks.id"],
@@ -116,8 +140,10 @@ def upgrade() -> None:
         "tb_device_connections",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("device_id", sa.Integer(), nullable=False),
-        sa.Column("connected_at", sa.Integer(), nullable=False),
-        sa.Column("checked_at", sa.Integer(), nullable=False),
+        sa.Column("connected_at", sa.DateTime(), nullable=False),
+        sa.Column(
+            "checked_at", postgresql.TIMESTAMP(timezone=True), nullable=False
+        ),
         sa.ForeignKeyConstraint(
             ["device_id"],
             ["tb_devices.device_id"],
