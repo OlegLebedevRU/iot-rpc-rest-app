@@ -16,7 +16,7 @@ class Device(Base):
                                                  server_default=func.current_timestamp(),
                                                  default=None)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    deleted_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=None)
+    deleted_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
     # conn = relationship(
     #     "DeviceConnection", backref=backref("d_conn", single_parent=True, cascade="all, delete-orphan")
     # )
@@ -28,6 +28,6 @@ class Device(Base):
 class DeviceConnection(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     device_id: Mapped[int] = mapped_column(Integer, ForeignKey(Device.device_id),unique=True)
-    connected_at: Mapped[datetime] = mapped_column(DateTime, default=None)
-    checked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=None)
+    connected_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
+    checked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
     dev_conn = relationship("Device", single_parent=True,cascade="all, delete-orphan")

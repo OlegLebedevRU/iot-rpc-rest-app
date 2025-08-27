@@ -23,7 +23,7 @@ class DevTask(Base):
                                                  server_default=func.current_timestamp(),
                                                  default=None)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    deleted_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=None)
+    deleted_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
     # payload = relationship(
     #     "DevTaskPayload", backref=backref("task_payload", single_parent=True, cascade="all, delete-orphan")
     # )
@@ -47,8 +47,8 @@ class DevTaskStatus(Base):
     priority: Mapped[int] = mapped_column(Integer, index=True, default=0)
     status: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     ttl: Mapped[int] = mapped_column(Integer, default=TaskTTL.MIN_TTL)
-    pending_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=None)
-    locked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=None)
+    pending_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
+    locked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True))
     one_task_status = relationship("DevTask", single_parent=True,cascade="all, delete-orphan")
 
 

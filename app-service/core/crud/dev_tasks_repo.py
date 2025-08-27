@@ -4,7 +4,8 @@ import uuid
 from typing import List
 
 from pydantic import UUID4
-from sqlalchemy import Sequence, Row, select, update, UUID, desc, RowMapping
+from sqlalchemy import Sequence, Row, select, update, UUID, desc, RowMapping, func
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import Mapped, aliased
 
@@ -20,21 +21,30 @@ class TasksRepository():
     @classmethod
     async def create_task(cls, session: AsyncSession, task: TaskCreate) -> TaskResponse | None:
         db_uuid = uuid.uuid4()
-        db_time_at = int(time.time())
-        db_task = DevTask(id=db_uuid, created_at=db_time_at,
-                             **task.model_dump(include={'device_id', 'method_code'}))  # item.model_dump()
-        db_task_payload = DevTaskPayload(task_id=db_uuid, **task.model_dump(mode='json', include={'payload'}))
-        db_task_status = DevTaskStatus(task_id=db_uuid, status=TaskStatus.READY,
-                                          **task.model_dump(include={'ttl', 'priority'}))
-        session.add(db_task)
-        session.add(db_task_payload)
-        session.add(db_task_status)
+        #db_time_at = int(time.time())
+        tsk_q = (insert(DevTask).values(id=db_uuid, created_at=func.current_datetime(),
+                                       device_id = task.device_id, method_code = task.method_code)
+                 .returning(DevTask.created_at))
+        payload_q = insert(DevTaskPayload).values(task_id=db_uuid,payload=task.payload)
+        status_q = insert(DevTaskStatus).values(task_id=db_uuid, status=TaskStatus.READY,
+                                                ttl=task.ttl, priority=task.priority)
+        # db_task = DevTask(id=db_uuid, created_at=func.current_datetime(),
+        #                      **task.model_dump(include={'device_id', 'method_code'}))  # item.model_dump()
+        # db_task_payload = DevTaskPayload(task_id=db_uuid, **task.model_dump(mode='json', include={'payload'}))
+        # db_task_status = DevTaskStatus(task_id=db_uuid, status=TaskStatus.READY,
+        #                                   **task.model_dump(include={'ttl', 'priority'}))
+        t = await session.execute(tsk_q)
+        await session.execute(payload_q)
+        await session.execute(status_q)
+        # session.add(db_task_payload)
+        # session.add(db_task_status)
         try:
             await session.commit()
+            created_at = t.one()
             logging.info(f"commited new task {db_uuid}")
         except:
             return None
-        return TaskResponse(id=db_task.id, created_at=db_time_at)
+        return TaskResponse(id=db_uuid, created_at=created_at.DevTask.created_at)
 
     @classmethod
     async def get_task(cls, session: AsyncSession, id: UUID4) -> TaskResponseResult | None:
