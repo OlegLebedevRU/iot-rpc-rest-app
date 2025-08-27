@@ -1,12 +1,11 @@
 import json
 import uuid
 from typing import Any, Annotated
-
 from pydantic import BaseModel, Field, JsonValue, field_validator, UUID4, ConfigDict, AfterValidator
 
-
-# Pydantic model for request data
-class TaskCreate(BaseModel):
+# Pydantic model for tasks
+class TaskHeader(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     device_id: int
     method_code: int = Field(
         0,
@@ -29,10 +28,12 @@ class TaskCreate(BaseModel):
         ge=1,
         lt=44640,
     )
+# Pydantic model for requests
+
+class TaskCreate(TaskHeader):
     payload: JsonValue = Field(
         "{}",
     )
-
     @field_validator('payload', mode='before')
     @classmethod
     def ensure_json(cls, value: Any) -> Any:
@@ -41,30 +42,22 @@ class TaskCreate(BaseModel):
         except (ValueError, TypeError):
             raise ValueError("'payload' is not json")
         return value
-
-
-# Pydantic model for response data
 class TaskRequest(BaseModel):
     id: UUID4 | Annotated[str, AfterValidator(lambda x: uuid.UUID(x, version=4))]
 
 
-class TaskResponse(BaseModel):
-    id: UUID4
+# Pydantic model for response data
+
+class TaskResponse(TaskRequest):
     created_at: int
 
-class TaskResponseDeleted(BaseModel):
-    id: UUID4
+class TaskResponseDeleted(TaskRequest):
     deleted_at: int
 
-class TaskResponseStatus(BaseModel):
-    id: UUID4
-    method_code: int
-    device_id: int
-    created_at: int
-    priority: int
+class TaskResponseStatus(TaskResponse):
+    header: TaskHeader
     status: int
     pending_at: int
-    ttl: int
     model_config = ConfigDict(from_attributes=True)
 
 class TaskResponseResult(TaskResponseStatus):
@@ -79,3 +72,9 @@ class TaskResponseResult(TaskResponseStatus):
 
 class TaskResponsePayload(TaskResponseStatus):
     payload: str
+
+# Pydantic model for devices
+
+class TaskNotify(TaskResponse):
+    model_config = ConfigDict(from_attributes=True)
+    header: TaskHeader

@@ -59,6 +59,7 @@ class ApiPrefix(BaseModel):
 
 class FastStreamConfig(BaseModel):
     url: AmqpDsn
+    max_consumers: int = 5
     #log_format: str = WORKER_LOG_DEFAULT_FORMAT
 
 class DatabaseConfig(BaseModel):
@@ -67,7 +68,7 @@ class DatabaseConfig(BaseModel):
     echo_pool: bool = False
     pool_size: int = 50
     max_overflow: int = 10
-    limit_tasks_result:int=100
+    limit_tasks_result:int=10
     naming_convention: dict[str, str] = {
         "ix": "ix_%(column_0_label)s",
         "uq": "uq_%(table_name)s_%(column_0_N_name)s",

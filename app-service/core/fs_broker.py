@@ -8,7 +8,7 @@ from core.config import settings
 fs_router = RabbitRouter(str(settings.faststream.url),
                          log_level=settings.logging.log_level_value,
                          log_fmt=settings.logging.log_format,
-                         max_consumers=5)
+                         max_consumers=settings.faststream.max_consumers)
 
 
 def broker():

@@ -1,12 +1,17 @@
 import logging
 import uuid
-from typing import Annotated, List, Sequence
+from typing import Annotated, List, Sequence, Any
 from fastapi import (
     APIRouter,
     Depends, HTTPException,
 )
+from fastapi.responses import ORJSONResponse
 from pydantic import UUID4
+from pydantic_core.core_schema import AnySchema
+from sqlalchemy import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import JSONResponse
+
 from core import settings
 from core.config import RoutingKey
 from core.crud.dev_tasks_repo import TasksRepository
@@ -17,7 +22,7 @@ from core.schemas.device_tasks import (
     TaskResponseStatus,
     TaskResponse,
     TaskRequest,
-    TaskResponseResult, TaskResponseDeleted
+    TaskResponseResult, TaskResponseDeleted, TaskNotify
 )
 from core.topologys.fs_queues import topic_publisher
 
@@ -47,9 +52,12 @@ async def create_task(
     log.info("Created task %s", task)
     rk=RoutingKey(settings.rmq.prefix_srv,
                   sn, settings.rmq.suffix_task)
+    notify: TaskNotify = TaskNotify(id=task.id,
+                                    created_at=task.created_at,
+                                    header=task_create)
     await topic_publisher.publish(
         routing_key=  str(rk),#"srv.a3b0000000c99999d250813.tsk",
-        message=task,
+        message=notify,
         exchange=settings.rmq.x_name,
         correlation_id=task.id
     )
@@ -69,11 +77,11 @@ async def get_task(id: UUID4, session: Annotated[
     return task
 
 
-@router.get("/", response_model=Sequence[TaskResponseStatus],
+@router.get("/",
             description=f"Tasks search by device_id with limit = {settings.db.limit_tasks_result}" )
 async def get_tasks(session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
                     device_id: int | None = 0):  #TaskResponseStatus:
-    task:Sequence[TaskResponseStatus] = await TasksRepository.get_tasks(session, device_id)
+    task = await TasksRepository.get_tasks(session, device_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Item not found")
     return task

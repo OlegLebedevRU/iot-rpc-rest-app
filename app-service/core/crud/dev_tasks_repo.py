@@ -4,16 +4,16 @@ import uuid
 from typing import List
 
 from pydantic import UUID4
-from sqlalchemy import Sequence, Row, select, update, UUID, desc
+from sqlalchemy import Sequence, Row, select, update, UUID, desc, RowMapping
 from sqlalchemy.ext.asyncio.session import AsyncSession
-from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import Mapped, aliased
 
 from core import settings
 from core.models import db_helper, Device
 from core.models.common import TaskStatus, PersistentVariable
 from core.models.device_tasks import DevTaskStatus, DevTask, DevTaskResult, DevTaskPayload
 from core.schemas.device_tasks import TaskRequest, TaskCreate, TaskResponseStatus, TaskResponse, TaskResponseResult, \
-    TaskResponseDeleted, TaskResponsePayload
+    TaskResponseDeleted, TaskResponsePayload, TaskHeader
 
 
 class TasksRepository():
@@ -54,7 +54,14 @@ class TasksRepository():
         if resp is None:
             return None
         # print(resp[2])
-        task: TaskResponseResult = TaskResponseResult.model_validate(resp)
+        header: TaskHeader = TaskHeader.model_validate(resp)
+        task: TaskResponseResult = TaskResponseResult(header=header,
+                                                      id=resp.id,
+                                                      status=resp.status,
+                                                      created_at=resp.created_at,
+                                                      pending_at=resp.pending_at,
+                                                      result=resp.result
+                                                      )
         return task
 
     @classmethod
@@ -94,17 +101,31 @@ class TasksRepository():
         if resp is None:
             return None
         # print(resp[2])
-        task: TaskResponsePayload = TaskResponsePayload.model_validate(resp)
+        header: TaskHeader = TaskHeader.model_validate(resp)
+        task: TaskResponsePayload = TaskResponsePayload(header=header,
+                                                        id=resp.id,
+                                                        status=resp.status,
+                                                        created_at=resp.created_at,
+                                                        pending_at=resp.pending_at,
+                                                        payload=resp.payload)
         return task
 
     @classmethod
     async def get_tasks(cls, session: AsyncSession, device_id: int | None = 0) -> Sequence[
-        TaskResponseStatus]:
-        query = (select(DevTask.id.label('id'), DevTask.method_code.label('method_code'),
-                        DevTask.device_id.label('device_id'), DevTask.created_at.label('created_at'),
-                        DevTaskStatus.priority.label('priority'),
-                        DevTaskStatus.status.label('status'), DevTaskStatus.pending_at.label('pending_at'),
-                        DevTaskStatus.ttl.label('ttl'))
+        RowMapping]:
+        a_dts: DevTaskStatus = aliased(DevTaskStatus)
+        subq = (select(DevTask.id.label('id'),DevTask.method_code.label('method_code'),
+                        DevTask.device_id.label('device_id'),
+                        DevTaskStatus.priority.label('priority'),DevTaskStatus.ttl.label('ttl'))
+                .join(DevTaskStatus, DevTask.id==DevTaskStatus.task_id)
+                .where(DevTask.device_id == device_id, DevTask.is_deleted==False).subquery())
+        query = (select(DevTask.id.label('id'),DevTask.method_code.label('method_code'),
+                        DevTask.device_id.label('device_id'),
+                        DevTaskStatus.priority.label('priority'),DevTaskStatus.ttl.label('ttl'),
+                        DevTaskStatus.status.label('status'), DevTask.created_at.label('created_at'),
+                        DevTaskStatus.pending_at.label('pending_at'))
+                 #.join(subq)
+
 
                  .join(DevTaskStatus)
                  .join(DevTaskResult, isouter=True)
