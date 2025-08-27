@@ -1,4 +1,7 @@
-from sqlalchemy import Integer, String, select, ForeignKey, BigInteger, Boolean
+from datetime import datetime
+
+from sqlalchemy import Integer, String, select, ForeignKey, BigInteger, Boolean, func, DateTime
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 
@@ -9,8 +12,11 @@ class Device(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     device_id: Mapped[int] = mapped_column(Integer, unique=True)
     sn: Mapped[str] = mapped_column(String,nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True),
+                                                 server_default=func.current_timestamp(),
+                                                 default=None)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    deleted_at: Mapped[int] = mapped_column(Integer, default=0)
+    deleted_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=None)
     # conn = relationship(
     #     "DeviceConnection", backref=backref("d_conn", single_parent=True, cascade="all, delete-orphan")
     # )
@@ -22,6 +28,6 @@ class Device(Base):
 class DeviceConnection(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     device_id: Mapped[int] = mapped_column(Integer, ForeignKey(Device.device_id),unique=True)
-    connected_at: Mapped[int] = mapped_column(Integer)
-    checked_at: Mapped[int] = mapped_column(Integer)
+    connected_at: Mapped[datetime] = mapped_column(DateTime, default=None)
+    checked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=None)
     dev_conn = relationship("Device", single_parent=True,cascade="all, delete-orphan")

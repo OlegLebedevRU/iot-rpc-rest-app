@@ -1,6 +1,10 @@
 import time
 import uuid
-from sqlalchemy import Integer, String, select, delete, Uuid, BigInteger, ForeignKey, update, Row, Sequence, Boolean
+from datetime import datetime
+
+from sqlalchemy import Integer, String, select, delete, Uuid, BigInteger, ForeignKey, update, Row, Sequence, Boolean, \
+    DateTime, func
+from sqlalchemy.dialects.postgresql import TIMESTAMP
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 
@@ -15,9 +19,11 @@ class DevTask(Base):
     device_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     method_code: Mapped[int] = mapped_column(Integer, default=0)
     #priority: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[int] = mapped_column(Integer)
+    created_at:  Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True),
+                                                 server_default=func.current_timestamp(),
+                                                 default=None)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
-    deleted_at: Mapped[int] = mapped_column(Integer, default=0)
+    deleted_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=None)
     # payload = relationship(
     #     "DevTaskPayload", backref=backref("task_payload", single_parent=True, cascade="all, delete-orphan")
     # )
@@ -41,7 +47,8 @@ class DevTaskStatus(Base):
     priority: Mapped[int] = mapped_column(Integer, index=True, default=0)
     status: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     ttl: Mapped[int] = mapped_column(Integer, default=TaskTTL.MIN_TTL)
-    pending_at: Mapped[int] = mapped_column(Integer,default=0)
+    pending_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=None)
+    locked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), default=None)
     one_task_status = relationship("DevTask", single_parent=True,cascade="all, delete-orphan")
 
 
