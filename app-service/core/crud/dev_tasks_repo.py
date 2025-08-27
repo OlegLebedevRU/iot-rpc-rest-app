@@ -22,7 +22,7 @@ class TasksRepository():
     async def create_task(cls, session: AsyncSession, task: TaskCreate) -> TaskResponse | None:
         db_uuid = uuid.uuid4()
         #db_time_at = int(time.time())
-        tsk_q = (insert(DevTask).values(id=db_uuid, created_at=func.current_datetime(),
+        tsk_q = (insert(DevTask).values(id=db_uuid, created_at=func.now(),
                                        device_id = task.device_id, method_code = task.method_code)
                  .returning(DevTask.created_at))
         payload_q = insert(DevTaskPayload).values(task_id=db_uuid,payload=task.payload)
@@ -44,7 +44,7 @@ class TasksRepository():
             logging.info(f"commited new task {db_uuid}")
         except:
             return None
-        return TaskResponse(id=db_uuid, created_at=created_at.DevTask.created_at)
+        return TaskResponse(id=db_uuid, created_at=created_at.created_at)
 
     @classmethod
     async def get_task(cls, session: AsyncSession, id: UUID4) -> TaskResponseResult | None:
@@ -133,7 +133,7 @@ class TasksRepository():
                         DevTask.device_id.label('device_id'),
                         DevTaskStatus.priority.label('priority'),DevTaskStatus.ttl.label('ttl'),
                         DevTaskStatus.status.label('status'), DevTask.created_at.label('created_at'),
-                        DevTaskStatus.pending_at.label('pending_at'))
+                        DevTaskStatus.pending_at.label('pending_at'),DevTaskStatus.locked_at.label('locked_at'))
                  #.join(subq)
 
 
@@ -184,7 +184,7 @@ class TasksRepository():
         if status in [TaskStatus.PENDING, TaskStatus.LOCK, TaskStatus.DONE]:
             pending_time = time.time()
             qur = (update(DevTaskStatus).where(DevTaskStatus.task_id == task_id)
-                   .values(status=status,pending_at=int(pending_time)))
+                   .values(status=status,pending_at=func.current_timestamp()))
         elif status == TaskStatus.DELETED:
             qur = update(DevTaskStatus).where(DevTaskStatus.task_id == task_id,
                                               DevTaskStatus.status < TaskStatus.DONE).values(status=status)

@@ -1,7 +1,7 @@
 import json
 import uuid
 from datetime import datetime
-from typing import Any, Annotated
+from typing import Any, Annotated, Optional
 from pydantic import BaseModel, Field, JsonValue, field_validator, UUID4, ConfigDict, AfterValidator
 
 # Pydantic model for tasks
@@ -53,13 +53,13 @@ class TaskResponse(TaskRequest):
     created_at: datetime
 
 class TaskResponseDeleted(TaskRequest):
-    deleted_at: datetime = None
+    deleted_at: Optional[datetime] = None
 
 class TaskResponseStatus(TaskResponse):
     header: TaskHeader
     status: int
-    pending_at: datetime = None
-    locked_at: datetime = None
+    pending_at: Optional[datetime] = None
+    locked_at: Optional[datetime] = None
     model_config = ConfigDict(from_attributes=True)
 
 class TaskResponseResult(TaskResponseStatus):
