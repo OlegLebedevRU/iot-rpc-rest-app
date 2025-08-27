@@ -148,15 +148,16 @@ class TasksRepository():
 
     @classmethod
     async def delete_task(cls, session: AsyncSession, id: UUID4) -> TaskResponseDeleted | None:
-        db_time_at = int(time.time())
-        q1 = update(DevTask).where(DevTask.id == id).values(is_deleted=True, deleted_at=db_time_at)
+        #db_time_at = int(time.time())
+        q1 = (update(DevTask).where(DevTask.id == id).values(is_deleted=True, deleted_at=func.now())
+              .returning(DevTask.deleted_at))
         q2 = (update(DevTaskStatus).where(DevTaskStatus.task_id == id)
               .values(status=TaskStatus.DELETED, ttl=0))
-        await session.execute(q1)
+        d = await session.execute(q1)
         await session.execute(q2)
         await session.commit()
         logging.info(f"deleted task {id}")
-        return TaskResponseDeleted(id=id, deleted_at=db_time_at)
+        return TaskResponseDeleted(id=id, deleted_at=d.one().deleted_at)
 
 
     @classmethod
