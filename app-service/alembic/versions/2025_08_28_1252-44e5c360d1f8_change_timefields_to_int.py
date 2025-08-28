@@ -1,8 +1,8 @@
-"""fix deleted_at default in device_tasks, device
+"""change timefields to int
 
-Revision ID: d5bbefccd315
-Revises: 26ba52b91608
-Create Date: 2025-08-24 14:19:42.164561
+Revision ID: 44e5c360d1f8
+Revises: 51af51456b2c
+Create Date: 2025-08-28 12:52:50.573021
 
 """
 
@@ -13,8 +13,8 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = "d5bbefccd315"
-down_revision: Union[str, Sequence[str], None] = "26ba52b91608"
+revision: str = "44e5c360d1f8"
+down_revision: Union[str, Sequence[str], None] = "51af51456b2c"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

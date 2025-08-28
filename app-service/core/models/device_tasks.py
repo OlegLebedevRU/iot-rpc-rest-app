@@ -1,6 +1,6 @@
-import time
+
 import uuid
-from datetime import datetime
+from datetime import datetime, time
 
 from sqlalchemy import Integer, String, select, delete, Uuid, BigInteger, ForeignKey, update, Row, Sequence, Boolean, \
     DateTime, func
@@ -19,8 +19,8 @@ class DevTask(Base):
     device_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     method_code: Mapped[int] = mapped_column(Integer, default=0)
     #priority: Mapped[int] = mapped_column(Integer, default=0)
-    created_at:  Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True),
-                                                 server_default=func.current_datetime(),
+    created_at = mapped_column(TIMESTAMP(timezone=True, precision=0),
+                                                 server_default=func.current_timestamp(0),
                                                  default=None)
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     deleted_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True)

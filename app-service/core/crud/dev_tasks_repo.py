@@ -22,9 +22,9 @@ class TasksRepository():
     async def create_task(cls, session: AsyncSession, task: TaskCreate) -> TaskResponse | None:
         db_uuid = uuid.uuid4()
         #db_time_at = int(time.time())
-        tsk_q = (insert(DevTask).values(id=db_uuid, created_at=func.now(),
+        tsk_q = (insert(DevTask).values(id=db_uuid, created_at=func.current_timestamp(),
                                        device_id = task.device_id, method_code = task.method_code)
-                 .returning(DevTask.created_at))
+                 .returning(func.extract('EPOCH',DevTask.created_at).label('created_at')))
         payload_q = insert(DevTaskPayload).values(task_id=db_uuid,payload=task.payload)
         status_q = insert(DevTaskStatus).values(task_id=db_uuid, status=TaskStatus.READY,
                                                 ttl=task.ttl, priority=task.priority)
@@ -44,14 +44,17 @@ class TasksRepository():
             logging.info(f"commited new task {db_uuid}")
         except:
             return None
-        return TaskResponse(id=db_uuid, created_at=created_at.created_at)
+        return TaskResponse(id=db_uuid, created_at=int(created_at.created_at))
 
     @classmethod
     async def get_task(cls, session: AsyncSession, id: UUID4) -> TaskResponseResult | None:
         query = (select(DevTask.id.label('id'),DevTask.method_code.label('method_code'),
-                        DevTask.device_id.label('device_id'),DevTask.created_at.label('created_at'),
+                        DevTask.device_id.label('device_id'),
+                        func.extract('EPOCH',DevTask.created_at).label('created_at'),
                         DevTaskStatus.priority.label('priority'),
-                        DevTaskStatus.status.label('status'),DevTaskStatus.pending_at.label('pending_at'),
+                        DevTaskStatus.status.label('status'),
+                        func.extract('EPOCH',DevTaskStatus.pending_at).label('pending_at'),
+                        func.extract('EPOCH', DevTaskStatus.locked_at).label('locked_at'),
                         DevTaskStatus.ttl.label('ttl'),
                         DevTaskResult.result.label('result'))
                  .join(DevTaskStatus)
@@ -65,13 +68,15 @@ class TasksRepository():
             return None
         # print(resp[2])
         header: TaskHeader = TaskHeader.model_validate(resp)
-        task: TaskResponseResult = TaskResponseResult(header=header,
-                                                      id=resp.id,
-                                                      status=resp.status,
-                                                      created_at=resp.created_at,
-                                                      pending_at=resp.pending_at,
-                                                      result=resp.result
-                                                      )
+        task: TaskResponseResult = (
+            TaskResponseResult(header=header,
+                              id=resp.id,
+                              status=resp.status,
+                              created_at=int(resp.created_at),
+                              pending_at=int(resp.pending_at) if resp.pending_at is not None else None,
+                              locked_at=int(resp.locked_at) if resp.locked_at is not None else None,
+                              result=resp.result
+                              ))
         return task
 
     @classmethod
@@ -80,7 +85,9 @@ class TasksRepository():
             query = (select(DevTask.id.label('id'),DevTask.method_code.label('method_code'),
                             DevTask.device_id.label('device_id'),DevTask.created_at.label('created_at'),
                             DevTaskStatus.priority.label('priority'),
-                            DevTaskStatus.status.label('status'),DevTaskStatus.pending_at.label('pending_at'),
+                            DevTaskStatus.status.label('status'),
+                            func.extract('EPOCH',DevTaskStatus.pending_at).label('pending_at'),
+                            func.extract('EPOCH', DevTaskStatus.locked_at).label('locked_at'),
                             DevTaskStatus.ttl.label('ttl'),
                             DevTaskPayload.payload.label('payload'))
                      .join(DevTaskStatus)
@@ -91,9 +98,12 @@ class TasksRepository():
         else:
             subq = select(Device).where( Device.sn==sn).subquery()
             query = (select(DevTask.id.label('id'),DevTask.method_code.label('method_code'),
-                            DevTask.device_id.label('device_id'),DevTask.created_at.label('created_at'),
+                            DevTask.device_id.label('device_id'),
+                            func.extract('EPOCH',DevTask.created_at).label('created_at'),
                             DevTaskStatus.priority.label('priority'),
-                            DevTaskStatus.status.label('status'),DevTaskStatus.pending_at.label('pending_at'),
+                            DevTaskStatus.status.label('status'),
+                            func.extract('EPOCH',DevTaskStatus.pending_at).label('pending_at'),
+                            func.extract('EPOCH', DevTaskStatus.locked_at).label('locked_at'),
                             DevTaskStatus.ttl.label('ttl'),
                             DevTaskPayload.payload.label('payload'))
                      .join(DevTaskStatus).join(DevTaskPayload)
@@ -112,12 +122,14 @@ class TasksRepository():
             return None
         # print(resp[2])
         header: TaskHeader = TaskHeader.model_validate(resp)
-        task: TaskResponsePayload = TaskResponsePayload(header=header,
-                                                        id=resp.id,
-                                                        status=resp.status,
-                                                        created_at=resp.created_at,
-                                                        pending_at=resp.pending_at,
-                                                        payload=resp.payload)
+        task: TaskResponsePayload = (
+            TaskResponsePayload(header=header,
+                                id=resp.id,
+                                status=resp.status,
+                                created_at=int(resp.created_at),
+                                pending_at=int(resp.pending_at) if resp.pending_at is not None else None,
+                                locked_at=int(resp.locked_at) if resp.locked_at is not None else None,
+                                payload=resp.payload))
         return task
 
     @classmethod
@@ -149,15 +161,16 @@ class TasksRepository():
     @classmethod
     async def delete_task(cls, session: AsyncSession, id: UUID4) -> TaskResponseDeleted | None:
         #db_time_at = int(time.time())
-        q1 = (update(DevTask).where(DevTask.id == id).values(is_deleted=True, deleted_at=func.now())
-              .returning(DevTask.deleted_at))
+        q1 = (update(DevTask).where(DevTask.id == id).values(is_deleted=True, deleted_at=func.current_timestamp())
+              .returning(func.extract('EPOCH', DevTask.deleted_at).label('deleted_at')))
         q2 = (update(DevTaskStatus).where(DevTaskStatus.task_id == id)
               .values(status=TaskStatus.DELETED, ttl=0))
         d = await session.execute(q1)
         await session.execute(q2)
         await session.commit()
         logging.info(f"deleted task {id}")
-        return TaskResponseDeleted(id=id, deleted_at=d.one().deleted_at)
+        resp = d.one()
+        return TaskResponseDeleted(id=id, deleted_at=int(resp.deleted_at) if resp.deleted_at is not None else None)
 
 
     @classmethod
