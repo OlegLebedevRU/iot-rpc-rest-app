@@ -1,0 +1,183 @@
+{
+  "rabbit_version": "4.1.3",
+  "rabbitmq_version": "4.1.3",
+  "product_name": "RabbitMQ",
+  "product_version": "4.1.3",
+  "rabbitmq_definition_format": "cluster",
+  "original_cluster_name": "rabbit@66eb150563ca",
+  "explanation": "Definitions of cluster 'rabbit@66eb150563ca'",
+  "users": [
+    {
+      "name": "user",
+      "password_hash": "Br8H5FPp+TSp4gEPUWGAS2sMOlmyjZTUGQo7hqLN8Gj32C9X",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": [
+        "administrator"
+      ],
+      "limits": {}
+    },
+    {
+      "name": "a3b0000000c10221d290825",
+      "password_hash": "",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": [
+        "device"
+      ],
+      "limits": {}
+    }
+  ],
+  "vhosts": [
+    {
+      "name": "/",
+      "description": "Default virtual host",
+      "metadata": {
+        "description": "Default virtual host",
+        "tags": [],
+        "default_queue_type": "classic"
+      },
+      "tags": []
+    }
+  ],
+  "permissions": [
+    {
+      "user": "user",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    },
+    {
+      "user": "a3b0000000c10221d290825",
+      "vhost": "/",
+      "configure": ".*",
+      "write": ".*",
+      "read": ".*"
+    }
+  ],
+
+  "topic_permissions": [
+    {
+        "user": "^a.*",
+        "vhost": "/",
+        "exchange": "amq.topic",
+        "write": "^dev.{client_id}.*",
+        "read": "^srv.{client_id}.*"
+    },
+    {
+        "user": "a3b0000000c10221d290825",
+        "vhost": "/",
+        "exchange": "amq.topic",
+        "write": "^dev.{client_id}.*",
+        "read": "^srv.{client_id}.*"
+    },
+    {
+        "user": "user",
+        "vhost": "/",
+        "exchange": "amq.topic",
+        "write": ".*",
+        "read": ".*"
+    }
+],
+  "parameters": [],
+  "global_parameters": [
+    {
+      "name": "cluster_tags",
+      "value": []
+    },
+    {
+      "name": "internal_cluster_id",
+      "value": "rabbitmq-cluster-id-0YLTpkDG0NxAtoTXnBg_ew"
+    }
+  ],
+  "policies": [],
+  "queues": [
+    {
+      "name": "res",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    },
+    {
+      "name": "core_jobs",
+      "vhost": "/",
+      "durable": false,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    },
+    {
+      "name": "evt",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    },
+    {
+      "name": "ack",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    },
+    {
+      "name": "req",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic"
+      }
+    }
+  ],
+  "exchanges": [],
+  "bindings": [
+    {
+      "source": "amq.direct",
+      "vhost": "/",
+      "destination": "core_jobs",
+      "destination_type": "queue",
+      "routing_key": "core_jobs",
+      "arguments": {}
+    },
+    {
+      "source": "amq.topic",
+      "vhost": "/",
+      "destination": "ack",
+      "destination_type": "queue",
+      "routing_key": "dev.*.ack",
+      "arguments": {}
+    },
+    {
+      "source": "amq.topic",
+      "vhost": "/",
+      "destination": "evt",
+      "destination_type": "queue",
+      "routing_key": "dev.*.evt",
+      "arguments": {}
+    },
+    {
+      "source": "amq.topic",
+      "vhost": "/",
+      "destination": "req",
+      "destination_type": "queue",
+      "routing_key": "dev.*.req",
+      "arguments": {}
+    },
+    {
+      "source": "amq.topic",
+      "vhost": "/",
+      "destination": "res",
+      "destination_type": "queue",
+      "routing_key": "dev.*.res",
+      "arguments": {}
+    }
+  ]
+}
