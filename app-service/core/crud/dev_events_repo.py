@@ -1,9 +1,8 @@
 from sqlalchemy import func
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.models import DevEvent
-from core.schemas.device_events import DevEventBody, DevEvents
+from core.schemas.device_events import DevEventBody
 
 
 class EventRepository:
