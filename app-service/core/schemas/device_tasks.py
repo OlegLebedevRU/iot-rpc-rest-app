@@ -36,7 +36,7 @@ class TaskHeader(BaseModel):
         1,
         title="Task ttl",
         description="this is the value (minutes) of time to live",
-        ge=1,
+        ge=0,
         lt=44640,
     )
 
