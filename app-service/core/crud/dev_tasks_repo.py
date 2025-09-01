@@ -146,6 +146,7 @@ class TasksRepository:
             query = (
                 select(
                     DevTask.id.label("id"),
+                    DevTask.ext_task_id.label("ext_task_id"),
                     DevTask.method_code.label("method_code"),
                     DevTask.device_id.label("device_id"),
                     func.extract("EPOCH", DevTask.created_at).label("created_at"),
@@ -209,6 +210,7 @@ class TasksRepository:
         query = (
             select(
                 DevTask.id.label("id"),
+                DevTask.ext_task_id.label("ext_task_id"),
                 DevTask.method_code.label("method_code"),
                 DevTask.device_id.label("device_id"),
                 DevTaskStatus.priority.label("priority"),
