@@ -18,7 +18,5 @@ class DevEvent(Base):
         server_default=func.current_timestamp(0),
         default=None,
     )
-    dev_timestamp: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=True
-    )
+    dev_timestamp: Mapped[int] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     payload: Mapped[str] = mapped_column(JSON)
