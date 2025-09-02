@@ -3,14 +3,13 @@ import uuid
 from typing import Literal
 
 from faststream.rabbit import RabbitQueue
-from pydantic import AmqpDsn, UUID4
+from pydantic import AmqpDsn, UUID4, HttpUrl
 from pydantic import BaseModel
 from pydantic import PostgresDsn
 from pydantic_settings import (
     BaseSettings,
     SettingsConfigDict,
 )
-
 
 
 LOG_DEFAULT_FORMAT = (
@@ -51,16 +50,19 @@ class LoggingConfig(BaseModel):
 class ApiV1Prefix(BaseModel):
     prefix: str = "/v1"
     device_tasks: str = "/device-tasks"
+    admin: str = "/admin"
 
 
 class ApiPrefix(BaseModel):
     prefix: str = "/api"
     v1: ApiV1Prefix = ApiV1Prefix()
 
+
 class FastStreamConfig(BaseModel):
     url: AmqpDsn
     max_consumers: int = 5
-    #log_format: str = WORKER_LOG_DEFAULT_FORMAT
+    # log_format: str = WORKER_LOG_DEFAULT_FORMAT
+
 
 class DatabaseConfig(BaseModel):
     url: PostgresDsn
@@ -68,7 +70,7 @@ class DatabaseConfig(BaseModel):
     echo_pool: bool = False
     pool_size: int = 50
     max_overflow: int = 10
-    limit_tasks_result:int=10
+    limit_tasks_result: int = 10
     naming_convention: dict[str, str] = {
         "ix": "ix_%(column_0_label)s",
         "uq": "uq_%(table_name)s_%(column_0_N_name)s",
@@ -76,7 +78,9 @@ class DatabaseConfig(BaseModel):
         "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
         "pk": "pk_%(table_name)s",
     }
-class RoutingKey():
+
+
+class RoutingKey:
     def __init__(self, prefix, sn, suffix):
         self.prefix = prefix
         self.sn = sn
@@ -90,12 +94,12 @@ class RoutingKey():
 
 
 class RabbitQXConfig(BaseModel):
-    x_name:str ="amq.topic"
+    x_name: str = "amq.topic"
 
-    prefix_dev:str = "dev"
+    prefix_dev: str = "dev"
     prefix_srv: str = "srv"
     # core -> dev
-    suffix_task:str = "tsk"
+    suffix_task: str = "tsk"
     suffix_event_ack: str = "eva"
     suffix_response: str = "rsp"
     suffix_result_ack: str = "rac"
@@ -109,13 +113,22 @@ class RabbitQXConfig(BaseModel):
     routing_key_dev_result: str = str(RoutingKey(prefix="dev", sn="*", suffix="res"))
     routing_key_dev_event: str = str(RoutingKey(prefix="dev", sn="*", suffix="evt"))
 
+
 class JobTtlConfig(BaseModel):
-    tick_interval:int = 1
+    tick_interval: int = 1
     id_name: str = "ttl_update_job"
+
 
 class TaskProcessingConfig(BaseModel):
     zero_corr_id: UUID4 = uuid.UUID(int=0)
-    nop_resp: bytes = b"{\"method_code\":0}"
+    nop_resp: bytes = b'{"method_code":0}'
+
+
+class Leo4CloudConfig(BaseModel):
+    url: HttpUrl
+    api_key: str
+    admin_url: HttpUrl
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -131,12 +144,18 @@ class Settings(BaseSettings):
     api: ApiPrefix = ApiPrefix()
     faststream: FastStreamConfig
     db: DatabaseConfig
-    rmq:RabbitQXConfig= RabbitQXConfig()
-    ttl_job:JobTtlConfig = JobTtlConfig()
+    rmq: RabbitQXConfig = RabbitQXConfig()
+    ttl_job: JobTtlConfig = JobTtlConfig()
     task_proc_cfg: TaskProcessingConfig = TaskProcessingConfig()
+    leo4: Leo4CloudConfig
+
 
 settn = Settings()
 print(str(settn))
+
+
 def settn_get():
     return settn
+
+
 settings = settn_get()
