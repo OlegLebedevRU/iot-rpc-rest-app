@@ -32,7 +32,7 @@ async def do_admin(
             url=str(settings.leo4.url) + "/account/login2",
             headers={"Authorization": "Bearer " + settings.leo4.api_key},
         )
-        logging.info(f"resp <dev.{r}.ack>, body = {str(r.json())}")
+        logging.info("token %s = ", str(r.json()))
 
         if r is None:
             raise HTTPException(status_code=404, detail="Item not found")
@@ -41,11 +41,16 @@ async def do_admin(
             headers={"Authorization": "Bearer " + r.json()["accessToken"]},
         )
         da = r1.json()
-
+        logging.info("device list %s = ", str(da[0]))
         insert_stmt = (
             insert(Device)
             .values(
-                [{"device_id": d["device_id"], "sn": d["serial_number"]} for d in da]
+                [
+                    {"device_id": int(d["device_id"]), "sn": d["serial_number"]}
+                    for d in da
+                ]
+                # device_id=21,
+                # sn="a1b21c22589d100424",
             )
             .on_conflict_do_nothing()
         )
@@ -54,7 +59,7 @@ async def do_admin(
         await session.execute(insert_stmt)
         await session.commit()
         # print(do_nothing_stmt)
-        return r1  # .json()
+        return da
     elif action == "get_u":
         r = httpx.get(url=str(settings.leo4.admin_url) + "api/users")
         logging.info(f"resp <dev.{r}.ack>, body = {str(r)}")

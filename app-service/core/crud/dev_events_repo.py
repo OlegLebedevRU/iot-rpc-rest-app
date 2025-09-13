@@ -1,8 +1,9 @@
-from sqlalchemy import func
+from fastapi_pagination import Page
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-
+from fastapi_pagination.ext.sqlalchemy import paginate
 from core.models import DevEvent
-from core.schemas.device_events import DevEventBody
+from core.schemas.device_events import DevEventBody, DevEvents, DevEventOut
 
 
 class EventRepository:
@@ -14,3 +15,14 @@ class EventRepository:
         )
         session.add(evt_q)
         await session.commit()
+
+    @classmethod
+    async def get_events_page(
+        cls, session: AsyncSession, device_id: int | None
+    ) -> Page[DevEventOut]:
+        return await paginate(
+            session,
+            select(DevEvent)
+            .where(DevEvent.device_id == device_id)
+            .order_by(DevEvent.created_at.desc()),
+        )

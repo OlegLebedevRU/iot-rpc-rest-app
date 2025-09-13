@@ -68,6 +68,7 @@ async def create_task(
         message=notify,
         exchange=settings.rmq.x_name,
         correlation_id=task.id,
+        headers={"method_code": str(notify.header.method_code)},
     )
     # await send_welcome_email.kiq(user_id=user.id)
     return task
@@ -91,7 +92,7 @@ async def get_task(
     "/",
     description=f"Tasks search by device_id with limit = {settings.db.limit_tasks_result}",
 )
-async def get_tasks(
+async def list_tasks(
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
     device_id: int | None = 0,
 ):  # TaskResponseStatus:

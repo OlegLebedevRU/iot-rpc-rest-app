@@ -125,7 +125,7 @@ class TasksRepository:
                     DevTask.ext_task_id.label("ext_task_id"),
                     DevTask.method_code.label("method_code"),
                     DevTask.device_id.label("device_id"),
-                    DevTask.created_at.label("created_at"),
+                    func.extract("EPOCH", DevTask.created_at).label("created_at"),
                     DevTaskStatus.priority.label("priority"),
                     DevTaskStatus.status.label("status"),
                     func.extract("EPOCH", DevTaskStatus.pending_at).label("pending_at"),

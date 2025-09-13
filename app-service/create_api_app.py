@@ -11,6 +11,7 @@ from fastapi.openapi.docs import (
     get_swagger_ui_oauth2_redirect_html,
 )
 from fastapi.responses import ORJSONResponse
+from fastapi_pagination import add_pagination
 from starlette.responses import HTMLResponse
 
 from core import settings
@@ -20,37 +21,39 @@ from core.topologys.fs_queues import act_ttl
 
 log = logging.getLogger(__name__)
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler = AsyncIOScheduler()
     scheduler.configure(
         jobstores={
-            'default': MemoryJobStore()
-        #    'default': SQLAlchemyJobStore(url=db_url2)
-        })
+            "default": MemoryJobStore()
+            #    'default': SQLAlchemyJobStore(url=db_url2)
+        }
+    )
     try:
         scheduler.add_job(
             act_ttl,
             args=[settings.ttl_job.tick_interval],
             coalesce=True,
-            #misfire_grace_time=10,
+            # misfire_grace_time=10,
             trigger=IntervalTrigger(minutes=settings.ttl_job.tick_interval),
-            id=settings.ttl_job.id_name
-            , replace_existing=True
+            id=settings.ttl_job.id_name,
+            replace_existing=True,
         )
         scheduler.start()
     except Exception as e:
-        logging.info(f'Исключение scheduler: {str(e)}')
+        logging.info(f"Исключение scheduler: {str(e)}")
 
-    #await broker().start()
-# 'default': MemoryJobStore()
+    # await broker().start()
+    # 'default': MemoryJobStore()
 
     # # startup
     # if not broker.is_worker_process:
     #     await broker.startup()
 
     # FastStream broker
-   # await broker.start()
+    # await broker.start()
 
     yield
     # shutdown
@@ -62,9 +65,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # if not broker.is_worker_process:
 
-
-    #await broker().stop()
-
+    # await broker().stop()
 
 
 def register_static_docs_routes(app: FastAPI) -> None:
@@ -101,6 +102,7 @@ def create_app(
         docs_url=None if create_custom_static_urls else "/docs",
         redoc_url=None if create_custom_static_urls else "/redoc",
     )
+    add_pagination(app)
     if create_custom_static_urls:
         register_static_docs_routes(app)
     return app

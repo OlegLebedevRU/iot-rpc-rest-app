@@ -175,6 +175,20 @@ wheels = [
 ]
 
 [[package]]
+name = "fastapi-pagination"
+version = "0.14.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/60/38/e27d94adb7050d88cddccddb56ab51244a2a9a30377eb5487de8f2b22959/fastapi_pagination-0.14.1.tar.gz", hash = "sha256:d045f8c678cef69ac006236f32a6d808ae6ca549360f79e92eefe2528f3e6337", size = 557666, upload-time = "2025-09-03T10:08:20.538Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/83/6e/7b6e63c3c004c4805fe8795f8355b30cc72f23aa2162f4072e6035ef1e84/fastapi_pagination-0.14.1-py3-none-any.whl", hash = "sha256:e5b698cab368b525f3b2ea2605c77dc22b00f50f67ac7d382dce8d3243fe60dc", size = 52534, upload-time = "2025-09-03T10:08:18.952Z" },
+]
+
+[[package]]
 name = "faststream"
 version = "0.5.48"
 source = { registry = "https://pypi.org/simple" }
@@ -281,6 +295,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "black" },
     { name = "fastapi" },
+    { name = "fastapi-pagination" },
     { name = "faststream" },
     { name = "gunicorn" },
     { name = "httpx" },
@@ -299,6 +314,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.30.0" },
     { name = "black", specifier = ">=25.1.0" },
     { name = "fastapi", specifier = ">=0.116.1" },
+    { name = "fastapi-pagination", specifier = ">=0.14.1" },
     { name = "faststream", specifier = ">=0.5.48" },
     { name = "gunicorn", specifier = ">=23.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },

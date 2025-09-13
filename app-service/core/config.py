@@ -51,6 +51,7 @@ class ApiV1Prefix(BaseModel):
     prefix: str = "/v1"
     device_tasks: str = "/device-tasks"
     admin: str = "/admin"
+    device_events: str = "/device-events"
 
 
 class ApiPrefix(BaseModel):

@@ -19,7 +19,7 @@ class TaskHeader(BaseModel):
     ext_task_id: str
     device_id: int
     method_code: int = Field(
-        0,
+        20,
         title="Task method code ref",
         description="this is the value of method code",
         ge=0,
@@ -46,7 +46,7 @@ class TaskHeader(BaseModel):
 
 class TaskCreate(TaskHeader):
     payload: JsonValue = Field(
-        "{}",
+        '{"dt":[{"mt":0}]}',
     )
 
     @field_validator("payload", mode="before")

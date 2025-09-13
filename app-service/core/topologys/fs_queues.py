@@ -3,12 +3,16 @@ import logging
 import uuid
 import time
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from aio_pika import RobustExchange, RobustQueue
 from fastapi import Depends
 from faststream.rabbit import RabbitExchange, ExchangeType, RabbitQueue
 from faststream.rabbit.fastapi import RabbitMessage
+from faststream.rabbit.schemas.queue import (
+    SharedClassicAndQuorumQueueArgs,
+    ClassicQueueArgs,
+)
 from pamqp.decode import timestamp
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,11 +35,17 @@ topic_exchange = RabbitExchange(
     name=topology.x_name, type=ExchangeType.TOPIC, declare=False
 )
 def_x = RabbitExchange(name="amq.direct", declare=False)
-q_ack = RabbitQueue(name=topology.ack_queue_name, durable=True)
-q_req = RabbitQueue(name=topology.req_queue_name, durable=True)
+q_ack = RabbitQueue(
+    name=topology.ack_queue_name, durable=True, arguments={"x-message-ttl": 600000}
+)
+q_req = RabbitQueue(
+    name=topology.req_queue_name, durable=True, arguments={"x-message-ttl": 600000}
+)
 q_evt = RabbitQueue(name=topology.evt_queue_name, durable=True)
 q_result = RabbitQueue(name=topology.res_queue_name, durable=True)
-q_jobs = RabbitQueue(name="core_jobs", durable=False)
+q_jobs = RabbitQueue(
+    name="core_jobs", durable=False, exclusive=True, arguments={"x-message-ttl": 60000}
+)
 
 
 async def declare_x_q():
@@ -70,12 +80,18 @@ async def declare_x_q():
 
 @fs_router.subscriber(q_evt)
 async def add_one_event(
-    body: str,
+    # body: str,
     msg: RabbitMessage,
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
 ):
     sn = msg.raw_message.routing_key[4:-4]
     dev_id = await DeviceRepo.get_device_id(session=session, sn=sn)
+    logging.info(
+        "on_message <dev.%s.evt>, correlation_id =%s",
+        sn,
+        str(msg),  # .raw_message.correlation_id
+    )
+    logging.info("body = %s, device_id = %d", msg.body.decode(), dev_id)
     if hasattr(msg, "headers"):
         msg_headers = msg.headers
         logging.info(f"event msg headers = {msg.headers}")
@@ -98,7 +114,7 @@ async def add_one_event(
             event_type_code=event_type_code,
             dev_event_id=dev_event_id,
             dev_timestamp=dev_timestamp,
-            payload=body,
+            payload=msg.body.decode(),
         )
         await EventRepository.add_event(session, event)
 
@@ -112,7 +128,12 @@ async def ack(
     sn = msg.raw_message.routing_key[4:-4]
     logging.info(f"on_message <dev.{sn}.ack>, body = {body}")
     try:
-        if hasattr(msg.raw_message.headers, "x-correlation-id"):
+        logging.info(
+            f"on_message <dev.{sn}.ack>, correlation_id = {str(msg.raw_message.correlation_id)}"
+        )
+        if msg.correlation_id:
+            task_id = uuid.UUID(msg.correlation_id)
+        elif hasattr(msg.raw_message.headers, "x-correlation-id"):
             task_id = uuid.UUID(bytes=msg.raw_message.headers["x-correlation-id"])
             logging.info(f"srv - in ack exist corr data =  {task_id}")
             if task_id == settings.task_proc_cfg.zero_corr_id:
@@ -135,12 +156,20 @@ async def req(
     sn = msg.raw_message.routing_key[4:-4]
     logging.info(f"on_message <dev.{sn}.req>, body = {body}")
     try:
-        task_id = uuid.UUID(bytes=msg.raw_message.headers["x-correlation-id"])
-        logging.info(f"srv - in request exist corr data =  {task_id}")
-        if task_id == settings.task_proc_cfg.zero_corr_id:
+        logging.info(
+            f"on_message <dev.{sn}.req>, correlation_id = {str(msg.raw_message.correlation_id)}"
+        )
+        if msg.correlation_id:
+            task_id = uuid.UUID(msg.correlation_id)
+        elif hasattr(msg.raw_message.headers, "x-correlation-id"):
+            task_id = uuid.UUID(bytes=msg.raw_message.headers["x-correlation-id"])
+            logging.info(f"srv - in req exist corr data =  {task_id}")
+            if task_id == settings.task_proc_cfg.zero_corr_id:
+                task_id = None
+        else:
             task_id = None
     except (TypeError, ValueError, KeyError) as e:
-        logging.info(f"srv - in request from device no corr data, exception = {e}")
+        logging.info(f"srv - in ack from device no corr data, exception = {e}")
         task_id = None
 
     # print(str(msg.raw_message.headers['x-reply-to-topic']))
@@ -149,10 +178,14 @@ async def req(
         t_resp = task.model_dump_json()
         logging.info(f"srv task select = {t_resp}")
         corr_id = task.id
+        method_code = str(task.header.method_code)
+        await TasksRepository.task_status_update(session, task.id, TaskStatus.LOCK)
+
     else:
         t_resp = settings.task_proc_cfg.nop_resp
         logging.info("srv task select = None")
         corr_id = settings.task_proc_cfg.zero_corr_id
+        method_code = "0"
     await topic_publisher.publish(
         routing_key=str(
             RoutingKey(
@@ -162,9 +195,21 @@ async def req(
         message=t_resp,
         correlation_id=corr_id,  # msg.raw_message.headers['x-correlation-id'], #task_id.bytes,
         exchange=settings.rmq.x_name,
+        headers={"method_code": method_code},
     )
-    if task is not None:
-        await TasksRepository.task_status_update(session, task.id, TaskStatus.LOCK)
+
+
+@fs_router.subscriber(q_result)
+async def result(
+    body: str,
+    msg: RabbitMessage,
+    session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
+):
+    sn = msg.raw_message.routing_key[4:-4]
+    logging.info(f"on_message <dev.{sn}.res>, body = {body}")
+    logging.info(
+        f"on_message <dev.{sn}.res>, correlation_id = {str(msg.raw_message.correlation_id)}"
+    )
 
 
 @fs_router.subscriber(q_jobs)

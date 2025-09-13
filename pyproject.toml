@@ -10,6 +10,7 @@ dependencies = [
     "asyncpg>=0.30.0",
     "black>=25.1.0",
     "fastapi>=0.116.1",
+    "fastapi-pagination>=0.14.1",
     "faststream>=0.5.48",
     "gunicorn>=23.0.0",
     "httpx>=0.28.1",
