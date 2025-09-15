@@ -1,6 +1,7 @@
 import logging
 import time
 import uuid
+from msvcrt import locking
 from typing import List
 
 from pydantic import UUID4
@@ -27,6 +28,7 @@ from core.schemas.device_tasks import (
     TaskResponseDeleted,
     TaskResponsePayload,
     TaskHeader,
+    ResultArray,
 )
 
 
@@ -89,20 +91,30 @@ class TasksRepository:
                 func.extract("EPOCH", DevTaskStatus.pending_at).label("pending_at"),
                 func.extract("EPOCH", DevTaskStatus.locked_at).label("locked_at"),
                 DevTaskStatus.ttl.label("ttl"),
-                DevTaskResult.result.label("result"),
             )
             .join(DevTaskStatus)
-            .join(DevTaskResult, isouter=True)
             .where(DevTask.id == id, DevTask.is_deleted == False)
         )
+        res_q = select(
+            DevTaskResult.id.label("id"),
+            DevTaskResult.ext_id.label("ext_id"),
+            DevTaskResult.status_code.label("status_code"),
+            DevTaskResult.result.label("result"),
+        ).where(DevTaskResult.task_id == id)
         t = await session.execute(query)
+        r = await session.execute(res_q)
         resp = t.mappings().one_or_none()
+        res = r.mappings().all()
         # print(str(resp))
         # print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
         if resp is None:
             return None
         # print(resp[2])
+        results = []
         header: TaskHeader = TaskHeader.model_validate(resp)
+        for r in res:
+            results.append(ResultArray.model_validate(r))
+        # results: ResultArray = ResultArray(res)
         task: TaskResponseResult = TaskResponseResult(
             header=header,
             id=resp.id,
@@ -110,7 +122,7 @@ class TasksRepository:
             created_at=int(resp.created_at),
             pending_at=int(resp.pending_at) if resp.pending_at is not None else None,
             locked_at=int(resp.locked_at) if resp.locked_at is not None else None,
-            result=resp.result,
+            results=results,
         )
         return task
 
@@ -224,6 +236,7 @@ class TasksRepository:
             .join(DevTaskStatus)
             .join(DevTaskResult, isouter=True)
             .where(DevTask.device_id == device_id, DevTask.is_deleted == False)
+            .order_by(DevTask.created_at.desc())
             .limit(settings.db.limit_tasks_result)
         )
         t = await session.execute(query)
@@ -288,12 +301,19 @@ class TasksRepository:
     ) -> bool:
         if task_id is None:
             return True
-        if status in [TaskStatus.PENDING, TaskStatus.LOCK, TaskStatus.DONE]:
-            pending_time = time.time()
+        if status in [TaskStatus.PENDING, TaskStatus.DONE]:
+
             qur = (
                 update(DevTaskStatus)
                 .where(DevTaskStatus.task_id == task_id)
                 .values(status=status, pending_at=func.current_timestamp())
+            )
+        elif status == TaskStatus.LOCK:
+
+            qur = (
+                update(DevTaskStatus)
+                .where(DevTaskStatus.task_id == task_id)
+                .values(status=TaskStatus.LOCK, locked_at=func.current_timestamp())
             )
         elif status == TaskStatus.DELETED:
             qur = (
@@ -338,3 +358,32 @@ class TasksRepository:
             session, "saved_time_minutes", str(tn), "INT32"
         )
         return
+
+    @classmethod
+    async def save_task_result(
+        cls,
+        session: AsyncSession,
+        task_id: UUID4,
+        ext_id: int,
+        status_code: int,
+        result: str,
+    ) -> int | None:
+        tsk_q = (
+            insert(DevTaskResult)
+            .values(
+                task_id=task_id,
+                ext_id=ext_id,
+                status_code=status_code,
+                result=result,
+            )
+            .returning(DevTaskResult.id.label("id"))
+        )
+        t = await session.execute(tsk_q)
+
+        try:
+            await session.commit()
+            id_new = t.one()
+            logging.info(f"commited new result {task_id}")
+        except:
+            return None
+        return id_new.id

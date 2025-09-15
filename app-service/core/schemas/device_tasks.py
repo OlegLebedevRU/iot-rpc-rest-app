@@ -1,7 +1,7 @@
 import json
 import uuid
 from datetime import datetime, time
-from typing import Any, Annotated, Optional
+from typing import Any, Annotated, Optional, List, Sequence
 from pydantic import (
     BaseModel,
     Field,
@@ -11,6 +11,7 @@ from pydantic import (
     ConfigDict,
     AfterValidator,
 )
+from sqlalchemy import RowMapping
 
 
 # Pydantic model for tasks
@@ -82,16 +83,23 @@ class TaskResponseStatus(TaskResponse):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ResultArray(BaseModel):
+    id: int
+    ext_id: int
+    status_code: int
+    result: str = None
+
+
 class TaskResponseResult(TaskResponseStatus):
-    result: str
+    results: List[ResultArray]
 
     # model_config = ConfigDict(from_attributes=True)
-    @field_validator("result", mode="before")
-    @classmethod
-    def is_exist(cls, value: str | None) -> str:
-        if value is None:
-            value = "{}"
-        return value
+    # @field_validator("result", mode="before")
+    # @classmethod
+    # def is_exist(cls, value: str | None) -> str:
+    #     if value is None:
+    #         value = "{}"
+    #     return value
 
 
 class TaskResponsePayload(TaskResponseStatus):

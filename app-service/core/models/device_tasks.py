@@ -85,7 +85,9 @@ class DevTaskResult(Base):
     # __tablename__ = "tb_dev_tasks_result"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     task_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(DevTask.id))
-    result: Mapped[str] = mapped_column(String)
+    ext_id: Mapped[int] = mapped_column(Integer, default=0)
+    status_code: Mapped[int] = mapped_column(Integer, default=501)
+    result: Mapped[str] = mapped_column(String, default="default")
     one_task_result = relationship(
         "DevTask", single_parent=True, cascade="all, delete-orphan"
     )

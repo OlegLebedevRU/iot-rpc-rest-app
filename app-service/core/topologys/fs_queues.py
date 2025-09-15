@@ -1,32 +1,21 @@
-import json
 import logging
-import uuid
 import time
-from datetime import datetime
-from typing import Annotated, Any
-
+from typing import Annotated
 from aio_pika import RobustExchange, RobustQueue
 from fastapi import Depends
 from faststream.rabbit import RabbitExchange, ExchangeType, RabbitQueue
 from faststream.rabbit.fastapi import RabbitMessage
-from faststream.rabbit.schemas.queue import (
-    SharedClassicAndQuorumQueueArgs,
-    ClassicQueueArgs,
-)
-from pamqp.decode import timestamp
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-
-
 from core import settings
-from core.config import RoutingKey, TaskProcessingConfig
+from core.config import RoutingKey
 from core.crud.dev_events_repo import EventRepository
 from core.crud.dev_tasks_repo import TasksRepository
 from core.crud.device_repo import DeviceRepo
 from core.fs_broker import fs_router, broker
-from core.models import db_helper, Device
+from core.models import db_helper
 from core.models.common import TaskStatus
 from core.schemas.device_events import DevEventBody
+from core.topologys.fs_depends import sn_getter_dep, corr_id_getter_dep
 
 job_publisher = fs_router.publisher()
 topic_publisher = fs_router.publisher()
@@ -34,30 +23,37 @@ topology = settings.rmq
 topic_exchange = RabbitExchange(
     name=topology.x_name, type=ExchangeType.TOPIC, declare=False
 )
-def_x = RabbitExchange(name="amq.direct", declare=False)
+def_x = RabbitExchange(name=settings.rmq.x_name_direct, declare=False)
 q_ack = RabbitQueue(
-    name=topology.ack_queue_name, durable=True, arguments={"x-message-ttl": 600000}
+    name=topology.ack_queue_name,
+    durable=True,
+    arguments=settings.rmq.def_queue_args,
 )
 q_req = RabbitQueue(
-    name=topology.req_queue_name, durable=True, arguments={"x-message-ttl": 600000}
+    name=topology.req_queue_name,
+    durable=True,
+    arguments=settings.rmq.def_queue_args,
 )
 q_evt = RabbitQueue(name=topology.evt_queue_name, durable=True)
 q_result = RabbitQueue(name=topology.res_queue_name, durable=True)
 q_jobs = RabbitQueue(
-    name="core_jobs", durable=False, exclusive=True, arguments={"x-message-ttl": 60000}
+    name=settings.ttl_job.queue_name,
+    durable=False,
+    exclusive=True,
+    arguments=settings.rmq.def_queue_args,
 )
 
 
 async def declare_x_q():
+    # declare queues, exchange, bindings
     amq_ex: RobustExchange = await fs_router.broker.declare_exchange(topic_exchange)
     topic_publisher.exchange = topic_exchange
-
     # queues
     req_queue: RobustQueue = await broker().declare_queue(q_req)
     ack_queue: RobustQueue = await fs_router.broker.declare_queue(q_ack)
     evt_queue: RobustQueue = await broker().declare_queue(q_evt)
     res_queue: RobustQueue = await broker().declare_queue(q_result)
-
+    # bind queues to exchange with routing key
     await req_queue.bind(
         exchange=amq_ex,
         routing_key=topology.routing_key_dev_request,
@@ -68,11 +64,9 @@ async def declare_x_q():
 
     def_ex: RobustExchange = await broker().declare_exchange(def_x)
     jobs_queue: RobustQueue = await broker().declare_queue(q_jobs)
-    await jobs_queue.bind(exchange=def_ex, routing_key="core_jobs")
+    await jobs_queue.bind(exchange=def_ex, routing_key=settings.ttl_job.queue_name)
     job_publisher.exchange = def_x
 
-
-# test_broker = broker()
 
 # {'x-correlation-id': b'\x96\xce\xe8\xd2\xf4\x1fK_\x81\xcc|w\x0bu\x92\xae',
 # 'x-reply-to-topic': 'srv.a3b0000000c99999d250813.rsp'}
@@ -80,22 +74,21 @@ async def declare_x_q():
 
 @fs_router.subscriber(q_evt)
 async def add_one_event(
-    # body: str,
     msg: RabbitMessage,
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
+    sn: Annotated[str, Depends(sn_getter_dep)],
 ):
-    sn = msg.raw_message.routing_key[4:-4]
-    dev_id = await DeviceRepo.get_device_id(session=session, sn=sn)
-    logging.info(
-        "on_message <dev.%s.evt>, correlation_id =%s",
-        sn,
-        str(msg),  # .raw_message.correlation_id
-    )
-    logging.info("body = %s, device_id = %d", msg.body.decode(), dev_id)
+    try:
+        dev_id = await DeviceRepo.get_device_id(session=session, sn=sn)
+    except Exception as e:
+        logging.info(
+            "Mqtt received EVENT: <dev.%s.evt>, error select device_id, error= =%s",
+            sn,
+            e,
+        )
+        return
     if hasattr(msg, "headers"):
         msg_headers = msg.headers
-        logging.info(f"event msg headers = {msg.headers}")
-        #
         if "event_type_code" in msg_headers:
             event_type_code = int(msg_headers["event_type_code"])
         else:
@@ -108,7 +101,11 @@ async def add_one_event(
             dev_timestamp = msg.headers["dev_timestamp"]
         else:
             dev_timestamp = int(time.time())
-
+        logging.info(
+            "Mqtt received EVENT: event_type_code =%d, dev_event_id=%d",
+            event_type_code,
+            dev_event_id,
+        )
         event = DevEventBody(
             device_id=dev_id,
             event_type_code=event_type_code,
@@ -121,79 +118,37 @@ async def add_one_event(
 
 @fs_router.subscriber(q_ack)
 async def ack(
-    body: str,
-    msg: RabbitMessage,
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
+    corr_id: Annotated[str | None, Depends(corr_id_getter_dep)],
 ):
-    sn = msg.raw_message.routing_key[4:-4]
-    logging.info(f"on_message <dev.{sn}.ack>, body = {body}")
-    try:
-        logging.info(
-            f"on_message <dev.{sn}.ack>, correlation_id = {str(msg.raw_message.correlation_id)}"
-        )
-        if msg.correlation_id:
-            task_id = uuid.UUID(msg.correlation_id)
-        elif hasattr(msg.raw_message.headers, "x-correlation-id"):
-            task_id = uuid.UUID(bytes=msg.raw_message.headers["x-correlation-id"])
-            logging.info(f"srv - in ack exist corr data =  {task_id}")
-            if task_id == settings.task_proc_cfg.zero_corr_id:
-                task_id = None
-        else:
-            task_id = None
-    except (TypeError, ValueError, KeyError) as e:
-        logging.info(f"srv - in ack from device no corr data, exception = {e}")
-        task_id = None
-    if task_id is not None:
-        await TasksRepository.task_status_update(session, task_id, TaskStatus.PENDING)
+    if corr_id is not None:
+        await TasksRepository.task_status_update(session, corr_id, TaskStatus.PENDING)
 
 
 @fs_router.subscriber(q_req)
 async def req(
-    body: str,
-    msg: RabbitMessage,
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
+    sn: Annotated[str, Depends(sn_getter_dep)],
+    corr_id: Annotated[str | None, Depends(corr_id_getter_dep)],
 ):
-    sn = msg.raw_message.routing_key[4:-4]
-    logging.info(f"on_message <dev.{sn}.req>, body = {body}")
-    try:
-        logging.info(
-            f"on_message <dev.{sn}.req>, correlation_id = {str(msg.raw_message.correlation_id)}"
-        )
-        if msg.correlation_id:
-            task_id = uuid.UUID(msg.correlation_id)
-        elif hasattr(msg.raw_message.headers, "x-correlation-id"):
-            task_id = uuid.UUID(bytes=msg.raw_message.headers["x-correlation-id"])
-            logging.info(f"srv - in req exist corr data =  {task_id}")
-            if task_id == settings.task_proc_cfg.zero_corr_id:
-                task_id = None
-        else:
-            task_id = None
-    except (TypeError, ValueError, KeyError) as e:
-        logging.info(f"srv - in ack from device no corr data, exception = {e}")
-        task_id = None
-
-    # print(str(msg.raw_message.headers['x-reply-to-topic']))
-    task = await TasksRepository.select_task(session, task_id, sn)
+    task = await TasksRepository.select_task(session, corr_id, sn)
     if task is not None:
         t_resp = task.model_dump_json()
-        logging.info(f"srv task select = {t_resp}")
-        corr_id = task.id
+        logging.info("from DB select task = %s", t_resp)
         method_code = str(task.header.method_code)
         await TasksRepository.task_status_update(session, task.id, TaskStatus.LOCK)
-
     else:
         t_resp = settings.task_proc_cfg.nop_resp
-        logging.info("srv task select = None")
+        logging.info("from DB select task = None")
         corr_id = settings.task_proc_cfg.zero_corr_id
         method_code = "0"
+    routing_key: str = str(
+        RoutingKey(prefix=topology.prefix_srv, sn=sn, suffix=topology.suffix_response)
+    )
     await topic_publisher.publish(
-        routing_key=str(
-            RoutingKey(
-                prefix=topology.prefix_srv, sn=sn, suffix=topology.suffix_response
-            )
-        ),
+        routing_key=routing_key,
         message=t_resp,
-        correlation_id=corr_id,  # msg.raw_message.headers['x-correlation-id'], #task_id.bytes,
+        correlation_id=corr_id,
         exchange=settings.rmq.x_name,
         headers={"method_code": method_code},
     )
@@ -201,15 +156,40 @@ async def req(
 
 @fs_router.subscriber(q_result)
 async def result(
-    body: str,
     msg: RabbitMessage,
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
+    sn: Annotated[str, Depends(sn_getter_dep)],
+    corr_id: Annotated[str | None, Depends(corr_id_getter_dep)],
 ):
-    sn = msg.raw_message.routing_key[4:-4]
-    logging.info(f"on_message <dev.{sn}.res>, body = {body}")
-    logging.info(
-        f"on_message <dev.{sn}.res>, correlation_id = {str(msg.raw_message.correlation_id)}"
-    )
+    if "ext_id" in msg.headers:
+        ext_id = int(msg.headers["ext_id"])
+    else:
+        ext_id = 0
+    if "status_code" in msg.headers:
+        status_code = int(msg.headers["status_code"])
+    else:
+        status_code = 501
+    if corr_id:
+        if msg.body:
+            res = msg.body.decode()
+        else:
+            res = "default"
+        logging.info(
+            "Mqtt received RESULT ext_id=%d, status_code=%d",
+            ext_id,
+            status_code,
+        )
+        await TasksRepository.save_task_result(
+            session, corr_id, ext_id, status_code, res
+        )
+        await TasksRepository.task_status_update(session, corr_id, TaskStatus.DONE)
+    else:
+        logging.info(
+            "Mqtt received RESULT with ERROR <dev.%s.res> - No corr_id, ext_id=%d, status_code=%d",
+            sn,
+            ext_id,
+            status_code,
+        )
 
 
 @fs_router.subscriber(q_jobs)
@@ -221,8 +201,10 @@ async def jobs_parse(
     ],
 ):
     await TasksRepository.update_ttl(session, 1)
-    logging.info(f"subscribe job event  {msg}")
+    logging.info("subscribe job event  %s", msg)
 
 
 async def act_ttl(step: int):
-    await job_publisher.publish(message="ttl_decrement", routing_key="core_jobs")
+    await job_publisher.publish(
+        message="ttl_decrement", routing_key=settings.ttl_job.queue_name
+    )

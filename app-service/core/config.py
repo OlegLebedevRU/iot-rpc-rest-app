@@ -96,7 +96,8 @@ class RoutingKey:
 
 class RabbitQXConfig(BaseModel):
     x_name: str = "amq.topic"
-
+    x_name_direct: str = "amq.direct"
+    def_queue_args: dict = {"x-message-ttl": 600000}
     prefix_dev: str = "dev"
     prefix_srv: str = "srv"
     # core -> dev
@@ -118,6 +119,7 @@ class RabbitQXConfig(BaseModel):
 class JobTtlConfig(BaseModel):
     tick_interval: int = 1
     id_name: str = "ttl_update_job"
+    queue_name: str = "core_jobs"
 
 
 class TaskProcessingConfig(BaseModel):
