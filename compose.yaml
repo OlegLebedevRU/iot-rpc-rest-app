@@ -88,7 +88,7 @@ services:
         - "80:80"
     volumes:
       - type: bind
-        source: ./nginx-configs/local-light/nginx.test.conf
+        source: /home/user1/iot-rpc-rest-app/nginx-configs/local-light/nginx.test.conf
         target: /etc/nginx/nginx.conf
         read_only: true
 
