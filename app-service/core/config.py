@@ -1,8 +1,6 @@
 import logging
 import uuid
 from typing import Literal
-
-from faststream.rabbit import RabbitQueue
 from pydantic import AmqpDsn, UUID4, HttpUrl
 from pydantic import BaseModel
 from pydantic import PostgresDsn

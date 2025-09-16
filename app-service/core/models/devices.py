@@ -11,10 +11,10 @@ from sqlalchemy import (
     DateTime,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 
 from core.models import Base
+from core.models.orgs import Org
 
 
 class Device(Base):
@@ -22,7 +22,7 @@ class Device(Base):
     device_id: Mapped[int] = mapped_column(Integer, unique=True)
     sn: Mapped[str] = mapped_column(String, unique=True)
     created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), server_default=func.current_datetime(), default=None
+        TIMESTAMP(timezone=True), server_default=func.current_timestamp(0), default=None
     )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
     deleted_at: Mapped[datetime] = mapped_column(
@@ -35,6 +35,14 @@ class Device(Base):
     # id = Column(Integer, primary_key=True)
     # device_id = Column(Integer, unique=True)
     # sn = Column(String, unique=True, default="default serial number")
+
+
+class DeviceOrgBind(Base):
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey(Device.device_id), unique=True
+    )
+    org_id: Mapped[int] = mapped_column(Integer, ForeignKey(Org.org_id))
 
 
 class DeviceConnection(Base):

@@ -1,17 +1,15 @@
 import logging
 import time
 import uuid
-from msvcrt import locking
-from typing import List
-
+from fastapi_pagination import Page
+from fastapi_pagination.ext.sqlalchemy import paginate
 from pydantic import UUID4
-from sqlalchemy import Sequence, Row, select, update, UUID, desc, RowMapping, func
+from sqlalchemy import select, update, desc, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import Mapped, aliased
-
 from core import settings
-from core.models import db_helper, Device
+from core.models import Device
 from core.models.common import TaskStatus, PersistentVariable
 from core.models.device_tasks import (
     DevTaskStatus,
@@ -19,16 +17,18 @@ from core.models.device_tasks import (
     DevTaskResult,
     DevTaskPayload,
 )
+from core.models.devices import DeviceOrgBind
+from core.models.orgs import Org
 from core.schemas.device_tasks import (
     TaskRequest,
     TaskCreate,
-    TaskResponseStatus,
     TaskResponse,
     TaskResponseResult,
     TaskResponseDeleted,
     TaskResponsePayload,
     TaskHeader,
     ResultArray,
+    TaskListOut,
 )
 
 
@@ -77,7 +77,10 @@ class TasksRepository:
 
     @classmethod
     async def get_task(
-        cls, session: AsyncSession, id: UUID4
+        cls,
+        session: AsyncSession,
+        id: UUID4,
+        org_id: int | None = 0,
     ) -> TaskResponseResult | None:
         query = (
             select(
@@ -91,7 +94,13 @@ class TasksRepository:
                 func.extract("EPOCH", DevTaskStatus.pending_at).label("pending_at"),
                 func.extract("EPOCH", DevTaskStatus.locked_at).label("locked_at"),
                 DevTaskStatus.ttl.label("ttl"),
+                Org,
+                DeviceOrgBind,
             )
+            .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
+            .where(DeviceOrgBind.org_id == org_id)
+            .join(Org, DeviceOrgBind.org_id == Org.org_id)
+            .where(Org.is_deleted == False)
             .join(DevTaskStatus)
             .where(DevTask.id == id, DevTask.is_deleted == False)
         )
@@ -101,15 +110,16 @@ class TasksRepository:
             DevTaskResult.status_code.label("status_code"),
             DevTaskResult.result.label("result"),
         ).where(DevTaskResult.task_id == id)
+
         t = await session.execute(query)
-        r = await session.execute(res_q)
         resp = t.mappings().one_or_none()
-        res = r.mappings().all()
+
         # print(str(resp))
         # print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
         if resp is None:
             return None
-        # print(resp[2])
+        r = await session.execute(res_q)
+        res = r.mappings().all()
         results = []
         header: TaskHeader = TaskHeader.model_validate(resp)
         for r in res:
@@ -203,22 +213,11 @@ class TasksRepository:
 
     @classmethod
     async def get_tasks(
-        cls, session: AsyncSession, device_id: int | None = 0
-    ) -> Sequence[RowMapping]:
-        a_dts: DevTaskStatus = aliased(DevTaskStatus)
-        subq = (
-            select(
-                DevTask.id.label("id"),
-                DevTask.ext_task_id.label("ext_task_id"),
-                DevTask.method_code.label("method_code"),
-                DevTask.device_id.label("device_id"),
-                DevTaskStatus.priority.label("priority"),
-                DevTaskStatus.ttl.label("ttl"),
-            )
-            .join(DevTaskStatus, DevTask.id == DevTaskStatus.task_id)
-            .where(DevTask.device_id == device_id, DevTask.is_deleted == False)
-            .subquery()
-        )
+        cls,
+        session: AsyncSession,
+        device_id: int | None = 0,
+        org_id: int | None = 0,
+    ) -> Page[TaskListOut]:
         query = (
             select(
                 DevTask.id.label("id"),
@@ -231,27 +230,45 @@ class TasksRepository:
                 DevTask.created_at.label("created_at"),
                 DevTaskStatus.pending_at.label("pending_at"),
                 DevTaskStatus.locked_at.label("locked_at"),
+                Org,
+                DeviceOrgBind,
             )
-            # .join(subq)
+            .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
+            .where(DeviceOrgBind.org_id == org_id)
+            .join(Org, DeviceOrgBind.org_id == Org.org_id)
+            .where(Org.is_deleted == False)
             .join(DevTaskStatus)
             .join(DevTaskResult, isouter=True)
             .where(DevTask.device_id == device_id, DevTask.is_deleted == False)
             .order_by(DevTask.created_at.desc())
             .limit(settings.db.limit_tasks_result)
         )
-        t = await session.execute(query)
-        resp = t.mappings().all()
 
-        return resp
+        # t = await session.execute(query)
+        # resp = t.mappings().all()
+
+        return await paginate(session, query)
 
     @classmethod
     async def delete_task(
-        cls, session: AsyncSession, id: UUID4
+        cls,
+        session: AsyncSession,
+        id: UUID4,
+        org_id: int | None = 0,
     ) -> TaskResponseDeleted | None:
         # db_time_at = int(time.time())
         q1 = (
             update(DevTask)
-            .where(DevTask.id == id)
+            .where(
+                DevTask.id
+                == select(DevTask.id)
+                .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
+                .where(DeviceOrgBind.org_id == org_id)
+                .join(Org, DeviceOrgBind.org_id == Org.org_id)
+                .where(Org.is_deleted == False)
+                .where(DevTask.id == id)
+                .where(DevTask.is_deleted == False)
+            )
             .values(is_deleted=True, deleted_at=func.current_timestamp())
             .returning(func.extract("EPOCH", DevTask.deleted_at).label("deleted_at"))
         )
@@ -261,13 +278,18 @@ class TasksRepository:
             .values(status=TaskStatus.DELETED, ttl=0)
         )
         d = await session.execute(q1)
-        await session.execute(q2)
+        resp = d.one_or_none()
+        if resp:
+            await session.execute(q2)
+            deleted_at = int(resp.deleted_at) if resp.deleted_at is not None else None
+        else:
+            deleted_at = None
         await session.commit()
-        logging.info(f"deleted task {id}")
-        resp = d.one()
+        logging.info("deleted task %s", str(id))
+
         return TaskResponseDeleted(
             id=id,
-            deleted_at=int(resp.deleted_at) if resp.deleted_at is not None else None,
+            deleted_at=deleted_at if deleted_at is not None else None,
         )
 
     @classmethod

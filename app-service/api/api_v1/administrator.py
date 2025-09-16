@@ -12,6 +12,9 @@ from core.crud.dev_tasks_repo import TasksRepository
 from core.models import db_helper, Device
 import httpx
 
+from core.models.devices import DeviceOrgBind
+from core.models.orgs import Org
+
 log = logging.getLogger(__name__)
 router = APIRouter(
     prefix=settings.api.v1.admin,
@@ -116,3 +119,10 @@ async def do_admin(
             headers={"Content-type": "application/json"},
         )
         print(r.status_code)
+
+    # elif action == "test":
+    #     insert_stmt = insert(Org).values(org_id=0)
+    #     insert_bind = insert(DeviceOrgBind).values(org_id=0, device_id=4617)
+    #     await session.execute(insert_stmt)
+    #     await session.execute(insert_bind)
+    #     await session.commit()

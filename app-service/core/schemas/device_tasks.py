@@ -112,3 +112,11 @@ class TaskResponsePayload(TaskResponseStatus):
 class TaskNotify(TaskResponse):
     model_config = ConfigDict(from_attributes=True)
     header: TaskHeader
+
+
+class TaskListOut(TaskHeader):
+    id: UUID4
+    status: int
+    created_at: datetime
+    pending_at: Optional[datetime] = None
+    locked_at: Optional[datetime] = None

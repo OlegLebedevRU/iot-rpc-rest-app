@@ -4,17 +4,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.params import Query
 from fastapi_pagination import Page
-from sqlalchemy import select, not_
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
 from core.crud.dev_events_repo import EventRepository
-from core.crud.dev_tasks_repo import TasksRepository
-from core.models import db_helper, Device
-import httpx
+from core.models import db_helper
 
-from core.schemas.device_events import DevEvents, DevEventOut
+
+from core.schemas.device_events import DevEventOut
 
 log = logging.getLogger(__name__)
 router = APIRouter(
@@ -34,5 +31,5 @@ async def get_device_events(
 ) -> Page[DevEventOut] | None:  # TaskResponseStatus:
     events = await EventRepository.get_events_page(session, device_id)
     if events is None:
-        raise HTTPException(status_code=404, detail="Item not found")
+        raise HTTPException(status_code=404, detail="Events not found")
     return events

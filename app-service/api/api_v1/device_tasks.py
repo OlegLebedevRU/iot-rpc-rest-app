@@ -1,36 +1,30 @@
 import logging
-import uuid
-from typing import Annotated, List, Sequence, Any
+from typing import Annotated
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
     Header,
 )
-from fastapi.responses import ORJSONResponse
+from fastapi_pagination import Page
 from pydantic import UUID4
-from pydantic_core.core_schema import AnySchema
-from sqlalchemy import RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession
-from starlette.responses import JSONResponse
-
 from core import settings
 from core.config import RoutingKey
 from core.crud.dev_tasks_repo import TasksRepository
 from core.crud.device_repo import DeviceRepo
 from core.models import db_helper
+from core.models.orgs import Org
 from core.schemas.device_tasks import (
     TaskCreate,
-    TaskResponseStatus,
     TaskResponse,
-    TaskRequest,
     TaskResponseResult,
     TaskResponseDeleted,
     TaskNotify,
+    TaskListOut,
 )
 from core.topologys.fs_queues import topic_publisher
 
-# from crud import users as users_crud
 
 log = logging.getLogger(__name__)
 router = APIRouter(
@@ -46,12 +40,13 @@ async def create_task(
         Depends(db_helper.session_getter),
     ],
     task_create: TaskCreate,
-    org_id: Annotated[str | None, Header()] = None,
+    org_id: Annotated[int | None, Header()] = None,
 ):
-    sn = await DeviceRepo.get_device_sn(session, task_create.device_id)
+    sn = await DeviceRepo.get_device_sn(session, task_create.device_id, org_id)
     if sn is None:
         log.info(
-            f"trying to create task failed - device_id not found = {task_create.device_id}"
+            "trying to create task failed - device_id not found = %d",
+            task_create.device_id,
         )
         raise HTTPException(status_code=404, detail="device_id not found")
     task = await TasksRepository.create_task(
@@ -81,25 +76,30 @@ async def get_task(
         AsyncSession,
         Depends(db_helper.session_getter),
     ],
-):  # TaskResponseStatus:
-    task = await TasksRepository.get_task(session, id)
+    org_id: Annotated[int | None, Header()] = None,
+) -> TaskResponseResult:  # TaskResponseStatus:
+    task = await TasksRepository.get_task(session, id, org_id)
     if task is None:
-        raise HTTPException(status_code=404, detail="Item not found")
+        raise HTTPException(status_code=404, detail="Task not found")
     return task
 
 
 @router.get(
     "/",
-    description=f"Tasks search by device_id with limit = {settings.db.limit_tasks_result}",
+    response_model=Page[TaskListOut],
+    description=f"Tasks search by device_id with pagination",
 )
 async def list_tasks(
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
     device_id: int | None = 0,
-):  # TaskResponseStatus:
-    task = await TasksRepository.get_tasks(session, device_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Item not found")
-    return task
+    org_id: Annotated[int | None, Header()] = None,
+) -> Page[TaskListOut]:
+    tasks: Page[TaskListOut] = await TasksRepository.get_tasks(
+        session, device_id, org_id
+    )
+    if tasks is None:
+        raise HTTPException(status_code=404, detail="Tasks not found")
+    return tasks
 
 
 @router.delete("/{id}", response_model=TaskResponseDeleted, description="soft delete")
@@ -109,8 +109,9 @@ async def delete_task(
         AsyncSession,
         Depends(db_helper.session_getter),
     ],
-):  # TaskResponseStatus:
-    task = await TasksRepository.delete_task(session, id)
+    org_id: Annotated[int | None, Header()] = None,
+) -> TaskResponseDeleted:  # TaskResponseStatus:
+    task: TaskResponseDeleted = await TasksRepository.delete_task(session, id)
     if task is None:
-        raise HTTPException(status_code=404, detail="Item not found")
+        raise HTTPException(status_code=404, detail="Task not found")
     return task
