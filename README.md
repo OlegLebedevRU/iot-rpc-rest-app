@@ -88,8 +88,7 @@ sequenceDiagram
             Device->>+Core:Ack
         else Device is offline
             Core-xDevice:Mqtt pub
-        end        
-    
+        end           
     end
     
     Device->>+Core: Request current task
