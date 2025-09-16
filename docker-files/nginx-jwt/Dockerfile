@@ -29,7 +29,7 @@ RUN ln -s /usr/lib/x86_64-linux-gnu/libjwt.so.0 /usr/lib/x86_64-linux-gnu/libjwt
 
 WORKDIR /
 
-RUN --mount=type=bind,source=${PWD}/iot-rpc-rest-app/nginx-configs/local-light/nginx.test.conf,target=/etc/nginx/nginx.conf
+RUN --mount=type=bind,source=./nginx-configs/local-light/nginx.test.conf,target=/etc/nginx/nginx.conf,ro
 # ${CONF_FILE}
 #COPY <<` /etc/nginx/nginx.conf
 #daemon off;
