@@ -1,4 +1,4 @@
-ARG CONF_FILE=./nginx-configs/local-light/nginx.conf
+ARG CONF_FILE="./nginx-configs/local-light/nginx.conf"
 FROM debian:bookworm-slim
 
 RUN <<`
@@ -29,7 +29,7 @@ RUN ln -s /usr/lib/x86_64-linux-gnu/libjwt.so.0 /usr/lib/x86_64-linux-gnu/libjwt
 
 WORKDIR /
 
-RUN --mount=type=bind,source=$CONF_FILE,target=/etc/nginx/nginx.conf
+RUN --mount=type=bind,source=${CONF_FILE},target=/etc/nginx/nginx.conf
 
 #COPY <<` /etc/nginx/nginx.conf
 #daemon off;
