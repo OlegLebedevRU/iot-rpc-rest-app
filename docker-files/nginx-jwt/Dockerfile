@@ -1,4 +1,3 @@
-ARG CONF_FILE="./nginx-configs/local-light/nginx.conf"
 FROM debian:bookworm-slim
 
 RUN <<`
@@ -31,26 +30,31 @@ WORKDIR /
 
 #RUN --mount=type=bind,source=${PWD}/nginx-configs/local-light/nginx.test.conf,target=/etc/nginx/nginx.conf,ro
 # ${CONF_FILE}
-#COPY <<` /etc/nginx/nginx.conf
-#daemon off;
-#user  nginx;
-#worker_processes  auto;
-#
-#error_log  /dev/stderr notice;
-#pid        /var/run/nginx.pid;
-#
-#load_module /usr/lib/nginx/modules/ngx_http_auth_jwt_module.so;
-#
-#events {
-#    worker_connections  1024;
-#}
-#
-#http {
-#    include       /etc/nginx/mime.types;
-#    default_type  application/octet-stream;
-#
-#    auth_jwt_enabled off;
-#    resolver 127.0.0.11;
+COPY <<` /etc/nginx/nginx.conf
+daemon off;
+user  nginx;
+worker_processes  auto;
+
+error_log  /dev/stderr notice;
+pid        /var/run/nginx.pid;
+
+load_module /usr/lib/nginx/modules/ngx_http_auth_jwt_module.so;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                      '$status $body_bytes_sent "$http_referer" '
+                      '"$http_user_agent" "$http_x_forwarded_for"';
+
+    access_log  /var/log/nginx/access.log  main;
+    #auth_jwt_enabled off;
+    # on from binded conf
+    #resolver 127.0.0.11;
 #    upstream app {
 #    server app1:3031;
 #    }
@@ -61,8 +65,9 @@ WORKDIR /
 #        proxy_pass http://app;
 #      }
 #    }
-#}
-#`
+    include /etc/nginx/conf.d/*.conf;
+}
+`
 
 RUN nginx -t
 

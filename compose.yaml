@@ -28,26 +28,56 @@ services:
         pg:
           condition: service_healthy
   rabbitmq:
-    image: rabbitmq:4-management-alpine
-    hostname: rabbitmq
+    image: rabbitmq:4-management
     container_name: rabbitmq
+    restart: unless-stopped
     ports:
-      - "5672:5672"
-      - "15671:15671"
-      - "15672:15672"
+      - "15672:15672" # RabbitMQ Management UI
       - "1883:1883"
-      #- "8883:8883" ssl listener
+      - "8883:8883"
+      - "5672:5672" # RabbitMQ AMQP
     environment:
-      RABBITMQ_DEFAULT_USER: "user"
-      RABBITMQ_DEFAULT_PASS: "root"
+      RABBITMQ_HOST: '%'
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: root
+      RABBITMQ_CONFIG_FILE: /etc/rabbitmq/rabbitmq.conf
     configs:
       - source: plugins
         target: /etc/rabbitmq/enabled_plugins
     volumes:
-      - ./rmq/rabbitmq-data:/var/lib/rabbitmq
-      - ./rmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
-      - ./rmq/definitions.json:/etc/rabbitmq/definitions.json:ro
-      # -  config volume
+      - type: bind
+        source: ./rmq/rabbitmq.conf
+        target: /etc/rabbitmq/rabbitmq.conf
+        read_only: true
+      - type: bind
+        source: ./rmq/definitions.json
+        target: /etc/rabbitmq/definitions.json
+        read_only: true
+        # certs
+      - type: bind
+        source: ./crt/iot_leo4_ca.crt
+        target: /crt/ca_certificate.pem
+        read_only: true
+      - type: bind
+        source: ./crt/cert_0000.pem
+        target: /crt/server_certificate.pem
+        read_only: true
+      - type: bind
+        source: ./crt/key_0000.pem
+        target: /crt/server_key.pem
+        read_only: true
+#ssl_options.cacertfile = /crt/ca_certificate.pem
+#ssl_options.certfile   = /crt/server_certificate.pem
+#ssl_options.keyfile    = /crt/server_key.pem
+      #- ./rmq/rabbitmq-data:/var/lib/rabbitmq
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - rabbitmq_network
+    healthcheck:
+      test: [ "CMD-SHELL", "rabbitmq-diagnostics", "-q", "ping" ]
+      retries: 3
+      timeout: 5s
+      interval: 30s
   pg:
     image: postgres
     environment:
@@ -81,29 +111,31 @@ services:
   nginx:
     build:
       dockerfile: ./docker-files/nginx-jwt/Dockerfile
-      args:
-        CONF_FILE: ./nginx-configs/local-light/nginx.conf
       context: ./
     ports:
         - "80:80"
     volumes:
       - type: bind
-        source: /home/user1/iot-rpc-rest-app/nginx-configs/local-light/nginx.test.conf
-        target: /etc/nginx/nginx.conf
+        source: ./nginx-configs/test
+        target: /etc/nginx/conf.d
         read_only: true
 
   avahi:
     image: ydkn/avahi
-    hostname: $HOSTNAME
+    hostname: '%'
+    #$HOSTNAME
     network_mode: host
     volumes:
       - ./avahi-services:/etc/avahi/services:ro
     restart: always
 configs:
   plugins:
-    content: |
-      rabbitmq_management
-      rabbitmq_mqtt
+    content: "[rabbitmq_management, rabbitmq_mqtt]."
 volumes:
   pgdata:
-  rabbitmq-data:
+  rabbitmq_data:
+    driver: local
+
+networks:
+  rabbitmq_network:
+    driver: bridge
