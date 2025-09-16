@@ -1,4 +1,4 @@
-ARG CONF_FILE=nginx-config/local-light/nginx.conf
+ARG CONF_FILE=./nginx-configs/local-light/nginx.conf
 FROM debian:bookworm-slim
 
 RUN <<`

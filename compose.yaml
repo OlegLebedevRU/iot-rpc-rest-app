@@ -82,7 +82,7 @@ services:
     build:
       dockerfile: ./docker-files/nginx-jwt/Dockerfile
       args:
-        CONF_FILE: nginx-config/local-light/nginx.conf
+        CONF_FILE: ./nginx-configs/local-light/nginx.conf
       context: ./
     ports:
         - "80:80"
