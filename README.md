@@ -89,7 +89,7 @@ sequenceDiagram
         else Device is offline
             Core-xDevice:Mqtt pub
         end        
-    destroy Queue
+    
     end
     
     Device->>+Core: Request current task
