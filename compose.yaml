@@ -33,7 +33,7 @@ services:
     restart: unless-stopped
     ports:
       - "15672:15672" # RabbitMQ Management UI
-      - "1883:1883"
+      #- "1883:1883"
       - "8883:8883"
       - "5672:5672" # RabbitMQ AMQP
     environment:
@@ -114,11 +114,20 @@ services:
       context: ./
     ports:
         - "80:80"
+        - "443:443"
+    restart: always
     volumes:
       - type: bind
-        source: ./nginx-configs/test
+        source: ./nginx-configs/dev_leo4_ru
         target: /etc/nginx/conf.d
         read_only: true
+      - ./certbot/www:/var/www/certbot/:ro
+      - ./certbot/conf/:/etc/nginx/ssl/:ro
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - ./certbot/www/:/var/www/certbot/:rw
+      - ./certbot/conf/:/etc/letsencrypt/:rw
 
   avahi:
     image: ydkn/avahi
