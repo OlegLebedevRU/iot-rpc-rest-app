@@ -67,11 +67,34 @@ debian/ubuntu - /etc/rabbitmq/rabbitmq.conf
 
 ```mermaid
 sequenceDiagram
-    participant Controller
-    participant RPC_BUS
-    participant REST_API
-    Controller->>RPC_BUS: Click button
-    RPC_BUS->>REST_API: Fetch data
-    REST_API-->>RPC_BUS: Return data
-    RPC_BUS-->>Controller: Display result
+    box Green
+    actor ClientApp
+    end
+    participant API  
+    participant Core
+   
+
+
+    ClientApp->>+API: Touch new task (http/post)
+    Note over API: Validate
+    API->>-Core: Create new task
+    
+    par Core to Queue       
+        create participant Queue
+        Core->>Queue:Push to queue
+    and Core to Device
+        alt Device is online
+            Core->>+Device:Mqtt pub
+            Device->>+Core:Ack
+        else Device is offline
+            Core-xDevice:Mqtt pub
+        end        
+    destroy Queue
+    end
+    
+    Device->>+Core: Request current task
+    Core->>-Device: Response current task with payload
+    activate Device
+    Device->>-Core: Result
+    
 ```
