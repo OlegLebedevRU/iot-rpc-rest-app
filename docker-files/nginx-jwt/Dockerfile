@@ -64,7 +64,7 @@ RUN --mount=type=bind,source=./nginx-configs/local-light/nginx.test.conf,target=
 #}
 #`
 
-#RUN nginx -t
+RUN nginx -t
 
 CMD ["nginx", "-g", "daemon off;"]
 # sudo docker network create -d bridge net1
