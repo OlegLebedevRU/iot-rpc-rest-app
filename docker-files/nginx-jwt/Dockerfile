@@ -29,8 +29,8 @@ RUN ln -s /usr/lib/x86_64-linux-gnu/libjwt.so.0 /usr/lib/x86_64-linux-gnu/libjwt
 
 WORKDIR /
 
-RUN --mount=type=bind,source=${CONF_FILE},target=/etc/nginx/nginx.conf
-
+RUN --mount=type=bind,source=./nginx-configs/local-light/nginx.conf,target=/etc/nginx/nginx.conf
+# ${CONF_FILE}
 #COPY <<` /etc/nginx/nginx.conf
 #daemon off;
 #user  nginx;
