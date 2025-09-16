@@ -88,7 +88,7 @@ services:
         - "80:80"
     volumes:
       - type: bind
-        source: ${PWD}/nginx-configs/local-light/nginx.test.conf
+        source: ./nginx-configs/local-light/nginx.test.conf
         target: target=/etc/nginx/nginx.conf
         read_only: true
 
