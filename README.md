@@ -57,9 +57,21 @@
 
 ### Notes:
 
-````commandline
+````
 rabbitmqctl set_topic_permissions -p my-vhost user amq.topic "*.{client_id}-." "*.{client_id}-.*"
 ````
 RABBITMQ_CONFIG_FILE=/path/to/a/custom/location/rabbitmq/my.conf
 
 debian/ubuntu - /etc/rabbitmq/rabbitmq.conf
+
+
+```mermaid
+sequenceDiagram
+    participant Controller
+    participant RPC_BUS
+    participant REST_API
+    Controller->>RPC_BUS: Click button
+    RPC_BUS->>REST_API: Fetch data
+    REST_API-->>RPC_BUS: Return data
+    RPC_BUS-->>Controller: Display result
+```
