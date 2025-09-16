@@ -95,7 +95,9 @@ services:
     restart: always
 configs:
   plugins:
-    content: "[rabbitmq_management, rabbitmq_mqtt]."  
+    content: |
+      rabbitmq_management
+      rabbitmq_mqtt
 volumes:
   pgdata:
   rabbitmq-data:
