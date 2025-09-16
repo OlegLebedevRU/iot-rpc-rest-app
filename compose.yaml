@@ -89,7 +89,7 @@ services:
     volumes:
       - type: bind
         source: ./nginx-configs/local-light/nginx.test.conf
-        target: target=/etc/nginx/nginx.conf
+        target: /etc/nginx/nginx.conf
         read_only: true
 
   avahi:
