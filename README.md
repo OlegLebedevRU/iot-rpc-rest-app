@@ -143,10 +143,12 @@ sequenceDiagram
     API->>ClientApp: Response task data (Status)
     end
     end
+    rect rgb(0, 102, 204)
+    Loop loop Periodic request to Task queue
     rect rgb(100, 102, 204)
     Core->Device:Device started at any time
     end
-    rect rgb(0, 102, 204)
+    
     
     Device->>+Device: Periodic timer
     Note right of Device: Start job
@@ -165,6 +167,7 @@ sequenceDiagram
     deactivate Core
     Note right of Device: End Job
     end
+    end
     rect rgb(0, 102, 204)
     Loop loop Request task status
    
@@ -174,9 +177,5 @@ sequenceDiagram
     API->>ClientApp: Response task data (Status)
     end
     end
-
-    
-
-    
     
 ```
