@@ -129,6 +129,10 @@ services:
       - ./certbot/www/:/var/www/certbot/:rw
       - ./certbot/conf/:/etc/letsencrypt/:rw
 
+# docker compose run --rm certbot certonly --webroot --webroot-path /var/www/certbot/ -d dev.leo4.ru
+# docker compose run --rm certbot renew
+
+
   avahi:
     image: ydkn/avahi
     hostname: '%'
