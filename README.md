@@ -76,24 +76,57 @@ sequenceDiagram
 
 
     ClientApp->>+API: Touch new task (http/post)
-    Note over API: Validate
-    API->>-Core: Create new task
+    Note over API: Validate request headers
     
+    alt Valid request
+        API->>+Core: Init new task
+        activate Core
+        API->>ClientApp: Response OK (task_id: uuid4)
+    else Error
+        API->>ClientApp: Response Error code
+    end   
+    deactivate API
     par Core to Queue       
         create participant Queue
-        Core->>Queue:Push to queue
+        Core->>-Queue:Push to queue
     and Core to Device
         alt Device is online
             Core->>+Device:Mqtt pub
+            deactivate Core
+    ClientApp->>API: Request task status
+    Note over API: Validate request headers
+    API->>Core: Get task data
+    Core->>API: Task data
+    API->> ClientApp: Response task data (Status=New)        
+            Note right of Device: Start Job
             Device->>+Core:Ack
+            Core->>-Core: Pending Status
+    ClientApp->>API: Request task status
+    API->>Core: Get task data
+    Core->>API: Task data
+    API->> ClientApp: Response task data (Status=Pending)
         else Device is offline
             Core-xDevice:Mqtt pub
-        end           
+    ClientApp->>API: Request task status
+    Note over API: Validate request headers
+    API->>Core: Get task data
+    Core->>API: Task data
+    API->> ClientApp: Response task data (Status=New)
+        end        
+
     end
     
     Device->>+Core: Request current task
+    Core->>Core: Locked Status
     Core->>-Device: Response current task with payload
     activate Device
+    Note right of Device: Worker
     Device->>-Core: Result
+    activate Core
+    Core->>Core: Save Result, Done task    
+    deactivate Device
+    deactivate Core
+    Note right of Device: End Job
+    
     
 ```
