@@ -71,6 +71,6 @@ http {
 
 RUN nginx -t
 
-CMD ["nginx", "-g", "daemon off;"]
+CMD ["nginx"]
 # sudo docker network create -d bridge net1
 # sudo docker run --name=ngx --network=net1 --network-alias ngx -p 80:80 'ngx'
