@@ -83,11 +83,12 @@ sequenceDiagram
     and Core to Device
         rect rgb(0, 102, 204)
         alt Device is online
-            Core->>+Device:Mqtt pub to private device topic
+            Core->>+Device:Immediate notification of a new task
+            activate Device
             deactivate Core
        
             Note right of Device: Start Job
-            Device->>+Core:Ack
+            Device->>+Core:Ack ( Optional )
             Core->>-Core: Set Pending Status
         
         else Device is offline
@@ -99,6 +100,7 @@ sequenceDiagram
     end
     rect rgb(0, 102, 204)
     Device->>+Core: Request current task
+    deactivate Device
     rect rgb(0, 0, 204)
     Queue<<->>Core: Get task from queue
     end
