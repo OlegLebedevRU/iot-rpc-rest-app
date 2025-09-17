@@ -139,10 +139,11 @@ async def req(
         logging.info("from DB select task = %s", t_resp)
         method_code = str(task.header.method_code)
         await TasksRepository.task_status_update(session, task.id, TaskStatus.LOCK)
+        correlation_id = task.id
     else:
         t_resp = settings.task_proc_cfg.nop_resp
         logging.info("from DB select task = None")
-        corr_id = settings.task_proc_cfg.zero_corr_id
+        correlation_id = settings.task_proc_cfg.zero_corr_id
         method_code = "0"
     routing_key: str = str(
         RoutingKey(prefix=topology.prefix_srv, sn=sn, suffix=topology.suffix_response)
@@ -150,7 +151,7 @@ async def req(
     await topic_publisher.publish(
         routing_key=routing_key,
         message=t_resp,
-        correlation_id=corr_id,
+        correlation_id=correlation_id,
         exchange=settings.rmq.x_name,
         headers={"method_code": method_code},
     )

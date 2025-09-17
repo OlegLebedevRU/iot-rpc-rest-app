@@ -12,6 +12,7 @@ async def sn_getter_dep(msg: RabbitMessage) -> str:
 async def corr_id_getter_dep(msg: RabbitMessage) -> str | None:
     try:
         if msg.correlation_id:
+            # logging.info("Raw corr_id = %s", msg.correlation_id)
             corr_id = uuid.UUID(msg.correlation_id)
             logging.info("Received msg.correlation_id = %s", corr_id)
         elif hasattr(msg.raw_message.headers, "x-correlation-id"):

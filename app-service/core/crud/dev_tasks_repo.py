@@ -138,9 +138,9 @@ class TasksRepository:
 
     @classmethod
     async def select_task(
-        cls, session: AsyncSession, t_req: TaskRequest = None, sn: str = None
+        cls, session: AsyncSession, t_req: str = None, sn: str = None
     ) -> TaskResponsePayload | None:
-        if t_req is not None:
+        if t_req is not None and t_req != uuid.UUID(int=0):
             query = (
                 select(
                     DevTask.id.label("id"),
