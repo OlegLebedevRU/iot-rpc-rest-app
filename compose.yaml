@@ -32,7 +32,7 @@ services:
     container_name: rabbitmq
     restart: unless-stopped
     ports:
-      - "15672:15672" # RabbitMQ Management UI
+      #- "15672:15672" # RabbitMQ Management UI
       #- "1883:1883"
       - "8883:8883"
       - "5672:5672" # RabbitMQ AMQP
@@ -123,6 +123,9 @@ services:
         read_only: true
       - ./certbot/www:/var/www/certbot/:ro
       - ./certbot/conf/:/etc/nginx/ssl/:ro
+    networks:
+      - rabbitmq_network
+
   certbot:
     image: certbot/certbot:latest
     volumes:
