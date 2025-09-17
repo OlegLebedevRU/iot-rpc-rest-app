@@ -87,6 +87,8 @@ async def add_one_event(
             e,
         )
         return
+    if dev_id is None:
+        return
     if hasattr(msg, "headers"):
         msg_headers = msg.headers
         if "event_type_code" in msg_headers:
