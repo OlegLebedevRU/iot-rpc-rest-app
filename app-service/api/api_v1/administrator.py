@@ -1,11 +1,9 @@
 import json
 import logging
 from typing import Annotated
-
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, not_
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from core import settings
 from core.crud.administrator import AdminRepo
 from core.models import db_helper, Device
@@ -31,7 +29,7 @@ async def do_admin(
             url=str(settings.leo4.url) + "/account/login2",
             headers={"Authorization": "Bearer " + settings.leo4.api_key},
         )
-        logging.info("token %s = ", str(r.json()))
+        log.info("login to leo4 cloud token %s = ", str(r.json()))
 
         if r is None:
             raise HTTPException(status_code=404, detail="Item not found")
@@ -41,13 +39,13 @@ async def do_admin(
         )
         # -------------------------------------------------
         da = r1.json()
-        logging.info("device list %s = ", str(da[0]))
+        log.info("from cloud device list %s = ", str(da[0]))
         await AdminRepo.add_devices(session, da)
         # print(do_nothing_stmt)
         return da
     elif action == "get_u":
         r = httpx.get(url=str(settings.leo4.admin_url) + "api/users")
-        logging.info(f"resp <dev.{r}.ack>, body = {str(r)}")
+        log.info("admin - get_u, body =%s", str(r))
         names = [""]
         n_obj = r.json()
         print(n_obj)
@@ -100,7 +98,7 @@ async def do_admin(
             json=defns,
             headers={"Content-type": "application/json"},
         )
-        print(r.status_code)
+        log.info("to rabbitmq api post definitions, status code= ", r.status_code)
 
     # elif action == "test":
     #     insert_stmt = insert(Org).values(org_id=0)
