@@ -1,6 +1,6 @@
 __all__ = ("broker", "fs_router")
 
-from faststream.rabbit.fastapi import RabbitRouter, RabbitMessage
+from faststream.rabbit.fastapi import RabbitRouter
 from core.config import settings
 
 fs_router = RabbitRouter(
