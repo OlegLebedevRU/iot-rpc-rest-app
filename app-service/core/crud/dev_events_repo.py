@@ -3,7 +3,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi_pagination.ext.sqlalchemy import paginate
 from core.models import DevEvent
-from core.schemas.device_events import DevEventBody, DevEvents, DevEventOut
+from core.schemas.device_events import DevEventBody, DevEventOut
 
 
 class EventRepository:

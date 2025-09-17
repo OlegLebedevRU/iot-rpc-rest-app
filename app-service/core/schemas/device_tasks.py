@@ -120,3 +120,11 @@ class TaskListOut(TaskHeader):
     created_at: datetime
     pending_at: Optional[datetime] = None
     locked_at: Optional[datetime] = None
+
+
+class TaskPublish(BaseModel):
+    routing_key: str
+    message: Optional[str] = None
+    correlation_id: Optional[str] = None
+    exchange: str
+    headers: Optional[dict] = None

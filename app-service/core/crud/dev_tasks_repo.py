@@ -7,7 +7,7 @@ from pydantic import UUID4
 from sqlalchemy import select, update, desc, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
-from sqlalchemy.orm import Mapped, aliased
+from sqlalchemy.orm import Mapped
 from core import settings
 from core.models import Device
 from core.models.common import TaskStatus, PersistentVariable
@@ -20,7 +20,6 @@ from core.models.device_tasks import (
 from core.models.devices import DeviceOrgBind
 from core.models.orgs import Org
 from core.schemas.device_tasks import (
-    TaskRequest,
     TaskCreate,
     TaskResponse,
     TaskResponseResult,
@@ -65,8 +64,6 @@ class TasksRepository:
         t = await session.execute(tsk_q)
         await session.execute(payload_q)
         await session.execute(status_q)
-        # session.add(db_task_payload)
-        # session.add(db_task_status)
         try:
             await session.commit()
             created_at = t.one()
@@ -243,10 +240,6 @@ class TasksRepository:
             .order_by(DevTask.created_at.desc())
             .limit(settings.db.limit_tasks_result)
         )
-
-        # t = await session.execute(query)
-        # resp = t.mappings().all()
-
         return await paginate(session, query)
 
     @classmethod

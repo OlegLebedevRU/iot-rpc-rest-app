@@ -17,7 +17,7 @@ from starlette.responses import HTMLResponse
 from core import settings
 from core.fs_broker import broker
 from core.models import db_helper
-from core.topologys.fs_queues import act_ttl
+from core.services.device_tasks import act_ttl
 
 log = logging.getLogger(__name__)
 
