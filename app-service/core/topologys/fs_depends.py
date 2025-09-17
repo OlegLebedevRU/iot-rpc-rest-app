@@ -1,7 +1,17 @@
 import logging
 import uuid
+from typing import Annotated
+
+from fastapi import Depends
 from faststream.rabbit.fastapi import RabbitMessage
-from core import settings
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from core.models import db_helper
+
+Session_dep = Annotated[
+    AsyncSession,
+    Depends(db_helper.session_getter),
+]
 
 
 async def sn_getter_dep(msg: RabbitMessage) -> str:
@@ -11,6 +21,9 @@ async def sn_getter_dep(msg: RabbitMessage) -> str:
         msg.raw_message.headers,
     )
     return msg.raw_message.routing_key[4:-4]
+
+
+Sn_dep = Annotated[str, Depends(sn_getter_dep)]
 
 
 async def corr_id_getter_dep(msg: RabbitMessage) -> str | None:
@@ -37,3 +50,6 @@ async def corr_id_getter_dep(msg: RabbitMessage) -> str | None:
         logging.info("Received from device no corr data, exception = %s", e)
         corr_id = None
     return corr_id
+
+
+Corr_id_dep = Annotated[str | None, Depends(corr_id_getter_dep)]

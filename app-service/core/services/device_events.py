@@ -1,6 +1,5 @@
 import logging
 import time
-
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.crud.dev_events_repo import EventRepository

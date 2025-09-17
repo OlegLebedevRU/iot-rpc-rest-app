@@ -1,6 +1,5 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio.session import AsyncSession
-
 from core.models import Device
 from core.models.devices import DeviceOrgBind
 from core.models.orgs import Org

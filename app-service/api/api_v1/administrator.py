@@ -1,4 +1,3 @@
-import json
 import logging
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
@@ -23,7 +22,7 @@ router = APIRouter(
 async def do_admin(
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
     action: str | None,
-):  # TaskResponseStatus:
+):
     if action == "get_d":
         r = httpx.get(
             url=str(settings.leo4.url) + "/account/login2",

@@ -1,12 +1,8 @@
-from typing import Annotated
 from aio_pika import RobustExchange, RobustQueue
-from fastapi import Depends
 from faststream.rabbit import RabbitExchange, ExchangeType, RabbitQueue
 from faststream.rabbit.fastapi import RabbitMessage
-from sqlalchemy.ext.asyncio import AsyncSession
 from core import settings
 from core.fs_broker import fs_router, broker
-from core.models import db_helper
 from core.services.device_events import DeviceEventsService
 from core.services.device_tasks import (
     DeviceTasksService,
@@ -14,12 +10,12 @@ from core.services.device_tasks import (
     job_publisher,
     topology,
 )
-from core.topologys.fs_depends import sn_getter_dep, corr_id_getter_dep
+from core.topologys.fs_depends import (
+    Session_dep,
+    Corr_id_dep,
+    Sn_dep,
+)
 
-Session_dep = Annotated[
-    AsyncSession,
-    Depends(db_helper.session_getter),
-]
 topic_exchange = RabbitExchange(
     name=topology.x_name, type=ExchangeType.TOPIC, declare=False
 )
@@ -76,7 +72,7 @@ async def declare_x_q():
 async def add_one_event(
     msg: RabbitMessage,
     session: Session_dep,
-    sn: Annotated[str, Depends(sn_getter_dep)],
+    sn: Sn_dep,
 ):
     await DeviceEventsService(session, sn, 0).add(msg)
 
@@ -84,7 +80,7 @@ async def add_one_event(
 @fs_router.subscriber(q_ack)
 async def ack(
     session: Session_dep,
-    corr_id: Annotated[str | None, Depends(corr_id_getter_dep)],
+    corr_id: Corr_id_dep,
 ):
     await DeviceTasksService(session, 0).pending(corr_id)
 
@@ -92,8 +88,8 @@ async def ack(
 @fs_router.subscriber(q_req)
 async def req(
     session: Session_dep,
-    sn: Annotated[str, Depends(sn_getter_dep)],
-    corr_id: Annotated[str | None, Depends(corr_id_getter_dep)],
+    sn: Sn_dep,
+    corr_id: Corr_id_dep,
 ):
     await DeviceTasksService(session, 0).select(sn, corr_id)
 
@@ -102,8 +98,8 @@ async def req(
 async def result(
     msg: RabbitMessage,
     session: Session_dep,
-    sn: Annotated[str, Depends(sn_getter_dep)],
-    corr_id: Annotated[str | None, Depends(corr_id_getter_dep)],
+    sn: Sn_dep,
+    corr_id: Corr_id_dep,
 ):
     await DeviceTasksService(session, 0).save(msg, sn, corr_id)
 

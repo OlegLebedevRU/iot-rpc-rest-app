@@ -1,7 +1,5 @@
 import logging
-from fastapi import (
-    APIRouter,
-)
+from fastapi import APIRouter
 from fastapi_pagination import Page
 from pydantic import UUID4
 from api.api_v1.api_depends import Session_dep, Org_dep
@@ -27,7 +25,7 @@ async def touch_task(
     session: Session_dep,
     task_create: TaskCreate,
     org_id: Org_dep,
-):
+) -> TaskResponse:
     return await DeviceTasksService(session, org_id).create(task_create)
 
 
