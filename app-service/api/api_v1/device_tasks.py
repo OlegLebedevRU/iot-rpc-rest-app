@@ -23,8 +23,7 @@ from core.schemas.device_tasks import (
     TaskNotify,
     TaskListOut,
 )
-from core.topologys.fs_queues import topic_publisher
-
+from core.services.device_tasks import DeviceTasksService
 
 log = logging.getLogger(__name__)
 router = APIRouter(
@@ -33,40 +32,23 @@ router = APIRouter(
 )
 
 
+async def org_id_dep(
+    org_id: Annotated[int, Header()],
+):
+    return org_id
+
+
 @router.post("/", response_model=TaskResponse)
-async def create_task(
+async def touch_task(
     session: Annotated[
         AsyncSession,
         Depends(db_helper.session_getter),
     ],
     task_create: TaskCreate,
-    org_id: Annotated[int | None, Header()] = None,
+    org_id: Annotated[int, Depends(org_id_dep)],
 ):
-    sn = await DeviceRepo.get_device_sn(session, task_create.device_id, org_id)
-    if sn is None:
-        log.info(
-            "trying to create task failed - device_id not found = %d",
-            task_create.device_id,
-        )
-        raise HTTPException(status_code=404, detail="device_id not found")
-    task = await TasksRepository.create_task(
-        session=session,
-        task=task_create,
-    )
-    log.info("Created task %s", task)
-    rk = RoutingKey(settings.rmq.prefix_srv, sn, settings.rmq.suffix_task)
-    notify: TaskNotify = TaskNotify(
-        id=task.id, created_at=task.created_at, header=task_create
-    )
-    await topic_publisher.publish(
-        routing_key=str(rk),  # "srv.a3b0000000c99999d250813.tsk",
-        message=notify,
-        exchange=settings.rmq.x_name,
-        correlation_id=task.id,
-        headers={"method_code": str(notify.header.method_code)},
-    )
-    # await send_welcome_email.kiq(user_id=user.id)
-    return task
+    task_service = DeviceTasksService(session, org_id)
+    return await task_service.create_task(task_create)
 
 
 @router.get("/{id}", response_model=TaskResponseResult)
@@ -77,11 +59,9 @@ async def get_task(
         Depends(db_helper.session_getter),
     ],
     org_id: Annotated[int | None, Header()] = None,
-) -> TaskResponseResult:  # TaskResponseStatus:
-    task = await TasksRepository.get_task(session, id, org_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
+) -> TaskResponseResult:
+    task_service = DeviceTasksService(session, org_id)
+    return await task_service.get(id)
 
 
 @router.get(
@@ -111,7 +91,7 @@ async def delete_task(
     ],
     org_id: Annotated[int | None, Header()] = None,
 ) -> TaskResponseDeleted:  # TaskResponseStatus:
-    task: TaskResponseDeleted = await TasksRepository.delete_task(session, id)
+    task: TaskResponseDeleted = await TasksRepository.delete_task(session, id, org_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
