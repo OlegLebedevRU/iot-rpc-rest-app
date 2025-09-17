@@ -4,16 +4,12 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, not_
-from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
-from core.crud.dev_tasks_repo import TasksRepository
+from core.crud.administrator import AdminRepo
 from core.models import db_helper, Device
 import httpx
-
-from core.models.devices import DeviceOrgBind
-from core.models.orgs import Org
 
 log = logging.getLogger(__name__)
 router = APIRouter(
@@ -43,24 +39,10 @@ async def do_admin(
             url=str(settings.leo4.url) + "/device/list",
             headers={"Authorization": "Bearer " + r.json()["accessToken"]},
         )
+        # -------------------------------------------------
         da = r1.json()
         logging.info("device list %s = ", str(da[0]))
-        insert_stmt = (
-            insert(Device)
-            .values(
-                [
-                    {"device_id": int(d["device_id"]), "sn": d["serial_number"]}
-                    for d in da
-                ]
-                # device_id=21,
-                # sn="a1b21c22589d100424",
-            )
-            .on_conflict_do_nothing()
-        )
-        # , set_=dict(is_deleted=False
-
-        await session.execute(insert_stmt)
-        await session.commit()
+        await AdminRepo.add_devices(session, da)
         # print(do_nothing_stmt)
         return da
     elif action == "get_u":
