@@ -35,7 +35,7 @@ q_result = RabbitQueue(name=topology.res_queue_name, durable=True)
 q_jobs = RabbitQueue(
     name=settings.ttl_job.queue_name,
     durable=False,
-    exclusive=True,
+    # exclusive=True,
     arguments=settings.rmq.def_queue_args,
 )
 

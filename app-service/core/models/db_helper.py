@@ -28,6 +28,7 @@ class DatabaseHelper:
             echo_pool=echo_pool,
             pool_size=pool_size,
             max_overflow=max_overflow,
+            pool_pre_ping=True,
         )
         self.session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             bind=self.engine,
@@ -45,6 +46,18 @@ class DatabaseHelper:
             yield session
 
 
+""""
+InterfaceError
+Exception raised for errors that are related to the database interface rather than the database itself.
+
+This error is a DBAPI Error and originates from the database driver (DBAPI), not SQLAlchemy itself.
+
+The InterfaceError is sometimes raised by drivers in the context of the database connection being dropped, 
+or not being able to connect to the database. 
+For tips on how to deal with this, see the section Dealing with Disconnects.
+https://docs.sqlalchemy.org/en/20/core/pooling.html#dealing-with-disconnects
+"""
+
 db_h = DatabaseHelper(
     url=str(settings.db.url),
     echo=settings.db.echo,
@@ -52,8 +65,11 @@ db_h = DatabaseHelper(
     pool_size=settings.db.pool_size,
     max_overflow=settings.db.max_overflow,
 )
-def db_init ():
+
+
+def db_init():
     log.info("db init")
     return db_h
+
 
 db_helper = db_init()
