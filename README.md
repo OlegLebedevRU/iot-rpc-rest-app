@@ -44,6 +44,11 @@ Python agent
 c
 ESP-IDF
 
+## Diagrams
+
+Task states [here](./docs/task_states.md)
+
+
 ```mermaid
 sequenceDiagram
     box  rgb(55, 51, 25)
