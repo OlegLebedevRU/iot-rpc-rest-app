@@ -14,5 +14,3 @@ debian/ubuntu - /etc/rabbitmq/rabbitmq.conf
  alembic revision --autogenerate -m "comment"
  alembic upgrade head
 ````
-
-
