@@ -1,10 +1,16 @@
 # MQTT topic rules
+## Breaking
+
+The rules are important. RabbitMQ definitions create restrictions on device access to topics based on device serial numbers. The serial numbers of the devices are embedded in the x509 certificate.
 
 ### Topic name template
 
 Example topic name:
+
 Mqtt received topic= <dev/a3b0000000c10221d290825/req>
+
 _to RabbitMQ routing-key translate = "dev.a3b0000000c10221d290825.req"_
+### Format
 
 ````mermaid
 ---
