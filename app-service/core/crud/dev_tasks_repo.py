@@ -398,7 +398,7 @@ class TasksRepository:
         try:
             await session.commit()
             id_new = t.one()
-            logging.info(f"commited new result {task_id}")
+            logging.info("commited new result %s", task_id)
         except:
             return None
         return id_new.id
