@@ -26,6 +26,6 @@
 
 ## Diagrams
 
-Task states [here](./docs/task_states.md)
-Workflow sequence [here](./docs/sequence.md)
+- Task states [here](./docs/task_states.md)
+- Workflow sequence [here](./docs/sequence.md)
 
