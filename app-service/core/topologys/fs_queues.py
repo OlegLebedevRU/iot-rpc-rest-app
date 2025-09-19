@@ -1,3 +1,5 @@
+import logging
+
 from aio_pika import RobustExchange, RobustQueue
 from faststream.rabbit import RabbitExchange, ExchangeType, RabbitQueue
 from faststream.rabbit.fastapi import RabbitMessage
@@ -10,6 +12,7 @@ from core.services.device_tasks import (
     job_publisher,
     topology,
 )
+from core.services.rmq_admin import RmqAdmin
 from core.topologys.fs_depends import (
     Session_dep,
     Corr_id_dep,
@@ -107,3 +110,11 @@ async def result(
 @fs_router.subscriber(q_jobs)
 async def jobs_parse(session: Session_dep):
     await DeviceTasksService(session, 0).ttl(decrement=1)
+    devices = await RmqAdmin.get_online_devices(
+        sn_arr=[
+            "a1b0004617c24558d080925",
+            "a3b0000000c10221d290825",
+        ]
+    )
+    for device in devices:
+        logging.info("get api: %s", device)
