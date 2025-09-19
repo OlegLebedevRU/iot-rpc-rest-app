@@ -1,72 +1,22 @@
 import logging
 
-from aio_pika import RobustExchange, RobustQueue
-from faststream.rabbit import RabbitExchange, ExchangeType, RabbitQueue
 from faststream.rabbit.fastapi import RabbitMessage
-from core import settings
-from core.fs_broker import fs_router, broker
+from core.fs_broker import fs_router
 from core.services.device_events import DeviceEventsService
 from core.services.device_tasks import (
     DeviceTasksService,
-    topic_publisher,
-    job_publisher,
-    topology,
 )
-from core.services.rmq_admin import RmqAdmin
-from core.topologys.fs_depends import (
+from core.topologys import (
+    q_ack,
+    q_req,
+    q_evt,
+    q_result,
     Session_dep,
     Corr_id_dep,
     Sn_dep,
 )
 
-topic_exchange = RabbitExchange(
-    name=topology.x_name, type=ExchangeType.TOPIC, declare=False
-)
-def_x = RabbitExchange(name=settings.rmq.x_name_direct, declare=False)
-q_ack = RabbitQueue(
-    name=topology.ack_queue_name,
-    durable=True,
-    arguments=settings.rmq.def_queue_args,
-)
-q_req = RabbitQueue(
-    name=topology.req_queue_name,
-    durable=True,
-    arguments=settings.rmq.def_queue_args,
-)
-q_evt = RabbitQueue(name=topology.evt_queue_name, durable=True)
-q_result = RabbitQueue(name=topology.res_queue_name, durable=True)
-q_jobs = RabbitQueue(
-    name=settings.ttl_job.queue_name,
-    durable=False,
-    # exclusive=True,
-    arguments=settings.rmq.def_queue_args,
-)
-
-
-async def declare_x_q():
-    # declare queues, exchange, bindings
-    amq_ex: RobustExchange = await fs_router.broker.declare_exchange(topic_exchange)
-    topic_publisher.exchange = topic_exchange
-    # queues
-    req_queue: RobustQueue = await broker().declare_queue(q_req)
-    ack_queue: RobustQueue = await fs_router.broker.declare_queue(q_ack)
-    evt_queue: RobustQueue = await broker().declare_queue(q_evt)
-    res_queue: RobustQueue = await broker().declare_queue(q_result)
-    # bind queues to exchange with routing key
-    await req_queue.bind(
-        exchange=amq_ex,
-        routing_key=topology.routing_key_dev_request,
-    )
-    await ack_queue.bind(exchange=amq_ex, routing_key=topology.routing_key_dev_ack)
-    await evt_queue.bind(exchange=amq_ex, routing_key=topology.routing_key_dev_event)
-    await res_queue.bind(exchange=amq_ex, routing_key=topology.routing_key_dev_result)
-
-    def_ex: RobustExchange = await broker().declare_exchange(def_x)
-    jobs_queue: RobustQueue = await broker().declare_queue(q_jobs)
-    await jobs_queue.bind(exchange=def_ex, routing_key=settings.ttl_job.queue_name)
-    job_publisher.exchange = def_x
-
-
+log = logging.getLogger(__name__)
 # {'x-correlation-id': b'\x96\xce\xe8\xd2\xf4\x1fK_\x81\xcc|w\x0bu\x92\xae',
 # 'x-reply-to-topic': 'srv.a3b0000000c99999d250813.rsp'}
 
@@ -105,16 +55,3 @@ async def result(
     corr_id: Corr_id_dep,
 ):
     await DeviceTasksService(session, 0).save(msg, sn, corr_id)
-
-
-@fs_router.subscriber(q_jobs)
-async def jobs_parse(session: Session_dep):
-    await DeviceTasksService(session, 0).ttl(decrement=1)
-    devices = await RmqAdmin.get_online_devices(
-        sn_arr=[
-            "a1b0004617c24558d080925",
-            "a3b0000000c10221d290825",
-        ]
-    )
-    for device in devices:
-        logging.info("get api: %s", device)

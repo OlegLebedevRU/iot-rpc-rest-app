@@ -1,3 +1,4 @@
+import enum
 import uuid
 from datetime import datetime, time
 
@@ -22,7 +23,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 
 from core import settings
 from core.models import Base
-from core.models.common import TaskStatus, TaskTTL
+from core.models.common import TaskTTL
 from core.schemas.device_tasks import TaskCreate, TaskRequest
 
 
