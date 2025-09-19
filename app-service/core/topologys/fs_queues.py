@@ -11,10 +11,8 @@ from core.topologys import (
     q_req,
     q_evt,
     q_result,
-    Session_dep,
-    Corr_id_dep,
-    Sn_dep,
 )
+from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
 
 log = logging.getLogger(__name__)
 # {'x-correlation-id': b'\x96\xce\xe8\xd2\xf4\x1fK_\x81\xcc|w\x0bu\x92\xae',
