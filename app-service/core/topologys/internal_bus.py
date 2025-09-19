@@ -3,7 +3,8 @@ import logging
 from core.fs_broker import fs_router
 from core.services.device_tasks import DeviceTasksService
 from core.services.rmq_admin import RmqAdmin
-from core.topologys import Session_dep, q_jobs
+from core.topologys.fs_depends import Session_dep
+from core.topologys import q_jobs
 
 log = logging.getLogger(__name__)
 

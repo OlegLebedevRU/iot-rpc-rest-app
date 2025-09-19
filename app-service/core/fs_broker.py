@@ -1,8 +1,11 @@
 __all__ = ("broker", "fs_router")
 
+import logging
+
 from faststream.rabbit.fastapi import RabbitRouter
 from core.config import settings
 
+log = logging.getLogger(__name__)
 fs_router = RabbitRouter(
     str(settings.faststream.url),
     include_in_schema=False,

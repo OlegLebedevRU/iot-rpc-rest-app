@@ -1,3 +1,5 @@
+import logging
+
 from aio_pika import RobustExchange, RobustQueue
 from faststream.rabbit import RabbitExchange, ExchangeType, RabbitQueue
 
@@ -5,6 +7,7 @@ from core import settings
 from core.fs_broker import fs_router, broker
 from core.services.device_tasks import topology, topic_publisher, job_publisher
 
+log = logging.getLogger(__name__)
 topic_exchange = RabbitExchange(
     name=topology.x_name, type=ExchangeType.TOPIC, declare=False
 )
