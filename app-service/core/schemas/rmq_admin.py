@@ -19,3 +19,8 @@ class DeviceConnectionDetails(ClientProperties):
     peer_cert_subject: str
     protocol: str
     peer_cert_validity: str
+
+
+class RmqClientsAction(BaseModel):
+    action: str
+    clients: list[str]

@@ -30,6 +30,12 @@ q_jobs = RabbitQueue(
     # exclusive=True,
     arguments=settings.rmq.def_queue_args,
 )
+rmq_api_client_action = RabbitQueue(
+    name=settings.rmq.api_clients_queue,
+    durable=False,
+    # exclusive=True,
+    arguments=settings.rmq.def_queue_args,
+)
 
 
 async def declare_x_q():
@@ -52,5 +58,11 @@ async def declare_x_q():
 
     def_ex: RobustExchange = await broker().declare_exchange(def_x)
     jobs_queue: RobustQueue = await broker().declare_queue(q_jobs)
+    rmq_client_action_robust: RobustQueue = await broker().declare_queue(
+        rmq_api_client_action
+    )
     await jobs_queue.bind(exchange=def_ex, routing_key=settings.ttl_job.queue_name)
+    await rmq_client_action_robust.bind(
+        exchange=def_ex, routing_key=settings.rmq.ack_queue_name
+    )
     job_publisher.exchange = def_x

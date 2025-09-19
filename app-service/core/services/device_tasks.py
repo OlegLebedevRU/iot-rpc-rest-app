@@ -15,6 +15,7 @@ from core.schemas.device_tasks import (
     TaskResponseResult,
     TaskResponseDeleted,
 )
+from core.schemas.rmq_admin import RmqClientsAction
 
 topology = settings.rmq
 
@@ -26,6 +27,20 @@ log = logging.getLogger(__name__)
 async def act_ttl(step: int):
     await job_publisher.publish(
         message="ttl_decrement", routing_key=settings.ttl_job.queue_name
+    )
+    # [
+    #             "a1b0004617c24558d080925",
+    #             "a3b0000000c10221d290825",
+    #         ]
+    api_test_msg: RmqClientsAction = RmqClientsAction(
+        action="get_online_status",
+        clients=[
+            "a1b0004617c24558d080925",
+            "a3b0000000c10221d290825",
+        ],
+    )
+    await job_publisher.publish(
+        routing_key=settings.rmq.ack_queue_name, message=api_test_msg
     )
 
 

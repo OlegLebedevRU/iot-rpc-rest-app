@@ -49,5 +49,61 @@ class RmqAdminApi:
             log.info("Error Get connectionsFrom rabbit API =%s", e)
             return None
 
+    @classmethod
+    async def get_exist_devices(cls):
+        r = httpx.get(url=str(settings.leo4.admin_url) + "api/users")
+        log.info("admin - get_u, body =%s", str(r))
+        names = [""]
+        n_obj = r.json()
+        print(n_obj)
+        for u in n_obj:
+            names.append(u["name"])
+        return names
+    @classmethod
+    async def set_device_definitions(cls, lu1):
+        d_users = []
+        d_perm = []
+        d_topic_perm = []
+        for d in lu1:
+            d_users.append(
+                {
+                    "name": d.sn,
+                    "password_hash": "",
+                    "hashing_algorithm": "rabbit_password_hashing_sha256",
+                    "tags": ["device"],
+                    "limits": {},
+                }
+            )
+            d_perm.append(
+                {
+                    "user": d.sn,
+                    "vhost": "/",
+                    "configure": ".*",
+                    "write": ".*",
+                    "read": ".*",
+                }
+            )
+            d_topic_perm.append(
+                {
+                    "user": d.sn,
+                    "vhost": "/",
+                    "exchange": "amq.topic",
+                    "write": "^dev.{client_id}.*",
+                    "read": "^srv.{client_id}.*",
+                }
+            )
+        defns = {}
+        defns["users"] = d_users
+        defns["permissions"] = d_perm
+        defns["topic_permissions"] = d_topic_perm
+        print(defns)
+
+        r = httpx.post(
+            url=str(settings.leo4.admin_url) + "api/definitions",
+            json=defns,
+            headers={"Content-type": "application/json"},
+        )
+        log.info("to rabbitmq api post definitions, status code= ", r.status_code)
+
 
 # DeviceConnectionDetails

@@ -5,8 +5,9 @@ __all__ = (
     "q_req",
     "q_evt",
     "q_result",
+    "rmq_api_client_action",
 )
 
-from .declare import q_jobs, q_ack, q_req, q_evt, q_result
+from .declare import *
 from .fs_queues import *
 from .internal_bus import *

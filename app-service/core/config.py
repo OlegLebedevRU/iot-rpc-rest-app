@@ -112,6 +112,7 @@ class RabbitQXConfig(BaseModel):
     routing_key_dev_request: str = str(RoutingKey(prefix="dev", sn="*", suffix="req"))
     routing_key_dev_result: str = str(RoutingKey(prefix="dev", sn="*", suffix="res"))
     routing_key_dev_event: str = str(RoutingKey(prefix="dev", sn="*", suffix="evt"))
+    api_clients_queue: str = "rmq_api_client_action"
 
 
 class JobTtlConfig(BaseModel):

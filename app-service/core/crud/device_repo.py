@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import select, not_
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from core.models import Device
 from core.models.devices import DeviceOrgBind
@@ -46,3 +46,10 @@ class DeviceRepo:
         else:
             resp = None
         return resp
+
+    @classmethod
+    async def det_exist_device_sn(cls, session, sn_list):
+        lu_q = select(Device.sn).where(not_(Device.sn.in_(sn_list)))
+        lu = await session.execute(lu_q)
+        lu1 = lu.mappings().all()
+        print(lu1)
