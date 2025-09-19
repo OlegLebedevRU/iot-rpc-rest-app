@@ -19,3 +19,4 @@
 - Alembic + asyncio recipe https://alembic.sqlalchemy.org/en/latest/cookbook.html#using-asyncio-with-alembic
 - orjson https://github.com/ijl/orjson
 - FastAPI ORJSONResponse https://fastapi.tiangolo.com/advanced/custom-response/#use-orjsonresponse
+- Creating CA hierarchy https://cryptography.io/en/latest/x509/tutorial/#creating-a-ca-hierarchy
