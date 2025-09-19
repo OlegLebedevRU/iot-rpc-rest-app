@@ -1,6 +1,6 @@
 from ipaddress import IPv4Address
 
-from pydantic import BaseModel, Field, IPvAnyAddress, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ClientId(BaseModel):

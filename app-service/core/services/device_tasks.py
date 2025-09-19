@@ -28,10 +28,7 @@ async def act_ttl(step: int):
     await job_publisher.publish(
         message="ttl_decrement", routing_key=settings.ttl_job.queue_name
     )
-    # [
-    #             "a1b0004617c24558d080925",
-    #             "a3b0000000c10221d290825",
-    #         ]
+
     api_test_msg: RmqClientsAction = RmqClientsAction(
         action="get_online_status",
         clients=[

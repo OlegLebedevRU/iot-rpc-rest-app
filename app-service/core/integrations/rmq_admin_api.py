@@ -1,8 +1,6 @@
 import asyncio
 import logging
-
 import httpx
-
 from core import settings
 from core.schemas.rmq_admin import DeviceConnectionDetails
 
@@ -20,15 +18,9 @@ class RmqAdminApi:
     user_conn = "api/connections/username/"
     conn = "api/connections/"
 
-    # @classmethod
-    # async def session_getter(cls):
-    #     return httpx.AsyncClient(base_url=str(settings.leo4.admin_url))
-
     @classmethod
     async def get_connection(cls, sn_arr):
         try:
-
-            # async with httpx.AsyncClient(base_url=str(settings.leo4.admin_url)) as session:
             async with httpx.AsyncClient(
                 base_url=str(settings.leo4.admin_url)
             ) as session:
@@ -59,6 +51,7 @@ class RmqAdminApi:
         for u in n_obj:
             names.append(u["name"])
         return names
+
     @classmethod
     async def set_device_definitions(cls, lu1):
         d_users = []
@@ -104,6 +97,3 @@ class RmqAdminApi:
             headers={"Content-type": "application/json"},
         )
         log.info("to rabbitmq api post definitions, status code= ", r.status_code)
-
-
-# DeviceConnectionDetails
