@@ -1,6 +1,6 @@
 # Iot Async-RPC Core
 
-[**Swarm of devices**] <--> [**Core**] <--> [**Control center**]
+[**Client App**] <--> [**API**] <-->  [**Swarm of devices**]
 
 ### Architecture
 
