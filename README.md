@@ -1,4 +1,7 @@
 # Iot Async-RPC Core
+## Purpose:
+A transport framework for creating secure control systems and telemetry for a distributed, loosely coupled network of cross-platform devices.
+
 
 [**Client App**] <--> [**API**] <-->  [**Swarm of devices**]
 
