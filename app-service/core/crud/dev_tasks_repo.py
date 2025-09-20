@@ -30,6 +30,8 @@ from core.schemas.device_tasks import (
     TaskListOut,
 )
 
+log = logging.getLogger(__name__)
+
 
 class TasksRepository:
     @classmethod

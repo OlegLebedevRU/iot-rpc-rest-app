@@ -73,7 +73,6 @@ class DeviceTasksService:
             correlation_id=task.id,
             headers={"method_code": str(notify.header.method_code)},
         )
-        # await send_welcome_email.kiq(user_id=user.id)
         return task
 
     # @classmethod
@@ -109,7 +108,7 @@ class DeviceTasksService:
         task = await TasksRepository.select_task(self.session, corr_id, sn)
         if task is not None:
             t_resp = task.model_dump_json()
-            logging.info("from DB select task = %s", t_resp)
+            log.info("from DB select task = %s", t_resp)
             method_code = str(task.header.method_code)
             await TasksRepository.task_status_update(
                 self.session, task.id, TaskStatus.LOCK
@@ -117,7 +116,7 @@ class DeviceTasksService:
             correlation_id = task.id
         else:
             t_resp = settings.task_proc_cfg.nop_resp
-            logging.info("from DB select task = None")
+            log.info("from DB select task = None")
             correlation_id = settings.task_proc_cfg.zero_corr_id
             method_code = "0"
         routing_key: str = str(
@@ -147,7 +146,7 @@ class DeviceTasksService:
                 res = msg.body.decode()
             else:
                 res = "default"
-            logging.info(
+            log.info(
                 "Mqtt received RESULT ext_id=%d, status_code=%d",
                 ext_id,
                 status_code,
@@ -159,7 +158,7 @@ class DeviceTasksService:
                 self.session, corr_id, TaskStatus.DONE
             )
         else:
-            logging.info(
+            log.info(
                 "Mqtt received RESULT with ERROR <dev.%s.res> - No corr_id, ext_id=%d, status_code=%d",
                 sn,
                 ext_id,
@@ -168,4 +167,4 @@ class DeviceTasksService:
 
     async def ttl(self, decrement: int = 1):
         await TasksRepository.update_ttl(self.session, decrement)
-        logging.info("subscribe job event  decrement TTL = %d", decrement)
+        log.info("subscribe job event  decrement TTL = %d", decrement)
