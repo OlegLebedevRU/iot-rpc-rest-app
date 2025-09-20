@@ -20,7 +20,8 @@ class RmqAdmin:
     @classmethod
     async def repl_devices(cls, session: AsyncSession, api_key: str):
         da = await get_factory_device_list(api_key)
-        await DeviceRepo.add_devices(session, da)
+        if da:
+            await DeviceRepo.add_devices(session, da)
         return da
 
     @classmethod
