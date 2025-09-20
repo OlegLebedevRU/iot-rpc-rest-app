@@ -10,7 +10,7 @@ from sqlalchemy import (
     func,
     DateTime,
 )
-from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
 
 from core.models import Base
@@ -56,4 +56,7 @@ class DeviceConnection(Base):
     checked_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True
     )
+    client_id: Mapped[str] = mapped_column(String, nullable=True)
+    last_checked_result: Mapped[bool] = mapped_column(Boolean, default=False)
+    details: Mapped[str] = mapped_column(JSONB, default=None)
     dev_conn = relationship("Device", single_parent=True, cascade="all, delete-orphan")
