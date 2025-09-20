@@ -50,6 +50,7 @@ class ApiV1Prefix(BaseModel):
     device_tasks: str = "/device-tasks"
     admin: str = "/admin"
     device_events: str = "/device-events"
+    devices: str = "/devices"
 
 
 class ApiPrefix(BaseModel):
