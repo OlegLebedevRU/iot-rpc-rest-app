@@ -2,7 +2,7 @@ from typing import Any
 from sqlalchemy import select, not_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
-from core.models import Device
+from core.models import Device, DeviceConnection
 from core.models.devices import DeviceOrgBind
 from core.models.orgs import Org
 
@@ -84,7 +84,13 @@ class DeviceRepo:
             )
             .on_conflict_do_nothing()
         )
+        insert_dev_conn = insert(DeviceConnection).values([
+                    {"device_id": int(d["device_id"]), "client_id": d["serial_number"]}
+                    for d in device_list
+                ]).on_conflict_do_nothing()
+
         await session.execute(insert_stmt)
         await session.execute(insert_stmt1)
         await session.execute(insert_stmt2)
+        await session.execute(insert_dev_conn)
         await session.commit()
