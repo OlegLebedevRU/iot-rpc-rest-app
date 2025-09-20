@@ -58,5 +58,5 @@ class DeviceConnection(Base):
     )
     client_id: Mapped[str] = mapped_column(String, nullable=True)
     last_checked_result: Mapped[bool] = mapped_column(Boolean, default=False)
-    details: Mapped[str] = mapped_column(JSONB, default=None)
+    details: Mapped[str] = mapped_column(JSONB, nullable=True)
     dev_conn = relationship("Device", single_parent=True, cascade="all, delete-orphan")

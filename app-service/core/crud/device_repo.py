@@ -1,10 +1,15 @@
+import logging
 from typing import Any
-from sqlalchemy import select, not_
+from sqlalchemy import select, not_, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
+from sqlalchemy import update
 from core.models import Device, DeviceConnection
 from core.models.devices import DeviceOrgBind
 from core.models.orgs import Org
+from core.schemas.devices import DeviceConnectStatus
+
+log = logging.getLogger(__name__)
 
 
 class DeviceRepo:
@@ -54,7 +59,7 @@ class DeviceRepo:
         lu_q = select(Device.sn).where(not_(Device.sn.in_(sn_list)))
         lu = await session.execute(lu_q)
         lu1 = lu.mappings().all()
-        print(lu1)
+        log.info("get exist devices = %s", lu1)
 
     @classmethod
     async def add_devices(cls, session: AsyncSession, device_list: Any):
@@ -100,3 +105,38 @@ class DeviceRepo:
         await session.execute(insert_stmt2)
         await session.execute(insert_dev_conn)
         await session.commit()
+
+    @classmethod
+    async def update_connections(
+        cls, session: AsyncSession, device_conn: list[DeviceConnectStatus]
+    ):
+        for dev_con in device_conn:
+            con_upd = (
+                update(DeviceConnection)
+                .values(
+                    checked_at=func.current_timestamp(),
+                    last_checked_result=True,
+                    details=dev_con.details,
+                    connected_at=func.to_timestamp(dev_con.connected_at / 1000),
+                )
+                .where(DeviceConnection.client_id == dev_con.client_id)
+            )
+            await session.execute(con_upd)
+        await session.commit()
+
+    @classmethod
+    async def reset_connection_flag(cls, session: AsyncSession, sn_arr: list[str]):
+        await session.execute(
+            update(DeviceConnection)
+            .values(last_checked_result=False)
+            .where(DeviceConnection.client_id.in_(sn_arr))
+        )
+        await session.commit()
+
+    @classmethod
+    async def list(cls, session):
+        sn_arr_q = select(DeviceConnection.client_id)
+        sn_arr = await session.execute(sn_arr_q)
+        lu1 = sn_arr.mappings().all()
+        lu2 = [s["client_id"] for s in lu1]
+        return lu2

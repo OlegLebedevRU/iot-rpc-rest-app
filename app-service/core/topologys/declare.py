@@ -63,6 +63,6 @@ async def declare_x_q():
     )
     await jobs_queue.bind(exchange=def_ex, routing_key=settings.ttl_job.queue_name)
     await rmq_client_action_robust.bind(
-        exchange=def_ex, routing_key=settings.rmq.ack_queue_name
+        exchange=def_ex, routing_key=settings.rmq.api_clients_queue
     )
     job_publisher.exchange = def_x

@@ -22,3 +22,4 @@ async def get_factory_device_list(api_key):
     # -------------------------------------------------
     da = r1.json()
     log.info("from cloud device list %s = ", str(da[0]))
+    return da

@@ -58,11 +58,6 @@ class TasksRepository:
             ttl=task.ttl,
             priority=task.priority,
         )
-        # db_task = DevTask(id=db_uuid, created_at=func.current_datetime(),
-        #                      **task.model_dump(include={'device_id', 'method_code'}))  # item.model_dump()
-        # db_task_payload = DevTaskPayload(task_id=db_uuid, **task.model_dump(mode='json', include={'payload'}))
-        # db_task_status = DevTaskStatus(task_id=db_uuid, status=TaskStatus.READY,
-        #                                   **task.model_dump(include={'ttl', 'priority'}))
         t = await session.execute(tsk_q)
         await session.execute(payload_q)
         await session.execute(status_q)
@@ -112,9 +107,6 @@ class TasksRepository:
 
         t = await session.execute(query)
         resp = t.mappings().one_or_none()
-
-        # print(str(resp))
-        # print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
         if resp is None:
             return None
         r = await session.execute(res_q)
@@ -123,7 +115,6 @@ class TasksRepository:
         header: TaskHeader = TaskHeader.model_validate(resp)
         for r in res:
             results.append(ResultArray.model_validate(r))
-        # results: ResultArray = ResultArray(res)
         task: TaskResponseResult = TaskResponseResult(
             header=header,
             id=resp.id,
@@ -193,11 +184,8 @@ class TasksRepository:
         if t is None:
             return None
         resp = t.mappings().one_or_none()
-        # print(str(resp))
-        # print("vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv")
         if resp is None:
             return None
-        # print(resp[2])
         header: TaskHeader = TaskHeader.model_validate(resp)
         task: TaskResponsePayload = TaskResponsePayload(
             header=header,
@@ -298,9 +286,7 @@ class TasksRepository:
             )
             .values(ttl=DevTaskStatus.ttl - delta_ttl)
         )
-        await session.flush()
         await session.commit()
-        # except OperationalError as e:
         await session.execute(
             update(DevTaskStatus)
             .where(
@@ -350,15 +336,11 @@ class TasksRepository:
         else:
             return False
         await session.execute(qur)
-        # except OperationalError as e:
         await session.commit()
         return True
 
     @classmethod
     async def update_ttl(cls, session: AsyncSession, step_ttl: int):
-        # session = await anext(db_helper.session_getter())
-        # async with db_helper.session_getter() as session:
-        # saved_min = await PersistentVariables.get_data(session, "saved_time_minutes")
         data = await PersistentVariable.get_data(session, "saved_time_minutes")
         tn = int(time.time()) // 60
         if data is not None:
@@ -400,7 +382,8 @@ class TasksRepository:
         try:
             await session.commit()
             id_new = t.one()
-            logging.info("commited new result %s", task_id)
-        except:
+            log.info("Task result commited, id= %s", task_id)
+        except Exception as e:
+            log.info("ERROR task result commited, id = %s, exception = %s", task_id, e)
             return None
         return id_new.id

@@ -15,7 +15,8 @@ class RmqAdmin:
 
     @classmethod
     async def get_online_devices(cls, sn_arr):
-        return await RmqAdminApi.get_connection(sn_arr)
+        devs_online = await RmqAdminApi.get_connection(sn_arr)
+        return devs_online
 
     @classmethod
     async def repl_devices(cls, session: AsyncSession, api_key: str):
@@ -27,6 +28,8 @@ class RmqAdmin:
     @classmethod
     async def set_device_definitions(cls, session: AsyncSession):
         names = await RmqAdminApi.get_exist_devices()
-        lu1 = await DeviceRepo.get_exist_device_sn(session, names)
-        # defns = {"users": [], "permissions": []}
-        await RmqAdminApi.set_device_definitions(lu1)
+        if names:
+            lu1 = await DeviceRepo.get_exist_device_sn(session, names)
+            # defns = {"users": [], "permissions": []}
+            if lu1:
+                await RmqAdminApi.set_device_definitions(lu1)

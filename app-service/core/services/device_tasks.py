@@ -36,8 +36,11 @@ async def act_ttl(step: int):
             "a3b0000000c10221d290825",
         ],
     )
+    api_test2_msg: RmqClientsAction = RmqClientsAction(
+        action="update_online_status", clients=[]
+    )
     await job_publisher.publish(
-        routing_key=settings.rmq.ack_queue_name, message=api_test_msg
+        routing_key=settings.rmq.api_clients_queue, message=api_test2_msg
     )
 
 
