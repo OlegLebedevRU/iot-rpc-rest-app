@@ -9,7 +9,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import Mapped
 from core import settings
-from core.models import Device
+from core.models import Device, Org
 from core.models.common import TaskStatus, PersistentVariable
 from core.models.device_tasks import (
     DevTaskStatus,
@@ -18,7 +18,6 @@ from core.models.device_tasks import (
     DevTaskPayload,
 )
 from core.models.devices import DeviceOrgBind
-from core.models.orgs import Org
 from core.schemas.device_tasks import (
     TaskCreate,
     TaskResponse,

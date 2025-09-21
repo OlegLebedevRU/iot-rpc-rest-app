@@ -4,9 +4,8 @@ from sqlalchemy import select, not_, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy import update
-from core.models import Device, DeviceConnection
+from core.models import Device, DeviceConnection, Org
 from core.models.devices import DeviceOrgBind
-from core.models.orgs import Org
 from core.schemas.devices import DeviceConnectStatus
 
 log = logging.getLogger(__name__)
