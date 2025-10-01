@@ -1,5 +1,6 @@
 import logging
 
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +13,9 @@ log = logging.getLogger(__name__)
 
 
 class DeviceService:
+    @classmethod
+    async def get_list(cls, session: AsyncSession, org_id, device_id: int | None):
+        return await DeviceRepo.get(session, org_id, device_id)
 
     @classmethod
     async def get_connect_status_ids(cls, device_ids: [int]):
@@ -39,3 +43,21 @@ class DeviceService:
         log.info("service DeviceService: update device connections %s", dev_statuses)
         await DeviceRepo.reset_connection_flag(session, list_devices)
         await DeviceRepo.update_connections(session, dev_statuses)
+
+    @classmethod
+    async def proxy_upsert_tag(cls, session, org_id, device_id, tag, value):
+        if tag.isascii():
+            if len(value) > 0:
+                try:
+                    tag_id = await DeviceRepo.upsert_tag(
+                        session, org_id, device_id, tag, value
+                    )
+                except:
+                    raise HTTPException(
+                        status_code=404, detail="Tag/device_id uniqes error."
+                    )
+            else:
+                raise HTTPException(status_code=404, detail="Value is empty")
+        else:
+            raise HTTPException(status_code=404, detail="Tag is not ascii")
+        return tag_id

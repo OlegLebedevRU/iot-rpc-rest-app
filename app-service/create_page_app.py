@@ -10,9 +10,9 @@ from fastapi.openapi.docs import (
     get_swagger_ui_html,
     get_swagger_ui_oauth2_redirect_html,
 )
-from fastapi.responses import ORJSONResponse, HTMLResponse
-
-# from starlette.responses import HTMLResponse
+from fastapi.responses import ORJSONResponse
+from fastapi.responses import HTMLResponse
+from httpx import AsyncClient
 
 from core import settings
 from core.fs_broker import broker
@@ -23,39 +23,14 @@ log = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    scheduler = AsyncIOScheduler()
-    scheduler.configure(
-        jobstores={
-            "default": MemoryJobStore()
-            #    'default': SQLAlchemyJobStore(url=db_url2)
-        }
-    )
-    try:
-        scheduler.add_job(
-            act_ttl,
-            args=[settings.ttl_job.tick_interval],
-            coalesce=True,
-            # misfire_grace_time=10,
-            trigger=IntervalTrigger(minutes=settings.ttl_job.tick_interval),
-            id=settings.ttl_job.id_name,
-            replace_existing=True,
-        )
-        scheduler.start()
-    except Exception as e:
-        logging.info(f"Исключение scheduler: {str(e)}")
-
-    yield
-
-    await db_helper.dispose()
-    scheduler.shutdown()
-
-    # FastStream broker
-    await broker().stop()
+async def lifespan(app_: FastAPI):
+    async with AsyncClient() as client:
+        app_.state.httpx_client = client
+        yield
 
 
 def register_static_docs_routes(app: FastAPI) -> None:
-    @app.get("/docs", include_in_schema=False)
+    @app.get("/pages-docs", include_in_schema=False)
     async def custom_swagger_ui_html() -> HTMLResponse:
         return get_swagger_ui_html(
             openapi_url=str(app.openapi_url),
@@ -69,7 +44,7 @@ def register_static_docs_routes(app: FastAPI) -> None:
     async def swagger_ui_redirect() -> HTMLResponse:
         return get_swagger_ui_oauth2_redirect_html()
 
-    @app.get("/redoc", include_in_schema=False)
+    @app.get("/pages-redoc", include_in_schema=False)
     async def redoc_html() -> HTMLResponse:
         return get_redoc_html(
             openapi_url=str(app.openapi_url),
@@ -82,11 +57,11 @@ def create_app(
     create_custom_static_urls: bool = False,
 ) -> FastAPI:
     app = FastAPI(
-        title="Leo4",
-        default_response_class=ORJSONResponse,
+        title="Leo4-pages",
+        default_response_class=HTMLResponse,
         lifespan=lifespan,
-        docs_url=None if create_custom_static_urls else "/docs",
-        redoc_url=None if create_custom_static_urls else "/redoc",
+        docs_url=None if create_custom_static_urls else "/pages-docs",
+        redoc_url=None if create_custom_static_urls else "/pages-redoc",
     )
 
     if create_custom_static_urls:

@@ -12,6 +12,7 @@ dependencies = [
     "fastapi>=0.116.1",
     "fastapi-pagination>=0.14.1",
     "faststream>=0.5.48",
+    "fastui>=0.8.0",
     "gunicorn>=23.0.0",
     "httpx>=0.28.1",
     "orjson>=3.11.3",

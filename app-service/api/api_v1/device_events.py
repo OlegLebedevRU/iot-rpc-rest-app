@@ -24,5 +24,8 @@ async def list_device_events(
     device_id: Annotated[int, Query()],
     session: Session_dep,
     org_id: Org_dep,
+    events_exclude: Annotated[list[int] | None, Query()] = None,
 ) -> Page[DevEventOut] | None:
-    return await DeviceEventsService(session, None, org_id).list(device_id)
+    return await DeviceEventsService(session, None, org_id).list(
+        device_id, events_exclude
+    )

@@ -14,6 +14,9 @@ from core.schemas.device_tasks import (
     TaskListOut,
     TaskResponseResult,
     TaskResponseDeleted,
+    TaskHeader,
+    ResultArray,
+    TaskResponse,
 )
 from core.schemas.rmq_admin import RmqClientsAction
 
@@ -60,17 +63,20 @@ class DeviceTasksService:
                 task_create.device_id,
             )
             raise HTTPException(status_code=404, detail="device_id not found")
-        task = await TasksRepository.create_task(
+        db_uuid, created_at = await TasksRepository.create_task(
             session=self.session,
             task=task_create,
         )
+        task = TaskResponse(id=db_uuid, created_at=int(created_at))
         log.info("Created task %s", task)
-        rk = RoutingKey(settings.rmq.prefix_srv, sn, settings.rmq.suffix_task)
+        task_device_topic = str(
+            RoutingKey(settings.rmq.prefix_srv, sn, settings.rmq.suffix_task)
+        )
         notify: TaskNotify = TaskNotify(
             id=task.id, created_at=task.created_at, header=task_create
         )
         await topic_publisher.publish(
-            routing_key=str(rk),  # "srv.a3b0000000c99999d250813.tsk",
+            routing_key=task_device_topic,  # "srv.a3b0000000c99999d250813.tsk",
             message=notify,
             exchange=settings.rmq.x_name,
             correlation_id=task.id,
@@ -80,10 +86,25 @@ class DeviceTasksService:
 
     # @classmethod
     async def get(self, id: UUID) -> TaskResponseResult | None:
-        task = await TasksRepository.get_task(self.session, id, self.org_id)
+        task, result = await TasksRepository.get_task(self.session, id, self.org_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
-        return task
+        results = []
+        header: TaskHeader = TaskHeader.model_validate(task)
+        for r in result:
+            results.append(ResultArray.model_validate(r))
+        task_resp: TaskResponseResult = TaskResponseResult(
+            header=header,
+            id=task.id,
+            status=task.status,
+            created_at=int(task.created_at),
+            pending_at=int(task.pending_at) if task.pending_at is not None else None,
+            locked_at=int(task.locked_at) if task.locked_at is not None else None,
+            results=results,
+        )
+        if task_resp is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return task_resp
 
     async def delete(self, id: UUID) -> TaskResponseDeleted:
         task: TaskResponseDeleted = await TasksRepository.delete_task(

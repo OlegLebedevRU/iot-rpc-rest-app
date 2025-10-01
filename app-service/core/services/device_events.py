@@ -55,8 +55,10 @@ class DeviceEventsService:
             )
             await EventRepository.add_event(self.session, event)
 
-    async def list(self, device_id):
-        events = await EventRepository.get_events_page(self.session, device_id)
+    async def list(self, device_id, events_exclude):
+        events = await EventRepository.get_events_page(
+            self.session, device_id, events_exclude=events_exclude
+        )
         if events is None:
             raise HTTPException(status_code=404, detail="Events not found")
         return events

@@ -1,10 +1,16 @@
 from datetime import datetime
+from typing import List
+
 from sqlalchemy import (
     Integer,
     String,
     ForeignKey,
     Boolean,
     func,
+    sql,
+    Column,
+    column,
+    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -22,8 +28,58 @@ class Device(Base):
     deleted_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True
     )
-    connection: Mapped["DeviceConnection"] = relationship(back_populates="device")
-    org_bind: Mapped["DeviceOrgBind"] = relationship(back_populates="device")
+    connection: Mapped["DeviceConnection"] = relationship(
+        back_populates="device_conn",
+        # lazy="joined",
+        # primaryjoin="Device.device_id==DeviceConnection.device_id",
+    )
+    # org_bind: Mapped["DeviceOrgBind"] = relationship(
+    #     back_populates="device_bind",
+    #     # lazy="noload",
+    #     uselist=False,
+    #     single_parent=True,
+    #     innerjoin=True,
+    # )
+    device_tags: Mapped[List["DeviceTag"]] = relationship(
+        back_populates="tags",
+        # lazy="joined",
+        # primaryjoin="Device.device_id==DeviceTag.device_id",
+    )
+
+
+class DeviceTag(Base):
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey(Device.device_id), unique=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.current_timestamp(0), default=None
+    )
+    is_deleted: Mapped[bool] = mapped_column(Boolean, server_default=sql.false())
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+        server_onupdate=func.current_timestamp(0),
+    )
+    deleted_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+    tag: Mapped[str] = mapped_column(String)
+    value: Mapped[str] = mapped_column(String, nullable=True)
+    is_system_tag: Mapped[bool] = mapped_column(Boolean, server_default=sql.false())
+    UniqueConstraint(
+        "device_id",
+        "tag",
+        "uq_tb_device_tags_device_id",
+        #  postgresql_where=is_deleted=False,
+    )
+    tags: Mapped["Device"] = relationship(
+        back_populates="device_tags",
+        single_parent=True,
+        uselist=False,
+        innerjoin=True,
+        # secondaryjoin="Device.device_id==DeviceTag.device_id",
+    )
 
 
 class DeviceConnection(Base):
@@ -40,7 +96,14 @@ class DeviceConnection(Base):
     client_id: Mapped[str] = mapped_column(String, nullable=True)
     last_checked_result: Mapped[bool] = mapped_column(Boolean, default=False)
     details: Mapped[str] = mapped_column(JSONB, nullable=True)
-    device: Mapped["Device"] = relationship(back_populates="connection")
+    device_conn: Mapped["Device"] = relationship(
+        back_populates="connection",
+        # secondaryjoin="Device.device_id==DeviceConnection.device_id",
+        single_parent=True,
+        uselist=False,
+        # secondaryjoin="and_(DeviceOrgBind.org_id==Org.org_id, Org.is_deleted ==sql.false())",
+        # innerjoin=True,
+    )
 
 
 class Org(Base):
@@ -54,7 +117,10 @@ class Org(Base):
     deleted_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True
     )
-    device_bind: Mapped["DeviceOrgBind"] = relationship(back_populates="org")
+    o_bind: Mapped["DeviceOrgBind"] = relationship(
+        back_populates="org",
+        # lazy="joined",
+    )
 
 
 class DeviceOrgBind(Base):
@@ -63,5 +129,18 @@ class DeviceOrgBind(Base):
         Integer, ForeignKey(Device.device_id), unique=True
     )
     org_id: Mapped[int] = mapped_column(Integer, ForeignKey(Org.org_id))
-    device: Mapped["Device"] = relationship(back_populates="org_bind")
-    org: Mapped["Org"] = relationship(back_populates="device_bind")
+    device_bind: Mapped["Device"] = relationship(
+        # back_populates="org_bind",
+        single_parent=True,
+        lazy="noload",
+        innerjoin=True,
+    )
+    org: Mapped["Org"] = relationship(
+        back_populates="o_bind",
+        single_parent=True,
+        # lazy="joined",
+        # join_depth=1,
+        # primaryjoin="and_(DeviceOrgBind.org_id==Org.org_id, Org.is_deleted ==sql.false())",
+        # primaryjoin="DeviceOrgBind.org_id==Org.org_id",
+        innerjoin=True,
+    )

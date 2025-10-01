@@ -18,11 +18,20 @@ class EventRepository:
 
     @classmethod
     async def get_events_page(
-        cls, session: AsyncSession, device_id: int | None
+        cls,
+        session: AsyncSession,
+        device_id: int | None,
+        events_exclude: list[int] | None = None,
     ) -> Page[DevEventOut]:
+
         return await paginate(
             session,
             select(DevEvent)
-            .where(DevEvent.device_id == device_id)
+            .where(
+                DevEvent.device_id == device_id,
+                ~DevEvent.event_type_code.in_(
+                    events_exclude if events_exclude is not None else []
+                ),
+            )
             .order_by(DevEvent.created_at.desc()),
         )

@@ -20,12 +20,9 @@ from core.models.device_tasks import (
 from core.models.devices import DeviceOrgBind
 from core.schemas.device_tasks import (
     TaskCreate,
-    TaskResponse,
-    TaskResponseResult,
     TaskResponseDeleted,
     TaskResponsePayload,
     TaskHeader,
-    ResultArray,
     TaskListOut,
 )
 
@@ -34,9 +31,7 @@ log = logging.getLogger(__name__)
 
 class TasksRepository:
     @classmethod
-    async def create_task(
-        cls, session: AsyncSession, task: TaskCreate
-    ) -> TaskResponse | None:
+    async def create_task(cls, session: AsyncSession, task: TaskCreate):
         db_uuid = uuid.uuid4()
         # db_time_at = int(time.time())
         tsk_q = (
@@ -66,7 +61,7 @@ class TasksRepository:
             logging.info(f"commited new task {db_uuid}")
         except:
             return None
-        return TaskResponse(id=db_uuid, created_at=int(created_at.created_at))
+        return db_uuid, created_at.created_at
 
     @classmethod
     async def get_task(
@@ -74,7 +69,7 @@ class TasksRepository:
         session: AsyncSession,
         id: UUID4,
         org_id: int | None = 0,
-    ) -> TaskResponseResult | None:
+    ):
         query = (
             select(
                 DevTask.id.label("id"),
@@ -94,7 +89,7 @@ class TasksRepository:
             .where(DeviceOrgBind.org_id == org_id)
             .join(Org, DeviceOrgBind.org_id == Org.org_id)
             .where(Org.is_deleted == False)
-            .join(DevTaskStatus)
+            .join(DevTask.status)
             .where(DevTask.id == id, DevTask.is_deleted == False)
         )
         res_q = select(
@@ -105,25 +100,14 @@ class TasksRepository:
         ).where(DevTaskResult.task_id == id)
 
         t = await session.execute(query)
-        resp = t.mappings().one_or_none()
-        if resp is None:
-            return None
+        resp_task_w_status = t.unique().mappings().one_or_none()
+
+        if resp_task_w_status is None:
+            return None, None
         r = await session.execute(res_q)
-        res = r.mappings().all()
-        results = []
-        header: TaskHeader = TaskHeader.model_validate(resp)
-        for r in res:
-            results.append(ResultArray.model_validate(r))
-        task: TaskResponseResult = TaskResponseResult(
-            header=header,
-            id=resp.id,
-            status=resp.status,
-            created_at=int(resp.created_at),
-            pending_at=int(resp.pending_at) if resp.pending_at is not None else None,
-            locked_at=int(resp.locked_at) if resp.locked_at is not None else None,
-            results=results,
-        )
-        return task
+        task_results = r.unique().mappings().all()
+
+        return resp_task_w_status, task_results
 
     @classmethod
     async def select_task(
@@ -223,8 +207,8 @@ class TasksRepository:
             .where(DeviceOrgBind.org_id == org_id)
             .join(Org, DeviceOrgBind.org_id == Org.org_id)
             .where(Org.is_deleted == False)
-            .join(DevTaskStatus)
-            .join(DevTaskResult, isouter=True)
+            .join(DevTask.status)
+            # .join(DevTaskResult, isouter=True)
             .where(DevTask.device_id == device_id, DevTask.is_deleted == False)
             .order_by(DevTask.created_at.desc())
             .limit(settings.db.limit_tasks_result)

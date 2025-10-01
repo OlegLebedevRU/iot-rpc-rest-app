@@ -60,7 +60,7 @@ class RmqAdminApi:
         for d in lu1:
             d_users.append(
                 {
-                    "name": d.sn,
+                    "name": d,
                     "password_hash": "",
                     "hashing_algorithm": "rabbit_password_hashing_sha256",
                     "tags": ["device"],
@@ -69,7 +69,7 @@ class RmqAdminApi:
             )
             d_perm.append(
                 {
-                    "user": d.sn,
+                    "user": d,
                     "vhost": "/",
                     "configure": ".*",
                     "write": ".*",
@@ -78,7 +78,7 @@ class RmqAdminApi:
             )
             d_topic_perm.append(
                 {
-                    "user": d.sn,
+                    "user": d,
                     "vhost": "/",
                     "exchange": "amq.topic",
                     "write": "^dev.{client_id}.*",
@@ -89,7 +89,7 @@ class RmqAdminApi:
         defns["users"] = d_users
         defns["permissions"] = d_perm
         defns["topic_permissions"] = d_topic_perm
-        print(defns)
+        log.info("set RMQ definitions = %s", defns)
 
         r = httpx.post(
             url=str(settings.leo4.admin_url) + "api/definitions",

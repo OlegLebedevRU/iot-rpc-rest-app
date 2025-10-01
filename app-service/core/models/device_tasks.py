@@ -1,30 +1,17 @@
-import enum
 import uuid
-from datetime import datetime, time
-
+from datetime import datetime
 from sqlalchemy import (
     Integer,
     String,
-    select,
-    delete,
     Uuid,
-    BigInteger,
     ForeignKey,
-    update,
-    Row,
-    Sequence,
     Boolean,
-    DateTime,
     func,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import Mapped, mapped_column, relationship, backref
-
-from core import settings
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from core.models import Base
 from core.models.common import TaskTTL
-from core.schemas.device_tasks import TaskCreate, TaskRequest
 
 
 class DevTask(Base):
@@ -34,7 +21,6 @@ class DevTask(Base):
     )
     device_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     method_code: Mapped[int] = mapped_column(Integer, default=0)
-    # priority: Mapped[int] = mapped_column(Integer, default=0)
     ext_task_id: Mapped[str] = mapped_column(String, nullable=True)
     created_at = mapped_column(
         TIMESTAMP(timezone=True, precision=0),
@@ -45,15 +31,9 @@ class DevTask(Base):
     deleted_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True
     )
-    # payload = relationship(
-    #     "DevTaskPayload", backref=backref("task_payload", single_parent=True, cascade="all, delete-orphan")
-    # )
-    # status = relationship(
-    #     "DevTaskStatus", backref=backref("task_status", single_parent=True,cascade="all, delete-orphan")
-    # )
-    # result = relationship(
-    #     "DevTaskResult", backref=backref("task_result", single_parent=True,cascade="all, delete-orphan")
-    # )
+    payload: Mapped["DevTaskPayload"] = relationship(back_populates="one_task_payload")
+    status: Mapped["DevTaskStatus"] = relationship(back_populates="one_task_status")
+    result: Mapped["DevTaskResult"] = relationship(back_populates="task_result")
 
 
 class DevTaskPayload(Base):
@@ -61,8 +41,8 @@ class DevTaskPayload(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     task_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(DevTask.id))
     payload: Mapped[str] = mapped_column(String)
-    one_task_payload = relationship(
-        "DevTask", single_parent=True, cascade="all, delete-orphan"
+    one_task_payload: Mapped["DevTask"] = relationship(
+        single_parent=True, cascade="all, delete-orphan"
     )
 
 
@@ -77,8 +57,8 @@ class DevTaskStatus(Base):
         TIMESTAMP(timezone=True), nullable=True
     )
     locked_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    one_task_status = relationship(
-        "DevTask", single_parent=True, cascade="all, delete-orphan"
+    one_task_status: Mapped["DevTask"] = relationship(
+        single_parent=True, cascade="all, delete-orphan"
     )
 
 
@@ -89,6 +69,6 @@ class DevTaskResult(Base):
     ext_id: Mapped[int] = mapped_column(Integer, default=0)
     status_code: Mapped[int] = mapped_column(Integer, default=501)
     result: Mapped[str] = mapped_column(String, default="default")
-    one_task_result = relationship(
-        "DevTask", single_parent=True, cascade="all, delete-orphan"
+    task_result: Mapped["DevTask"] = relationship(
+        single_parent=True, cascade="all, delete-orphan"
     )
