@@ -123,6 +123,18 @@ services:
         read_only: true
       - ./certbot/www:/var/www/certbot/:ro
       - ./certbot/conf/:/etc/nginx/ssl/:ro
+      - type: bind
+        source: ./crt/iot_leo4_ca.crt
+        target: /crt/ca_certificate.pem
+        read_only: true
+      - type: bind
+        source: ./crt/cert_0000.pem
+        target: /crt/server_certificate.pem
+        read_only: true
+      - type: bind
+        source: ./crt/key_0000.pem
+        target: /crt/server_key.pem
+        read_only: true
     networks:
       - rabbitmq_network
 
