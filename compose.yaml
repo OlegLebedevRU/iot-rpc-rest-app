@@ -27,6 +27,9 @@ services:
     depends_on:
         pg:
           condition: service_healthy
+    container_name: app1
+    networks:
+      - rabbitmq_network
   rabbitmq:
     image: rabbitmq:4-management
     container_name: rabbitmq
