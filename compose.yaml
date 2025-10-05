@@ -30,6 +30,7 @@ services:
     container_name: app1
     networks:
       - rabbitmq_network
+      - pg_network
   rabbitmq:
     image: rabbitmq:4-management
     container_name: rabbitmq
@@ -97,7 +98,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 3
-
+    networks:
+      - pg_network
   # adminer:
     # image: adminer
     # ports:
@@ -111,6 +113,8 @@ services:
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
       - "5050:80"
+    networks:
+      - pg_network
   nginx:
     build:
       dockerfile: ./docker-files/nginx-jwt/Dockerfile
@@ -170,4 +174,6 @@ volumes:
 
 networks:
   rabbitmq_network:
+    driver: bridge
+  pg_network:
     driver: bridge
