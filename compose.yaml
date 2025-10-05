@@ -3,11 +3,11 @@ services:
     build:
       dockerfile: ./docker-files/app-service/Dockerfile
       context: ./
-    environment:
-      APP_CONFIG__DB__URL: postgresql+asyncpg://user:password@pg:5432/postgres
-      APP_CONFIG__DB__ECHO: 0
-      APP_CONFIG__GUNICORN__WORKERS: 1
-      APP_CONFIG__FASTSTREAM__URL: amqp://user:root@rabbitmq:5672//
+ #   environment:
+   #   APP_CONFIG__DB__URL: postgresql+asyncpg://user:password@pg:5432/postgres
+   #   APP_CONFIG__DB__ECHO: 0
+    #  APP_CONFIG__GUNICORN__WORKERS: 1
+    #  APP_CONFIG__FASTSTREAM__URL: amqp://user:root@rabbitmq:5672//
     develop:
       # Create a `watch` configuration to update the app
       # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
