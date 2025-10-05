@@ -8,8 +8,6 @@ from sqlalchemy import (
     Boolean,
     func,
     sql,
-    Column,
-    column,
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
@@ -49,9 +47,7 @@ class Device(Base):
 
 class DeviceTag(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    device_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey(Device.device_id), unique=True
-    )
+    device_id: Mapped[int] = mapped_column(Integer, ForeignKey(Device.device_id))
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.current_timestamp(0), default=None
     )
@@ -68,10 +64,11 @@ class DeviceTag(Base):
     value: Mapped[str] = mapped_column(String, nullable=True)
     is_system_tag: Mapped[bool] = mapped_column(Boolean, server_default=sql.false())
     UniqueConstraint(
-        "device_id",
-        "tag",
-        "uq_tb_device_tags_device_id",
-        #  postgresql_where=is_deleted=False,
+        device_id,
+        tag,
+        is_deleted,
+        # name="uq_tb_device_tags_device_id",
+        # postgresql_where=(is_deleted == sql.false()),
     )
     tags: Mapped["Device"] = relationship(
         back_populates="device_tags",
