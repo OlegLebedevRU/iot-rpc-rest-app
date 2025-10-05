@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Then, add the rest of the project source code and install it
 # Installing separately from its dependencies allows optimal layer caching
-COPY app-service /app
+COPY app-service .
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
@@ -37,7 +37,7 @@ ENTRYPOINT ["./prestart.sh"]
 # Uses `fastapi dev` to enable hot-reloading when the `watch` sync occurs
 # Uses `--host 0.0.0.0` to allow access from outside the container
 #CMD ["fastapi", "dev", "--host", "0.0.0.0", "src/uv_docker_example"]
-RUN["python","./appup"]
+RUN["./appup"]
 # Run with uvicorn
 #CMD ["uv", "run", "uvicorn", "api1:app", "--host", "0.0.0.0", "--port", "3031"]
 #sudo docker run -d --name=app1 --network=net1 -p 127.0.0.1:3031:3031 'test_app'
