@@ -143,6 +143,7 @@ services:
         source: ./crt/key_0000.pem
         target: /crt/server_key.pem
         read_only: true
+      - ./nginx/html:/var/share/nginx/html
     networks:
       - rabbitmq_network
 
