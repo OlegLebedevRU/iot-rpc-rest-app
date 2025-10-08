@@ -51,7 +51,7 @@ class ApiV1Prefix(BaseModel):
     admin: str = "/admin"
     device_events: str = "/device-events"
     devices: str = "/devices"
-    accounts: str = "accounts"
+    accounts: str = "/accounts"
 
 
 class ApiPrefix(BaseModel):
