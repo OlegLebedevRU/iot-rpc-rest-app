@@ -5,7 +5,7 @@ from core.models import db_helper
 
 
 async def org_id_dep(
-    org_id: Annotated[int, Header()],
+    org_id: Annotated[int, Header(convert_underscores=True)],
 ):
     return org_id
 
