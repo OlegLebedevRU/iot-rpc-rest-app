@@ -63,7 +63,7 @@ def register_static_docs_routes(app: FastAPI) -> None:
             oauth2_redirect_url=app.swagger_ui_oauth2_redirect_url,
             swagger_js_url="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js",
             swagger_css_url="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css",
-            # swagger_favicon_url="/static/fastapi.png",
+            swagger_favicon_url="/favicon.ico",
         )
 
     @app.get(str(app.swagger_ui_oauth2_redirect_url), include_in_schema=False)
