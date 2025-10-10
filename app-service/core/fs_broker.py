@@ -15,7 +15,7 @@ fs_router = RabbitRouter(
     str(settings.faststream.url),
     include_in_schema=False,
     logger=log,
-    #log_level=logging.WARNING,
+    # log_level=logging.WARNING,
     log_fmt=settings.logging.log_format,
     max_consumers=settings.faststream.max_consumers,
 )

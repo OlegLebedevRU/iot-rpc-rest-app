@@ -17,6 +17,8 @@ Session_dep = Annotated[
 
 fh = logging.FileHandler("/var/log/app/dep_broker.log")
 fh.setLevel(logging.INFO)
+formatter = logging.Formatter(settings.logging.log_format)
+fh.setFormatter(formatter)
 log = logging.getLogger(__name__)
 log.addHandler(fh)
 
