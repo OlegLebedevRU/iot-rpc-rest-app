@@ -9,6 +9,8 @@ from core.config import settings
 log = logging.getLogger(__name__)
 fh = logging.FileHandler("/var/log/app/broker.log")
 fh.setLevel(logging.WARNING)
+formatter = logging.Formatter(settings.logging.log_format)
+fh.setFormatter(formatter)
 log.addHandler(fh)
 
 fs_router = RabbitRouter(
@@ -16,7 +18,7 @@ fs_router = RabbitRouter(
     include_in_schema=False,
     logger=log,
     # log_level=logging.WARNING,
-    log_fmt=settings.logging.log_format,
+    # log_fmt=settings.logging.log_format,
     max_consumers=settings.faststream.max_consumers,
 )
 
