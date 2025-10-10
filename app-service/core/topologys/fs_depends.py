@@ -15,7 +15,7 @@ Session_dep = Annotated[
     Depends(db_helper.session_getter),
 ]
 
-fh = logging.FileHandler("/var//var/log/app/dep_broker.log")
+fh = logging.FileHandler("/var/log/app/dep_broker.log")
 fh.setLevel(logging.INFO)
 log = logging.getLogger(__name__)
 log.addHandler(fh)
