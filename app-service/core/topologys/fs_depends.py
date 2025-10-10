@@ -15,14 +15,10 @@ Session_dep = Annotated[
     Depends(db_helper.session_getter),
 ]
 
-logging.basicConfig(
-    level=logging.WARNING,
-    format=settings.logging.log_format,
-    datefmt=settings.logging.date_format,
-    filename="/var/log/app/dep_broker.log",
-    filemode="w",
-)
+fh = logging.FileHandler("/var//var/log/app/dep_broker.log")
+fh.setLevel(logging.INFO)
 log = logging.getLogger(__name__)
+log.addHandler(fh)
 
 
 async def sn_getter_dep(msg: RabbitMessage) -> str:
