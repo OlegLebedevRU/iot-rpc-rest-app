@@ -1,4 +1,4 @@
-import logging
+import logging.handlers
 import time
 import uuid
 from fastapi_pagination import Page
@@ -28,7 +28,14 @@ from core.schemas.device_tasks import (
 
 
 log = logging.getLogger(__name__)
-fh = logging.FileHandler("/var/log/app/repo_dev_task.log")
+
+fh = logging.handlers.RotatingFileHandler(
+    "/var/log/app/repo_dev_task.log",
+    mode="a",
+    maxBytes=10 * 1024 * 1024,
+    backupCount=10,
+    encoding=None,
+)
 fh.setLevel(logging.INFO)
 formatter = logging.Formatter(settings.logging.log_format)
 fh.setFormatter(formatter)

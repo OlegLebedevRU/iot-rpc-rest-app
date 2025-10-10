@@ -1,4 +1,5 @@
 import logging
+import logging.handlers
 import uuid
 from typing import Annotated
 
@@ -16,7 +17,14 @@ Session_dep = Annotated[
 ]
 
 log = logging.getLogger(__name__)
-fh = logging.FileHandler("/var/log/app/dep_broker.log")
+# fh = logging.FileHandler("/var/log/app/dep_broker.log")
+fh = logging.handlers.RotatingFileHandler(
+    "/var/log/app/dep_broker.log",
+    mode="a",
+    maxBytes=10 * 1024 * 1024,
+    backupCount=10,
+    encoding=None,
+)
 fh.setLevel(logging.INFO)
 formatter = logging.Formatter(settings.logging.log_format)
 fh.setFormatter(formatter)
