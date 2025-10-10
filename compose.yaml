@@ -148,6 +148,7 @@ services:
       - ./nginx/html:/var/share/nginx/html
     networks:
       - rabbitmq_network
+      - pg_network
 
   certbot:
     image: certbot/certbot:latest
