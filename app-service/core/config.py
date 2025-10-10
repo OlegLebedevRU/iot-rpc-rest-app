@@ -46,7 +46,7 @@ class LoggingConfig(BaseModel):
 
     @property
     def fs_log_level_value(self) -> int:
-        return logging.getLevelNamesMapping()["warning"]
+        return logging.getLevelNamesMapping()["WARNING"]
 
 
 #  /var/log/app
