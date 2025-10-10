@@ -31,6 +31,8 @@ services:
     networks:
       - rabbitmq_network
       - pg_network
+    volumes:
+      - ./logs:/var/log/app
   rabbitmq:
     image: rabbitmq:4-management
     container_name: rabbitmq

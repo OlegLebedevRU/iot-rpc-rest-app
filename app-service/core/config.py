@@ -44,6 +44,13 @@ class LoggingConfig(BaseModel):
     def log_level_value(self) -> int:
         return logging.getLevelNamesMapping()[self.log_level.upper()]
 
+    @property
+    def fs_log_level_value(self) -> int:
+        return logging.getLevelNamesMapping()["warning"]
+
+
+#  /var/log/app
+
 
 class ApiV1Prefix(BaseModel):
     prefix: str = "/v1"
