@@ -26,7 +26,12 @@ from core.schemas.device_tasks import (
     TaskListOut,
 )
 
+
 log = logging.getLogger(__name__)
+fh = logging.FileHandler("/var/log/app/repo_dev_task.log")
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter(settings.logging.log_format)
+fh.setFormatter(formatter)
 
 
 class TasksRepository:
@@ -58,7 +63,7 @@ class TasksRepository:
         try:
             await session.commit()
             created_at = t.one()
-            logging.info(f"commited new task {db_uuid}")
+            log.info("commited new task %s", db_uuid)
         except:
             return None
         return db_uuid, created_at.created_at
@@ -251,7 +256,7 @@ class TasksRepository:
         else:
             deleted_at = None
         await session.commit()
-        logging.info("deleted task %s", str(id))
+        log.info("deleted task %s", str(id))
 
         return TaskResponseDeleted(
             id=id,

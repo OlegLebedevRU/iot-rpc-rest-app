@@ -172,7 +172,7 @@ def settn_get():
 settings = settn_get()
 
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.INFO,
     format=settings.logging.log_format,
     datefmt=settings.logging.date_format,
     # filename="/var/log/app/broker.log",

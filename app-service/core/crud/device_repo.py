@@ -6,11 +6,17 @@ from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy import update, exists
 from sqlalchemy.orm import joinedload
 
+from core import settings
 from core.models import Device, DeviceConnection, Org, DeviceTag
 from core.models.devices import DeviceOrgBind
 from core.schemas.devices import DeviceConnectStatus
 
+
 log = logging.getLogger(__name__)
+fh = logging.FileHandler("/var/log/app/repo_devices.log")
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter(settings.logging.log_format)
+fh.setFormatter(formatter)
 
 
 class DeviceRepo:
