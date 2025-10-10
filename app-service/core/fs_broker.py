@@ -7,8 +7,8 @@ from core.config import settings
 
 logging.basicConfig(
     level=logging.WARNING,
-    format="%(asctime)s %(name)-12s %(levelname)-8s %(message)s",
-    datefmt="%m-%d %H:%M",
+    format=settings.logging.log_format,
+    datefmt=settings.logging.date_format,
     filename="/var/log/app/broker.log",
     filemode="w",
 )
@@ -17,8 +17,8 @@ fs_router = RabbitRouter(
     str(settings.faststream.url),
     include_in_schema=False,
     logger=log,
-    log_level=settings.logging.fs_log_level_value,
-    log_fmt=settings.logging.log_format,
+    # log_level=logging.WARNING,
+    # log_fmt=settings.logging.log_format,
     max_consumers=settings.faststream.max_consumers,
 )
 
