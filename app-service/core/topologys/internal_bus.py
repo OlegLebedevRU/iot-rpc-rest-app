@@ -1,4 +1,6 @@
-import logging
+import logging.handlers
+
+from core import settings
 from core.fs_broker import fs_router
 from core.schemas.rmq_admin import RmqClientsAction
 from core.services.device_tasks import DeviceTasksService
@@ -8,6 +10,17 @@ from core.topologys.fs_depends import Session_dep
 from core.topologys import q_jobs, rmq_api_client_action
 
 log = logging.getLogger(__name__)
+fh = logging.handlers.RotatingFileHandler(
+    "/var/log/app/internal_queues.log",
+    mode="a",
+    maxBytes=10 * 1024 * 1024,
+    backupCount=10,
+    encoding=None,
+)
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter(settings.logging.log_format)
+fh.setFormatter(formatter)
+log.addHandler(fh)
 
 
 @fs_router.subscriber(q_jobs)

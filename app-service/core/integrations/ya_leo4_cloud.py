@@ -1,9 +1,20 @@
-import logging
+import logging.handlers
 import httpx
 from fastapi import HTTPException
 from core import settings
 
 log = logging.getLogger(__name__)
+fh = logging.handlers.RotatingFileHandler(
+    "/var/log/app/leo4_cloud.log",
+    mode="a",
+    maxBytes=10 * 1024 * 1024,
+    backupCount=10,
+    encoding=None,
+)
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter(settings.logging.log_format)
+fh.setFormatter(formatter)
+log.addHandler(fh)
 
 
 async def get_token(api_key):

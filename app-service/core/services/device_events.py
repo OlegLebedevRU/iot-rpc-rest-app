@@ -1,12 +1,25 @@
-import logging
+import logging.handlers
 import time
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from core import settings
 from core.crud.dev_events_repo import EventRepository
 from core.crud.device_repo import DeviceRepo
 from core.schemas.device_events import DevEventBody
 
 log = logging.getLogger(__name__)
+fh = logging.handlers.RotatingFileHandler(
+    "/var/log/app/srv_dev_evnt.log",
+    mode="a",
+    maxBytes=10 * 1024 * 1024,
+    backupCount=10,
+    encoding=None,
+)
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter(settings.logging.log_format)
+fh.setFormatter(formatter)
+log.addHandler(fh)
 
 
 class DeviceEventsService:

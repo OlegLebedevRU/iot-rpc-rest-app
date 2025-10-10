@@ -17,7 +17,6 @@ Session_dep = Annotated[
 ]
 
 log = logging.getLogger(__name__)
-# fh = logging.FileHandler("/var/log/app/dep_broker.log")
 fh = logging.handlers.RotatingFileHandler(
     "/var/log/app/dep_broker.log",
     mode="a",
@@ -28,7 +27,6 @@ fh = logging.handlers.RotatingFileHandler(
 fh.setLevel(logging.INFO)
 formatter = logging.Formatter(settings.logging.log_format)
 fh.setFormatter(formatter)
-
 log.addHandler(fh)
 
 
