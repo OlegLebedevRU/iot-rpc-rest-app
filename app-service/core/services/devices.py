@@ -11,7 +11,7 @@ log = logging.getLogger(__name__)
 fh = logging.handlers.RotatingFileHandler(
     "/var/log/app/srv_devices.log",
     mode="a",
-    maxBytes=10 * 1024 * 1024,
+    maxBytes=1 * 1024 * 1024,
     backupCount=10,
     encoding=None,
 )
