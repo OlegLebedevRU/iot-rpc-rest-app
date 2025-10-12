@@ -1,0 +1,36 @@
+requires = ["uv_build>=0.8.11,<0.9.0"]
+build-backend = "uv_build"
+[project]
+license = "MIT"
+name = "proxy-app"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+classifiers = [
+  # How mature is this project? Common values are
+  #   3 - Alpha
+  #   4 - Beta
+  #   5 - Production/Stable
+  "Development Status :: 3 - Alpha",
+
+  # Indicate who your project is intended for
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Build Tools",
+
+  # Specify the Python versions you support here.
+  "Programming Language :: Python :: 3",
+
+]
+dependencies = [
+
+
+    "pyjwt>=2.10.1",
+
+    "pyopenssl>=25.1.0",
+    "python-jose>=3.5.0",
+
+    "uv-build>=0.8.11",
+    "uvicorn>=0.35.0",
+
+
+]
