@@ -40,7 +40,7 @@ async def get_factory_device_list(api_key):
         raise HTTPException(status_code=404, detail="Item not found")
     r1 = httpx.get(
         url=str(settings.leo4.url) + "/device/list",
-        headers={"accessToken": r.json()["accessToken"]},
+        headers={"Authorization": "Bearer " + r.json()["accessToken"]},
     )
     # -------------------------------------------------
     if r1.status_code == 403:
