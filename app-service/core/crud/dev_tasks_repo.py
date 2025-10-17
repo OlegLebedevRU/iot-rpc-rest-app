@@ -169,7 +169,7 @@ class TasksRepository:
                 .where(
                     DevTask.device_id == subq.c.device_id,
                     DevTask.is_deleted == False,
-                    DevTaskStatus.status < TaskStatus.LOCK,
+                    DevTaskStatus.status < TaskStatus.DONE,
                 )
                 .order_by(desc(DevTaskStatus.priority), DevTask.created_at)
                 .limit(1)
