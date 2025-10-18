@@ -46,11 +46,12 @@ async def ack(
 
 @fs_router.subscriber(q_req)
 async def req(
+    msg: RabbitMessage,
     session: Session_dep,
     sn: Sn_dep,
     corr_id: Corr_id_dep,
 ):
-    await DeviceTasksService(session, 0).select(sn, corr_id)
+    await DeviceTasksService(session, 0).select(sn, corr_id, msg)
 
 
 @fs_router.subscriber(q_result)

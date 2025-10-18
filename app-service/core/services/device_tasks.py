@@ -139,8 +139,17 @@ class DeviceTasksService:
                 self.session, corr_id, TaskStatus.PENDING
             )
 
-    async def select(self, sn, corr_id):
-        task = await TasksRepository.select_task(self.session, corr_id, sn)
+    async def select(self, sn, corr_id, msg):
+        ws_count = 0
+        if hasattr(msg, "headers"):
+            msg_headers = msg.headers
+            if "slave_ws" in msg_headers:
+                ws_count = int(msg_headers["slave_ws"])
+        if ws_count > 0:
+            method_le = 3999
+        else:
+            method_le = 2999
+        task = await TasksRepository.select_task(self.session, corr_id, sn, method_le)
         if task is not None:
             t_resp = task.model_dump_json()
             log.info("from DB select task = %s", t_resp)
