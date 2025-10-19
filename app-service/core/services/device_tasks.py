@@ -195,19 +195,38 @@ class DeviceTasksService:
                 ext_id,
                 status_code,
             )
-            await TasksRepository.save_task_result(
-                self.session, corr_id, ext_id, status_code, res
-            )
-            await TasksRepository.task_status_update(
-                self.session, corr_id, TaskStatus.DONE
-            )
+            try:
+                result_id = await TasksRepository.save_task_result(
+                    self.session, corr_id, ext_id, status_code, res
+                )
+                await TasksRepository.task_status_update(
+                    self.session, corr_id, TaskStatus.DONE
+                )
+                rmsg = "commited"
+            except:
+                result_id = 0
+                rmsg = "undefined"
         else:
+
             log.info(
                 "Mqtt received RESULT with ERROR <dev.%s.res> - No corr_id, ext_id=%d, status_code=%d",
                 sn,
                 ext_id,
                 status_code,
             )
+            return
+        routing_key: str = str(
+            RoutingKey(
+                prefix=topology.prefix_srv, sn=sn, suffix=topology.suffix_commited
+            )
+        )
+        await topic_publisher.publish(
+            routing_key=routing_key,
+            message=rmsg,
+            correlation_id=corr_id,
+            exchange=settings.rmq.x_name,
+            headers={"ext_id": str(ext_id), "result_id": str(result_id)},
+        )
 
     async def ttl(self, decrement: int = 1):
         await TasksRepository.update_ttl(self.session, decrement)

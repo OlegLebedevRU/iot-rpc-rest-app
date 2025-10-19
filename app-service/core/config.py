@@ -112,6 +112,7 @@ class RabbitQXConfig(BaseModel):
     suffix_event_ack: str = "eva"
     suffix_response: str = "rsp"
     suffix_result_ack: str = "rac"
+    suffix_commited: str = "cmt"
     # dev -> core
     req_queue_name: str = "req"
     ack_queue_name: str = "ack"
