@@ -382,7 +382,7 @@ class TasksRepository:
         try:
             await session.commit()
             id_new = t.one()
-            log.info("Task result commited, id= %s", task_id)
+            log.info("Task result commited, task_id= %s, tb_id=%s", task_id, str(id_new.id))
         except Exception as e:
             log.info("ERROR task result commited, id = %s, exception = %s", task_id, e)
             return None
