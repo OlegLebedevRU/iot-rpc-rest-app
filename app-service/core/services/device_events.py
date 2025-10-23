@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core import settings
 from core.crud.dev_events_repo import EventRepository
 from core.crud.device_repo import DeviceRepo
-from core.schemas.device_events import DevEventBody
+from core.schemas.device_events import DevEventBody, DevEventFields
 
 log = logging.getLogger(__name__)
 fh = logging.handlers.RotatingFileHandler(
@@ -85,7 +85,28 @@ class DeviceEventsService:
         )
         if fields is None:
             raise HTTPException(status_code=404, detail="Fields not found")
-        return fields
+        fres: list[DevEventFields] = [
+            DevEventFields(
+                created_at=f.created_at, field=f.field, interval_sec=f.interval_sec
+            )
+            for f in fields
+        ]
+
+        return fres
+
+
+# """"
+# dev_statuses: list[DeviceConnectStatus] = [
+#             DeviceConnectStatus(
+#                 client_id=d.user,
+#                 connected_at=d.connected_at,
+#                 last_checked_result=True,
+#                 device_id=0,
+#                 details=d.model_dump_json(exclude="client_properties"),
+#             )
+#             for d in dev_online
+#         ]
+# """
 
 
 # """
