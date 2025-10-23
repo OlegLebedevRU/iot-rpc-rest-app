@@ -27,7 +27,7 @@ class DevEventOut(BaseModel):
 
 class DevEventFields(BaseModel):
     created_at: datetime
-    field: str
+    value: str
     interval_sec: int
 
 

@@ -62,7 +62,7 @@ class EventRepository:
         if limit is None or limit > 10:
             limit = 10
         stmt_txt = text(
-            "SELECT created_at, ((payload #>> '{}')::jsonb -> '300'->0->:tag)::text as field,\
+            "SELECT created_at, ((payload #>> '{}')::jsonb -> '300'->0->:tag)::text as value,\
                     (EXTRACT(EPOCH FROM current_timestamp - created_at))::Integer AS interval_sec \
                     from tb_dev_events \
                     WHERE device_id = :did and event_type_code = :etc and created_at > current_timestamp - (:mins || ' MINUTES')::INTERVAL \
