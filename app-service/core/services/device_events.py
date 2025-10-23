@@ -68,10 +68,34 @@ class DeviceEventsService:
             )
             await EventRepository.add_event(self.session, event)
 
-    async def list(self, device_id, events_exclude):
+    async def list(self, device_id, events_include, events_exclude):
         events = await EventRepository.get_events_page(
-            self.session, device_id, events_exclude=events_exclude
+            self.session,
+            device_id,
+            events_include=events_include,
+            events_exclude=events_exclude,
         )
         if events is None:
             raise HTTPException(status_code=404, detail="Events not found")
         return events
+
+    async def fields(self, device_id, event_type_code, tag, interval_m, limit):
+        fields = await EventRepository.get_event_fields(
+            self.session, device_id, event_type_code, tag, interval_m, limit
+        )
+        if fields is None:
+            raise HTTPException(status_code=404, detail="Fields not found")
+        return fields
+
+
+# """
+# async def get_event_fields(
+#         cls,
+#         session: AsyncSession,
+#         device_id: int,
+#         event_type_code: int,
+#         tag: int,
+#         interval_m: int | None,
+#         limit: int | None = 10,
+#     ):
+# """
