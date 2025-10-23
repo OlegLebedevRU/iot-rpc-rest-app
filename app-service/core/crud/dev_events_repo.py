@@ -65,7 +65,7 @@ class EventRepository:
             "SELECT created_at, ((payload #>> '{}')::jsonb -> '300'->0->:tag)::text as field,\
                     (EXTRACT(EPOCH FROM current_timestamp - created_at))::Integer AS interval_sec \
                     from tb_dev_events \
-                    WHERE device_id = :did and event_type_code = :etc and created_at > current_timestamp - interval :minutes \
+                    WHERE device_id = :did and event_type_code = :etc and created_at > current_timestamp - interval ':minutes minutes' \
                     order by created_at desc limit :limit"
         )
         result = await session.execute(
@@ -74,7 +74,7 @@ class EventRepository:
                 "did": device_id,
                 "etc": event_type_code,
                 "tag": str(tag),
-                "minutes": str(interval_m) + " " + "minutes",
+                "minutes": interval_m,
                 "limit": limit,
             },
         )
