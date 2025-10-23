@@ -1,5 +1,5 @@
 import logging
-from typing import Annotated
+from typing import Annotated, List
 from fastapi import APIRouter
 from fastapi.params import Query
 from fastapi_pagination import Page
@@ -39,11 +39,11 @@ async def list_device_events(
 @router.get(
     "/fields/",
     description="Fields select from events",
-    response_model=[DevEventFields],
+    response_model=List[DevEventFields],
 )
 async def get_event_fields(
     session: Session_dep, org_id: Org_dep, request: DevEventFieldsRequest
-) -> [DevEventFields]:
+) -> List[DevEventFields]:
     return await DeviceEventsService(session, None, org_id).fields(
         request.device_id,
         request.event_type_code,
