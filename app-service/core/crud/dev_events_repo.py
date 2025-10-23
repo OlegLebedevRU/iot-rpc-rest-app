@@ -74,7 +74,7 @@ class EventRepository:
                 "did": device_id,
                 "etc": event_type_code,
                 "tag": str(tag),
-                "mins": interval_m,
+                "mins": str(interval_m),
                 "limit": limit,
             },
         )
