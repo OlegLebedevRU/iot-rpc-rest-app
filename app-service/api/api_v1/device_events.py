@@ -42,7 +42,9 @@ async def list_device_events(
     response_model=List[DevEventFields],
 )
 async def get_event_fields(
-    session: Session_dep, org_id: Org_dep, request: DevEventFieldsRequest
+    session: Session_dep,
+    org_id: Org_dep,
+    request: Annotated[DevEventFieldsRequest, Query()],
 ) -> List[DevEventFields]:
     return await DeviceEventsService(session, None, org_id).fields(
         request.device_id,
