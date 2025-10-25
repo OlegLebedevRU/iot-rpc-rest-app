@@ -45,6 +45,7 @@ class DeviceRepo:
             select(Device)
             .options(joinedload(Device.connection))
             .options(joinedload(Device.device_tags))
+            .options(joinedload(Device.device_gauges))
             .where(
                 Device.device_id.in_(select(stmt_org.c.device_id))
             )  # stmt_org.c.device_id)
