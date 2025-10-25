@@ -48,7 +48,7 @@ class DeviceRepo:
             ).where(DeviceGauge.type == "44")
         ).subquery("gauge_44_338")
         stmt = (
-            select(Device, stmt_44)
+            select(Device, DeviceGauge.gauges["300"][0]["338"].label("active_ws"))
             .options(joinedload(Device.connection))
             .options(joinedload(Device.device_tags))
             .options(joinedload(Device.device_gauges))
