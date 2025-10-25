@@ -119,6 +119,10 @@ class DeviceGauge(Base):
     def interval_sec(self):
         return func.now() - self.updated_at
 
+    @interval_sec.expression
+    def interval_sec(cls):
+        return func.now() - cls.updated_at
+
 
 class DeviceConnection(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
