@@ -52,7 +52,7 @@ class Device(Base):
     )
     device_gauges: Mapped[List["DeviceGauge"]] = relationship(
         back_populates="r_gauges",
-        lazy="selectin",
+        # lazy="selectin",
     )
 
 
@@ -121,7 +121,7 @@ class DeviceGauge(Base):
         innerjoin=True,
         # secondaryjoin="Device.device_id==DeviceTag.device_id",
     )
-    interval_sec: Mapped[int] = query_expression(func.now())
+    interval_sec: Mapped[int] = query_expression()
 
 
 class DeviceConnection(Base):

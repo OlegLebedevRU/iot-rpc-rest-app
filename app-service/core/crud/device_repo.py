@@ -27,33 +27,37 @@ class DeviceRepo:
                 select(DeviceOrgBind.device_id)
                 .where(DeviceOrgBind.org_id == org_id)
                 .subquery("devices")
-                # .options(joinedload(DeviceOrgBind.org))
-                # .where(DeviceOrgBind.org. == False)
             )
             if device_id is None
             else (
                 select(DeviceOrgBind.device_id).where(
                     DeviceOrgBind.org_id == org_id, DeviceOrgBind.device_id == device_id
                 )
-                # .options(joinedload(DeviceOrgBind.org))
-                # .where(Device.device_id == device_id)
             ).subquery("devices")
         )
         # test = await session.execute(select(stmt_org))
         # print(test.all())
+        stmt_44 = select(
+            DeviceGauge.device_id,
+            (DeviceGauge.gauges["300"][0]["338"]).label("active_ws"),
+            (func.extract("epoch", func.now()) - DeviceGauge.updated_at).label(
+                "interval_sec"
+            ),
+        ).subquery("gauge_44_338")
         stmt = (
             select(Device)
             .options(joinedload(Device.connection))
             .options(joinedload(Device.device_tags))
             .options(
-                subqueryload(Device.device_gauges).options(
+                joinedload(Device.device_gauges).options(
                     with_expression(
-                        Device.device_gauges.interval_sec,
-                        func.now(),  # - Device.device_gauges.updated_at
+                        #  Device.device_gauges.interval_sec,
+                        #  func.now(),  # - Device.device_gauges.updated_at
                     )
                 )
             )
             .where(Device.device_id.in_(select(stmt_org.c.device_id)))
+            .join_from(stmt_44)
         )
         devs = await session.execute(stmt)
         return devs.unique().scalars().all()
