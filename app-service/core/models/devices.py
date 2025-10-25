@@ -43,6 +43,9 @@ class Device(Base):
         # lazy="joined",
         # primaryjoin="Device.device_id==DeviceTag.device_id",
     )
+    device_gauges: Mapped[List["DeviceGauge"]] = relationship(
+        back_populates="r_gauges",
+    )
 
 
 class DeviceTag(Base):
@@ -72,6 +75,39 @@ class DeviceTag(Base):
     )
     tags: Mapped["Device"] = relationship(
         back_populates="device_tags",
+        single_parent=True,
+        uselist=False,
+        innerjoin=True,
+        # secondaryjoin="Device.device_id==DeviceTag.device_id",
+    )
+
+
+class DeviceGauge(Base):
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[int] = mapped_column(Integer, ForeignKey(Device.device_id))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.current_timestamp(0), default=None
+    )
+    is_deleted: Mapped[bool] = mapped_column(Boolean, server_default=sql.false())
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+        server_onupdate=func.current_timestamp(0),
+    )
+    deleted_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+    type: Mapped[str] = mapped_column(String)
+    gauges: Mapped[str] = mapped_column(JSONB, nullable=True)
+    UniqueConstraint(
+        device_id,
+        type,
+        is_deleted,
+        # name="uq_tb_device_tags_device_id",
+        # postgresql_where=(is_deleted == sql.false()),
+    )
+    r_gauges: Mapped["Device"] = relationship(
+        back_populates="device_gauges",
         single_parent=True,
         uselist=False,
         innerjoin=True,
