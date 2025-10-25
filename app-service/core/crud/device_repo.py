@@ -46,12 +46,13 @@ class DeviceRepo:
             .options(joinedload(Device.connection))
             .options(joinedload(Device.device_tags))
             .options(
-                joinedload(Device.device_gauges).options(
-                    with_expression(
-                        Device.device_gauges.interval_sec,
-                        func.now(),  # - Device.device_gauges.updated_at
-                    )
-                )
+                joinedload(Device.device_gauges)
+                # .options(
+                #     with_expression(
+                #         Device.device_gauges.interval_sec,
+                #         func.now(),  # - Device.device_gauges.updated_at
+                #     )
+                # )
             )
             .where(
                 Device.device_id.in_(select(stmt_org.c.device_id))
