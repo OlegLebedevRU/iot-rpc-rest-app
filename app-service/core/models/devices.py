@@ -46,6 +46,7 @@ class Device(Base):
     )
     device_gauges: Mapped[List["DeviceGauge"]] = relationship(
         back_populates="r_gauges",
+        lazy="selectin",
     )
 
 
@@ -119,8 +120,8 @@ class DeviceGauge(Base):
     def interval_sec(self):
         return func.now() - self.updated_at
 
-    @interval_sec.expression
-    def interval_sec(cls):
+    @interval_sec.inplace.expression
+    def _interval_sec(cls):
         return func.now() - cls.updated_at
 
 
