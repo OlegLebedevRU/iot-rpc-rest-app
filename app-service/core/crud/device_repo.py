@@ -37,10 +37,12 @@ class DeviceRepo:
         )
         # test = await session.execute(select(stmt_org))
         # print(test.all())
-        stmt_44 = select(
-            DeviceGauge.device_id.label("device_id"),
-            (DeviceGauge.gauges["300"][0]["338"]).label("active_ws"),
-            (func.now() - DeviceGauge.updated_at).label("interval_sec"),
+        stmt_44 = (
+            select(
+                DeviceGauge.device_id,
+                (DeviceGauge.gauges["300"][0]["338"]).label("active_ws"),
+                (func.now() - DeviceGauge.updated_at).label("interval_sec"),
+            ).where(DeviceGauge.type == "44")
         ).subquery("gauge_44_338")
         stmt = (
             select(Device)
