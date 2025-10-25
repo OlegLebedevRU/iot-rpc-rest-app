@@ -4,7 +4,7 @@ from sqlalchemy import select, not_, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy import update, exists
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, with_expression
 
 from core import settings
 from core.models import Device, DeviceConnection, Org, DeviceTag
@@ -46,6 +46,11 @@ class DeviceRepo:
             .options(joinedload(Device.connection))
             .options(joinedload(Device.device_tags))
             .options(joinedload(Device.device_gauges))
+            .options(
+                with_expression(
+                    DeviceGauge.interval_sec, func.now() - DeviceGauge.updated_at
+                )
+            )
             .where(
                 Device.device_id.in_(select(stmt_org.c.device_id))
             )  # stmt_org.c.device_id)

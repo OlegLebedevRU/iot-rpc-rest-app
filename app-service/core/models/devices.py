@@ -12,7 +12,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
 from sqlalchemy.ext.hybrid import hybrid_property
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, query_expression
 from core.models import Base
 
 
@@ -115,15 +115,7 @@ class DeviceGauge(Base):
         innerjoin=True,
         # secondaryjoin="Device.device_id==DeviceTag.device_id",
     )
-
-    @hybrid_property
-    def interval_sec(self):
-        return func.now() - self.updated_at
-
-    @interval_sec.inplace.expression
-    @classmethod
-    def _interval_sec(cls):
-        return func.now() - cls.updated_at
+    interval_sec: Mapped[int] = query_expression()
 
 
 class DeviceConnection(Base):
