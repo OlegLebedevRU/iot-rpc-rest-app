@@ -50,7 +50,7 @@ class DeviceRepo:
             .options(joinedload(Device.device_tags))
             .options(joinedload(Device.device_gauges))
             .where(Device.device_id.in_(select(stmt_org.c.device_id)))
-            .join_from(stmt_44)
+            .join(stmt_44)
         )
         devs = await session.execute(stmt)
         return devs.unique().scalars().all()
