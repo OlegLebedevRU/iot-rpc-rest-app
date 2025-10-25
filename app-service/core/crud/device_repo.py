@@ -40,20 +40,20 @@ class DeviceRepo:
         stmt_44 = (
             select(
                 DeviceGauge,
-                #   DeviceGauge.device_id,
-                #    (DeviceGauge.gauges["300"][0]["338"]).label(
-                #      "active_ws"
-                #    ),  # ["300"][0]["338"]
-                #    (func.now() - DeviceGauge.updated_at).label("interval_sec"),
+                DeviceGauge.device_id,
+                (DeviceGauge.gauges["300"][0]["338"]).label(
+                    "active_ws"
+                ),  # ["300"][0]["338"]
+                (func.now() - DeviceGauge.updated_at).label("interval_sec"),
             ).where(DeviceGauge.type == "44")
         ).subquery("gauge_44_338")
         stmt = (
-            select(Device)
+            select(Device, stmt_44)
             .options(joinedload(Device.connection))
             .options(joinedload(Device.device_tags))
-            #     .options(joinedload(Device.device_gauges))
+            .options(joinedload(Device.device_gauges))
             .where(Device.device_id.in_(select(stmt_org.c.device_id)))
-            .outerjoin(stmt_44, Device.device_id == stmt_44.c.device_id)
+            # .outerjoin(stmt_44, Device.device_id == stmt_44.c.device_id)
         )
         devs = await session.execute(stmt)
         return devs.unique().scalars().all()
