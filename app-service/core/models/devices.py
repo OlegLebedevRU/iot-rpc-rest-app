@@ -121,7 +121,7 @@ class DeviceGauge(Base):
         innerjoin=True,
         # secondaryjoin="Device.device_id==DeviceTag.device_id",
     )
-    interval_sec: Mapped[datetime] = deferred(func.now())
+    interval_sec: Mapped[int] = query_expression()
 
 
 class DeviceConnection(Base):
