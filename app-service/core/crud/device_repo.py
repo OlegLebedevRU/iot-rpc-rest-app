@@ -48,7 +48,7 @@ class DeviceRepo:
             .options(joinedload(Device.device_tags))
             .options(joinedload(Device.device_gauges))
             .where(Device.device_id.in_(select(stmt_org.c.device_id)))
-            .join(stmt_44)
+            .join(stmt_44, DeviceGauge.device_id == Device.device_id)
         )
         devs = await session.execute(stmt)
         return devs.unique().scalars().all()
