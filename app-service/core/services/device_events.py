@@ -1,3 +1,4 @@
+import json
 import logging.handlers
 import time
 from fastapi import HTTPException
@@ -74,7 +75,7 @@ class DeviceEventsService:
                     org_id=self.org_id,
                     device_id=dev_id,
                     type=str(event_type_code),
-                    gauges=payload,
+                    gauges=json.loads(payload),
                 )
 
     async def list(self, device_id, events_include, events_exclude):
