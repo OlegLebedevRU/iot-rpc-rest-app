@@ -121,6 +121,7 @@ class DeviceGauge(Base):
         return func.now() - self.updated_at
 
     @interval_sec.inplace.expression
+    @classmethod
     def _interval_sec(cls):
         return func.now() - cls.updated_at
 
