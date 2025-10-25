@@ -59,14 +59,23 @@ class DeviceEventsService:
                 event_type_code,
                 dev_event_id,
             )
+            payload = msg.body.decode()
             event = DevEventBody(
                 device_id=dev_id,
                 event_type_code=event_type_code,
                 dev_event_id=dev_event_id,
                 dev_timestamp=dev_timestamp,
-                payload=msg.body.decode(),
+                payload=payload,
             )
             await EventRepository.add_event(self.session, event)
+            if event_type_code == 44:
+                await DeviceRepo.upsert_gauge(
+                    self.session,
+                    org_id=self.org_id,
+                    device_id=dev_id,
+                    type=str(event_type_code),
+                    gauges=payload,
+                )
 
     async def list(self, device_id, events_include, events_exclude):
         events = await EventRepository.get_events_page(

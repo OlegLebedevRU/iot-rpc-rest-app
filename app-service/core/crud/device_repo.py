@@ -8,7 +8,7 @@ from sqlalchemy.orm import joinedload
 
 from core import settings
 from core.models import Device, DeviceConnection, Org, DeviceTag
-from core.models.devices import DeviceOrgBind
+from core.models.devices import DeviceOrgBind, DeviceGauge
 from core.schemas.devices import DeviceConnectStatus
 
 
@@ -194,3 +194,27 @@ class DeviceRepo:
         await session.commit()
         tag_id = res.unique().scalars().one()
         return tag_id
+
+    @classmethod
+    async def upsert_gauge(cls, session, org_id, device_id, type, gauges) -> int:
+        stmt = (
+            insert(DeviceGauge)
+            .values(device_id=device_id, type=type, gauges=gauges)
+            .on_conflict_do_update(
+                constraint="uq_tb_device_gauges_device_id_type_is_deleted",
+                set_=dict(gauges=gauges),
+            )
+            .returning(DeviceGauge.id)
+        )
+        res = await session.execute(stmt)
+        await session.commit()
+        gauge_id = res.unique().scalars().one()
+        return gauge_id
+
+    # async def add_event(cls, session: AsyncSession, event: DevEventBody) -> None:
+    #     evt_q = DevEvent(
+    #         **event.model_dump(exclude={"dev_timestamp"}),
+    #         dev_timestamp=func.to_timestamp(event.dev_timestamp),
+    #     )
+    #     session.add(evt_q)
+    #     await session.commit()
