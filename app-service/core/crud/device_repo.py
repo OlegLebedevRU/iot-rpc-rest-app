@@ -48,7 +48,7 @@ class DeviceRepo:
             .options(joinedload(Device.device_gauges))
             .options(
                 with_expression(
-                    DeviceGauge.interval_sec, func.now() - DeviceGauge.updated_at
+                    Device.device_gauges.interval_sec, func.now() - Device.device_gauges.updated_at
                 )
             )
             .where(
