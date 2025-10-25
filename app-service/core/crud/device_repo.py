@@ -40,7 +40,7 @@ class DeviceRepo:
         stmt_44 = (
             select(
                 DeviceGauge.device_id,
-                (DeviceGauge.gauges["300"][0]["338"]).label("active_ws"),
+                (DeviceGauge.gauges).label("active_ws"),  # ["300"][0]["338"]
                 (func.now() - DeviceGauge.updated_at).label("interval_sec"),
             ).where(DeviceGauge.type == "44")
         ).subquery("gauge_44_338")
