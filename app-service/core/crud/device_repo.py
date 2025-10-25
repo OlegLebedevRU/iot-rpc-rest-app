@@ -4,7 +4,7 @@ from sqlalchemy import select, not_, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy import update, exists
-from sqlalchemy.orm import joinedload, with_expression
+from sqlalchemy.orm import joinedload, with_expression, subqueryload
 
 from core import settings
 from core.models import Device, DeviceConnection, Org, DeviceTag
@@ -46,25 +46,17 @@ class DeviceRepo:
             .options(joinedload(Device.connection))
             .options(joinedload(Device.device_tags))
             .options(
-                joinedload(Device.device_gauges)
-                # .options(
-                #     with_expression(
-                #         Device.device_gauges.interval_sec,
-                #         func.now(),  # - Device.device_gauges.updated_at
-                #     )
-                # )
+                subqueryload(Device.device_gauges).options(
+                    with_expression(
+                        Device.device_gauges.interval_sec,
+                        func.now(),  # - Device.device_gauges.updated_at
+                    )
+                )
             )
-            .where(
-                Device.device_id.in_(select(stmt_org.c.device_id))
-            )  # stmt_org.c.device_id)
-            # .where(Device.device_id.in_(device_ids))
-            # .join(stmt_org, stmt_org.c.device_id==Device.device_id)
-            # .where(Org.org_id == org_id)
+            .where(Device.device_id.in_(select(stmt_org.c.device_id)))
         )
         devs = await session.execute(stmt)
-        # devices = devs.all()
-        devices = devs.unique().scalars().all()
-        return devices
+        return devs.unique().scalars().all()
 
     @classmethod
     async def get_device_sn(
