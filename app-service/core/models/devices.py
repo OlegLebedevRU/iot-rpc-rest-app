@@ -11,6 +11,7 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from core.models import Base
 
@@ -113,6 +114,10 @@ class DeviceGauge(Base):
         innerjoin=True,
         # secondaryjoin="Device.device_id==DeviceTag.device_id",
     )
+
+    @hybrid_property
+    def interval_sec(self):
+        return func.now() - self.updated_at
 
 
 class DeviceConnection(Base):
