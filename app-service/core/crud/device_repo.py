@@ -202,7 +202,7 @@ class DeviceRepo:
             .values(device_id=device_id, type=type, gauges=gauges)
             .on_conflict_do_update(
                 constraint="uq_tb_device_gauges_device_id_type_is_deleted",
-                set_=dict(gauges=gauges),
+                set_=dict(gauges=gauges, updated_at=func.now()),
             )
             .returning(DeviceGauge.id)
         )
