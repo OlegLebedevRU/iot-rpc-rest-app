@@ -48,11 +48,11 @@ class DeviceRepo:
             )  # .where(DeviceGauge.type == "44")
         ).subquery("gauge_44_338")
         stmt = (
-            select(Device, DeviceGauge, stmt_44)
+            select(Device)
             .options(joinedload(Device.connection))
             .options(joinedload(Device.device_tags))
             .options(joinedload(Device.device_gauges))
-            .join_from(Device, stmt_44, Device.device_id == stmt_44.c.device_id)
+            #  .join_from(Device, stmt_44, Device.device_id == stmt_44.c.device_id)
             .where(Device.device_id.in_(select(stmt_org.c.device_id)))
             # .outerjoin(stmt_44, Device.device_id == stmt_44.c.device_id)
         )
