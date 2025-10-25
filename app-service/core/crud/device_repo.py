@@ -38,7 +38,7 @@ class DeviceRepo:
         # test = await session.execute(select(stmt_org))
         # print(test.all())
         stmt_44 = select(
-            DeviceGauge.device_id,
+            DeviceGauge.device_id.label("device_id"),
             (DeviceGauge.gauges["300"][0]["338"]).label("active_ws"),
             (func.now() - DeviceGauge.updated_at).label("interval_sec"),
         ).subquery("gauge_44_338")
@@ -48,7 +48,7 @@ class DeviceRepo:
             .options(joinedload(Device.device_tags))
             .options(joinedload(Device.device_gauges))
             .where(Device.device_id.in_(select(stmt_org.c.device_id)))
-            .join(stmt_44, DeviceGauge.device_id == Device.device_id)
+            .join(stmt_44, Device.device_id == stmt_44.c.device_id)
         )
         devs = await session.execute(stmt)
         return devs.unique().scalars().all()
