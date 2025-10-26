@@ -94,16 +94,21 @@ class DeviceGauge(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     device_id: Mapped[int] = mapped_column(Integer, ForeignKey(Device.device_id))
     created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), server_default=func.current_timestamp(0), default=None
+        TIMESTAMP(timezone=True),
+        server_default=func.current_timestamp(0),
+        default=None,
+        deferred=True,
     )
-    is_deleted: Mapped[bool] = mapped_column(Boolean, server_default=sql.false())
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, server_default=sql.false(), deferred=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=True,
         server_onupdate=func.current_timestamp(0),
     )
     deleted_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=True
+        TIMESTAMP(timezone=True), nullable=True, deferred=True
     )
     type: Mapped[str] = mapped_column(String)
     gauges: Mapped[str] = mapped_column(JSONB, nullable=True)

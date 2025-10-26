@@ -49,9 +49,7 @@ class DeviceRepo:
         stmt = (
             select(Device)
             .options(load_only(Device.device_id, Device.sn))
-            .options(
-                joinedload(Device.connection)
-            )
+            .options(joinedload(Device.connection))
             .options(joinedload(Device.device_tags))
             .options(joinedload(Device.device_gauges))
             #  .join_from(Device, stmt_44, Device.device_id == stmt_44.c.device_id)
