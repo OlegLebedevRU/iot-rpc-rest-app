@@ -4,7 +4,7 @@ from sqlalchemy import select, not_, func, false
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy import update, exists
-from sqlalchemy.orm import joinedload, with_expression, subqueryload
+from sqlalchemy.orm import joinedload, with_expression, subqueryload, load_only
 
 from core import settings
 from core.models import Device, DeviceConnection, Org, DeviceTag
@@ -47,13 +47,14 @@ class DeviceRepo:
             )  # .where(DeviceGauge.type == "44")
         ).subquery("gauge_44_338")
         stmt = (
-            select(Device.device_id, Device.sn)
+            select(Device)
+            .options(load_only(Device.device_id,Device.sn))
             .options(joinedload(Device.connection))
             .options(joinedload(Device.device_tags))
             .options(joinedload(Device.device_gauges))
             #  .join_from(Device, stmt_44, Device.device_id == stmt_44.c.device_id)
             .where(Device.device_id.in_(select(stmt_org.c.device_id)))
-            .where(Device.is_deleted==False)
+            .where(Device.is_deleted == False)
             # .outerjoin(stmt_44, Device.device_id == stmt_44.c.device_id)
         )
         devs = await session.execute(stmt)
