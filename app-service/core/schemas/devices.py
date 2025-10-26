@@ -38,7 +38,7 @@ class DeviceConnectView(BaseModel):
     connected_at: Optional[datetime] = None
     checked_at: Optional[datetime] = None
     last_checked_result: bool
-    details: Optional[str]
+    details: Optional[Json]
 
 
 class DeviceListResult(BaseModel):
