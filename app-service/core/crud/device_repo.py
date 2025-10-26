@@ -1,6 +1,6 @@
 import logging
 from typing import Any
-from sqlalchemy import select, not_, func
+from sqlalchemy import select, not_, func, false
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy import update, exists
@@ -35,8 +35,7 @@ class DeviceRepo:
                 )
             ).subquery("devices")
         )
-        # test = await session.execute(select(stmt_org))
-        # print(test.all())
+
         stmt_44 = (
             select(
                 #  DeviceGauge,
@@ -48,12 +47,13 @@ class DeviceRepo:
             )  # .where(DeviceGauge.type == "44")
         ).subquery("gauge_44_338")
         stmt = (
-            select(Device)
+            select(Device.device_id, Device.sn)
             .options(joinedload(Device.connection))
             .options(joinedload(Device.device_tags))
             .options(joinedload(Device.device_gauges))
             #  .join_from(Device, stmt_44, Device.device_id == stmt_44.c.device_id)
             .where(Device.device_id.in_(select(stmt_org.c.device_id)))
+            .where(Device.is_deleted==False)
             # .outerjoin(stmt_44, Device.device_id == stmt_44.c.device_id)
         )
         devs = await session.execute(stmt)
