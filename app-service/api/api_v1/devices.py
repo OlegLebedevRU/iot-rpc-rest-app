@@ -20,10 +20,7 @@ router = APIRouter(
 )
 
 
-@router.get(
-    "/",
-    description="Devices status", response_model=DeviceListResult
-)
+@router.get("/", description="Devices status", response_model=[DeviceListResult])
 async def devices(
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
     org_id: Org_dep,
