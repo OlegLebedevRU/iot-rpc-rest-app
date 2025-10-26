@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 
 from pydantic import BaseModel
 
@@ -15,3 +15,19 @@ class DeviceConnectStatus(BaseModel):
 class DeviceTagPut(BaseModel):
     tag: str
     value: str
+
+
+class DeviceGaugesView(BaseModel):
+    device_id: int
+    type: str
+    updated_at: int
+    gauges: dict
+
+
+class DeviceListResult(BaseModel):
+    id: int
+    device_id: int
+    sn: str
+    device_gauges: List[DeviceGaugesView]
+    connection: DeviceConnectStatus
+    device_tags: List[DeviceTagPut]

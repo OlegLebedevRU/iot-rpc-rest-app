@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.api_v1.api_depends import Org_dep
 from core import settings
 from core.models import db_helper
-from core.schemas.devices import DeviceTagPut
+from core.schemas.devices import DeviceTagPut, DeviceListResult
 from core.services.devices import DeviceService
 
 log = logging.getLogger(__name__)
@@ -22,7 +22,7 @@ router = APIRouter(
 
 @router.get(
     "/",
-    description="Devices status",
+    description="Devices status", response_model=DeviceListResult
 )
 async def devices(
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
