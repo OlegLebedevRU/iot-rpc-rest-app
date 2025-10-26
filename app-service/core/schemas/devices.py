@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional, List
 
 from pydantic import BaseModel
@@ -20,8 +21,17 @@ class DeviceTagPut(BaseModel):
 class DeviceGaugesView(BaseModel):
     device_id: int
     type: str
-    updated_at: int
+    updated_at: datetime
     gauges: object
+
+
+class DeviceConnectView(BaseModel):
+    device_id: int
+    client_id: str
+    connected_at: Optional[datetime] = None
+    checked_at: Optional[datetime] = None
+    last_checked_result: bool
+    details: Optional[str]
 
 
 class DeviceListResult(BaseModel):
@@ -29,5 +39,5 @@ class DeviceListResult(BaseModel):
     device_id: int
     sn: str
     device_gauges: List[DeviceGaugesView | None]
-    connection: DeviceConnectStatus | None
+    connection: DeviceConnectView | None
     device_tags: List[DeviceTagPut | None]
