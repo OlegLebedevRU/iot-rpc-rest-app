@@ -50,9 +50,7 @@ class DeviceRepo:
             select(Device)
             .options(load_only(Device.device_id, Device.sn))
             .options(
-                joinedload(Device.connection).options(
-                    load_only(Device.connection.last_checked_result)
-                )
+                joinedload(Device.connection)
             )
             .options(joinedload(Device.device_tags))
             .options(joinedload(Device.device_gauges))
