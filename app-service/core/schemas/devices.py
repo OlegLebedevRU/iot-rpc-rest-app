@@ -4,6 +4,8 @@ from typing import Optional, List
 from pydantic import BaseModel, JsonValue
 from pydantic_core.core_schema import JsonSchema
 
+type Json = dict[str, Json] | list[Json] | str | int | float | bool | None
+
 
 class DeviceConnectStatus(BaseModel):
     device_id: int
@@ -27,7 +29,7 @@ class DeviceGaugesView(BaseModel):
     device_id: int
     type: str
     updated_at: datetime
-    gauges: Optional[Gauge]
+    gauges: Json
 
 
 class DeviceConnectView(BaseModel):
