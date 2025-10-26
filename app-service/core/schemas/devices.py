@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 from pydantic_core.core_schema import JsonSchema
 
 
@@ -23,7 +23,7 @@ class DeviceGaugesView(BaseModel):
     device_id: int
     type: str
     updated_at: datetime
-    gauges: JsonSchema
+    gauges: JsonValue
 
 
 class DeviceConnectView(BaseModel):
