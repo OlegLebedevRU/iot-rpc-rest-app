@@ -48,10 +48,11 @@ class Device(Base):
     device_tags: Mapped[List["DeviceTag"]] = relationship(
         back_populates="tags",
         # lazy="joined",
-        # primaryjoin="Device.device_id==DeviceTag.device_id",
+        primaryjoin="and_(Device.device_id==DeviceTag.device_id, DeviceTag.is_deleted ==sql.false())",
     )
     device_gauges: Mapped[List["DeviceGauge"]] = relationship(
         back_populates="r_gauges",
+        primaryjoin="and_(Device.device_id==DeviceGauge.device_id, DeviceGauge.is_deleted ==sql.false())",
         # lazy="selectin",
     )
 
@@ -60,16 +61,22 @@ class DeviceTag(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     device_id: Mapped[int] = mapped_column(Integer, ForeignKey(Device.device_id))
     created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), server_default=func.current_timestamp(0), default=None
+        TIMESTAMP(timezone=True),
+        server_default=func.current_timestamp(0),
+        default=None,
+        deferred=True,
     )
-    is_deleted: Mapped[bool] = mapped_column(Boolean, server_default=sql.false())
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, server_default=sql.false(), deferred=True
+    )
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=True,
         server_onupdate=func.current_timestamp(0),
+        deferred=True,
     )
     deleted_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True), nullable=True
+        TIMESTAMP(timezone=True), nullable=True, deferred=True
     )
     tag: Mapped[str] = mapped_column(String)
     value: Mapped[str] = mapped_column(String, nullable=True)
