@@ -13,7 +13,7 @@ class DeviceConnectStatus(BaseModel):
     connected_at: Optional[int] = None
     checked_at: Optional[int] = None
     last_checked_result: bool
-    details: Optional[str]
+    details: Optional[Json]
 
 
 class DeviceTagPut(BaseModel):
