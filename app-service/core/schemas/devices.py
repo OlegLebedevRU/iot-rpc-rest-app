@@ -21,7 +21,7 @@ class DeviceGaugesView(BaseModel):
     device_id: int
     type: str
     updated_at: int
-    gauges: dict
+    gauges: object
 
 
 class DeviceListResult(BaseModel):
