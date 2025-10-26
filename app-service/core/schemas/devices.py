@@ -28,6 +28,6 @@ class DeviceListResult(BaseModel):
     id: int
     device_id: int
     sn: str
-    device_gauges: List[DeviceGaugesView]
-    connection: DeviceConnectStatus
-    device_tags: List[DeviceTagPut]
+    device_gauges: List[DeviceGaugesView | None]
+    connection: DeviceConnectStatus | None
+    device_tags: List[DeviceTagPut | None]
