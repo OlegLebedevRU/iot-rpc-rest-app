@@ -22,7 +22,7 @@ class DeviceGaugesView(BaseModel):
     device_id: int
     type: str
     updated_at: datetime
-    gauges: object
+    gauges: {object}
 
 
 class DeviceConnectView(BaseModel):
