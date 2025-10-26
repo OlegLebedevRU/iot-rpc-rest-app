@@ -19,11 +19,15 @@ class DeviceTagPut(BaseModel):
     value: str
 
 
+class Gauge(BaseModel):
+    pass
+
+
 class DeviceGaugesView(BaseModel):
     device_id: int
     type: str
     updated_at: datetime
-    gauges: JsonValue
+    gauges: Optional[Gauge]
 
 
 class DeviceConnectView(BaseModel):
