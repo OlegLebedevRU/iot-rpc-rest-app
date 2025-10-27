@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
 from core.crud.device_repo import DeviceRepo
-from core.schemas.devices import DeviceConnectStatus
+from core.schemas.devices import DeviceConnectStatus, DeviceTagPut
 from core.services.rmq_admin import RmqAdmin
 
 log = logging.getLogger(__name__)
@@ -55,12 +55,14 @@ class DeviceService:
         await DeviceRepo.update_connections(session, dev_statuses)
 
     @classmethod
-    async def proxy_upsert_tag(cls, session, org_id, device_id, tag, value):
-        if tag.isascii():
-            if len(value) > 0:
+    async def proxy_upsert_tag(
+        cls, session, org_id, device_id, tag_value: DeviceTagPut
+    ):
+        if tag_value.tag.isascii():
+            if len(tag_value.value) > 0:
                 try:
                     tag_id = await DeviceRepo.upsert_tag(
-                        session, org_id, device_id, tag, value
+                        session, org_id, device_id, tag_value.tag, tag_value.value
                     )
                 except:
                     raise HTTPException(

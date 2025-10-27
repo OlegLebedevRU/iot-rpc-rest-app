@@ -37,7 +37,7 @@ async def add_device_tag(
     device_tag: DeviceTagPut,
 ):
     tag_id = await DeviceService.proxy_upsert_tag(
-        session, org_id, device_id, device_tag.tag, device_tag.value
+        session, org_id, device_id, device_tag
     )
     return {"tag_id": tag_id}
 

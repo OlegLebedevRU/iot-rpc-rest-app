@@ -188,7 +188,8 @@ class DeviceRepo:
             insert(DeviceTag)
             .values(device_id=device_id, tag=tag, value=value)
             .on_conflict_do_update(
-                constraint="uq_tb_device_tags_device_id", set_=dict(value=value)
+                constraint="uq_tb_device_tags_device_id_tag_is_deleted",
+                set_=dict(value=value),
             )
             .returning(DeviceTag.id)
         )
