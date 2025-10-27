@@ -46,7 +46,7 @@ class DeviceService:
                 connected_at=d.connected_at,
                 last_checked_result=True,
                 device_id=0,
-                details=d.dict(exclude={"client_properties"}),
+                details=d,
             )
             for d in dev_online
         ]

@@ -5,6 +5,8 @@ from typing import Optional, List
 from pydantic import BaseModel, JsonValue
 from pydantic_core.core_schema import JsonSchema
 
+from core.schemas.rmq_admin import DeviceConnectionDetails
+
 type Json = dict[str, Json] | list[Json] | str | int | float | bool | IPv4Address | None
 
 
@@ -14,7 +16,7 @@ class DeviceConnectStatus(BaseModel):
     connected_at: Optional[int] = None
     checked_at: Optional[int] = None
     last_checked_result: bool
-    details: Optional[Json]
+    details: DeviceConnectionDetails  # Optional[Json]
 
 
 class DeviceTagPut(BaseModel):
@@ -39,7 +41,7 @@ class DeviceConnectView(BaseModel):
     connected_at: Optional[datetime] = None
     checked_at: Optional[datetime] = None
     last_checked_result: bool
-    details: Optional[Json]
+    details: DeviceConnectionDetails  # Optional[Json]
 
 
 class DeviceListResult(BaseModel):
