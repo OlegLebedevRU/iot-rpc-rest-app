@@ -41,7 +41,7 @@ class DeviceConnectView(BaseModel):
     connected_at: Optional[datetime] = None
     checked_at: Optional[datetime] = None
     last_checked_result: bool
-    details: DeviceConnectionDetails  # Optional[Json]
+    details: Optional[DeviceConnectionDetails]  # Optional[Json]
 
 
 class DeviceListResult(BaseModel):
@@ -49,5 +49,5 @@ class DeviceListResult(BaseModel):
     device_id: int
     sn: str
     device_gauges: List[DeviceGaugesView | None]
-    connection: DeviceConnectView | None
+    connection: DeviceConnectView
     device_tags: List[DeviceTagPut | None]
