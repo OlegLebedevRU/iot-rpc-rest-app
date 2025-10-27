@@ -1,10 +1,11 @@
 from datetime import datetime
+from ipaddress import IPv4Address
 from typing import Optional, List
 
 from pydantic import BaseModel, JsonValue
 from pydantic_core.core_schema import JsonSchema
 
-type Json = dict[str, Json] | list[Json] | str | int | float | bool | None
+type Json = dict[str, Json] | list[Json] | str | int | float | bool | IPv4Address | None
 
 
 class DeviceConnectStatus(BaseModel):
