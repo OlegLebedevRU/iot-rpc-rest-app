@@ -157,7 +157,7 @@ class DeviceRepo:
                 .values(
                     checked_at=func.current_timestamp(),
                     last_checked_result=True,
-                    details=dev_con.details.model_dump(),
+                    details=dev_con.details.model_dump(mode="json"),
                     connected_at=func.to_timestamp(dev_con.connected_at / 1000),
                 )
                 .where(DeviceConnection.client_id == dev_con.client_id)
