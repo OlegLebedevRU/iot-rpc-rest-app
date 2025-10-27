@@ -46,7 +46,7 @@ class DeviceService:
                 connected_at=d.connected_at,
                 last_checked_result=True,
                 device_id=0,
-                details=json.loads(d.model_dump_json(exclude="client_properties")),
+                details=d.model_dump(exclude="client_properties"),
             )
             for d in dev_online
         ]
