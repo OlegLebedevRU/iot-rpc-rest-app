@@ -11,7 +11,7 @@ class ClientProperties(BaseModel):
 
 
 class DeviceConnectionDetails(ClientProperties):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, strict=False)
     user: str
     connected_at: int
     peer_host: IPv4Address
