@@ -49,5 +49,5 @@ class DeviceListResult(BaseModel):
     device_id: int
     sn: str
     device_gauges: List[DeviceGaugesView | None]
-    connection: DeviceConnectView
+    connection: Optional[DeviceConnectView]
     device_tags: List[DeviceTagPut | None]
