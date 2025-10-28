@@ -19,7 +19,7 @@ fs_router = RabbitRouter(
     logger=log,
     # log_level=logging.WARNING,
     # log_fmt=settings.logging.log_format,
-    max_consumers=settings.faststream.max_consumers,
+    # max_consumers=settings.faststream.max_consumers,
 )
 
 
