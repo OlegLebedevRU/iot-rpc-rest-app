@@ -1,8 +1,8 @@
 [project]
 name = "iot-rpc-rest-app"
-version = "0.1.0"
+version = "0.1.1"
 description = "Iot Async-RPC Core app"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = [
     "aio-pika>=9.5.8",
     "aiormq==6.9.2",
