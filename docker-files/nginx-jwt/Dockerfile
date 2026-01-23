@@ -17,12 +17,12 @@ RUN <<`
 RUN <<`
   set -e
   apt-get update
-  apt-get install -y nginx=1.27.4*
+  apt-get install -y nginx=1.29.4*
 `
 
 WORKDIR /usr/lib/nginx/modules
 
-RUN curl -Ls https://github.com/TeslaGov/ngx-http-auth-jwt-module/releases/download/2.4.0/ngx-http-auth-jwt-module-2.4.0_libjwt-1.15.3_nginx-1.27.4.tgz | tar -zx > ngx_http_auth_jwt_module.so
+RUN curl -Ls https://github.com/TeslaGov/ngx-http-auth-jwt-module/releases/download/2.4.0/ngx-http-auth-jwt-module-2.4.0_libjwt-1.15.3_nginx-1.29.4.tgz | tar -zx > ngx_http_auth_jwt_module.so
 
 RUN ln -s /usr/lib/x86_64-linux-gnu/libjwt.so.0 /usr/lib/x86_64-linux-gnu/libjwt.so.2
 
