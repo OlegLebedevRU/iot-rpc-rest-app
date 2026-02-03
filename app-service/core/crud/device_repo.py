@@ -11,7 +11,6 @@ from core.models import Device, DeviceConnection, Org, DeviceTag
 from core.models.devices import DeviceOrgBind, DeviceGauge
 from core.schemas.devices import DeviceConnectStatus
 
-
 log = logging.getLogger(__name__)
 fh = logging.FileHandler("/var/log/app/repo_devices.log")
 fh.setLevel(logging.INFO)
@@ -113,7 +112,7 @@ class DeviceRepo:
                 ]
                 # device_id=21,# sn="a1b21c22589d100424",
             )
-            .on_conflict_do_nothing()
+            .on_conflict_do_update()
         )
         insert_stmt1 = (
             insert(Org)
@@ -128,7 +127,7 @@ class DeviceRepo:
                     for d in device_list
                 ]
             )
-            .on_conflict_do_nothing()
+            .on_conflict_do_update()
         )
         insert_dev_conn = (
             insert(DeviceConnection)
@@ -138,7 +137,7 @@ class DeviceRepo:
                     for d in device_list
                 ]
             )
-            .on_conflict_do_nothing()
+            .on_conflict_do_update()
         )
 
         await session.execute(insert_stmt)
