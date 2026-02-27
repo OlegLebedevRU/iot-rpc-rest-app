@@ -9,6 +9,7 @@ log = logging.getLogger(__name__)
 router = APIRouter(
     prefix=settings.api.v1.accounts,
     tags=["Accounts"],
+    include_in_schema=False,
 )
 
 

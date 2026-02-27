@@ -7,6 +7,7 @@ from .device_tasks import router as device_tasks_router
 from .administrator import router as admin_router
 from .device_events import router as device_events_router
 from .devices import router as devices_router
+from .legacy import legacy_router
 from .accounts import router as accounts_router
 
 router = APIRouter(
@@ -16,5 +17,6 @@ router.include_router(device_tasks_router)
 
 router.include_router(device_events_router)
 router.include_router(devices_router)
-router.include_router(admin_router, include_in_schema=True)
+router.include_router(legacy_router)
+router.include_router(admin_router, include_in_schema=False)
 router.include_router(accounts_router)

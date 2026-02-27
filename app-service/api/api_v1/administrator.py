@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 router = APIRouter(
     prefix=settings.api.v1.admin,
     tags=["Administrator"],
+    include_in_schema=False,
 )
 
 
