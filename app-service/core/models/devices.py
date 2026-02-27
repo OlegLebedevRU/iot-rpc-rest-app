@@ -11,14 +11,12 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
-from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import (
     Mapped,
     mapped_column,
     relationship,
-    query_expression,
-    deferred,
 )
+
 from core.models import Base
 
 

@@ -1,4 +1,4 @@
-import logging
+import logging.handlers
 import logging.handlers
 import uuid
 from typing import Annotated
@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
 from core.models import db_helper
-
 
 Session_dep = Annotated[
     AsyncSession,
