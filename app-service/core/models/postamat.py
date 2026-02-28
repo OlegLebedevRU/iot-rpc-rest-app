@@ -5,7 +5,11 @@ from sqlalchemy import Integer, String, ForeignKey, TIMESTAMP, Boolean
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from core.models import Base, Device, Cell
+from core.models import Base
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.models import Device, Cell
 
 
 class Postamat(Base):

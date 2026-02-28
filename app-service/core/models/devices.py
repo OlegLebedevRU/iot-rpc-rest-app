@@ -17,7 +17,11 @@ from sqlalchemy.orm import (
     relationship,
 )
 
-from core.models import Base, Postamat
+from core.models import Base
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.models import Postamat
 
 
 class Device(Base):

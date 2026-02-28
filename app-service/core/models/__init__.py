@@ -13,6 +13,8 @@ __all__ = (
     "DeviceTag",
     "Postamat",
     "Cell",
+    "DeviceOrgBind",
+    "DeviceGauge",
 )
 
 from .cell import Cell
@@ -20,7 +22,12 @@ from .db_helper import db_helper
 from .base import Base
 from .device_events import DevEvent
 from .device_tasks import DevTask, DevTaskPayload, DevTaskStatus, DevTaskResult
-from .devices import DeviceOrgBind, Org, DeviceTag
-
-from .devices import DeviceConnection, Device
+from .devices import (
+    DeviceOrgBind,
+    Org,
+    DeviceTag,
+    DeviceGauge,
+    DeviceConnection,
+    Device,
+)
 from .postamat import Postamat

@@ -1,14 +1,23 @@
 import logging
 from typing import Any
-from sqlalchemy import select, not_, func, false
+
+from sqlalchemy import select, not_, func
+from sqlalchemy import update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
-from sqlalchemy import update, exists
-from sqlalchemy.orm import joinedload, with_expression, subqueryload, load_only
+from sqlalchemy.orm import joinedload, load_only
 
 from core import settings
-from core.models import Device, DeviceConnection, Org, DeviceTag
-from core.models.devices import DeviceOrgBind, DeviceGauge
+from core.models import (
+    Device,
+    DeviceConnection,
+    Org,
+    DeviceTag,
+    DeviceOrgBind,
+    DeviceGauge,
+)
+
+# from core.models.devices import DeviceOrgBind, DeviceGauge
 from core.schemas.devices import DeviceConnectStatus
 
 log = logging.getLogger(__name__)

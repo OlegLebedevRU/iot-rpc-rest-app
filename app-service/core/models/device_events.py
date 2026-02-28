@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from sqlalchemy import Integer, func
 from sqlalchemy.dialects.postgresql import TIMESTAMP, JSON
 from sqlalchemy.orm import Mapped, mapped_column

@@ -3,7 +3,11 @@ from sqlalchemy import Integer, String, ForeignKey, Boolean, TIMESTAMP, UniqueCo
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from core.models import Base, Postamat
+from core.models import Base
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.models import Postamat
 
 
 class Cell(Base):
