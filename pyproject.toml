@@ -19,7 +19,7 @@ dependencies = [
     "gunicorn>=25.1.0",
     "httpx>=0.28.1",
     "idna==3.11",
-    "multidict==6.7.0",
+    "multidict>=6.7.0",
     "orjson>=3.11.7",
     "platformdirs>=4.9.2",
     "pydantic-core>=2.41.5",
