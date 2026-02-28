@@ -17,7 +17,7 @@ from sqlalchemy.orm import (
     relationship,
 )
 
-from core.models import Base
+from core.models import Base, Postamat
 
 
 class Device(Base):
@@ -36,13 +36,14 @@ class Device(Base):
         # lazy="joined",
         # primaryjoin="Device.device_id==DeviceConnection.device_id",
     )
-    # org_bind: Mapped["DeviceOrgBind"] = relationship(
-    #     back_populates="device_bind",
-    #     # lazy="noload",
-    #     uselist=False,
-    #     single_parent=True,
-    #     innerjoin=True,
-    # )
+    org_bind: Mapped["DeviceOrgBind"] = relationship(
+        "DeviceOrgBind",
+        back_populates="device_bind",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        single_parent=True,
+        uselist=False,
+    )
     device_tags: Mapped[List["DeviceTag"]] = relationship(
         back_populates="tags",
         # lazy="joined",
@@ -52,6 +53,15 @@ class Device(Base):
         back_populates="r_gauges",
         primaryjoin="and_(Device.device_id==DeviceGauge.device_id, DeviceGauge.is_deleted ==sql.false())",
         # lazy="selectin",
+    )
+    # Новая обратная связь с Postamat (1:1)
+    postamat: Mapped["Postamat"] = relationship(
+        "Postamat",
+        back_populates="device",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        single_parent=True,
+        uselist=False,
     )
 
 
