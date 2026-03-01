@@ -17,7 +17,7 @@ __all__ = (
     "DeviceGauge",
 )
 
-from .cell import Cell
+
 from .db_helper import db_helper
 from .base import Base
 from .device_events import DevEvent
@@ -31,3 +31,4 @@ from .devices import (
     Device,
 )
 from .postamat import Postamat
+from .cell import Cell

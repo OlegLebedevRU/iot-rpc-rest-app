@@ -1,7 +1,7 @@
 import json
 import uuid
 from datetime import datetime
-from typing import Any, Annotated, Optional, List
+from typing import Any, Annotated, Optional, List, Dict
 from pydantic import (
     BaseModel,
     Field,
@@ -45,18 +45,12 @@ class TaskHeader(BaseModel):
 
 
 class TaskCreate(TaskHeader):
-    payload: JsonValue = Field(
-        '{"dt":[{"mt":0}]}',
-    )
+    payload: Optional[Dict] = None
 
-    @field_validator("payload", mode="before")
-    @classmethod
-    def ensure_json(cls, value: Any) -> Any:
-        try:
-            json.loads(value)
-        except (ValueError, TypeError):
-            raise ValueError("'payload' is not json")
-        return value
+    #     JsonValue = Field(
+    #     '{"dt":[{"mt":0}]}',
+    # )
+    model_config = {"json_schema_extra": {"examples": [{"dt": [{"mt": 0}]}]}}
 
 
 class TaskRequest(BaseModel):

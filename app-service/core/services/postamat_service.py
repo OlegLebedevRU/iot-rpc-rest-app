@@ -20,7 +20,11 @@ class PostamatService:
     ) -> Optional[dict]:
         # Получаем постамат с проверкой по org_id
         db_postamat = await crud_postamat.get_by_id(
-            db=db, postamat_id=postamat_id, org_id=org_id, with_device=True
+            db=db,
+            postamat_id=postamat_id,
+            org_id=org_id,
+            with_device=True,
+            include_deleted=False,
         )
         if not db_postamat:
             return None
@@ -37,10 +41,10 @@ class PostamatService:
             "name": db_postamat.name,
             "address": db_postamat.address,
             "location": db_postamat.location,
-            "created_at": db_postamat.created_at,
-            "updated_at": db_postamat.updated_at,
-            "is_deleted": db_postamat.is_deleted,
-            "deleted_at": db_postamat.deleted_at,
+            #    "created_at": db_postamat.created_at,
+            #    "updated_at": db_postamat.updated_at,
+            #    "is_deleted": db_postamat.is_deleted,
+            #    "deleted_at": db_postamat.deleted_at,
             "device": (
                 {
                     "sn": db_postamat.device.sn,
@@ -57,13 +61,56 @@ class PostamatService:
                     "alias": c.alias,
                     "is_locked": c.is_locked,
                     "attributes": c.attributes,
-                    "created_at": c.created_at,
+                    #     "created_at": c.created_at,
                     "updated_at": c.updated_at,
                     #        "is_deleted": c.is_deleted,
                 }
                 for c in cells
             ],
         }
+
+    async def get_all_postamats(
+        self,
+        db: AsyncSession,
+        *,
+        org_id: Optional[int] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[dict]:
+        """
+        Получить список всех постаматов (без ячеек) с опциональной фильтрацией по org_id.
+        Использует CRUD-метод get_multi для получения данных.
+        """
+        # Получаем объекты Postamat через CRUD
+        postamats = await crud_postamat.get_multi(
+            db=db,
+            org_id=org_id,
+            skip=skip,
+            limit=limit,
+            with_device=True,
+            include_deleted=False,  # Только активные постаматы
+        )
+
+        return [
+            {
+                "id": p.id,
+                "device_id": p.device_id,
+                "name": p.name,
+                "address": p.address,
+                "location": p.location,
+                "created_at": p.created_at,
+                "updated_at": p.updated_at,
+                "device": (
+                    {
+                        "sn": p.device.sn,
+                        "created_at": p.device.created_at,
+                    }
+                    if p.device
+                    else None
+                ),
+            }
+            for p in postamats
+        ]
 
     # 1️⃣ Переключить is_locked для одной ячейки
     async def toggle_lock_cell(

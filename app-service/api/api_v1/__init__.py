@@ -9,6 +9,7 @@ from .device_events import router as device_events_router
 from .devices import router as devices_router
 from .legacy import legacy_router
 from .accounts import router as accounts_router
+from .postamat import router as postamat_router
 
 router = APIRouter(
     prefix=settings.api.v1.prefix,
@@ -20,3 +21,4 @@ router.include_router(devices_router)
 router.include_router(legacy_router)
 router.include_router(admin_router, include_in_schema=False)
 router.include_router(accounts_router)
+router.include_router(postamat_router)

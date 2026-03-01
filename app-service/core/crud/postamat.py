@@ -59,13 +59,15 @@ class CRUDPostamat:
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
+    @classmethod
     async def get_multi(
-        self,
+        cls,
         db: AsyncSession,
         *,
         skip: int = 0,
         limit: int = 100,
         org_id: Optional[int] = None,
+        with_device: bool = False,
         include_deleted: bool = False,
     ) -> List[Postamat]:
         stmt = select(Postamat)
@@ -80,6 +82,8 @@ class CRUDPostamat:
             )
 
         stmt = stmt.offset(skip).limit(limit).order_by(Postamat.id)
+        if with_device:
+            stmt = stmt.options(selectinload(Postamat.device))
         result = await db.execute(stmt)
         return list(result.scalars().all())
 

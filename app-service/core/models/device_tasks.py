@@ -8,7 +8,7 @@ from sqlalchemy import (
     Boolean,
     func,
 )
-from sqlalchemy.dialects.postgresql import TIMESTAMP
+from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from core.models import Base
 from core.models.common import TaskTTL
@@ -40,7 +40,8 @@ class DevTaskPayload(Base):
     # __tablename__ = "tb_dev_tasks_payload"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     task_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(DevTask.id))
-    payload: Mapped[str] = mapped_column(String)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=True)
+    # Mapped[str] = mapped_column(String)
     one_task_payload: Mapped["DevTask"] = relationship(
         single_parent=True, cascade="all, delete-orphan"
     )
