@@ -185,6 +185,13 @@ class AuthConfig(BaseModel):
     api_keys_raw: str = Field("", alias="API_KEYS")
 
 
+# Параметры вебхука управляются через APP_CONFIG__WEBHOOK__TIMEOUT, MAX_RETRIES, BACKOFF_FACTOR из .env.
+class WebhookConfigModel(BaseModel):
+    timeout: float = 5.0
+    max_retries: int = 3
+    backoff_factor: float = 0.5
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(".env.template", ".env"),
@@ -206,6 +213,7 @@ class Settings(BaseSettings):
 
     # Сырая строка с API-ключами
     auth: AuthConfig
+    webhook: WebhookConfigModel = WebhookConfigModel()
 
     @property
     def api_keys(self) -> Dict[str, int]:

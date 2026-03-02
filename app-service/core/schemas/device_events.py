@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional, Dict
 
 from pydantic import BaseModel, Field
 
@@ -8,7 +9,7 @@ class DevEventBody(BaseModel):
     event_type_code: int
     dev_event_id: int
     dev_timestamp: int
-    payload: str
+    payload: Optional[Dict] = None
 
 
 class DevEvents(DevEventBody):
@@ -22,7 +23,7 @@ class DevEventOut(BaseModel):
     dev_event_id: int
     created_at: datetime
     dev_timestamp: datetime
-    payload: str
+    payload: Optional[Dict] = None
 
 
 class DevEventFields(BaseModel):

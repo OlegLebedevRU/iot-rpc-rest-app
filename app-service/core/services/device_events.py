@@ -68,7 +68,7 @@ class DeviceEventsService:
                 event_type_code=event_type_code,
                 dev_event_id=dev_event_id,
                 dev_timestamp=dev_timestamp,
-                payload=payload,
+                payload=json.loads(payload),
             )
             await EventRepository.add_event(self.session, event)
             if event_type_code == 44:
