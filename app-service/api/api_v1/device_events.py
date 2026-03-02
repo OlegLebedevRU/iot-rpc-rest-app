@@ -37,6 +37,34 @@ async def list_device_events(
 
 
 @router.get(
+    "/incremental",
+    # description="Get incremental events. If last_event_id is not provided, uses stored offset per device.",
+    response_model=List[DevEventOut],
+)
+async def get_incremental_events(
+    session: Session_dep,
+    org_id: Org_dep,
+    device_id: Annotated[int | None, Query()] = None,
+    last_event_id: Annotated[int | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> List[DevEventOut]:
+    """
+    Get incremental events. If last_event_id is not provided, uses stored offset per device.
+    Получение строго инкрементального списка событий.
+    - **device_id**: ID устройства, если нет - выдача по всем.
+    - **last_event_id**: последний (запомненный у клиента) ID события, если нет -
+    выдача последних событий по версии сервера.
+    - **limit**: ограничение выдачи (0-100), по умолчанию 50.
+    Проверяется принадлежность постамата к организации (если указан org_id).
+    Возвращает объект задачи (TaskResponse).
+    """
+
+    return await DeviceEventsService(
+        session, None, org_id=org_id
+    ).get_incremental_events(device_id, last_event_id, limit)
+
+
+@router.get(
     "/fields/",
     description="Fields select from events",
     response_model=List[DevEventFields],

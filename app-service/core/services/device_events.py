@@ -1,13 +1,15 @@
 import json
 import logging.handlers
 import time
+from typing import Optional, List
+
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
 from core.crud.dev_events_repo import EventRepository
 from core.crud.device_repo import DeviceRepo
-from core.schemas.device_events import DevEventBody, DevEventFields
+from core.schemas.device_events import DevEventBody, DevEventFields, DevEventOut
 
 log = logging.getLogger(__name__)
 fh = logging.handlers.RotatingFileHandler(
@@ -88,6 +90,24 @@ class DeviceEventsService:
         if events is None:
             raise HTTPException(status_code=404, detail="Events not found")
         return events
+
+    async def get_incremental_events(
+        self,
+        device_id: Optional[int] = None,
+        last_event_id: Optional[int] = None,
+        limit: int = 50,
+    ) -> List[DevEventOut]:
+        """
+        Получает инкрементальные события.
+        Смещение автоматически обновляется внутри репозитория.
+        """
+        return await EventRepository.get_incremental_events(
+            self.session,
+            org_id=self.org_id,
+            device_id=device_id,
+            last_event_id=last_event_id,
+            limit=limit,
+        )
 
     async def fields(self, device_id, event_type_code, tag, interval_m, limit):
         fields = await EventRepository.get_event_fields(
