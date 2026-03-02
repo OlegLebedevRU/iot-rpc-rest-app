@@ -45,12 +45,27 @@ class TaskHeader(BaseModel):
 
 
 class TaskCreate(TaskHeader):
-    payload: Optional[Dict] = None
+    payload: Optional[Dict[str, Any]] = Field(
+        default=None,
+        title="Task payload",
+        description="Данные задачи в формате JSON, опционально",
+    )
 
-    #     JsonValue = Field(
-    #     '{"dt":[{"mt":0}]}',
-    # )
-    model_config = {"json_schema_extra": {"examples": [{"dt": [{"mt": 0}]}]}}
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_schema_extra={
+            "examples": [
+                {
+                    "ext_task_id": "ext-12345",
+                    "device_id": 1,
+                    "method_code": 20,
+                    "priority": 0,
+                    "ttl": 1,
+                    "payload": {"dt": [{"mt": 0}]},
+                }
+            ]
+        },
+    )
 
 
 class TaskRequest(BaseModel):
@@ -62,6 +77,13 @@ class TaskRequest(BaseModel):
 
 class TaskResponse(TaskRequest):
     created_at: int
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {"id": "a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8", "created_at": 1712345678}
+            ]
+        }
+    )
 
 
 class TaskResponseDeleted(TaskRequest):

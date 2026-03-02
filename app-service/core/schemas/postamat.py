@@ -178,5 +178,21 @@ class PostamatShortSchema(BaseModel):
         }
     }
 
+
+class PostamatCmd(BaseModel):
+    method: str
+    params: Dict
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "method": "open_cells",
+                    "params": {"cell_numbers": [1, 2]},
+                }
+            ]
+        }
+    }
+
     # class Config:
     #     from_attributes = True  # ранее orm_mode = True

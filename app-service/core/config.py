@@ -1,14 +1,13 @@
 import logging
 import uuid
-from typing import Literal
-from pydantic import AmqpDsn, UUID4, HttpUrl
+from typing import Literal, Dict
+from pydantic import AmqpDsn, UUID4, HttpUrl, Field
 from pydantic import BaseModel
 from pydantic import PostgresDsn
 from pydantic_settings import (
     BaseSettings,
     SettingsConfigDict,
 )
-
 
 LOG_DEFAULT_FORMAT = (
     "[%(asctime)s.%(msecs)03d] %(module)10s:%(lineno)-3d %(levelname)-7s - %(message)s"
@@ -142,6 +141,50 @@ class Leo4CloudConfig(BaseModel):
     admin_url: HttpUrl
 
 
+# === Новый: API Keys Config ===
+# class ApiKeysConfig(BaseModel):
+#     keys_map: Dict[str, int] = {}
+#
+#     @classmethod
+#     def from_string(cls, value: str) -> "ApiKeysConfig":
+#         keys_map = {}
+#         if not value.strip():
+#             return cls(keys_map=keys_map)
+#         for item in value.split(","):
+#             item = item.strip()
+#             if ":" not in item:
+#                 continue
+#             api_key, org_id_str = item.split(":", 1)
+#             try:
+#                 org_id = int(org_id_str)
+#                 keys_map[api_key] = org_id
+#             except ValueError:
+#                 continue  # пропускаем некорректные
+#         return cls(keys_map=keys_map)
+
+
+# === Парсер API-ключей ===
+def parse_api_keys(raw: str) -> Dict[str, int]:
+    keys_map = {}
+    if not raw.strip():
+        return keys_map
+    for item in raw.split(","):
+        item = item.strip()
+        if ":" not in item:
+            continue
+        try:
+            api_key, org_id_str = item.split(":", 1)
+            org_id = int(org_id_str)
+            keys_map[api_key] = org_id
+        except ValueError:
+            logging.warning(f"Invalid API key format or org_id: '{item}' — skipped")
+    return keys_map
+
+
+class AuthConfig(BaseModel):
+    api_keys_raw: str = Field("", alias="API_KEYS")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(".env.template", ".env"),
@@ -161,8 +204,17 @@ class Settings(BaseSettings):
     task_proc_cfg: TaskProcessingConfig = TaskProcessingConfig()
     leo4: Leo4CloudConfig
 
+    # Сырая строка с API-ключами
+    auth: AuthConfig
+
+    @property
+    def api_keys(self) -> Dict[str, int]:
+        return parse_api_keys(self.auth.api_keys_raw)
+
 
 settn = Settings()
+# print("🔧 Raw API Keys:", settn.auth.api_keys_raw)
+# print("🔑 Parsed keys:", settn.api_keys)
 print(str(settn))
 
 

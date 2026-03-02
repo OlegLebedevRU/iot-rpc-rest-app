@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.crud.cell import CRUDCell as crud_cell
 from core.crud.postamat import CRUDPostamat as crud_postamat
 from core.models import Postamat, Cell, Device, DeviceOrgBind
+from core.schemas.device_tasks import TaskCreate
+from core.services.device_tasks import DeviceTasksService
 
 
 class PostamatService:
@@ -111,6 +113,65 @@ class PostamatService:
             }
             for p in postamats
         ]
+
+    async def create_command(
+        self,
+        db: AsyncSession,
+        *,
+        postamat_id: int,
+        method: str,
+        params: Dict,
+        org_id: Optional[int] = None,
+    ):
+        """
+        Создаёт задачу на устройство (постамат) через mapping метода в код.
+        Использует device_task_service.create для фактического создания задачи.
+        """
+        # 1. Получаем постамат и проверяем принадлежность к орге
+        db_postamat = await crud_postamat.get_by_id(
+            db=db,
+            postamat_id=postamat_id,
+            org_id=org_id,
+            with_device=True,
+            include_deleted=False,
+        )
+        if not db_postamat:
+            return None
+
+        device_id = db_postamat.device_id
+
+        # 2. Маппинг method -> method_code и формирование payload
+        method_code = None
+        payload = {}
+
+        if method == "open_cells":
+            method_code = 51
+            cell_numbers = params.get("cell_numbers")
+            if isinstance(cell_numbers, list):
+                payload["dt"] = [{"cl": num} for num in cell_numbers]
+            else:
+                payload["dt"] = []
+        else:
+            # Для других методов можно добавить логику
+            # Пока просто передаём params как payload
+            method_code = 99  # Условный "кастомный" метод
+            payload = params
+
+        # 3. Формируем схему TaskCreate
+        task_in = TaskCreate(
+            device_id=int(device_id),
+            method_code=method_code,
+            payload=payload,
+            ttl=1,
+            priority=99,
+            ext_task_id="0",
+        )
+
+        # 4. Передаём в device_task_service
+        task = await DeviceTasksService(session=db, org_id=org_id).create(
+            task_create=task_in
+        )  # .create(session=db, task_in=task_in)
+        return task
 
     # 1️⃣ Переключить is_locked для одной ячейки
     async def toggle_lock_cell(

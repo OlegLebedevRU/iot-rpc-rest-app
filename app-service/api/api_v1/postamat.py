@@ -5,7 +5,12 @@ from fastapi import APIRouter, HTTPException, status
 # from core.schemas.common import SuccessResponse
 # from core.services.auth_service import get_current_active_user
 from api.api_v1.api_depends import Session_dep, Org_dep
-from core.schemas.postamat import PostamatWithCellsResponse, PostamatShortSchema
+from core.schemas.device_tasks import TaskResponse
+from core.schemas.postamat import (
+    PostamatWithCellsResponse,
+    PostamatShortSchema,
+    PostamatCmd,
+)
 from core.services.postamat_service import postamat_service
 
 router = APIRouter(
@@ -56,3 +61,34 @@ async def get_postamat_with_cells(
             status_code=status.HTTP_404_NOT_FOUND, detail="Postamat not found"
         )
     return result
+
+
+@router.post("/{postamat_id}/command", response_model=TaskResponse)
+async def create_postamat_command(
+    postamat_id: int,
+    command: PostamatCmd,
+    org_id: Org_dep,
+    db: Session_dep,
+):
+    """
+    Отправить команду на постамат.
+    - **postamat_id**: ID постамата.
+    - **command.method**: имя команды (например, "lock_cells").
+    - **command.params**: параметры команды в виде словаря.
+    Проверяется принадлежность постамата к организации (если указан org_id).
+    Возвращает объект задачи (TaskResponse).
+    """
+    effective_org_id = org_id
+    task = await postamat_service.create_command(
+        db=db,
+        postamat_id=postamat_id,
+        method=command.method,
+        params=command.params,
+        org_id=effective_org_id,
+    )
+    if not task:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Postamat not found or not accessible",
+        )
+    return task
