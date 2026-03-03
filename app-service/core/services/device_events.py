@@ -87,7 +87,7 @@ class DeviceEventsService:
                 await topic_publisher.publish(
                     routing_key=settings.webhook.webhooks_queue,  # "srv.a3b0000000c99999d250813.tsk",
                     message=msg.body,
-                    exchange=settings.rmq.x_name,
+                    exchange=settings.rmq.x_name_direct,
                     # correlation_id=task.id,
                     headers={"x-device-id": str(dev_id)},
                 )
