@@ -86,6 +86,20 @@ class DeviceRepo:
         return resp
 
     @classmethod
+    async def get_org_id_by_device_id(
+        cls, session: AsyncSession, device_id: int | None = 0
+    ) -> int | None:
+        data = await session.execute(
+            select(DeviceOrgBind).where(Device.device_id == device_id)
+        )
+        r = data.unique().mappings().one_or_none()
+        if r is not None:
+            resp = r.DeviceOrgBind.org_id
+        else:
+            resp = None
+        return resp
+
+    @classmethod
     async def get_device_id(
         cls, session: AsyncSession, sn: str | None = "", org_id: int | None = 0
     ) -> int | None:

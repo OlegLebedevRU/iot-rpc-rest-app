@@ -22,7 +22,7 @@ class WebhookConfig:
         self.backoff_factor = backoff_factor
 
 
-config = WebhookConfig(
+config_default = WebhookConfig(
     timeout=settings.webhook.timeout,
     max_retries=settings.webhook.max_retries,
     backoff_factor=settings.webhook.backoff_factor,
@@ -34,7 +34,7 @@ config = WebhookConfig(
 
 
 class Webhook:
-    def __init__(self, url: str, config: WebhookConfig):
+    def __init__(self, url: str, config: WebhookConfig = config_default):
         """
         Асинхронный вебхук-клиент с поддержкой retry и таймаутов.
 

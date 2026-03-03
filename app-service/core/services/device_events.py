@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core import settings
 from core.crud.dev_events_repo import EventRepository
 from core.crud.device_repo import DeviceRepo
+from core.fs_broker import fs_router
 from core.schemas.device_events import DevEventBody, DevEventFields, DevEventOut
 
 log = logging.getLogger(__name__)
@@ -23,6 +24,8 @@ fh.setLevel(logging.INFO)
 formatter = logging.Formatter(settings.logging.log_format)
 fh.setFormatter(formatter)
 log.addHandler(fh)
+
+topic_publisher = fs_router.publisher()
 
 
 class DeviceEventsService:
@@ -78,6 +81,15 @@ class DeviceEventsService:
                     device_id=dev_id,
                     type=str(event_type_code),
                     gauges=json.loads(payload),
+                )
+            else:
+                # webhook_queue(payload, routing_key = 'webhook_action.'+str(dev_id)
+                await topic_publisher.publish(
+                    routing_key=settings.webhook.webhooks_queue,  # "srv.a3b0000000c99999d250813.tsk",
+                    message=msg.body,
+                    exchange=settings.rmq.x_name,
+                    # correlation_id=task.id,
+                    headers={"x-device-id": str(dev_id)},
                 )
 
     async def list(self, device_id, events_include, events_exclude):

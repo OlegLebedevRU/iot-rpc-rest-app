@@ -72,6 +72,15 @@ class FastStreamConfig(BaseModel):
 
 
 class DatabaseConfig(BaseModel):
+    """
+    Connection Pooling allows us to reuse existing database connections instead of creating new ones, which saves time and resources.
+
+    pool_size is the maximum number of permanent connections.
+    max_overflow is the maximum number of temporary connections.
+    pool_timeout is the maximum wait time for a connection. If a connection is not available within this time, an error is raised.
+    pool_recycle is the number of seconds to recycle connections after. This is useful to prevent the database from running out of connections.
+    """
+
     url: PostgresDsn
     echo: bool = False
     echo_pool: bool = False
@@ -190,6 +199,8 @@ class WebhookConfigModel(BaseModel):
     timeout: float = 5.0
     max_retries: int = 3
     backoff_factor: float = 0.5
+    webhooks_queue: str = "webhook_action"
+    def_queue_args: dict = {"x-message-ttl": 600000}
 
 
 class Settings(BaseSettings):

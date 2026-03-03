@@ -1,13 +1,18 @@
+import json
 import logging.handlers
 
+from faststream.rabbit.fastapi import RabbitMessage
+
 from core import settings
+from core.crud.device_repo import DeviceRepo
 from core.fs_broker import fs_router
+from core.integrations.webhooks import Webhook
 from core.schemas.rmq_admin import RmqClientsAction
 from core.services.device_tasks import DeviceTasksService
 from core.services.devices import DeviceService
 from core.services.rmq_admin import RmqAdmin
 from core.topologys.fs_depends import Session_dep
-from core.topologys import q_jobs, rmq_api_client_action
+from core.topologys import q_jobs, rmq_api_client_action, webhook_action
 
 log = logging.getLogger(__name__)
 fh = logging.handlers.RotatingFileHandler(
@@ -41,3 +46,19 @@ async def rmq_api_client(session: Session_dep, api_action: RmqClientsAction):
         #
         await DeviceService.update_device_connections(session)
         log.info("Subscribed job = Updated device connection status")
+
+
+@fs_router.subscriber(webhook_action)
+async def webhooks(session: Session_dep, msg: RabbitMessage):
+    log.info("Webhook = %s", str(msg))
+    if "x-device-id" in msg.raw_message.headers:
+        device_id = int((msg.raw_message.headers["x-device-id"]).encode())
+        payload = json.loads(msg.body.decode())
+        # device_id = int(msg.raw_message.routing_key.split(".")[1])
+        org_id = await DeviceRepo.get_org_id_by_device_id(session, device_id=device_id)
+        if org_id is not None:
+            log.info("webhook(org_id):(%d) %s", org_id, payload)
+            # todo get url by org_id
+            # webhook = Webhook(url="https://example.com/webhook")
+            # async with webhook:
+            #     response = await webhook.send(payload)
