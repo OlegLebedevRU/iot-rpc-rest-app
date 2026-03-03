@@ -90,7 +90,7 @@ class DeviceRepo:
         cls, session: AsyncSession, device_id: int | None = 0
     ) -> int | None:
         data = await session.execute(
-            select(DeviceOrgBind).where(Device.device_id == device_id)
+            select(DeviceOrgBind).where(DeviceOrgBind.device_id == device_id).limit(1)
         )
         r = data.unique().mappings().one_or_none()
         if r is not None:

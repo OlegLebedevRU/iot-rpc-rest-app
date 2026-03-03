@@ -50,7 +50,7 @@ async def rmq_api_client(session: Session_dep, api_action: RmqClientsAction):
 
 @fs_router.subscriber(webhook_action)
 async def webhooks(session: Session_dep, msg: RabbitMessage):
-    log.info("Webhook = %s", str(msg))
+    # log.info("Webhook = %s", str(msg))
     if "x-device-id" in msg.raw_message.headers:
         device_id = int((msg.raw_message.headers["x-device-id"]).encode())
         payload = json.loads(msg.body.decode())
