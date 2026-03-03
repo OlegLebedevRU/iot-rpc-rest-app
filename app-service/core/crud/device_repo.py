@@ -103,12 +103,17 @@ class DeviceRepo:
     async def get_device_id(
         cls, session: AsyncSession, sn: str | None = "", org_id: int | None = 0
     ) -> int | None:
-        data = await session.execute(
+        if sn == "" or sn is None:
+            return None
+        stmt = (
             select(Device)
             .where(Device.sn == sn)
             .where(Device.is_deleted == False)
-            .where(DeviceOrgBind.org_id == org_id)
+            .limit(1)
         )
+        if org_id > 0:
+            stmt = stmt.where(DeviceOrgBind.org_id == org_id)
+        data = await session.execute(stmt)
         r = data.unique().one_or_none()
         if r is not None:
             resp = r.Device.device_id

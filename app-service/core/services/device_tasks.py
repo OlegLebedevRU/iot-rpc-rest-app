@@ -227,6 +227,19 @@ class DeviceTasksService:
             exchange=settings.rmq.x_name,
             headers={"ext_id": str(ext_id), "result_id": str(result_id)},
         )
+        dev_id = await DeviceRepo.get_device_id(session=self.session, sn=sn)
+        await topic_publisher.publish(
+            routing_key=settings.webhook.webhooks_queue,  # "srv.a3b0000000c99999d250813.tsk",
+            message=msg.body,
+            exchange=settings.rmq.x_name_direct,
+            correlation_id=corr_id,
+            headers={
+                "x-device-id": str(dev_id),
+                "x-msg-type": "msg-task-result",
+                "x-ext-id": str(ext_id),
+                "x-result-id": str(result_id),
+            },
+        )
 
     async def ttl(self, decrement: int = 1):
         await TasksRepository.update_ttl(self.session, decrement)

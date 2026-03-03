@@ -89,7 +89,10 @@ class DeviceEventsService:
                     message=msg.body,
                     exchange=settings.rmq.x_name_direct,
                     # correlation_id=task.id,
-                    headers={"x-device-id": str(dev_id)},
+                    headers={
+                        "x-device-id": str(dev_id),
+                        "x-msg-type": "msg-event",
+                    },
                 )
 
     async def list(self, device_id, events_include, events_exclude):

@@ -51,14 +51,54 @@ async def rmq_api_client(session: Session_dep, api_action: RmqClientsAction):
 @fs_router.subscriber(webhook_action)
 async def webhooks(session: Session_dep, msg: RabbitMessage):
     # log.info("Webhook = %s", str(msg))
-    if "x-device-id" in msg.raw_message.headers:
-        device_id = int((msg.raw_message.headers["x-device-id"]).encode())
-        payload = json.loads(msg.body.decode())
-        # device_id = int(msg.raw_message.routing_key.split(".")[1])
-        org_id = await DeviceRepo.get_org_id_by_device_id(session, device_id=device_id)
-        if org_id is not None:
-            log.info("webhook(org_id):(%d) %s", org_id, payload)
-            # todo get url by org_id
-            # webhook = Webhook(url="https://example.com/webhook")
-            # async with webhook:
-            #     response = await webhook.send(payload)
+    if "x-msg-type" not in msg.raw_message.headers:
+        return
+    if msg.headers["x-msg_type"] == "msg-event":
+        if "x-device-id" in msg.raw_message.headers:
+            device_id = int((msg.raw_message.headers["x-device-id"]).encode())
+            payload = json.loads(msg.body.decode())
+            # device_id = int(msg.raw_message.routing_key.split(".")[1])
+            org_id = await DeviceRepo.get_org_id_by_device_id(
+                session, device_id=device_id
+            )
+            if org_id is not None:
+                log.info("event webhook(org_id):(%d) %s", org_id, payload)
+                # todo get url by org_id
+                async with Webhook(
+                    url="https://functions.yandexcloud.net/d4e6itsmvhuebjda2al7",
+                    path_suffix="/event/" + str(device_id),
+                    headers={"x-msg-type": "msg-event"},
+                ) as wh:
+                    await wh.send(payload)
+    elif msg.headers["x-msg_type"] == "msg-task-result":
+        # headers = (
+        #     {
+        #         "x-device-id": str(dev_id),
+        #         "x-msg-type": "msg-task-result",
+        #         "x-ext-id": str(ext_id),
+        #         "x-result-id": str(result_id),
+        #     },
+        # )
+        if "x-device-id" in msg.raw_message.headers:
+            device_id = int((msg.raw_message.headers["x-device-id"]).encode())
+            payload = json.loads(msg.body.decode())
+            org_id = await DeviceRepo.get_org_id_by_device_id(
+                session, device_id=device_id
+            )
+            if org_id is not None:
+                log.info("task-result webhook(org_id):(%d) %s", org_id, payload)
+                # todo get url by org_id
+                headers = {"x-msg-type": "msg-task-result"}
+                if msg.headers["x-ext-id"]:
+                    headers["x-ext-id"] = msg.headers["x-ext-id"]
+                if msg.headers["x-result-id"]:
+                    headers["x-result-id"] = msg.headers["x-result-id"]
+                headers["x-device-id"] = str(device_id)
+                async with Webhook(
+                    url="https://functions.yandexcloud.net/d4e6itsmvhuebjda2al7",
+                    path_suffix="/task-result/" + msg.correlation_id,
+                    headers=headers,
+                ) as wh:
+                    await wh.send(payload)
+    else:
+        return

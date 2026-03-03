@@ -30,11 +30,11 @@ log.addHandler(fh)
 
 
 async def sn_getter_dep(msg: RabbitMessage) -> str:
-    log.info(
-        "Mqtt received topic= <%s>, headers=%s",
-        msg.raw_message.routing_key,
-        msg.raw_message.headers,
-    )
+    # log.info(
+    #     "Mqtt received topic= <%s>, headers=%s",
+    #     msg.raw_message.routing_key,
+    #     msg.raw_message.headers,
+    # )
     return msg.raw_message.routing_key[4:-4]
 
 

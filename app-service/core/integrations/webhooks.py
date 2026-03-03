@@ -34,16 +34,24 @@ config_default = WebhookConfig(
 
 
 class Webhook:
-    def __init__(self, url: str, config: WebhookConfig = config_default):
+    def __init__(
+        self,
+        url: str,
+        config: WebhookConfig = config_default,
+        path_suffix: str = "",
+        headers: dict = None,
+    ):
         """
         Асинхронный вебхук-клиент с поддержкой retry и таймаутов.
 
-        :param url: URL вебхука.
+        :param url: Базовый URL вебхука.
         :param config: Экземпляр WebhookConfig с настройками таймаутов и повторов.
+        :param path_suffix: Опциональный суффикс пути, добавляемый к URL (например, "/events").
+        :param headers: Опциональный словарь заголовков для отправки с запросом.
         """
-        self.url = url
+        self.url = url.rstrip("/") + path_suffix  # Собираем финальный URL
         self.config = config
-        self.client = httpx.AsyncClient(timeout=config.timeout)
+        self.client = httpx.AsyncClient(timeout=config.timeout, headers=headers or {})
 
     async def send(self, payload: dict) -> httpx.Response:
         """
