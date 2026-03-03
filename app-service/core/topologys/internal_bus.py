@@ -65,7 +65,7 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
                 log.info("event webhook(org_id):(%d) %s", org_id, payload)
                 # todo get url by org_id
                 async with Webhook(
-                    url="https://functions.yandexcloud.net/d4e6itsmvhuebjda2al7",
+                    url="https://d5dgp292c4okr1knd17q.g3ab4gln.apigw.yandexcloud.net",
                     path_suffix="/event/" + str(device_id),
                     headers={"x-msg-type": "msg-event"},
                 ) as wh:
@@ -95,7 +95,7 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
                     headers["x-result-id"] = msg.headers["x-result-id"]
                 headers["x-device-id"] = str(device_id)
                 async with Webhook(
-                    url="https://functions.yandexcloud.net/d4e6itsmvhuebjda2al7",
+                    url="https://d5dgp292c4okr1knd17q.g3ab4gln.apigw.yandexcloud.net",
                     path_suffix="/task-result/" + msg.correlation_id,
                     headers=headers,
                 ) as wh:
