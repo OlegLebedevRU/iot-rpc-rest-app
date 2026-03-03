@@ -53,7 +53,7 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
     # log.info("Webhook = %s", str(msg))
     if "x-msg-type" not in msg.raw_message.headers:
         return
-    if msg.headers["x-msg_type"] == "msg-event":
+    if msg.headers["x-msg-type"] == "msg-event":
         if "x-device-id" in msg.raw_message.headers:
             device_id = int((msg.raw_message.headers["x-device-id"]).encode())
             payload = json.loads(msg.body.decode())
@@ -70,7 +70,7 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
                     headers={"x-msg-type": "msg-event"},
                 ) as wh:
                     await wh.send(payload)
-    elif msg.headers["x-msg_type"] == "msg-task-result":
+    elif msg.headers["x-msg-type"] == "msg-task-result":
         # headers = (
         #     {
         #         "x-device-id": str(dev_id),
