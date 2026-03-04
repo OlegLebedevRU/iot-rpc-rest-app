@@ -91,7 +91,10 @@ class DeviceTasksService:
             message=notify,
             exchange=settings.rmq.x_name,
             correlation_id=task.id,
-            headers={"method_code": str(notify.header.method_code)},
+            headers={
+                "method_code": str(notify.header.method_code),
+                "correlationData": str(task.id),
+            },
         )
         return task
 
@@ -173,7 +176,10 @@ class DeviceTasksService:
             message=t_resp,
             correlation_id=str(correlation_id),
             exchange=settings.rmq.x_name,
-            headers={"method_code": method_code},
+            headers={
+                "method_code": method_code,
+                "correlationData": str(correlation_id),
+            },
         )
 
     async def save(self, msg, sn, corr_id):
@@ -225,7 +231,11 @@ class DeviceTasksService:
             message=rmsg,
             correlation_id=corr_id,
             exchange=settings.rmq.x_name,
-            headers={"ext_id": str(ext_id), "result_id": str(result_id)},
+            headers={
+                "ext_id": str(ext_id),
+                "result_id": str(result_id),
+                "correlationData": str(corr_id),
+            },
         )
         dev_id = await DeviceRepo.get_device_id(session=self.session, sn=sn)
         await topic_publisher.publish(

@@ -56,6 +56,13 @@ async def corr_id_getter_dep(msg: RabbitMessage) -> str | None:
                 bytes=(msg.raw_message.headers["x-correlation-id"]).encode()
             )
             log.info("Received headers.x-correlation-id =  %s", corr_id)
+        if "correlationData" in msg.raw_message.headers:
+            corr_id = uuid.UUID(
+                # bytes=(msg.raw_message.headers["x-correlation-id"].encode())
+                bytes=(msg.raw_message.headers["correlationData"]).encode()
+            )
+            log.info("Received headers.correlationData =  %s", corr_id)
+
         else:
             if corr_id is None:
                 pass
