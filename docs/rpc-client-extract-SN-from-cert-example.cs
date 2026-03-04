@@ -1,4 +1,5 @@
-/* ⚠️ Примечание: MQTTnet v4.5.3 — последняя версия с поддержкой .NET Framework 4.8.
+/*
+⚠️ Примечание: MQTTnet v4.5.3 — последняя версия с поддержкой .NET Framework 4.8.
 Добавьте в .csproj:
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -22,15 +23,36 @@ MQTT 5
 Используется через WithProtocolVersion(MQTTnet.Formatter.MqttProtocolVersion.V500)
 User Properties
 Через .WithUserProperty(name, value)
-Correlation Data
-Передаётся как userProperty с именем correlationData
+⚠️ Correlation Data Передаётся как userProperty с именем correlationData
+⚠️ тогда как это свойство является обособленным в других реализациях mqtt v5
+⚠️ поэтому намеренно изменили ключ свойства со snake_case на camelCase
+⚠️ обратить внимание и добавить адаптацию на стороне сервера.
+
 TLS аутентификация
 Через PFX-сертификат с закрытым ключом
 Асинхронность
 На базе async/await, Task.Run
 События
 SendEvent() с кодом 44 — healthcheck
+
+Извлечение SN из CN
+Добавлен метод ExtractSerialNumberFromCertificate()
+Чтение .pfx
+Сертификат загружается из файла с паролем
+Парсинг CN
+Из строки Subject извлекается часть CN=...
+Использование SN
+Как client_id и в построении топиков
+
+🔐 Требования
+Файл .pfx должен содержать закрытый ключ
+Пароль от .pfx указан в ClientCertPassword
+CN должен быть первым элементом или явно указан
+📌 Пример содержимого Subject
+CN=a3b1234567c10221d290825, O=MyCompany, C=RU
+→ Извлекается a3b1234567c10221d290825
 */
+
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -55,8 +77,36 @@ namespace DeviceClient
         private const string ClientCertPath = @"path\to\client_cert.pfx"; // PFX/PKCS#12
         private const string ClientCertPassword = "password"; // Пароль от сертификата
 
-        // Серийный номер устройства (должен быть в CN сертификата)
-        private const string SN = "a3b1234567c10221d290825";
+        // Извлечение SN из CN сертификата
+        private static readonly string SN = ExtractSerialNumberFromCertificate();
+
+        private static string ExtractSerialNumberFromCertificate()
+        {
+            try
+            {
+                var cert = new X509Certificate2(ClientCertPath, ClientCertPassword);
+                var cn = cert.Subject; // Subject: "CN=a3b1234567c10221d290825, O=Company, ..."
+
+                // Извлекаем значение CN
+                var cnPair = cn.Split(',')
+                    .Select(part => part.Trim())
+                    .FirstOrDefault(part => part.StartsWith("CN="));
+
+                if (cnPair != null && cnPair.Length > 3)
+                {
+                    var sn = cnPair.Substring(3); // Убираем "CN="
+                    Console.WriteLine($"Извлечённый SN из сертификата (CN): {sn}");
+                    return sn;
+                }
+
+                throw new InvalidOperationException("Не удалось извлечь CN из сертификата.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Ошибка при чтении сертификата: {ex.Message}");
+                throw;
+            }
+        }
 
         // Топики
         private static readonly string TopicReq = $"dev/{SN}/req";
@@ -89,7 +139,7 @@ namespace DeviceClient
             _mqttClient = factory.CreateMqttClient();
 
             var options = new MqttClientOptionsBuilder()
-                .WithClientId(SN)
+                .WithClientId(SN) // Используем SN как client_id
                 .WithTcpServer(BrokerHost, BrokerPort)
                 .WithProtocolVersion(MQTTnet.Formatter.MqttProtocolVersion.V500)
                 .WithTlsOptions(new MqttClientOptionsBuilderTlsParameters
@@ -140,7 +190,6 @@ namespace DeviceClient
 
         private static bool ValidateServerCertificate(object certificate)
         {
-            // Здесь можно реализовать более строгую проверку
             var cert = certificate as X509Certificate2;
             if (cert == null) return false;
             return true; // Упрощённо: доверяем CA
