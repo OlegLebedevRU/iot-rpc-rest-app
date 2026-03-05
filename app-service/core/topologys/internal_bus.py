@@ -56,7 +56,11 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
     if msg.headers["x-msg-type"] == "msg-event":
         if "x-device-id" in msg.raw_message.headers:
             device_id = int((msg.raw_message.headers["x-device-id"]).encode())
-            payload = json.loads(msg.body.decode())
+            try:
+                payload = json.loads(msg.body.decode())
+            except ValueError or TypeError:
+                payload = {}
+            # payload = json.loads(msg.body.decode())
             # device_id = int(msg.raw_message.routing_key.split(".")[1])
             org_id = await DeviceRepo.get_org_id_by_device_id(
                 session, device_id=device_id
@@ -81,7 +85,11 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
         # )
         if "x-device-id" in msg.raw_message.headers:
             device_id = int((msg.raw_message.headers["x-device-id"]).encode())
-            payload = json.loads(msg.body.decode())
+            # payload = json.loads(msg.body.decode())
+            try:
+                payload = json.loads(msg.body.decode())
+            except ValueError or TypeError:
+                payload = {}
             org_id = await DeviceRepo.get_org_id_by_device_id(
                 session, device_id=device_id
             )
