@@ -142,6 +142,10 @@ services:
         target: /crt/server_certificate.pem
         read_only: true
       - type: bind
+        source: ./crt/legacy_cert_dev_leo4_ru.crt
+        target: /crt/legacy_cert_dev_leo4_ru.crt
+        read_only: true
+      - type: bind
         source: ./crt/key_0000.pem
         target: /crt/server_key.pem
         read_only: true
