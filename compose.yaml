@@ -127,6 +127,7 @@ services:
         - "4443:4443"
     restart: always
     volumes:
+      - ./crt/openssl.cnf:/etc/ssl/openssl.cnf:ro
       - type: bind
         source: ./nginx-configs/dev_leo4_ru
         target: /etc/nginx/conf.d
