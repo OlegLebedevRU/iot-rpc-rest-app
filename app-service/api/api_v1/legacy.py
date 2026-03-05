@@ -19,7 +19,7 @@ async def map_cert(
     request: Request,
 ):
     hd = request.headers
-    return {"headers": str(hd)}
+    return Response(content=str(hd))
 
 
 @legacy_router.get("/certificates/")
