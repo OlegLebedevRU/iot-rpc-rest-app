@@ -110,7 +110,11 @@ class TaskResponseResult(TaskResponseStatus):
 
 
 class TaskResponsePayload(TaskResponseStatus):
-    payload: str
+    payload: Optional[Dict[str, Any]] = Field(
+        default=None,
+        title="Task payload",
+        description="Данные задачи в формате JSON, опционально",
+    )
 
 
 # Pydantic model for devices
