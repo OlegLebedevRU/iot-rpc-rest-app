@@ -65,11 +65,15 @@ class DeviceEventsService:
                 event_type_code,
                 dev_event_id,
             )
-            payload = msg.body.decode()
-            if payload:
-                payload_dict = json.loads(payload)
-            else:
+            try:
+                payload_dict = json.loads(msg.body.decode())
+            except ValueError or TypeError:
                 payload_dict = {}
+            # payload = msg.body.decode()
+            # if payload:
+            #     payload_dict = json.loads(msg.body.decode())
+            # else:
+            #     payload_dict = {}
             event = DevEventBody(
                 device_id=dev_id,
                 event_type_code=event_type_code,
