@@ -14,7 +14,7 @@ legacy_router = APIRouter(
 )
 
 
-@legacy_router.get("/map_legacy_crt")
+@legacy_router.get("/map_legacy_crt/")
 async def map_cert(
     request: Request,
 ):
