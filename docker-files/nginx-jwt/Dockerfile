@@ -51,8 +51,14 @@ http {
 #    log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
 #                      '$status $body_bytes_sent "$http_referer" '
 #                      '"$http_user_agent" "$http_x_forwarded_for"';
+    log_format ssl_debug '$remote_addr - $remote_user [$time_local] "$request" '
+                        'ssl_verify:$ssl_client_verify '
+                        'ssl_dn:"$ssl_client_s_dn" '
+                        'ssl_issuer:"$ssl_client_i_dn" '
+                        'status:$status '
+                        'body_bytes_sent:$body_bytes_sent '
+                        '"$http_referer" "$http_user_agent"';
 
-    access_log  /var/log/nginx/access.log  custom;
     #auth_jwt_enabled off;
     # on from binded conf
     #resolver 127.0.0.11;
