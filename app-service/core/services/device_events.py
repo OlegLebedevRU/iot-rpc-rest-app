@@ -66,12 +66,16 @@ class DeviceEventsService:
                 dev_event_id,
             )
             payload = msg.body.decode()
+            if payload:
+                payload_dict = json.loads(payload)
+            else:
+                payload_dict = {}
             event = DevEventBody(
                 device_id=dev_id,
                 event_type_code=event_type_code,
                 dev_event_id=dev_event_id,
                 dev_timestamp=dev_timestamp,
-                payload=json.loads(payload) if payload is not None else None,
+                payload=payload_dict,
             )
             await EventRepository.add_event(self.session, event)
             if event_type_code == 44:
@@ -80,7 +84,7 @@ class DeviceEventsService:
                     org_id=self.org_id,
                     device_id=dev_id,
                     type=str(event_type_code),
-                    gauges=json.loads(payload) if payload is not None else None,
+                    gauges=payload_dict,
                 )
             else:
                 # webhook_queue(payload, routing_key = 'webhook_action.'+str(dev_id)
