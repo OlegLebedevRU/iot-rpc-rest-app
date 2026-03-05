@@ -14,6 +14,14 @@ legacy_router = APIRouter(
 )
 
 
+@legacy_router.get("/map_legacy_crt")
+async def map_cert(
+    request: Request,
+):
+    hd = request.scope["headers"]
+    return {"headers": str(hd), "dn": hd["X-SSL-Client-DN"]}
+
+
 @legacy_router.get("/certificates/")
 async def legacy(
     function: Annotated[str, Query],
