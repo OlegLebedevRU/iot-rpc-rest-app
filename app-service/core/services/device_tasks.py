@@ -1,7 +1,9 @@
 import logging.handlers
+import uuid
 from uuid import UUID
 from fastapi import HTTPException
 from fastapi_pagination import Page
+from pydantic import UUID4
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import RoutingKey, settings
 from core.crud.dev_tasks_repo import TasksRepository
@@ -142,7 +144,7 @@ class DeviceTasksService:
                 self.session, corr_id, TaskStatus.PENDING
             )
 
-    async def select(self, sn, corr_id, msg):
+    async def select(self, sn, corr_id: UUID4, msg):
         ws_count = 0
         if hasattr(msg, "headers"):
             msg_headers = msg.headers
@@ -174,7 +176,7 @@ class DeviceTasksService:
         await topic_publisher.publish(
             routing_key=routing_key,
             message=t_resp,
-            correlation_id=str(correlation_id),
+            correlation_id=correlation_id,  # str(correlation_id),uuid.UUID(correlation_id).bytes,
             exchange=settings.rmq.x_name,
             headers={
                 "method_code": method_code,
@@ -182,7 +184,7 @@ class DeviceTasksService:
             },
         )
 
-    async def save(self, msg, sn, corr_id):
+    async def save(self, msg, sn, corr_id: UUID4):
         if "ext_id" in msg.headers:
             ext_id = int(msg.headers["ext_id"])
         else:

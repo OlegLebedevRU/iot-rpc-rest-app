@@ -26,7 +26,6 @@ from core.schemas.device_tasks import (
     TaskListOut,
 )
 
-
 log = logging.getLogger(__name__)
 
 fh = logging.handlers.RotatingFileHandler(
@@ -125,60 +124,43 @@ class TasksRepository:
     async def select_task(
         cls,
         session: AsyncSession,
-        t_req: str = None,
+        t_req: UUID4 = uuid.UUID(int=0),  # str = None,
         sn: str = None,
         method_le: int = 65535,
     ) -> TaskResponsePayload | None:
+        query = (
+            select(
+                DevTask.id.label("id"),
+                DevTask.ext_task_id.label("ext_task_id"),
+                DevTask.method_code.label("method_code"),
+                DevTask.device_id.label("device_id"),
+                func.extract("EPOCH", DevTask.created_at).label("created_at"),
+                DevTaskStatus.priority.label("priority"),
+                DevTaskStatus.status.label("status"),
+                func.extract("EPOCH", DevTaskStatus.pending_at).label("pending_at"),
+                func.extract("EPOCH", DevTaskStatus.locked_at).label("locked_at"),
+                DevTaskStatus.ttl.label("ttl"),
+                DevTaskPayload.payload.label("payload"),
+            )
+            .join(DevTaskStatus)
+            .join(DevTaskPayload)
+            .where(
+                DevTask.is_deleted == False,
+                DevTaskStatus.status < TaskStatus.DONE,
+            )
+        )
         if t_req is not None and t_req != uuid.UUID(int=0):
-            query = (
-                select(
-                    DevTask.id.label("id"),
-                    DevTask.ext_task_id.label("ext_task_id"),
-                    DevTask.method_code.label("method_code"),
-                    DevTask.device_id.label("device_id"),
-                    func.extract("EPOCH", DevTask.created_at).label("created_at"),
-                    DevTaskStatus.priority.label("priority"),
-                    DevTaskStatus.status.label("status"),
-                    func.extract("EPOCH", DevTaskStatus.pending_at).label("pending_at"),
-                    func.extract("EPOCH", DevTaskStatus.locked_at).label("locked_at"),
-                    DevTaskStatus.ttl.label("ttl"),
-                    DevTaskPayload.payload.label("payload"),
-                )
-                .join(DevTaskStatus)
-                .join(DevTaskPayload)
-                .where(
-                    DevTask.id == t_req,
-                    DevTask.is_deleted == False,
-                    DevTaskStatus.status < TaskStatus.DONE,
-                    DevTask.method_code <= method_le,
-                )
+            query = query.where(
+                DevTask.id == t_req,
+                DevTask.method_code <= method_le,
             )
         else:
             subq = select(Device).where(Device.sn == sn).subquery()
-            query = (
-                select(
-                    DevTask.id.label("id"),
-                    DevTask.ext_task_id.label("ext_task_id"),
-                    DevTask.method_code.label("method_code"),
-                    DevTask.device_id.label("device_id"),
-                    func.extract("EPOCH", DevTask.created_at).label("created_at"),
-                    DevTaskStatus.priority.label("priority"),
-                    DevTaskStatus.status.label("status"),
-                    func.extract("EPOCH", DevTaskStatus.pending_at).label("pending_at"),
-                    func.extract("EPOCH", DevTaskStatus.locked_at).label("locked_at"),
-                    DevTaskStatus.ttl.label("ttl"),
-                    DevTaskPayload.payload.label("payload"),
-                )
-                .join(DevTaskStatus)
-                .join(DevTaskPayload)
-                .where(
-                    DevTask.device_id == subq.c.device_id,
-                    DevTask.is_deleted == False,
-                    DevTaskStatus.status < TaskStatus.DONE,
-                )
-                .order_by(desc(DevTaskStatus.priority), DevTask.created_at)
-                .limit(1)
+            query = query.where(
+                DevTask.device_id == subq.c.device_id,
             )
+            query = query.order_by(desc(DevTaskStatus.priority), DevTask.created_at)
+            query = query.limit(1)
 
         t = await session.execute(query)
         if t is None:
