@@ -1,6 +1,10 @@
 import logging
+import urllib.parse
+from datetime import datetime, UTC
 from typing import Annotated
 
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
 from fastapi import APIRouter, Query, Request, Response
 
 from core import settings
@@ -14,12 +18,68 @@ legacy_router = APIRouter(
 )
 
 
+def parse_cert(pem_data: str) -> dict:
+    """
+    Парсит PEM-сертификат и возвращает словарь с данными.
+    """
+    try:
+        cert = x509.load_pem_x509_certificate(pem_data.encode(), default_backend())
+        subject = cert.subject
+        issuer = cert.issuer
+        not_valid_before = cert.not_valid_before
+        not_valid_after = cert.not_valid_after
+        serial = cert.serial_number
+
+        def get_attr(oid):
+            attrs = subject.get_attributes_for_oid(oid)
+            return attrs[0].value if attrs else None
+
+        cn = get_attr(x509.NameOID.COMMON_NAME)
+        ou = get_attr(x509.NameOID.ORGANIZATIONAL_UNIT_NAME)
+        o = get_attr(x509.NameOID.ORGANIZATION_NAME)
+        # email = get_attr(x509.EmailAddressOID.EMAIL_ADDRESS)
+
+        return {
+            "subject": str(subject),
+            "issuer": str(issuer),
+            "cn": cn,
+            "ou": ou,
+            "o": o,
+            # "email": email,
+            "serial": serial,
+            "not_valid_before": not_valid_before.isoformat(),
+            "not_valid_after": not_valid_after.isoformat(),
+            "expired": datetime.now(UTC) > not_valid_after,
+            "pem": pem_data.strip(),
+        }
+    except Exception as e:
+        log.error("Failed to parse certificate: %s", e)
+        return {"error": "Invalid or malformed certificate", "details": str(e)}
+
+
 @legacy_router.get("/map_legacy_crt/")
-async def map_cert(
-    request: Request,
-):
-    hd = request.headers
-    return Response(content=str(hd))
+async def map_cert(request: Request):
+    """
+    Принимает X-SSL-Client-Cert, декодирует и возвращает информацию о сертификате.
+    """
+    escaped_cert = request.headers.get("X-SSL-Client-Cert")
+    if not escaped_cert:
+        return Response(
+            content="No client certificate provided",
+            status_code=400,
+            media_type="text/plain",
+        )
+
+    try:
+        # Декодируем URL-encoded PEM
+        pem_cert = urllib.parse.unquote(escaped_cert)
+        cert_info = parse_cert(pem_cert)
+        return Response(content=str(cert_info), media_type="text/plain")
+    except Exception as e:
+        log.error("Error processing certificate: %s", e)
+        return Response(
+            content=f"Error: {str(e)}", status_code=500, media_type="text/plain"
+        )
 
 
 @legacy_router.get("/certificates/")
