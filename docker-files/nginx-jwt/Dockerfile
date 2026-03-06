@@ -4,7 +4,7 @@ RUN <<`
   set -e
   apt-get update
   apt-get upgrade -y
-  apt-get install -y less nano libjansson4 libjwt0 curl gnupg2 ca-certificates lsb-release debian-archive-keyring openssl libssl3-modules
+  apt-get install -y less nano libjansson4 libjwt0 curl gnupg2 ca-certificates lsb-release debian-archive-keyring openssl libssl3-contrib
 `
 
 RUN <<`
