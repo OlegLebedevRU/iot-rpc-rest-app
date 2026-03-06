@@ -4,10 +4,11 @@ RUN <<`
   set -e
   apt-get update
   apt-get upgrade -y
-  apt-get install -y less nano libjansson4 libjwt0 curl gnupg2 ca-certificates lsb-release debian-archive-keyring openssl libssl3-contrib
+  apt-get install -y less nano libjansson4 libjwt0 curl gnupg2 ca-certificates lsb-release debian-archive-keyring openssl openssl-provider-legacy
 `
-# Создаём симлинк на legacy.so, если он не появился автоматически
-RUN ln -sf /usr/lib/x86_64-linux-gnu/ossl-modules/legacy.so /usr/lib/ssl/engines-3/legacy.so
+# Создаём симлинк, если OpenSSL ищет legacy.so в старом пути
+RUN mkdir -p /usr/lib/ssl/engines-3 && \
+    ln -sf /usr/lib/x86_64-linux-gnu/ossl-modules/legacy.so /usr/lib/ssl/engines-3/legacy.so
 
 RUN <<`
   set -e
