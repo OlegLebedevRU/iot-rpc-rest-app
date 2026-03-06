@@ -127,7 +127,7 @@ services:
         - "4443:4443"
     restart: always
     volumes:
-      - ./crt/openssl.cnf:/usr/lib/ssl/openssl.cnf:ro
+      - ./crt/openssl.cnf:/etc/ssl/openssl.cnf:ro
       - type: bind
         source: ./nginx-configs/dev_leo4_ru
         target: /etc/nginx/conf.d
@@ -156,7 +156,7 @@ services:
         read_only: true
       - ./nginx/html:/var/share/nginx/html
     environment:
-      - OPENSSL_CONF=/usr/lib/ssl/openssl.cnf
+      - OPENSSL_CONF=/etc/ssl/openssl.cnf
     networks:
       - rabbitmq_network
       - pg_network
