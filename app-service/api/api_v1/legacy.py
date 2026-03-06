@@ -2,7 +2,7 @@ import json
 import logging
 import random
 import urllib.parse
-from datetime import datetime
+from datetime import datetime, timedelta
 import httpx
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -183,7 +183,7 @@ async def map_cert(request: Request):
         # Асинхронный запрос к Yandex Cloud Function
         async with httpx.AsyncClient() as client:
             resp = await client.get(
-                "https://functions.yandexcloud.net/d4efqr7g0mlpqr8acktl",
+                settings.leo4.cert_map_url,
                 headers=headers,
                 timeout=10.0,
             )
@@ -205,7 +205,22 @@ async def map_cert(request: Request):
         # Декодируем поле cert из URL-encoding
         if "cert" in cert_response:
             cert_response["cert"] = urllib.parse.unquote(cert_response["cert"])
+        # === Добавляем вычисление остатка дней ===
+        try:
+            not_valid_before_str = cert_response.get("not_valid_before")
+            valid_days = cert_response.get("valid_days", 0)
 
+            if not_valid_before_str and isinstance(valid_days, int):
+                not_valid_before = datetime.strptime(
+                    not_valid_before_str, "%Y-%m-%d %H:%M:%S"
+                )
+                expiration_date = not_valid_before + timedelta(days=valid_days)
+                today = datetime.now()
+                days_left = (expiration_date - today).days
+                cert_response["days_left"] = days_left  # Добавляем в ответ
+        except Exception as e:
+            log.warning("Failed to calculate days_left: %s", e)
+            cert_response["days_left"] = None
         # Объединяем данные
         cert_info.update(
             {

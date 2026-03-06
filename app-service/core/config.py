@@ -148,6 +148,7 @@ class Leo4CloudConfig(BaseModel):
     url: HttpUrl
     api_key: str
     admin_url: HttpUrl
+    cert_map_url: HttpUrl
 
 
 # === Новый: API Keys Config ===
