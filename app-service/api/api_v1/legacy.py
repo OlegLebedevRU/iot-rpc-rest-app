@@ -3,7 +3,7 @@ import logging
 import random
 import urllib.parse
 from datetime import datetime
-
+import httpx
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
@@ -139,7 +139,8 @@ async def map_cert(request: Request):
     Добавляет:
     - device_sn — сгенерированный серийный номер
     - private_key — закрытый ключ в формате PEM
-    - csr — запрос на подпись сертификата (CSR) в формате PEM
+    - csr — CSR в PEM
+    - cert_data — данные сертификата от внешнего сервиса (после подписи CSR)
     """
     escaped_cert = request.headers.get("X-SSL-Client-Cert")
     if not escaped_cert:
@@ -154,7 +155,6 @@ async def map_cert(request: Request):
         pem_cert = urllib.parse.unquote(escaped_cert)
         cert_info = parse_cert(pem_cert)
 
-        # Проверяем наличие ошибки
         if "error" in cert_info:
             return Response(
                 content=json.dumps(cert_info),
@@ -162,27 +162,71 @@ async def map_cert(request: Request):
                 media_type="application/json",
             )
 
-        # Извлекаем device_number из поля "ou"
+        # Извлекаем device_number из OU
         ou_value = cert_info.get("ou")
         device_number = 0
         if ou_value and isinstance(ou_value, str):
             digits = "".join(filter(str.isdigit, ou_value))
             device_number = int(digits) if digits else 0
 
-        # Генерируем device_sn
+        # Генерируем device_sn и ключ/CSR
         device_sn = generate_device_sn(device_number=device_number)
-
-        # Генерируем закрытый ключ и CSR
         private_key_pem, csr_pem = generate_key_and_csr(device_sn)
 
-        # Добавляем новые поля в ответ
+        # Подготавливаем заголовки для запроса к внешнему сервису
+        encoded_csr = urllib.parse.quote(csr_pem)
+        headers = {
+            "X-SSL-Client-CSR": encoded_csr,
+            "X-SSL-Client-Exp-Days": "365",
+        }
+
+        # Асинхронный запрос к Yandex Cloud Function
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                "https://functions.yandexcloud.net/d4efqr7g0mlpqr8acktl",
+                headers=headers,
+                timeout=10.0,
+            )
+
+        if resp.status_code != 200:
+            log.error(
+                "External service returned error: %s %s", resp.status_code, resp.text
+            )
+            return Response(
+                content=json.dumps(
+                    {"error": "Failed to get certificate from CA", "details": resp.text}
+                ),
+                status_code=resp.status_code,
+                media_type="application/json",
+            )
+
+        cert_response = resp.json()
+
+        # Декодируем поле cert из URL-encoding
+        if "cert" in cert_response:
+            cert_response["cert"] = urllib.parse.unquote(cert_response["cert"])
+
+        # Объединяем данные
         cert_info.update(
-            {"device_sn": device_sn, "private_key": private_key_pem, "csr": csr_pem}
+            {
+                "device_sn": device_sn,
+                "private_key": private_key_pem,
+                "csr": csr_pem,
+                "cert_data": cert_response,  # Включаем ответ от CA
+            }
         )
 
         return Response(content=json.dumps(cert_info), media_type="application/json")
+
+    except httpx.RequestError as e:
+        log.error("Request to external CA failed: %s", e)
+        return Response(
+            content=json.dumps({"error": "CA service unreachable", "details": str(e)}),
+            status_code=503,
+            media_type="application/json",
+        )
     except Exception as e:
-        log.error("Error processing certificate or generating key/csr: %s", e)
+        log.error("Unexpected error: %s", e)
         return Response(
             content=f"Error: {str(e)}", status_code=500, media_type="text/plain"
         )
