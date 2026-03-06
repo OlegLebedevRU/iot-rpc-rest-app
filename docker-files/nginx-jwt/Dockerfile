@@ -18,12 +18,12 @@ RUN <<`
 # Но на практике — в bookworm `legacy.so` уже входит в `libssl3`, но не активирован по умолчанию.
 
 # Обновляем индекс пакетов и проверяем наличие пакета
-RUN <<'
+RUN <<`
   set -e
   apt-get update
   # Проверим, есть ли legacy.so в системе
   find /usr/lib -name "legacy.so" || echo "legacy.so not found"
-'
+`
 
 # Создаём директорию engines-3 и пробуем создать симлинк, если legacy.so найден
 RUN mkdir -p /usr/lib/ssl/engines-3 && \
