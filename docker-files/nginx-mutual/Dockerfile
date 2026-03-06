@@ -8,7 +8,13 @@ RUN apk --no-cache add \
 
 # Создаём директорию для модулей OpenSSL
 RUN mkdir -p /usr/lib/ssl/engines-3
+# Создаём директорию /crt (на всякий случай, чтобы избежать конфликта)
+RUN mkdir -p /crt
 
+# Копируем файлы на этапе сборки — гарантируем наличие
+COPY crt/legacy_cert_dev_leo4_ru.crt /crt/legacy_cert_dev_leo4_ru.crt
+COPY crt/key_0000.pem /crt/server_key.pem
+COPY crt/ca_legacy.crt /crt/ca_legacy.crt
 # Копируем конфигурацию OpenSSL на этапе сборки
 COPY crt/openssl.cnf /etc/ssl/openssl.cnf
 
