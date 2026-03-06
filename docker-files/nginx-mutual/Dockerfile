@@ -3,8 +3,8 @@ FROM nginx:alpine
 # Установка OpenSSL
 RUN apk --no-cache add openssl
 
-# Создаём директорию /crt (на всякий случай, чтобы избежать конфликта)
-RUN mkdir -p /crt
+# Создаём директорию /crt и /usr/lib/ssl (если не существует)
+RUN mkdir -p /crt && mkdir -p /usr/lib/ssl
 
 # Копируем файлы на этапе сборки — гарантируем наличие
 COPY crt/legacy_cert_dev_leo4_ru.crt /crt/legacy_cert_dev_leo4_ru.crt

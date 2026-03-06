@@ -125,10 +125,7 @@ services:
     ports:
       - "4443:4443"
     restart: always
-    volumes:
-      - ./crt/legacy_cert_dev_leo4_ru.crt:/crt/legacy_cert_dev_leo4_ru.crt:ro
-      - ./crt/key_0000.pem:/crt/server_key.pem:ro
-      - ./crt/ca_legacy.crt:/crt/ca_legacy.crt:ro
+
     networks:
       - rabbitmq_network
       - pg_network
