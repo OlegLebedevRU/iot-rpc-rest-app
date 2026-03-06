@@ -117,6 +117,31 @@ services:
     #  - "5050:80"
     networks:
       - pg_network
+
+  nginx-mutual:
+    build:
+      dockerfile: ./docker-files/nginx-mutual/Dockerfile
+      context: ./
+    ports:
+      - "4443:4443"
+    restart: always
+    volumes:
+      - ./crt/openssl.cnf:/etc/ssl/openssl.cnf:ro
+      - ./nginx-configs/dev_leo4_ru/internal_ssl.conf:/etc/nginx/conf.d/internal_ssl.conf:ro
+      - ./crt/legacy_cert_dev_leo4_ru.crt:/crt/legacy_cert_dev_leo4_ru.crt:ro
+      - ./crt/server_key.pem:/crt/server_key.pem:ro
+      - ./crt/ca_legacy.crt:/crt/ca_legacy.crt:ro
+    environment:
+      - OPENSSL_CONF=/etc/ssl/openssl.cnf
+    networks:
+      - rabbitmq_network
+      - pg_network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   nginx:
     build:
       dockerfile: ./docker-files/nginx-jwt/Dockerfile
@@ -124,39 +149,19 @@ services:
     ports:
         - "80:80"
         - "443:443"
-        - "4443:4443"
+        #- "4443:4443"
     restart: always
     volumes:
-      - ./crt/openssl.cnf:/etc/ssl/openssl.cnf:ro
-      - type: bind
-        source: ./nginx-configs/dev_leo4_ru
-        target: /etc/nginx/conf.d
-        read_only: true
+      - ./nginx-configs/dev_leo4_ru/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx-configs/dev_leo4_ru/ssl.conf:/etc/nginx/conf.d/ssl.conf:ro
       - ./certbot/www:/var/www/certbot/:ro
       - ./certbot/conf/:/etc/nginx/ssl/:ro
-      - type: bind
-        source: ./crt/iot_leo4_ca.crt
-        target: /crt/ca_certificate.pem
-        read_only: true
-      - type: bind
-        source: ./crt/cert_0000.pem
-        target: /crt/server_certificate.pem
-        read_only: true
-      - type: bind
-        source: ./crt/legacy_cert_dev_leo4_ru.crt
-        target: /crt/legacy_cert_dev_leo4_ru.crt
-        read_only: true
-      - type: bind
-        source: ./crt/ca_legacy.crt
-        target: /crt/ca_legacy.crt
-        read_only: true
-      - type: bind
-        source: ./crt/key_0000.pem
-        target: /crt/server_key.pem
-        read_only: true
+      - ./crt/iot_leo4_ca.crt:/crt/ca_certificate.pem:ro
+      - ./crt/cert_0000.pem:/crt/server_certificate.pem:ro
+      - ./crt/key_0000.pem:/crt/server_key.pem:ro
       - ./nginx/html:/var/share/nginx/html
-    environment:
-      - OPENSSL_CONF=/etc/ssl/openssl.cnf
+    #environment:
+    #  - OPENSSL_CONF=/etc/ssl/openssl.cnf
     networks:
       - rabbitmq_network
       - pg_network
