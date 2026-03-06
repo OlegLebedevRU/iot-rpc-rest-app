@@ -156,7 +156,7 @@ services:
         read_only: true
       - ./nginx/html:/var/share/nginx/html
     environment:
-      - OPENSSL_CONF=/etc/ssl/openssl.cnf
+      - OPENSSL_CONF=/usr/lib/ssl/openssl.cnf
     networks:
       - rabbitmq_network
       - pg_network
