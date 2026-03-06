@@ -26,8 +26,8 @@ def parse_cert(pem_data: str) -> dict:
         cert = x509.load_pem_x509_certificate(pem_data.encode(), default_backend())
         subject = cert.subject
         issuer = cert.issuer
-        not_valid_before = cert.not_valid_before
-        not_valid_after = cert.not_valid_after
+        # not_valid_before = cert.not_valid_before
+        # not_valid_after = cert.not_valid_after
         serial = cert.serial_number
 
         def get_attr(oid):
@@ -47,9 +47,9 @@ def parse_cert(pem_data: str) -> dict:
             "o": o,
             # "email": email,
             "serial": serial,
-            "not_valid_before": not_valid_before.isoformat(),
-            "not_valid_after": not_valid_after.isoformat(),
-            "expired": datetime.now(UTC) > not_valid_after,
+            # "not_valid_before": not_valid_before.isoformat(),
+            # "not_valid_after": not_valid_after.isoformat(),
+            # "expired": datetime.now(UTC) > not_valid_after,
             "pem": pem_data.strip(),
         }
     except Exception as e:
