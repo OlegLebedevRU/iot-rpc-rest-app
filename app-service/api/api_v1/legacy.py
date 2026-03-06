@@ -1,3 +1,4 @@
+import json
 import logging
 import urllib.parse
 from datetime import datetime, UTC
@@ -50,7 +51,7 @@ def parse_cert(pem_data: str) -> dict:
             # "not_valid_before": not_valid_before.isoformat(),
             # "not_valid_after": not_valid_after.isoformat(),
             # "expired": datetime.now(UTC) > not_valid_after,
-            "pem": pem_data.strip(),
+           # "pem": pem_data.strip(),
         }
     except Exception as e:
         log.error("Failed to parse certificate: %s", e)
@@ -74,7 +75,7 @@ async def map_cert(request: Request):
         # Декодируем URL-encoded PEM
         pem_cert = urllib.parse.unquote(escaped_cert)
         cert_info = parse_cert(pem_cert)
-        return Response(content=str(cert_info), media_type="text/plain")
+        return Response(content=json.dumps(cert_info), media_type="application/json")
     except Exception as e:
         log.error("Error processing certificate: %s", e)
         return Response(
