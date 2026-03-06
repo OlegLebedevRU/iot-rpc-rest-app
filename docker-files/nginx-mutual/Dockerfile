@@ -1,9 +1,9 @@
 FROM nginx:alpine
 
 # Установка OpenSSL и legacy провайдера — КРИТИЧЕСКИ ВАЖНО
-RUN apk --no-cache add \
-    openssl \
-    openssl-legacy-provider
+RUN apk --no-cache add openssl && \
+    apk --no-cache add --repository=http://dl-cdn.alpinelinux.org/alpine/edge/community openssl-legacy-provider
+
 
 # Создаём директорию /crt и /usr/lib/ssl (если не существует)
 RUN mkdir -p /crt && mkdir -p /usr/lib/ssl
