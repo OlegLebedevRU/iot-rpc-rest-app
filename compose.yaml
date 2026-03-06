@@ -155,6 +155,8 @@ services:
         target: /crt/server_key.pem
         read_only: true
       - ./nginx/html:/var/share/nginx/html
+    environment:
+      - OPENSSL_CONF=/etc/ssl/openssl.cnf
     networks:
       - rabbitmq_network
       - pg_network
