@@ -20,7 +20,38 @@ ENV OPENSSL_CONF=/etc/ssl/openssl.cnf
 
 # Копируем конфиг Nginx
 COPY nginx-configs/dev_leo4_ru/internal_ssl.conf /etc/nginx/conf.d/internal_ssl.conf
+WORKDIR /
 
+# Копируем конфиг Nginx
+COPY <<` /etc/nginx/nginx.conf
+daemon off;
+user  nginx;
+worker_processes  auto;
+
+error_log  /dev/stderr notice;
+pid        /var/run/nginx.pid;
+
+
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    include       /etc/nginx/mime.types;
+    default_type  application/octet-stream;
+    log_format custom '$remote_addr - $remote_user [$time_local] "$request" $status $body_bytes_sent "$http_referer" "$http_user_agent"';
+    log_format ssl_debug '$remote_addr - $remote_user [$time_local] "$request" '
+                        'ssl_verify:$ssl_client_verify '
+                        'ssl_dn:"$ssl_client_s_dn" '
+                        'ssl_issuer:"$ssl_client_i_dn" '
+                        'status:$status '
+                        'body_bytes_sent:$body_bytes_sent '
+                        '"$http_referer" "$http_user_agent"';
+
+    include /etc/nginx/conf.d/*.conf;
+}
+`
 # Проверка конфигурации
 RUN nginx -t
 
