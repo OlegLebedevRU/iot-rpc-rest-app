@@ -129,7 +129,7 @@ services:
       - ./crt/openssl.cnf:/etc/ssl/openssl.cnf:ro
       - ./nginx-configs/dev_leo4_ru/internal_ssl.conf:/etc/nginx/conf.d/internal_ssl.conf:ro
       - ./crt/legacy_cert_dev_leo4_ru.crt:/crt/legacy_cert_dev_leo4_ru.crt:ro
-      - ./crt/server_key.pem:/crt/server_key.pem:ro
+      - ./crt/key_0000.pem:/crt/server_key.pem:ro
       - ./crt/ca_legacy.crt:/crt/ca_legacy.crt:ro
     environment:
       - OPENSSL_CONF=/etc/ssl/openssl.cnf
