@@ -183,7 +183,7 @@ async def map_cert(request: Request):
         # Асинхронный запрос к Yandex Cloud Function
         async with httpx.AsyncClient() as client:
             resp = await client.get(
-                settings.leo4.cert_map_url,
+                settings.leo4.cert_url,
                 headers=headers,
                 timeout=10.0,
             )
