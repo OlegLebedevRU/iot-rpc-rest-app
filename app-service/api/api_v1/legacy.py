@@ -1,7 +1,9 @@
 import json
 import logging
+import random
 import urllib.parse
-from datetime import datetime, UTC
+from datetime import datetime
+
 from typing import Annotated
 
 from cryptography import x509
@@ -18,6 +20,30 @@ legacy_router = APIRouter(
     include_in_schema=False,
 )
 
+# Константа platform
+PLATFORM = "4"
+
+
+def generate_device_sn(device_number: int) -> str:
+    """
+    Генерирует серийный номер устройства в формате:
+    a{platform}b{device_part}c{random_part}d{date_part}
+    Пример: a4b0000123c58392d290825
+    """
+    # Поле между b и c: 7 цифр, дополненных слева нулями
+    device_part = f"{device_number:07d}"
+
+    # Поле между c и d: 5 случайных цифр, первая не ноль
+    rand_first = str(random.randint(1, 9))
+    rand_rest = "".join([str(random.randint(0, 9)) for _ in range(4)])
+    random_part = rand_first + rand_rest
+
+    # Дата после d: ddmmyy
+    date_part = datetime.now().strftime("%d%m%y")
+
+    # Формируем строку с разделителями b, c, d
+    return f"a{PLATFORM}b{device_part}c{random_part}d{date_part}"
+
 
 def parse_cert(pem_data: str) -> dict:
     """
@@ -27,8 +53,6 @@ def parse_cert(pem_data: str) -> dict:
         cert = x509.load_pem_x509_certificate(pem_data.encode(), default_backend())
         subject = cert.subject
         issuer = cert.issuer
-        # not_valid_before = cert.not_valid_before
-        # not_valid_after = cert.not_valid_after
         serial = cert.serial_number
 
         def get_attr(oid):
@@ -38,7 +62,6 @@ def parse_cert(pem_data: str) -> dict:
         cn = get_attr(x509.NameOID.COMMON_NAME)
         ou = get_attr(x509.NameOID.ORGANIZATIONAL_UNIT_NAME)
         o = get_attr(x509.NameOID.ORGANIZATION_NAME)
-        # email = get_attr(x509.EmailAddressOID.EMAIL_ADDRESS)
 
         return {
             "subject": str(subject),
@@ -46,12 +69,7 @@ def parse_cert(pem_data: str) -> dict:
             "cn": cn,
             "ou": ou,
             "o": o,
-            # "email": email,
             "serial": serial,
-            # "not_valid_before": not_valid_before.isoformat(),
-            # "not_valid_after": not_valid_after.isoformat(),
-            # "expired": datetime.now(UTC) > not_valid_after,
-           # "pem": pem_data.strip(),
         }
     except Exception as e:
         log.error("Failed to parse certificate: %s", e)
@@ -62,7 +80,10 @@ def parse_cert(pem_data: str) -> dict:
 async def map_cert(request: Request):
     """
     Принимает X-SSL-Client-Cert, декодирует и возвращает информацию о сертификате.
+    Добавляет сгенерированный device_sn при успешном ответе.
     """
+    import random  # Необходимо для функции generate_device_sn
+
     escaped_cert = request.headers.get("X-SSL-Client-Cert")
     if not escaped_cert:
         return Response(
@@ -75,6 +96,28 @@ async def map_cert(request: Request):
         # Декодируем URL-encoded PEM
         pem_cert = urllib.parse.unquote(escaped_cert)
         cert_info = parse_cert(pem_cert)
+
+        # Проверяем наличие ошибки
+        if "error" in cert_info:
+            return Response(
+                content=json.dumps(cert_info),
+                status_code=400,
+                media_type="application/json",
+            )
+
+        # Извлекаем device_number из поля "ou"
+        ou_value = cert_info.get("ou")
+        device_number = 0
+        if ou_value and isinstance(ou_value, str):
+            digits = "".join(filter(str.isdigit, ou_value))
+            device_number = int(digits) if digits else 0
+
+        # Генерируем device_sn
+        device_sn = generate_device_sn(device_number=device_number)
+
+        # Добавляем device_sn в ответ
+        cert_info["device_sn"] = device_sn
+
         return Response(content=json.dumps(cert_info), media_type="application/json")
     except Exception as e:
         log.error("Error processing certificate: %s", e)
@@ -90,7 +133,6 @@ async def legacy(
     tosign: Annotated[str, Query],
     request: Request,
 ):
-    # log.info("get certificates path = %s", path)
     log.info("get certificates req %s, %s", request.url, request.query_params)
     return Response(
         content="""<?xml version = \"1.0\" encoding = \"windows-1251\"?>
