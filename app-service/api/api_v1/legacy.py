@@ -93,18 +93,37 @@ def generate_key_and_csr(device_sn: str) -> tuple[str, str]:
         encryption_algorithm=serialization.NoEncryption(),
     ).decode("utf-8")
 
-    # Создание Subject для CSR: CN = device_sn
+    # Извлекаем device_part из device_sn для заполнения OU, email и DNS
+    device_part = device_sn.split("b")[1].split("c")[0]  # извлекаем 7-значный номер
+
+    # Создание Subject для CSR: CN остаётся как device_sn (по текущей логике)
     subject = x509.Name(
         [
             x509.NameAttribute(x509.NameOID.COMMON_NAME, device_sn),
-            x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, "ForPay"),
-            x509.NameAttribute(x509.NameOID.ORGANIZATIONAL_UNIT_NAME, "Terminals"),
+            x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, "Leo4"),  # O = Leo4
+            x509.NameAttribute(
+                x509.NameOID.ORGANIZATIONAL_UNIT_NAME, device_part
+            ),  # OU = device_part
             x509.NameAttribute(x509.NameOID.COUNTRY_NAME, "RU"),
         ]
     )
 
-    # Создание CSR
-    builder = x509.CertificateSigningRequestBuilder().subject_name(subject)
+    # Добавляем альтернативные имена (SAN)
+    alt_names = [
+        x509.DNSName(f"Leo4-{device_part}.ru"),  # DNS.1
+        x509.RFC822Name(f"{device_part}@leo4.ru"),  # emailAddress
+    ]
+
+    # Создание CSR с расширением subjectAltName
+    builder = (
+        x509.CertificateSigningRequestBuilder()
+        .subject_name(subject)
+        .add_extension(
+            x509.SubjectAlternativeName(alt_names),
+            critical=False,
+        )
+    )
+
     csr = builder.sign(private_key, hashes.SHA256(), default_backend())
 
     # Сериализация CSR в PEM
