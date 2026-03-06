@@ -1,8 +1,8 @@
 FROM debian:bookworm-slim
 
-# Установка Nginx и OpenSSL с legacy провайдером
+# Установка Nginx и OpenSSL (legacy.so входит в libssl3)
 RUN apt-get update && \
-    apt-get install -y nginx openssl libssl3-contrib && \
+    apt-get install -y nginx openssl && \
     rm -rf /var/lib/apt/lists/*
 
 # Создаём директории
