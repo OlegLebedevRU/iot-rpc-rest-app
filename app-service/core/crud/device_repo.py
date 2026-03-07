@@ -1,11 +1,12 @@
 import logging
 from typing import Any
 
-from sqlalchemy import select, not_, func
-from sqlalchemy import update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import select, not_, func, update
+
+from sqlalchemy.dialects.postgresql import insert, excluded  # type: ignore
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import joinedload, load_only
+
 
 from core import settings
 from core.models import (
@@ -72,18 +73,32 @@ class DeviceRepo:
     async def get_device_sn(
         cls, session: AsyncSession, device_id: int | None = 0, org_id: int | None = 0
     ) -> str | None:
-        data = await session.execute(
-            select(Device)
+        stmt = (
+            select(Device.sn)
+            .join(Device.org_bind)  # явный JOIN через relationship
             .where(Device.device_id == device_id)
             .where(Device.is_deleted == False)
             .where(DeviceOrgBind.org_id == org_id)
+            .limit(1)
         )
-        r = data.unique().mappings().one_or_none()
-        if r is not None:
-            resp = r.Device.sn
-        else:
-            resp = None
-        return resp
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    # async def get_device_sn(
+    #     cls, session: AsyncSession, device_id: int | None = 0, org_id: int | None = 0
+    # ) -> str | None:
+    #     data = await session.execute(
+    #         select(Device)
+    #         .where(Device.device_id == device_id)
+    #         .where(Device.is_deleted == False)
+    #         .where(DeviceOrgBind.org_id == org_id)
+    #     )
+    #     r = data.unique().mappings().one_or_none()
+    #     if r is not None:
+    #         resp = r.Device.sn
+    #     else:
+    #         resp = None
+    #     return resp
 
     @classmethod
     async def get_org_id_by_device_id(
@@ -103,23 +118,38 @@ class DeviceRepo:
     async def get_device_id(
         cls, session: AsyncSession, sn: str | None = "", org_id: int | None = 0
     ) -> int | None:
-        if sn == "" or sn is None:
+        if not sn:
             return None
-        stmt = (
-            select(Device)
-            .where(Device.sn == sn)
-            .where(Device.is_deleted == False)
-            .limit(1)
+
+        stmt = select(Device.device_id).where(
+            Device.sn == sn, Device.is_deleted == False
         )
         if org_id > 0:
-            stmt = stmt.where(DeviceOrgBind.org_id == org_id)
-        data = await session.execute(stmt)
-        r = data.unique().one_or_none()
-        if r is not None:
-            resp = r.Device.device_id
-        else:
-            resp = None
-        return resp
+            stmt = stmt.join(Device.org_bind).where(DeviceOrgBind.org_id == org_id)
+
+        result = await session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    # async def get_device_id(
+    #     cls, session: AsyncSession, sn: str | None = "", org_id: int | None = 0
+    # ) -> int | None:
+    #     if sn == "" or sn is None:
+    #         return None
+    #     stmt = (
+    #         select(Device)
+    #         .where(Device.sn == sn)
+    #         .where(Device.is_deleted == False)
+    #         .limit(1)
+    #     )
+    #     if org_id > 0:
+    #         stmt = stmt.where(DeviceOrgBind.org_id == org_id)
+    #     data = await session.execute(stmt)
+    #     r = data.unique().one_or_none()
+    #     if r is not None:
+    #         resp = r.Device.device_id
+    #     else:
+    #         resp = None
+    #     return resp
 
     @classmethod
     async def get_exist_device_sn(cls, session, sn_list):
@@ -138,9 +168,13 @@ class DeviceRepo:
                     {"device_id": int(d["device_id"]), "sn": d["serial_number"]}
                     for d in device_list
                 ]
-                # device_id=21,# sn="a1b21c22589d100424",
             )
-            .on_conflict_do_update()
+            .on_conflict_do_update(
+                index_elements=[
+                    "device_id"
+                ],  # или ["sn"] — зависит от вашего UNIQUE индекса
+                set_=dict(sn=excluded.sn),  # sql.excluded ссылается на новые значения
+            )
         )
         insert_stmt1 = (
             insert(Org)
@@ -155,7 +189,10 @@ class DeviceRepo:
                     for d in device_list
                 ]
             )
-            .on_conflict_do_update()
+            .on_conflict_do_update(
+                index_elements=["device_id"],  # предполагаем, что device_id уникален
+                set_=dict(org_id=excluded.org_id),
+            )
         )
         insert_dev_conn = (
             insert(DeviceConnection)
@@ -165,7 +202,10 @@ class DeviceRepo:
                     for d in device_list
                 ]
             )
-            .on_conflict_do_update()
+            .on_conflict_do_update(
+                index_elements=["device_id"],
+                set_=dict(client_id=excluded.client_id),
+            )
         )
 
         await session.execute(insert_stmt)
