@@ -17,4 +17,8 @@ def get_app_options(
         "timeout": timeout,
         "workers": workers,
         "worker_class": "uvicorn.workers.UvicornWorker",
+        "keepalive": 5,
+        "graceful_timeout": 15,
+        "max_requests": 1000,
+        "max_requests_jitter": 100,
     }

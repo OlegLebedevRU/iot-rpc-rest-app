@@ -1,16 +1,14 @@
 import json
 import logging
-import random
-import urllib.parse
-from datetime import datetime, timedelta
-import httpx
-from cryptography import x509
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
-from fastapi import APIRouter, Request, Response
+from typing import Annotated
+
+from fastapi import APIRouter, Response, Header, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
+from core.models import db_helper
+from core.schemas.legacy import LegacyCertRequest
+from core.services.legacy import process_legacy_certificate
 
 log = logging.getLogger(__name__)
 
@@ -20,231 +18,53 @@ legacy_router = APIRouter(
     include_in_schema=False,
 )
 
-# Константа platform
-PLATFORM = "4"
-
-
-def generate_device_sn(device_number: int) -> str:
-    """
-    Генерирует серийный номер устройства в формате:
-    a{platform}b{device_part}c{random_part}d{date_part}
-    Пример: a4b0000123c58392d290825
-    """
-    # Поле между b и c: 7 цифр, дополненных слева нулями
-    device_part = f"{device_number:07d}"
-
-    # Поле между c и d: 5 случайных цифр, первая не ноль
-    rand_first = str(random.randint(1, 9))
-    rand_rest = "".join([str(random.randint(0, 9)) for _ in range(4)])
-    random_part = rand_first + rand_rest
-
-    # Дата после d: ddmmyy
-    date_part = datetime.now().strftime("%d%m%y")
-
-    # Формируем строку с разделителями b, c, d
-    return f"a{PLATFORM}b{device_part}c{random_part}d{date_part}"
-
-
-def parse_cert(pem_data: str) -> dict:
-    """
-    Парсит PEM-сертификат и возвращает словарь с данными.
-    """
-    try:
-        cert = x509.load_pem_x509_certificate(pem_data.encode(), default_backend())
-        subject = cert.subject
-        issuer = cert.issuer
-        serial = cert.serial_number
-
-        def get_attr(oid):
-            attrs = subject.get_attributes_for_oid(oid)
-            return attrs[0].value if attrs else None
-
-        cn = get_attr(x509.NameOID.COMMON_NAME)
-        ou = get_attr(x509.NameOID.ORGANIZATIONAL_UNIT_NAME)
-        o = get_attr(x509.NameOID.ORGANIZATION_NAME)
-
-        return {
-            "subject": str(subject),
-            "issuer": str(issuer),
-            "cn": cn,
-            "ou": ou,
-            "o": o,
-            "serial": serial,
-        }
-    except Exception as e:
-        log.error("Failed to parse certificate: %s", e)
-        return {"error": "Invalid or malformed certificate", "details": str(e)}
-
-
-def generate_key_and_csr(device_sn: str) -> tuple[str, str]:
-    """
-    Генерирует RSA-ключ (2048 бит) и CSR с CN=устройства.
-    Возвращает кортеж: (private_key_pem, csr_pem)
-    """
-    # Генерация закрытого ключа
-    private_key = rsa.generate_private_key(
-        public_exponent=65537, key_size=2048, backend=default_backend()
-    )
-
-    # Сериализация закрытого ключа в PEM (без шифрования)
-    private_key_pem = private_key.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.NoEncryption(),
-    ).decode("utf-8")
-
-    # Извлекаем device_part из device_sn для заполнения OU, email и DNS
-    device_part = device_sn.split("b")[1].split("c")[0]  # извлекаем 7-значный номер
-
-    # Создание Subject для CSR: CN остаётся как device_sn (по текущей логике)
-    subject = x509.Name(
-        [
-            x509.NameAttribute(x509.NameOID.COMMON_NAME, device_sn),
-            x509.NameAttribute(x509.NameOID.ORGANIZATION_NAME, "Leo4"),  # O = Leo4
-            x509.NameAttribute(
-                x509.NameOID.ORGANIZATIONAL_UNIT_NAME, device_part
-            ),  # OU = device_part
-            x509.NameAttribute(x509.NameOID.COUNTRY_NAME, "RU"),
-        ]
-    )
-
-    # Добавляем альтернативные имена (SAN)
-    alt_names = [
-        x509.DNSName(f"Leo4-{device_part}.ru"),  # DNS.1
-        x509.RFC822Name(f"{device_part}@leo4.ru"),  # emailAddress
-    ]
-
-    # Создание CSR с расширением subjectAltName
-    builder = (
-        x509.CertificateSigningRequestBuilder()
-        .subject_name(subject)
-        .add_extension(
-            x509.SubjectAlternativeName(alt_names),
-            critical=False,
-        )
-    )
-
-    csr = builder.sign(private_key, hashes.SHA256(), default_backend())
-
-    # Сериализация CSR в PEM
-    csr_pem = csr.public_bytes(serialization.Encoding.PEM).decode("utf-8")
-
-    return private_key_pem.strip(), csr_pem.strip()
-
 
 @legacy_router.get("/map_legacy_crt/")
-async def map_cert(request: Request):
+async def map_cert(
+    session: Annotated[
+        AsyncSession, Depends(db_helper.session_getter)
+    ],  # Добавляем сессию через внедрение зависимости
+    x_ssl_client_cert: Annotated[str | None, Header()] = None,
+):
     """
     Принимает X-SSL-Client-Cert, декодирует и возвращает информацию о сертификате.
     Добавляет:
-    - device_sn — сгенерированный серийный номер
+    - device_sn — существующий или сгенерированный серийный номер
     - private_key — закрытый ключ в формате PEM
     - csr — CSR в PEM
     - cert_data — данные сертификата от внешнего сервиса (после подписи CSR)
     """
-    escaped_cert = request.headers.get("X-SSL-Client-Cert")
-    if not escaped_cert:
-        return Response(
-            content="No client certificate provided",
-            status_code=400,
-            media_type="text/plain",
-        )
-
     try:
-        # Декодируем URL-encoded PEM
-        pem_cert = urllib.parse.unquote(escaped_cert)
-        cert_info = parse_cert(pem_cert)
-
-        if "error" in cert_info:
-            return Response(
-                content=json.dumps(cert_info),
-                status_code=400,
-                media_type="application/json",
-            )
-
-        # Извлекаем device_number из OU
-        ou_value = cert_info.get("ou")
-        device_number = 0
-        if ou_value and isinstance(ou_value, str):
-            digits = "".join(filter(str.isdigit, ou_value))
-            device_number = int(digits) if digits else 0
-
-        # Генерируем device_sn и ключ/CSR
-        device_sn = generate_device_sn(device_number=device_number)
-        private_key_pem, csr_pem = generate_key_and_csr(device_sn)
-
-        # Подготавливаем заголовки для запроса к внешнему сервису
-        encoded_csr = urllib.parse.quote(csr_pem)
-        headers = {
-            "X-SSL-Client-CSR": encoded_csr,
-            "X-SSL-Client-Exp-Days": "365",
+        # Валидация наличия заголовка
+        req_data = LegacyCertRequest(client_cert=x_ssl_client_cert)
+    except Exception as e:
+        log.warning("Validation error in /map_legacy_crt/: %s", e)
+        error_response = {
+            "error": "Invalid or missing client certificate",
+            "details": str(e),
         }
-
-        # Асинхронный запрос к Yandex Cloud Function
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                str(settings.leo4.cert_url),
-                headers=headers,
-                timeout=10.0,
-            )
-
-        if resp.status_code != 200:
-            log.error(
-                "External service returned error: %s %s", resp.status_code, resp.text
-            )
-            return Response(
-                content=json.dumps(
-                    {"error": "Failed to get certificate from CA", "details": resp.text}
-                ),
-                status_code=resp.status_code,
-                media_type="application/json",
-            )
-
-        cert_response = resp.json()
-
-        # Декодируем поле cert из URL-encoding
-        if "cert" in cert_response:
-            cert_response["cert"] = urllib.parse.unquote(cert_response["cert"])
-        # === Добавляем вычисление остатка дней ===
-        try:
-            not_valid_before_str = cert_response.get("not_valid_before")
-            valid_days = cert_response.get("valid_days", 0)
-
-            if not_valid_before_str and isinstance(valid_days, int):
-                not_valid_before = datetime.strptime(
-                    not_valid_before_str, "%Y-%m-%d %H:%M:%S"
-                )
-                expiration_date = not_valid_before + timedelta(days=valid_days)
-                today = datetime.now()
-                days_left = (expiration_date - today).days
-                cert_response["days_left"] = days_left  # Добавляем в ответ
-        except Exception as e:
-            log.warning("Failed to calculate days_left: %s", e)
-            cert_response["days_left"] = None
-        # Объединяем данные
-        cert_info.update(
-            {
-                "device_sn": device_sn,
-                "private_key": private_key_pem,
-                "csr": csr_pem,
-                "cert_data": cert_response,  # Включаем ответ от CA
-            }
-        )
-
-        return Response(content=json.dumps(cert_info), media_type="application/json")
-
-    except httpx.RequestError as e:
-        log.error("Request to external CA failed: %s", e)
         return Response(
-            content=json.dumps({"error": "CA service unreachable", "details": str(e)}),
-            status_code=503,
+            content=json.dumps(error_response),
+            status_code=400,
             media_type="application/json",
         )
-    except Exception as e:
-        log.error("Unexpected error: %s", e)
+
+    # Передаём сессию в сервисную функцию
+    result = await process_legacy_certificate(req_data.client_cert, session)
+
+    if "error" in result:
+        status_code = result.get("status_code", 500) if "status_code" in result else 400
         return Response(
-            content=f"Error: {str(e)}", status_code=500, media_type="text/plain"
+            content=json.dumps(result),
+            status_code=status_code,
+            media_type="application/json",
         )
+    status_code = 206 if result.get("code") == 206 else 200
+    return Response(
+        content=json.dumps(result),
+        status_code=status_code,
+        media_type="application/json",
+    )
 
 
 #

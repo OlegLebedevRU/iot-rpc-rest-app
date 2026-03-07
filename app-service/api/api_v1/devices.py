@@ -1,17 +1,16 @@
 import logging
-from typing import Annotated, Optional, List
+from typing import Annotated, List
 
-from fastapi import APIRouter, Depends, Query, Request, Response
-
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-
-# from starlette.requests import Request
 
 from api.api_v1.api_depends import Org_dep
 from core import settings
 from core.models import db_helper
 from core.schemas.devices import DeviceTagPut, DeviceListResult
 from core.services.devices import DeviceService
+
+# from starlette.requests import Request
 
 log = logging.getLogger(__name__)
 router = APIRouter(

@@ -23,6 +23,7 @@ class Application(BaseApplication):
             # for each option
             for k, v in self.options.items()
             # not empty key / value
+            # защищает от передачи несуществующих опций Gunicorn.
             if k in self.cfg.settings and v is not None
         }
 

@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from typing import Literal, Dict
 from pydantic import AmqpDsn, UUID4, HttpUrl, Field
@@ -22,10 +23,20 @@ class RunConfig(BaseModel):
 
 
 class GunicornConfig(BaseModel):
+    """
+        Рекомендуется:
+        2 * CPU_CORES + 1
+        workers = int(os.getenv("WEB_CONCURRENCY", (os.cpu_count() or 1) * 2 + 1))
+        2. Worker timeout
+     он задаётся из настроек — хорошо. Рекомендуемое значение: 30–120 секунд.
+    Для production — не менее 30, чтобы избежать обрывов при высокой нагрузке.
+    """
+
     host: str = "0.0.0.0"
     port: int = 8000
-    workers: int = 1
-    timeout: int = 900
+    workers = int(os.getenv("WEB_CONCURRENCY", (os.cpu_count() or 1) * 2 + 1))
+    # workers: int = 1
+    timeout: int = 60
 
 
 class LoggingConfig(BaseModel):
