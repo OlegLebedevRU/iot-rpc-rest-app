@@ -34,7 +34,7 @@ class GunicornConfig(BaseModel):
 
     host: str = "0.0.0.0"
     port: int = 8000
-    workers = int(os.getenv("WEB_CONCURRENCY", (os.cpu_count() or 1) * 2 + 1))
+    workers: int = int(os.getenv("WEB_CONCURRENCY", (os.cpu_count() or 1) * 2 + 1))
     # workers: int = 1
     timeout: int = 60
 
