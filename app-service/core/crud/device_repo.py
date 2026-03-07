@@ -3,7 +3,7 @@ from typing import Any
 
 from sqlalchemy import select, not_, func, update
 
-from sqlalchemy.dialects.postgresql import insert, excluded  # type: ignore
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import joinedload, load_only
 
@@ -161,6 +161,7 @@ class DeviceRepo:
 
     @classmethod
     async def add_devices(cls, session: AsyncSession, device_list: Any):
+        ins_device = insert(Device)
         insert_stmt = (
             insert(Device)
             .values(
@@ -173,7 +174,9 @@ class DeviceRepo:
                 index_elements=[
                     "device_id"
                 ],  # или ["sn"] — зависит от вашего UNIQUE индекса
-                set_=dict(sn=excluded.sn),  # sql.excluded ссылается на новые значения
+                set_=dict(
+                    sn=ins_device.excluded.sn
+                ),  # sql.excluded ссылается на новые значения
             )
         )
         insert_stmt1 = (
@@ -181,6 +184,7 @@ class DeviceRepo:
             .values([{"org_id": int(d["org_id"])} for d in device_list])
             .on_conflict_do_nothing()
         )
+        ins_bind = insert(DeviceOrgBind)
         insert_stmt2 = (
             insert(DeviceOrgBind)
             .values(
@@ -191,9 +195,10 @@ class DeviceRepo:
             )
             .on_conflict_do_update(
                 index_elements=["device_id"],  # предполагаем, что device_id уникален
-                set_=dict(org_id=excluded.org_id),
+                set_=dict(org_id=ins_bind.excluded.org_id),
             )
         )
+        ins_conn = insert(DeviceConnection)
         insert_dev_conn = (
             insert(DeviceConnection)
             .values(
@@ -204,7 +209,7 @@ class DeviceRepo:
             )
             .on_conflict_do_update(
                 index_elements=["device_id"],
-                set_=dict(client_id=excluded.client_id),
+                set_=dict(client_id=ins_conn.excluded.client_id),
             )
         )
 
