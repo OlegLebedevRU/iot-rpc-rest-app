@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-import re
+from urllib.parse import unquote
 
 
 class LegacyCertRequest(BaseModel):
@@ -18,12 +18,20 @@ class LegacyCertRequest(BaseModel):
         if len(v) < 50:
             raise ValueError("Client certificate appears to be too short or invalid")
 
-        # Проверка на наличие URL-encoded или частично закодированного PEM-формата
-        pem_pattern = r"-----BEGIN(?:\+|(%20)|\s)+CERTIFICATE(?:\+|(%20)|\s)+-----.*?-----END(?:\+|(%20)|\s)+CERTIFICATE(?:\+|(%20)|\s)+-----"
-        if not re.search(pem_pattern, v, re.DOTALL | re.IGNORECASE):
+        # Декодируем URL-escaped строку
+        try:
+            decoded = unquote(v)
+        except Exception as e:
+            raise ValueError(f"Invalid URL encoding in certificate: {e}")
+
+        # Проверяем PEM-маркеры
+        if "-----BEGIN CERTIFICATE-----" not in decoded:
             raise ValueError(
-                "Client certificate must be a valid URL-encoded PEM certificate "
-                "and contain '-----BEGIN CERTIFICATE-----' and '-----END CERTIFICATE-----' (can be URL-encoded)"
+                "Client certificate must contain '-----BEGIN CERTIFICATE-----'"
+            )
+        if "-----END CERTIFICATE-----" not in decoded:
+            raise ValueError(
+                "Client certificate must contain '-----END CERTIFICATE-----'"
             )
 
         return v
