@@ -1,8 +1,9 @@
 # services/legacy.py
+import base64
 import logging
 import random
 import urllib.parse
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Tuple
 
 import httpx
@@ -14,6 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
 from core.crud.device_repo import DeviceRepo
+from utils.pfx import create_pfx
 
 log = logging.getLogger(__name__)
 
@@ -100,38 +102,91 @@ async def fetch_signed_certificate(csr_pem: str) -> dict:
     }
 
     async with httpx.AsyncClient() as client:
-        resp = await client.get(
-            str(settings.leo4.cert_url), headers=headers, timeout=10.0
-        )
+        try:
+            resp = await client.get(
+                str(settings.leo4.cert_url), headers=headers, timeout=10.0
+            )
+        except Exception as e:
+            log.error("CA request failed: %s", e)
+            return {"error": "CA request failed", "details": str(e)}
 
     if resp.status_code != 200:
         return {
             "error": "Failed to get certificate from CA",
-            "details": resp.text,
             "status_code": resp.status_code,
+            "details": resp.text,
         }
 
-    cert_response = resp.json()
+    try:
+        response_data = resp.json()
+    except Exception as e:
+        log.error("Invalid JSON from CA: %s", e)
+        return {"error": "Invalid response from CA", "details": str(e)}
 
-    if "cert" in cert_response:
-        cert_response["cert"] = urllib.parse.unquote(cert_response["cert"])
+    if response_data.get("statusCode") != 200:
+        return {
+            "error": "CA signing failed",
+            "status_code": response_data.get("statusCode"),
+            "details": response_data.get("body", ""),
+        }
+
+    body = response_data.get("body", {})
+    required = ["cert", "ca_pem", "not_valid_before", "not_valid_after", "valid_days", "sn", "device_id"]
+    if not all(k in body for k in required):
+        return {"error": "Incomplete response from CA", "received": body}
+
+    # Декодируем PEM
+    try:
+        cert_pem = urllib.parse.unquote(body["cert"])
+        ca_pem = urllib.parse.unquote(body["ca_pem"])
+    except Exception as e:
+        log.error("Failed to unquote PEM: %s", e)
+        return {"error": "Malformed PEM encoding", "details": str(e)}
+
+    # Преобразуем даты
+    not_valid_before = None
+    not_valid_after = None
+    valid_days = 0
+    days_left = None
 
     try:
-        not_valid_before_str = cert_response.get("not_valid_before")
-        valid_days = cert_response.get("valid_days", 0)
-        if not_valid_before_str and isinstance(valid_days, int):
-            not_valid_before = datetime.strptime(
-                not_valid_before_str, "%Y-%m-%d %H:%M:%S"
-            )
-            expiration_date = not_valid_before + timedelta(days=valid_days)
-            today = datetime.now()
-            days_left = (expiration_date - today).days
-            cert_response["days_left"] = days_left
-    except Exception as e:
-        log.warning("Failed to calculate days_left: %s", e)
-        cert_response["days_left"] = None
+        not_valid_before_str = body["not_valid_before"]
+        not_valid_after_str = body["not_valid_after"]
+        # Поддержка ISO-формата (если приходит с "T")
+        not_valid_before = (
+            datetime.fromisoformat(not_valid_before_str.replace(" ", "T"))
+            if isinstance(not_valid_before_str, str)
+            else None
+        )
+        not_valid_after = (
+            datetime.fromisoformat(not_valid_after_str.replace(" ", "T"))
+            if isinstance(not_valid_after_str, str)
+            else None
+        )
 
-    return cert_response
+        valid_days = int(body["valid_days"])
+        if not_valid_after:
+            days_left = (not_valid_after - datetime.now()).days
+    except Exception as e:
+        log.warning("Date parsing error: %s", e)
+
+    # Проверяем обязательные поля перед возвратом
+    if not not_valid_before or not not_valid_after:
+        return {
+            "error": "Invalid or missing certificate validity dates",
+            "details": f"not_valid_before={body.get('not_valid_before')}, not_valid_after={body.get('not_valid_after')}",
+        }
+
+    return {
+        "cert": cert_pem,
+        "ca_pem": ca_pem,
+        "not_valid_before": not_valid_before,
+        "not_valid_after": not_valid_after,
+        "valid_days": valid_days,
+        "days_left": days_left,
+        "sn": body["sn"],
+        "device_id": body["device_id"],
+    }
 
 
 async def process_legacy_certificate(escaped_cert: str, session: AsyncSession) -> Dict:
@@ -159,25 +214,8 @@ async def process_legacy_certificate(escaped_cert: str, session: AsyncSession) -
         if existing_sn:
             device_sn = existing_sn
             log.info(f"Using existing SN for device_id={device_number}: {device_sn}")
-
-            # Полная обработка: генерация ключа, CSR, получение сертификата
-            private_key_pem, csr_pem = generate_key_and_csr(device_sn)
-            cert_data = await fetch_signed_certificate(csr_pem)
-            if "error" in cert_data:
-                return cert_data
-
-            cert_info.update(
-                {
-                    "device_sn": device_sn,
-                    "private_key": private_key_pem,
-                    "csr": csr_pem,
-                    "cert_data": cert_data,
-                }
-            )
-            return cert_info
-
         else:
-            # Устройство не существует — регистрируем новое
+            # Регистрируем новое устройство — только если его ещё нет
             device_sn = generate_device_sn(device_number)
             log.info(f"Registering new device_id={device_number} with SN: {device_sn}")
 
@@ -192,14 +230,33 @@ async def process_legacy_certificate(escaped_cert: str, session: AsyncSession) -
                 ],
             )
 
-            # Возвращаем упрощённый ответ без ключей и CSR
-            return {
-                "status": "device_registered",
-                "device_id": device_number,
-                "device_sn": device_sn,
-                "message": "Device registered. Certificate issuance pending on next request.",
-                "code": 206,
-            }
+        # Генерируем ключ и CSR
+        private_key_pem, csr_pem = generate_key_and_csr(device_sn)
+
+        # Запрашиваем подписанный сертификат и CA от внешнего сервиса
+        cert_data = await fetch_signed_certificate(csr_pem)
+        if "error" in cert_data:
+            return cert_data
+
+        cert_pem = cert_data["cert"]
+        ca_pem = cert_data["ca_pem"]
+
+        # Генерируем PFX с приватным ключом, сертификатом и CA
+        pfx_password = f"pfx-{device_number}-{random.randint(1000, 9999)}"
+        pfx_bytes = create_pfx(private_key_pem, cert_pem, ca_pem, pfx_password)
+        pfx_b64 = base64.b64encode(pfx_bytes).decode()
+
+        # Формируем финальный ответ — НИЧЕГО НЕ СОХРАНЯЕМ В БД ДАЛЬШЕ
+        return {
+            "pfx": pfx_b64,
+            "pfx_password": pfx_password,
+            "not_valid_before": cert_data["not_valid_before"].isoformat(),
+            "not_valid_after": cert_data["not_valid_after"].isoformat(),
+            "valid_days": cert_data["valid_days"],
+            "sn": cert_data["sn"],
+            "device_id": cert_data["device_id"],
+            "days_left": cert_data.get("days_left"),
+        }
 
     except Exception as e:
         log.error("Unexpected error in legacy service: %s", e)
