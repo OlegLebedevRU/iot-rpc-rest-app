@@ -1,11 +1,10 @@
 # services/legacy.py
 import base64
-import logging
 import random
 import urllib.parse
 from datetime import datetime
 from typing import Dict, Tuple
-import logging.handlers
+
 import httpx
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
@@ -15,21 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
 from core.crud.device_repo import DeviceRepo
+from core.logging_config import setup_module_logger
 from utils.pfx import create_pfx
 
-log = logging.getLogger(__name__)
-# Настройка ротации логов
-fh = logging.handlers.RotatingFileHandler(
-    "/var/log/app/srv_legacy.log",  # Соответствует шаблону: srv_<service>.log
-    mode="a",
-    maxBytes=10 * 1024 * 1024,  # 10 МБ
-    backupCount=10,
-    encoding="utf-8",
-)
-fh.setLevel(logging.INFO)
-formatter = logging.Formatter(settings.logging.log_format)
-fh.setFormatter(formatter)
-log.addHandler(fh)
+log = setup_module_logger(__name__, "srv_legacy.log")
 
 PLATFORM = "4"
 

@@ -1,4 +1,3 @@
-import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -15,12 +14,13 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from core import settings
 from core.fs_broker import broker
+from core.logging_config import setup_module_logger
 from core.models import db_helper
 from core.services.device_tasks import act_ttl
 
 # from starlette.responses import HTMLResponse
 
-log = logging.getLogger(__name__)
+log = setup_module_logger(__name__, "app_create_app.log")
 
 
 @asynccontextmanager
@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         scheduler.start()
     except Exception as e:
-        logging.info(f"Исключение scheduler: {str(e)}")
+        log.info(f"Исключение scheduler: {str(e)}")
 
     yield
 

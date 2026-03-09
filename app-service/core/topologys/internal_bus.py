@@ -1,9 +1,6 @@
 import json
-import logging.handlers
-
+from core.logging_config import setup_module_logger
 from faststream.rabbit.fastapi import RabbitMessage
-
-from core import settings
 from core.crud.device_repo import DeviceRepo
 from core.fs_broker import fs_router
 from core.integrations.webhooks import Webhook
@@ -14,18 +11,7 @@ from core.services.rmq_admin import RmqAdmin
 from core.topologys.fs_depends import Session_dep
 from core.topologys import q_jobs, rmq_api_client_action, webhook_action
 
-log = logging.getLogger(__name__)
-fh = logging.handlers.RotatingFileHandler(
-    "/var/log/app/internal_queues.log",
-    mode="a",
-    maxBytes=10 * 1024 * 1024,
-    backupCount=10,
-    encoding=None,
-)
-fh.setLevel(logging.INFO)
-formatter = logging.Formatter(settings.logging.log_format)
-fh.setFormatter(formatter)
-log.addHandler(fh)
+log = setup_module_logger(__name__, "internal_bus.log")
 
 
 @fs_router.subscriber(q_jobs)

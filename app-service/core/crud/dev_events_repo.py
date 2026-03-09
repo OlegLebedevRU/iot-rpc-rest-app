@@ -1,3 +1,4 @@
+from core.logging_config import setup_module_logger
 from typing import Optional, List
 
 from fastapi_pagination import Page
@@ -9,6 +10,8 @@ from core.models import DevEvent, DeviceOrgBind
 from core.models.device_events import DeviceEventOffset
 from core.schemas.device_events import DevEventBody, DevEventOut
 
+log = setup_module_logger(__name__, "repo_dev_events.log")
+
 
 class EventRepository:
     @classmethod
@@ -18,7 +21,12 @@ class EventRepository:
             dev_timestamp=func.to_timestamp(event.dev_timestamp),
         )
         session.add(evt_q)
-        await session.commit()
+        try:
+            await session.commit()
+        except Exception as e:
+            await session.rollback()
+            log.error(f"Ошибка при сохранении события: {e}")
+            raise
 
     @classmethod
     async def get_events_page(
@@ -97,83 +105,92 @@ class EventRepository:
         Возвращает новые события (id > last_event_id или сохранённого offset).
         Автоматически обновляет смещение в tb_device_event_offsets.
         """
-        # Получаем device_id, принадлежащие орге
-        devices_subq = select(DeviceOrgBind.device_id).where(
-            DeviceOrgBind.org_id == org_id
-        )
-        if device_id is not None:
-            devices_subq = devices_subq.where(DeviceOrgBind.device_id == device_id)
-        devices_result = await session.execute(devices_subq)
-        target_device_ids = [r[0] for r in devices_result.fetchall()]
-        if not target_device_ids:
-            return []
-
-        # Получаем текущие смещения
-        offsets_stmt = select(DeviceEventOffset).where(
-            DeviceEventOffset.device_id.in_(target_device_ids)
-        )
-        offsets_result = await session.execute(offsets_stmt)
-        offsets = {
-            offset.device_id: offset.last_event_id
-            for offset in offsets_result.scalars().all()
-        }
-
-        # Формируем условия WHERE
-        conditions = [DevEvent.device_id.in_(target_device_ids)]
-
-        if last_event_id is not None:
-            last_id: int = last_event_id
-            conditions.append(and_(DevEvent.id > last_id))
-        else:
-            or_conds = []
-            for dev_id in target_device_ids:
-                last_id = offsets.get(dev_id, 0)
-                or_conds.append(
-                    and_(DevEvent.device_id == dev_id, DevEvent.id > last_id)
-                )
-            conditions.append(or_(*or_conds))
-
-        # Выбираем события
-        stmt = (
-            select(DevEvent).where(*conditions).order_by(DevEvent.id.asc()).limit(limit)
-        )
-        result = await session.execute(stmt)
-        events = result.scalars().all()
-
-        if not events:
-            return []
-
-        # Группируем события по device_id и находим max(id)
-        events_by_device = {}
-        for ev in events:
-            if ev.device_id not in events_by_device:
-                events_by_device[ev.device_id] = []
-            events_by_device[ev.device_id].append(ev)
-
-        # Подготавливаем batch upsert для смещений
-        for dev_id, ev_list in events_by_device.items():
-            max_id = max(ev.id for ev in ev_list)
-            current_offset = offsets.get(dev_id, 0)
-            if max_id <= current_offset:
-                continue  # не обновляем, если уже было выше
-
-            # Upsert: INSERT ... ON CONFLICT UPDATE
-            upsert_stmt = (
-                insert(DeviceEventOffset)
-                .values(device_id=dev_id, org_id=org_id, last_event_id=max_id)
-                .on_conflict_do_update(
-                    index_elements=["device_id"],
-                    set_=dict(last_event_id=max_id),
-                )
+        try:
+            # Получаем device_id, принадлежащие орге
+            devices_subq = select(DeviceOrgBind.device_id).where(
+                DeviceOrgBind.org_id == org_id
             )
-            await session.execute(upsert_stmt)
+            if device_id is not None:
+                devices_subq = devices_subq.where(DeviceOrgBind.device_id == device_id)
+            devices_result = await session.execute(devices_subq)
+            target_device_ids = [r[0] for r in devices_result.fetchall()]
+            if not target_device_ids:
+                return []
 
-        await session.commit()
+            # Получаем текущие смещения
+            offsets_stmt = select(DeviceEventOffset).where(
+                DeviceEventOffset.device_id.in_(target_device_ids)
+            )
+            offsets_result = await session.execute(offsets_stmt)
+            offsets = {
+                offset.device_id: offset.last_event_id
+                for offset in offsets_result.scalars().all()
+            }
 
-        # Возвращаем Pydantic-модели
-        return [
-            DevEventOut.model_validate(event, from_attributes=True) for event in events
-        ]
+            # Формируем условия WHERE
+            conditions = [DevEvent.device_id.in_(target_device_ids)]
+
+            if last_event_id is not None:
+                last_id: int = last_event_id
+                conditions.append(and_(DevEvent.id > last_id))
+            else:
+                or_conds = []
+                for dev_id in target_device_ids:
+                    last_id = offsets.get(dev_id, 0)
+                    or_conds.append(
+                        and_(DevEvent.device_id == dev_id, DevEvent.id > last_id)
+                    )
+                conditions.append(or_(*or_conds))
+
+            # Выбираем события
+            stmt = (
+                select(DevEvent)
+                .where(*conditions)
+                .order_by(DevEvent.id.asc())
+                .limit(limit)
+            )
+            result = await session.execute(stmt)
+            events = result.scalars().all()
+
+            if not events:
+                return []
+
+            # Группируем события по device_id и находим max(id)
+            events_by_device = {}
+            for ev in events:
+                if ev.device_id not in events_by_device:
+                    events_by_device[ev.device_id] = []
+                events_by_device[ev.device_id].append(ev)
+
+            # Подготавливаем batch upsert для смещений
+            for dev_id, ev_list in events_by_device.items():
+                max_id = max(ev.id for ev in ev_list)
+                current_offset = offsets.get(dev_id, 0)
+                if max_id <= current_offset:
+                    continue  # не обновляем, если уже было выше
+
+                # Upsert: INSERT ... ON CONFLICT UPDATE
+                upsert_stmt = (
+                    insert(DeviceEventOffset)
+                    .values(device_id=dev_id, org_id=org_id, last_event_id=max_id)
+                    .on_conflict_do_update(
+                        index_elements=["device_id"],
+                        set_=dict(last_event_id=max_id),
+                    )
+                )
+                await session.execute(upsert_stmt)
+
+            await session.commit()
+
+            # Возвращаем Pydantic-модели
+            return [
+                DevEventOut.model_validate(event, from_attributes=True)
+                for event in events
+            ]
+        except Exception as e:
+            await session.rollback()
+            log.error(f"Ошибка при получении инкрементальных событий: {e}")
+            raise
 
 
 #

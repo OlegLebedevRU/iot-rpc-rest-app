@@ -1,9 +1,9 @@
-import logging
 from fastapi import APIRouter
 from fastapi_pagination import Page
 from pydantic import UUID4
 from api.api_v1.api_depends import Session_dep, Org_dep
 from core import settings
+from core.logging_config import setup_module_logger
 from core.schemas.device_tasks import (
     TaskCreate,
     TaskResponse,
@@ -13,7 +13,7 @@ from core.schemas.device_tasks import (
 )
 from core.services.device_tasks import DeviceTasksService
 
-log = logging.getLogger(__name__)
+log = setup_module_logger(__name__, "api_device_tasks.log")
 router = APIRouter(
     prefix=settings.api.v1.device_tasks,
     tags=["Device tasks"],

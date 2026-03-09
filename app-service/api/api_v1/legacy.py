@@ -1,17 +1,17 @@
 import json
-import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Response, Header, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
+from core.logging_config import setup_module_logger
 from core.models import db_helper
 
 # from core.schemas.legacy import LegacyCertRequest
 from core.services.legacy import process_legacy_certificate
 
-log = logging.getLogger(__name__)
+log = setup_module_logger(__name__, "api_legacy.log")
 
 legacy_router = APIRouter(
     prefix=settings.api.v1.devices,

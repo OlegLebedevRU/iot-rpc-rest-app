@@ -1,10 +1,11 @@
-from typing import List, Dict
+from typing import List
 
 from fastapi import APIRouter, HTTPException, status
 
 # from core.schemas.common import SuccessResponse
 # from core.services.auth_service import get_current_active_user
 from api.api_v1.api_depends import Session_dep, Org_dep
+from core.logging_config import setup_module_logger
 from core.schemas.device_tasks import TaskResponse
 from core.schemas.postamat import (
     PostamatWithCellsResponse,
@@ -13,6 +14,7 @@ from core.schemas.postamat import (
 )
 from core.services.postamat_service import postamat_service
 
+log = setup_module_logger(__name__, "api_postamats.log")
 router = APIRouter(
     prefix="/postamats",
     tags=["Postamats"],

@@ -1,11 +1,7 @@
-import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from core.crud.device_repo import DeviceRepo
 from core.integrations.rmq_admin_api import RmqAdminApi
 from core.integrations.ya_leo4_cloud import get_factory_device_list
-
-
-log = logging.getLogger(__name__)
 
 
 class RmqAdmin:

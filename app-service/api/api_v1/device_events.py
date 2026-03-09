@@ -1,4 +1,4 @@
-import logging
+from core.logging_config import setup_module_logger
 from typing import Annotated, List
 from fastapi import APIRouter
 from fastapi.params import Query
@@ -12,7 +12,7 @@ from core.schemas.device_events import (
 )
 from core.services.device_events import DeviceEventsService
 
-log = logging.getLogger(__name__)
+log = setup_module_logger(__name__, "api_dev_events.log")
 router = APIRouter(
     prefix=settings.api.v1.device_events,
     tags=["Device events"],

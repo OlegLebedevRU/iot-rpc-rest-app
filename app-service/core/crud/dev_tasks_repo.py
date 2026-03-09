@@ -1,6 +1,4 @@
-import logging.handlers
-
-# import logging
+from core.logging_config import setup_module_logger
 import time
 import uuid
 from typing import Any
@@ -37,17 +35,7 @@ from core.schemas.device_tasks import (
     TaskListOut,
 )
 
-log = logging.getLogger(__name__)
-fh = logging.handlers.RotatingFileHandler(
-    "/var/log/app/repo_dev_task.log",
-    mode="a",
-    maxBytes=10 * 1024 * 1024,
-    backupCount=10,
-    encoding=None,
-)
-fh.setLevel(logging.INFO)
-formatter = logging.Formatter(settings.logging.log_format)
-fh.setFormatter(formatter)
+log = setup_module_logger(__name__, "repo_dev_tasks.log")
 
 
 class TasksRepository:

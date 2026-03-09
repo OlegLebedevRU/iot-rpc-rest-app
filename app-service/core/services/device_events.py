@@ -1,5 +1,5 @@
 import json
-import logging.handlers
+from core.logging_config import setup_module_logger
 import time
 from typing import Optional, List
 
@@ -12,18 +12,7 @@ from core.crud.device_repo import DeviceRepo
 from core.fs_broker import fs_router
 from core.schemas.device_events import DevEventBody, DevEventFields, DevEventOut
 
-log = logging.getLogger(__name__)
-fh = logging.handlers.RotatingFileHandler(
-    "/var/log/app/srv_dev_evnt.log",
-    mode="a",
-    maxBytes=10 * 1024 * 1024,
-    backupCount=10,
-    encoding=None,
-)
-fh.setLevel(logging.INFO)
-formatter = logging.Formatter(settings.logging.log_format)
-fh.setFormatter(formatter)
-log.addHandler(fh)
+log = setup_module_logger(__name__, "srv_dev_evnt.log")
 
 topic_publisher = fs_router.publisher()
 

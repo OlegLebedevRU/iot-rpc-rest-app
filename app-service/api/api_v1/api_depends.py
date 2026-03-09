@@ -1,4 +1,4 @@
-import logging
+from core.logging_config import setup_module_logger
 from typing import Annotated
 from fastapi import Header, Depends, Security, HTTPException
 from fastapi.security import APIKeyHeader
@@ -10,7 +10,7 @@ from core.models import db_helper
 
 # === Отладка: распечатайте, что загружено ===
 
-log = logging.getLogger(__name__)
+log = setup_module_logger(__name__, "api_depends.log")
 
 
 async def org_id_dep(

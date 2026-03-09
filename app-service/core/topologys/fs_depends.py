@@ -1,5 +1,3 @@
-import logging.handlers
-import logging.handlers
 import uuid
 from typing import Annotated
 
@@ -8,7 +6,7 @@ from faststream.rabbit.fastapi import RabbitMessage
 from pydantic import UUID4
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from core import settings
+from core.logging_config import setup_module_logger
 from core.models import db_helper
 
 Session_dep = Annotated[
@@ -16,18 +14,7 @@ Session_dep = Annotated[
     Depends(db_helper.session_getter),
 ]
 
-log = logging.getLogger(__name__)
-fh = logging.handlers.RotatingFileHandler(
-    "/var/log/app/dep_broker.log",
-    mode="a",
-    maxBytes=10 * 1024 * 1024,
-    backupCount=10,
-    encoding=None,
-)
-fh.setLevel(logging.INFO)
-formatter = logging.Formatter(settings.logging.log_format)
-fh.setFormatter(formatter)
-log.addHandler(fh)
+log = setup_module_logger(__name__, "depends_broker.log")
 
 
 async def sn_getter_dep(msg: RabbitMessage) -> str:
