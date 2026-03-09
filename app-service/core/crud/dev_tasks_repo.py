@@ -1,11 +1,21 @@
 import logging.handlers
+
+# import logging
 import time
 import uuid
+from typing import Any
 
 from fastapi_pagination import Page
 from fastapi_pagination.ext.sqlalchemy import paginate
 from pydantic import UUID4
-from sqlalchemy import select, update, desc, func, Integer
+from sqlalchemy import (
+    select,
+    update,
+    desc,
+    func,
+    Integer,
+    and_,
+)
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
@@ -28,7 +38,6 @@ from core.schemas.device_tasks import (
 )
 
 log = logging.getLogger(__name__)
-
 fh = logging.handlers.RotatingFileHandler(
     "/var/log/app/repo_dev_task.log",
     mode="a",
@@ -42,10 +51,55 @@ fh.setFormatter(formatter)
 
 
 class TasksRepository:
+    @staticmethod
+    def _apply_org_filter(query: Any, org_id: int | None) -> Any:
+        """
+        Применяет фильтр по организации с безопасным JOIN.
+        Использует LEFT JOIN, если org_id не задан, чтобы избежать потери данных.
+        """
+        if org_id and org_id > 0:
+            return (
+                query.join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
+                .join(
+                    Org,
+                    and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted == False),
+                )
+                .where(Org.org_id == org_id)
+            )
+        return query.outerjoin(
+            DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id
+        ).outerjoin(
+            Org, and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted == False)
+        )
+
+    @staticmethod
+    def _base_task_query():
+        """
+        Базовый SELECT с общими полями задачи и статуса.
+        """
+        return select(
+            DevTask.id.label("id"),
+            DevTask.ext_task_id.label("ext_task_id"),
+            DevTask.method_code.label("method_code"),
+            DevTask.device_id.label("device_id"),
+            func.extract("EPOCH", DevTask.created_at).cast(Integer).label("created_at"),
+            DevTaskStatus.priority.label("priority"),
+            DevTaskStatus.status.label("status"),
+            func.extract("EPOCH", DevTaskStatus.pending_at)
+            .cast(Integer)
+            .label("pending_at"),
+            func.extract("EPOCH", DevTaskStatus.locked_at)
+            .cast(Integer)
+            .label("locked_at"),
+            DevTaskStatus.ttl.label("ttl"),
+            Org.org_id.label("org_id"),
+        ).select_from(DevTask)
+
     @classmethod
-    async def create_task(cls, session: AsyncSession, task: TaskCreate):
+    async def create_task(
+        cls, session: AsyncSession, task: TaskCreate
+    ) -> tuple[UUID4, float] | None:
         db_uuid = uuid.uuid4()
-        # db_time_at = int(time.time())
         tsk_q = (
             insert(DevTask)
             .values(
@@ -64,18 +118,19 @@ class TasksRepository:
             ttl=task.ttl,
             priority=task.priority,
         )
-        t = await session.execute(tsk_q)
-        await session.execute(payload_q)
-        await session.execute(status_q)
+
         try:
+            result = await session.execute(tsk_q)
+            await session.execute(payload_q)
+            await session.execute(status_q)
             await session.commit()
-            created_at = t.one()
+            created_at = result.scalar_one()
             log.info("Committed new task %s", db_uuid)
+            return db_uuid, created_at
         except Exception as e:
             log.error("Failed to create task %s: %s", db_uuid, e)
             await session.rollback()
             return None
-        return db_uuid, created_at.created_at
 
     @classmethod
     async def get_task(
@@ -83,54 +138,43 @@ class TasksRepository:
         session: AsyncSession,
         id: UUID4,
         org_id: int | None = 0,
-    ):
-        query = (
+    ) -> tuple[dict | None, list[dict] | None]:
+        query = cls._base_task_query().join(DevTask.status)
+        query = cls._apply_org_filter(query, org_id)
+        query = query.where(DevTask.id == id, DevTask.is_deleted == False)
+
+        res_q = (
             select(
-                DevTask.id.label("id"),
-                DevTask.ext_task_id.label("ext_task_id"),
-                DevTask.method_code.label("method_code"),
-                DevTask.device_id.label("device_id"),
-                func.extract("EPOCH", DevTask.created_at).label("created_at"),
-                DevTaskStatus.priority.label("priority"),
-                DevTaskStatus.status.label("status"),
-                func.extract("EPOCH", DevTaskStatus.pending_at).label("pending_at"),
-                func.extract("EPOCH", DevTaskStatus.locked_at).label("locked_at"),
-                DevTaskStatus.ttl.label("ttl"),
-                Org,
-                DeviceOrgBind,
+                DevTaskResult.id.label("id"),
+                DevTaskResult.ext_id.label("ext_id"),
+                DevTaskResult.status_code.label("status_code"),
+                DevTaskResult.result.label("result"),
             )
-            .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
-            # .where(DeviceOrgBind.org_id == org_id)
-            .join(Org, DeviceOrgBind.org_id == Org.org_id)
-            .where(Org.is_deleted == False)
-            .join(DevTask.status)
-            .where(DevTask.id == id, DevTask.is_deleted == False)
+            .where(DevTaskResult.task_id == id)
+            .order_by(DevTaskResult.id.desc())
         )
-        if org_id is not None:
-            query = query.where(DeviceOrgBind.org_id == org_id)
-        res_q = select(
-            DevTaskResult.id.label("id"),
-            DevTaskResult.ext_id.label("ext_id"),
-            DevTaskResult.status_code.label("status_code"),
-            DevTaskResult.result.label("result"),
-        ).where(DevTaskResult.task_id == id)
 
         t = await session.execute(query)
         resp_task_w_status = t.unique().mappings().one_or_none()
 
         if resp_task_w_status is None:
             return None, None
+
         r = await session.execute(res_q)
         task_results = r.unique().mappings().all()
 
-        return resp_task_w_status, task_results
+        # Преобразуем RowMapping → dict для совместимости с типами
+        result_data = [dict(row) for row in task_results]
+        task_data = dict(resp_task_w_status)
+
+        return task_data, result_data
 
     @classmethod
     async def select_task(
         cls,
         session: AsyncSession,
-        t_req: UUID4 | None = None,  # str = None,
-        sn: str = None,
+        t_req: UUID4 | None = None,
+        sn: str | None = None,
         method_le: int = 65535,
     ) -> TaskResponsePayload | None:
         query = (
@@ -160,10 +204,15 @@ class TasksRepository:
                 DevTaskStatus.status < TaskStatus.DONE,
             )
         )
+
         if t_req is not None:
             query = query.where(DevTask.id == t_req, DevTask.method_code <= method_le)
         elif sn is not None:
-            subq = select(Device).where(Device.sn == sn).subquery()
+            subq = (
+                select(Device.device_id)
+                .where(Device.sn == sn, Device.is_deleted == False)
+                .subquery()
+            )
             query = query.where(
                 DevTask.device_id == subq.c.device_id,
                 DevTask.method_code <= method_le,
@@ -172,12 +221,12 @@ class TasksRepository:
             query = query.limit(1)
         else:
             return None
+
         t = await session.execute(query)
-        if t is None:
-            return None
         resp = t.mappings().one_or_none()
         if resp is None:
             return None
+
         header: TaskHeader = TaskHeader.model_validate(resp)
         task: TaskResponsePayload = TaskResponsePayload(
             header=header,
@@ -197,43 +246,10 @@ class TasksRepository:
         device_id: int | None = 0,
         org_id: int | None = 0,
     ) -> Page[TaskListOut]:
-        query = select(
-            DevTask.id.label("id"),
-            DevTask.ext_task_id.label("ext_task_id"),
-            DevTask.method_code.label("method_code"),
-            DevTask.device_id.label("device_id"),
-            DevTaskStatus.priority.label("priority"),
-            DevTaskStatus.ttl.label("ttl"),
-            DevTaskStatus.status.label("status"),
-            func.extract("EPOCH", DevTask.created_at).label("created_at"),
-            func.extract("EPOCH", DevTaskStatus.pending_at).label("pending_at"),
-            func.extract("EPOCH", DevTaskStatus.locked_at).label("locked_at"),
-            Org.org_id.label("org_id"),
-        ).select_from(DevTask)
-
-        # Всегда джойним статус
+        query = cls._base_task_query()
         query = query.join(DevTask.status)
-
-        # Если задан org_id — обязательно джойним DeviceOrgBind и Org
-        if org_id and org_id > 0:
-            query = (
-                query.join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
-                .join(Org, DeviceOrgBind.org_id == Org.org_id)
-                .where(
-                    Org.org_id == org_id,
-                    Org.is_deleted == False,
-                )
-            )
-        else:
-            # Если org_id не задан или 0 — можно либо не фильтровать по Org,
-            # либо оставить только DevTask (без привязки к организации)
-            # Но тогда Org.org_id будет NULL — будьте осторожны в схеме
-            pass
-
-        # Общие условия
-        query = query.where(
-            DevTask.is_deleted == False,
-        )
+        query = cls._apply_org_filter(query, org_id)
+        query = query.where(DevTask.is_deleted == False)
 
         if device_id:
             query = query.where(DevTask.device_id == device_id)
@@ -251,21 +267,26 @@ class TasksRepository:
         id: UUID4,
         org_id: int | None = 0,
     ) -> TaskResponseDeleted | None:
-        # db_time_at = int(time.time())
-        q1 = (
-            update(DevTask)
+        exists_q = (
+            select(1)
+            .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
+            .join(
+                Org, and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted == False)
+            )
             .where(
                 DevTask.id == id,
                 DevTask.is_deleted == False,
-                DevTask.device_id.in_(
-                    select(DeviceOrgBind.device_id)
-                    .join(Org, DeviceOrgBind.org_id == Org.org_id)
-                    .where(
-                        DeviceOrgBind.org_id == org_id,
-                        Org.is_deleted == False,
-                    )
-                ),
+                Org.org_id == org_id,
             )
+        )
+        exists_result = await session.execute(exists_q)
+        if not exists_result.first():
+            log.warning("Task %s not found or not accessible for org %s", id, org_id)
+            return None
+
+        q1 = (
+            update(DevTask)
+            .where(DevTask.id == id)
             .values(is_deleted=True, deleted_at=func.current_timestamp())
             .returning(func.extract("EPOCH", DevTask.deleted_at).label("deleted_at"))
         )
@@ -274,24 +295,24 @@ class TasksRepository:
             .where(DevTaskStatus.task_id == id)
             .values(status=TaskStatus.DELETED, ttl=0)
         )
+
         d = await session.execute(q1)
         resp = d.one_or_none()
-        if resp:
-            await session.execute(q2)
-            deleted_at = int(resp.deleted_at) if resp.deleted_at is not None else None
-        else:
-            deleted_at = None
-        await session.commit()
-        log.info("deleted task %s", str(id))
+        deleted_at = int(resp.deleted_at) if resp else None
 
-        return TaskResponseDeleted(
-            id=id,
-            deleted_at=deleted_at if deleted_at is not None else None,
-        )
+        await session.execute(q2)
+        try:
+            await session.commit()
+            log.info("Deleted task %s", id)
+        except Exception as e:
+            log.error("Failed to delete task %s: %s", id, e)
+            await session.rollback()
+            return None
+
+        return TaskResponseDeleted(id=id, deleted_at=deleted_at)
 
     @classmethod
     async def tasks_ttl_update(cls, session: AsyncSession, delta_ttl: int = 1):
-        # Уменьшаем TTL
         try:
             await session.execute(
                 update(DevTaskStatus)
@@ -301,7 +322,6 @@ class TasksRepository:
                 )
                 .values(ttl=DevTaskStatus.ttl - delta_ttl)
             )
-            # Помечаем как EXPIRED
             await session.execute(
                 update(DevTaskStatus)
                 .where(
@@ -310,7 +330,7 @@ class TasksRepository:
                 )
                 .values(status=TaskStatus.EXPIRED, ttl=0)
             )
-            await session.commit()  # Один коммит на всю операцию
+            await session.commit()
         except Exception as e:
             await session.rollback()
             log.error("Failed to update TTLs: %s", e)
@@ -322,6 +342,7 @@ class TasksRepository:
     ) -> bool:
         if task_id is None:
             return True
+
         stmt = update(DevTaskStatus).where(DevTaskStatus.task_id == task_id)
         match status:
             case TaskStatus.PENDING | TaskStatus.DONE:
@@ -338,34 +359,32 @@ class TasksRepository:
                 stmt = stmt.values(status=status)
             case _:
                 return False
-        await session.execute(stmt)
+
         try:
+            await session.execute(stmt)
             await session.commit()
-            log.info("Updated task-status %s", str(task_id))
+            log.info("Updated task-status %s to %s", task_id, status)
+            return True
         except Exception as e:
-            log.error("Failed to update task-status %s: %s", str(task_id), e)
+            log.error("Failed to update task-status %s: %s", task_id, e)
             await session.rollback()
             return False
-        return True
 
     @classmethod
     async def update_ttl(cls, session: AsyncSession, step_ttl: int):
         data = await PersistentVariable.get_data(session, "saved_time_minutes")
         tn = int(time.time()) // 60
-        if data is not None:
-            if data.var_val.isdigit():
-                delta_ttl = tn - int(data.var_val)
-                if delta_ttl <= 0:
-                    delta_ttl = step_ttl
-            else:
+        if data and data.var_val.isdigit():
+            delta_ttl = tn - int(data.var_val)
+            if delta_ttl <= 0:
                 delta_ttl = step_ttl
         else:
             delta_ttl = step_ttl
-        await TasksRepository.tasks_ttl_update(session, delta_ttl)
+
+        await cls.tasks_ttl_update(session, delta_ttl)
         await PersistentVariable.upsert_data(
             session, "saved_time_minutes", str(tn), "INT32"
         )
-        return
 
     @classmethod
     async def save_task_result(
@@ -386,14 +405,13 @@ class TasksRepository:
             )
             .returning(DevTaskResult.id)
         )
-        result = await session.execute(tsk_q)
-        new_id = result.scalar_one()
-
         try:
+            result = await session.execute(tsk_q)
+            new_id = result.scalar_one()
             await session.commit()
             log.info("Task result committed, task_id=%s, result_id=%s", task_id, new_id)
+            return new_id
         except Exception as e:
             log.error("Failed to commit task result for task %s: %s", task_id, e)
             await session.rollback()
             return None
-        return new_id

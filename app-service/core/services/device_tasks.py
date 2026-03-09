@@ -1,10 +1,11 @@
 import logging.handlers
-import uuid
 from uuid import UUID
+
 from fastapi import HTTPException
 from fastapi_pagination import Page
 from pydantic import UUID4
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from core.config import RoutingKey, settings
 from core.crud.dev_tasks_repo import TasksRepository
 from core.crud.device_repo import DeviceRepo
@@ -45,13 +46,13 @@ async def act_ttl(step: int):
         message="ttl_decrement", routing_key=settings.ttl_job.queue_name
     )
 
-    api_test_msg: RmqClientsAction = RmqClientsAction(
-        action="get_online_status",
-        clients=[
-            "a1b0004617c24558d080925",
-            "a3b0000000c10221d290825",
-        ],
-    )
+    # api_test_msg: RmqClientsAction = RmqClientsAction(
+    #     action="get_online_status",
+    #     clients=[
+    #         "a1b0004617c24558d080925",
+    #         "a3b0000000c10221d290825",
+    #     ],
+    # )
     api_test2_msg: RmqClientsAction = RmqClientsAction(
         action="update_online_status", clients=[]
     )
@@ -102,25 +103,44 @@ class DeviceTasksService:
 
     # @classmethod
     async def get(self, id: UUID) -> TaskResponseResult | None:
-        task, result = await TasksRepository.get_task(self.session, id, self.org_id)
-        if task is None:
+        # Получаем задачу и результаты из репозитория
+        task_data, results_data = await TasksRepository.get_task(
+            self.session, id, self.org_id
+        )
+
+        # Проверяем существование задачи
+        if task_data is None:
             raise HTTPException(status_code=404, detail="Task not found")
+
+        # Валидируем основные данные задачи
+        header = TaskHeader.model_validate(task_data)
+
+        # Обрабатываем результаты выполнения
         results = []
-        header: TaskHeader = TaskHeader.model_validate(task)
-        for r in result:
-            results.append(ResultArray.model_validate(r))
-        task_resp: TaskResponseResult = TaskResponseResult(
+        if results_data:
+            for result_item in results_data:
+                results.append(ResultArray.model_validate(result_item))
+
+        # Создаем ответную модель
+        task_response = TaskResponseResult(
             header=header,
-            id=task.id,
-            status=task.status,
-            created_at=int(task.created_at),
-            pending_at=int(task.pending_at) if task.pending_at is not None else None,
-            locked_at=int(task.locked_at) if task.locked_at is not None else None,
+            id=task_data["id"],
+            status=task_data["status"],
+            created_at=int(task_data["created_at"]),
+            pending_at=(
+                int(task_data["pending_at"])
+                if task_data["pending_at"] is not None
+                else None
+            ),
+            locked_at=(
+                int(task_data["locked_at"])
+                if task_data["locked_at"] is not None
+                else None
+            ),
             results=results,
         )
-        if task_resp is None:
-            raise HTTPException(status_code=404, detail="Task not found")
-        return task_resp
+
+        return task_response
 
     async def delete(self, id: UUID) -> TaskResponseDeleted:
         task: TaskResponseDeleted = await TasksRepository.delete_task(
@@ -203,17 +223,18 @@ class DeviceTasksService:
                 ext_id,
                 status_code,
             )
+
+            result_id = await TasksRepository.save_task_result(
+                self.session, corr_id, ext_id, status_code, res
+            )
+            rmsg = "commited"
             try:
-                result_id = await TasksRepository.save_task_result(
-                    self.session, corr_id, ext_id, status_code, res
-                )
                 await TasksRepository.task_status_update(
                     self.session, corr_id, TaskStatus.DONE
                 )
-                rmsg = "commited"
-            except:
-                result_id = 0
-                rmsg = "undefined"
+            except Exception as e:
+                log.error("Task status update error %s", e)
+                rmsg = "Partial error= result commited, but status updated fail"
         else:
 
             log.info(
