@@ -174,7 +174,7 @@ class DeviceTasksService:
             correlation_id = task.id
         else:
             t_resp = settings.task_proc_cfg.nop_resp
-            log.info("from DB select task = None")
+            log.debug("from DB select task = None")
             correlation_id = settings.task_proc_cfg.zero_corr_id
             method_code = "0"
         routing_key: str = str(
@@ -265,4 +265,4 @@ class DeviceTasksService:
 
     async def ttl(self, decrement: int = 1):
         await TasksRepository.update_ttl(self.session, decrement)
-        log.info("subscribe job event  decrement TTL = %d", decrement)
+        log.info("Complited job event, decrement TTL = %d", decrement)
