@@ -123,66 +123,44 @@ async def fetch_signed_certificate(csr_pem: str) -> dict:
         log.error("Invalid JSON from CA: %s", e)
         return {"error": "Invalid response from CA", "details": str(e)}
 
-    if response_data.get("statusCode") != 200:
+    # Проверяем наличие обязательных полей
+    required = ["cert", "ca_pem", "not_valid_before", "not_valid_after", "valid_days", "sn", "device_id"]
+    if not all(k in response_data for k in required):
         return {
-            "error": "CA signing failed",
-            "status_code": response_data.get("statusCode"),
-            "details": response_data.get("body", ""),
+            "error": "Incomplete response from CA",
+            "missing": [k for k in required if k not in response_data],
+            "received": list(response_data.keys()),
         }
 
-    body = response_data.get("body", {})
-    required = [
-        "cert",
-        "ca_pem",
-        "not_valid_before",
-        "not_valid_after",
-        "valid_days",
-        "sn",
-        "device_id",
-    ]
-    if not all(k in body for k in required):
-        return {"error": "Incomplete response from CA", "received": body}
-
-    # Декодируем PEM
     try:
-        cert_pem = urllib.parse.unquote(body["cert"])
-        ca_pem = urllib.parse.unquote(body["ca_pem"])
+        cert_pem = urllib.parse.unquote(response_data["cert"])
+        ca_pem = urllib.parse.unquote(response_data["ca_pem"])
     except Exception as e:
         log.error("Failed to unquote PEM: %s", e)
         return {"error": "Malformed PEM encoding", "details": str(e)}
 
-    # Преобразуем даты
+    # Парсим даты из формата "YYYY-MM-DD HH:MM:S"
+    date_format = "%Y-%m-%d %H:%M:%S"
     not_valid_before = None
     not_valid_after = None
     valid_days = 0
     days_left = None
 
     try:
-        not_valid_before_str = body["not_valid_before"]
-        not_valid_after_str = body["not_valid_after"]
-        # Поддержка ISO-формата (если приходит с "T")
-        not_valid_before = (
-            datetime.fromisoformat(not_valid_before_str.replace(" ", "T"))
-            if isinstance(not_valid_before_str, str)
-            else None
-        )
-        not_valid_after = (
-            datetime.fromisoformat(not_valid_after_str.replace(" ", "T"))
-            if isinstance(not_valid_after_str, str)
-            else None
-        )
-
-        valid_days = int(body["valid_days"])
+        not_valid_before = datetime.strptime(response_data["not_valid_before"], date_format)
+        not_valid_after = datetime.strptime(response_data["not_valid_after"], date_format)
+        valid_days = int(response_data["valid_days"])
         if not_valid_after:
             days_left = (not_valid_after - datetime.now()).days
     except Exception as e:
-        log.warning("Date parsing error: %s", e)
-
-    # Проверяем обязательные поля перед возвратом
-    if not not_valid_before or not not_valid_after:
+        log.error("Failed to parse certificate dates: %s", e)
         return {
-            "error": "Invalid or missing certificate validity dates",
-            "details": f"not_valid_before={body.get('not_valid_before')}, not_valid_after={body.get('not_valid_after')}",
+            "error": "Invalid date format in CA response",
+            "details": str(e),
+            "raw_dates": {
+                "not_valid_before": response_data["not_valid_before"],
+                "not_valid_after": response_data["not_valid_after"],
+            },
         }
 
     return {
@@ -192,8 +170,8 @@ async def fetch_signed_certificate(csr_pem: str) -> dict:
         "not_valid_after": not_valid_after,
         "valid_days": valid_days,
         "days_left": days_left,
-        "sn": body["sn"],
-        "device_id": body["device_id"],
+        "sn": response_data["sn"],
+        "device_id": response_data["device_id"],
     }
 
 
