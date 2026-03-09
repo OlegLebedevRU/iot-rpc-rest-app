@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 class Device(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     device_id: Mapped[int] = mapped_column(Integer, unique=True)
-    sn: Mapped[str] = mapped_column(String, unique=True)
+    sn: Mapped[str] = mapped_column(String, unique=True, index=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.current_timestamp(0), default=None
     )

@@ -26,8 +26,9 @@ class DevTask(Base):
         TIMESTAMP(timezone=True, precision=0),
         server_default=func.current_timestamp(0),
         default=None,
+        index=True,
     )
-    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     deleted_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True
     )
@@ -53,7 +54,7 @@ class DevTaskStatus(Base):
     task_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(DevTask.id), index=True)
     priority: Mapped[int] = mapped_column(Integer, index=True, default=0)
     status: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
-    ttl: Mapped[int] = mapped_column(Integer, default=TaskTTL.MIN_TTL)
+    ttl: Mapped[int] = mapped_column(Integer, default=TaskTTL.MIN_TTL, index=True)
     pending_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True
     )

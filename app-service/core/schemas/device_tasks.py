@@ -131,7 +131,7 @@ class TaskListOut(TaskHeader):
     created_at: datetime
     pending_at: Optional[datetime] = None
     locked_at: Optional[datetime] = None
-
+    org_id: int | None  # ← Это важно!
 
 class TaskPublish(BaseModel):
     routing_key: str
