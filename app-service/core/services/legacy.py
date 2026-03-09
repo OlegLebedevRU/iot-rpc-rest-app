@@ -124,7 +124,15 @@ async def fetch_signed_certificate(csr_pem: str) -> dict:
         return {"error": "Invalid response from CA", "details": str(e)}
 
     # Проверяем наличие обязательных полей
-    required = ["cert", "ca_pem", "not_valid_before", "not_valid_after", "valid_days", "sn", "device_id"]
+    required = [
+        "cert",
+        "ca_pem",
+        "not_valid_before",
+        "not_valid_after",
+        "valid_days",
+        "sn",
+        "device_id",
+    ]
     if not all(k in response_data for k in required):
         return {
             "error": "Incomplete response from CA",
@@ -147,8 +155,12 @@ async def fetch_signed_certificate(csr_pem: str) -> dict:
     days_left = None
 
     try:
-        not_valid_before = datetime.strptime(response_data["not_valid_before"], date_format)
-        not_valid_after = datetime.strptime(response_data["not_valid_after"], date_format)
+        not_valid_before = datetime.strptime(
+            response_data["not_valid_before"], date_format
+        )
+        not_valid_after = datetime.strptime(
+            response_data["not_valid_after"], date_format
+        )
         valid_days = int(response_data["valid_days"])
         if not_valid_after:
             days_left = (not_valid_after - datetime.now()).days
