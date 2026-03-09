@@ -197,35 +197,51 @@ class TasksRepository:
         device_id: int | None = 0,
         org_id: int | None = 0,
     ) -> Page[TaskListOut]:
-        query = (
-            select(
-                DevTask.id.label("id"),
-                DevTask.ext_task_id.label("ext_task_id"),
-                DevTask.method_code.label("method_code"),
-                DevTask.device_id.label("device_id"),
-                DevTaskStatus.priority.label("priority"),
-                DevTaskStatus.ttl.label("ttl"),
-                DevTaskStatus.status.label("status"),
-                DevTask.created_at.label("created_at"),
-                DevTaskStatus.pending_at.label("pending_at"),
-                DevTaskStatus.locked_at.label("locked_at"),
-                Org.org_id.label("org_id"),
+        query = select(
+            DevTask.id.label("id"),
+            DevTask.ext_task_id.label("ext_task_id"),
+            DevTask.method_code.label("method_code"),
+            DevTask.device_id.label("device_id"),
+            DevTaskStatus.priority.label("priority"),
+            DevTaskStatus.ttl.label("ttl"),
+            DevTaskStatus.status.label("status"),
+            func.extract("EPOCH", DevTask.created_at).label("created_at"),
+            func.extract("EPOCH", DevTaskStatus.pending_at).label("pending_at"),
+            func.extract("EPOCH", DevTaskStatus.locked_at).label("locked_at"),
+            Org.org_id.label("org_id"),
+        ).select_from(DevTask)
 
-            )
-            # .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
-            # .where(DeviceOrgBind.org_id == org_id)
-            .join(Org, DeviceOrgBind.org_id == Org.org_id)
-            .where(Org.is_deleted == False)
-            .join(DevTask.status)
-            # .join(DevTaskResult, isouter=True)
-            .where(DevTask.device_id == device_id, DevTask.is_deleted == False)
-            .order_by(DevTask.created_at.desc())
-            .limit(settings.db.limit_tasks_result)
-        )
+        # Всегда джойним статус
+        query = query.join(DevTask.status)
+
+        # Если задан org_id — обязательно джойним DeviceOrgBind и Org
         if org_id and org_id > 0:
-            query = query.join(
-                DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id
-            ).where(DeviceOrgBind.org_id == org_id)
+            query = (
+                query.join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
+                .join(Org, DeviceOrgBind.org_id == Org.org_id)
+                .where(
+                    Org.org_id == org_id,
+                    Org.is_deleted == False,
+                )
+            )
+        else:
+            # Если org_id не задан или 0 — можно либо не фильтровать по Org,
+            # либо оставить только DevTask (без привязки к организации)
+            # Но тогда Org.org_id будет NULL — будьте осторожны в схеме
+            pass
+
+        # Общие условия
+        query = query.where(
+            DevTask.is_deleted == False,
+        )
+
+        if device_id:
+            query = query.where(DevTask.device_id == device_id)
+
+        query = query.order_by(DevTask.created_at.desc()).limit(
+            settings.db.limit_tasks_result
+        )
+
         return await paginate(session, query)
 
     @classmethod
@@ -299,6 +315,7 @@ class TasksRepository:
             await session.rollback()
             log.error("Failed to update TTLs: %s", e)
             raise
+
     @classmethod
     async def task_status_update(
         cls, session: AsyncSession, task_id: UUID4 | None, status: int
