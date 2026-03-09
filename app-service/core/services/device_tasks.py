@@ -150,7 +150,7 @@ class DeviceTasksService:
             raise HTTPException(status_code=404, detail="Task not found")
         return task
 
-    async def list(self, device_id) -> Page[TaskListOut]:
+    async def list(self, device_id: int) -> Page[TaskListOut]:
         tasks: Page[TaskListOut] = await TasksRepository.get_tasks(
             self.session, device_id, self.org_id
         )

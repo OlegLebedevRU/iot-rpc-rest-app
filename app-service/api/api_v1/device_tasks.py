@@ -46,7 +46,7 @@ async def get_task(
 async def list_tasks(
     session: Session_dep,
     org_id: Org_dep,
-    device_id: int | None = 0,
+    device_id: int,
 ) -> Page[TaskListOut]:
     return await DeviceTasksService(session, org_id).list(device_id)
 

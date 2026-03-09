@@ -251,7 +251,7 @@ class TasksRepository:
         query = cls._apply_org_filter(query, org_id)
         query = query.where(DevTask.is_deleted == False)
 
-        if device_id:
+        if device_id is not None:
             query = query.where(DevTask.device_id == device_id)
 
         query = query.order_by(DevTask.created_at.desc()).limit(
