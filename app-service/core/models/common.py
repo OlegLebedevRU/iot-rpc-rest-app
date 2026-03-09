@@ -1,11 +1,25 @@
 import enum
-from typing import Any, Annotated
+import logging.handlers
 
-from sqlalchemy import Enum, Integer, String, select, delete, RowMapping
+from sqlalchemy import Integer, String, select, delete, RowMapping
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Mapped, mapped_column
 
+from core import settings
 from core.models import Base
+
+log = logging.getLogger(__name__)
+fh = logging.handlers.RotatingFileHandler(
+    "/var/log/app/repo_common.log",
+    mode="a",
+    maxBytes=10 * 1024 * 1024,
+    backupCount=10,
+    encoding="utf-8",
+)
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter(settings.logging.log_format)
+fh.setFormatter(formatter)
+log.addHandler(fh)
 
 
 # Helper classes
@@ -56,8 +70,18 @@ class PersistentVariable(Base):
     ) -> None:
         await session.execute(delete(cls).where(cls.var_key == key_val))
 
-        await session.commit()
+        try:
+            await session.commit()
+        except Exception as e:
+            log.error("Failed to update key-val: %s", e)
+            await session.rollback()
+            raise
         var = cls(var_key=key_val, var_val=val_var, var_typ=val_typ)
         session.add(var)
 
-        await session.commit()
+        try:
+            await session.commit()
+        except Exception as e:
+            log.error("Failed to add key-val: %s", e)
+            await session.rollback()
+            raise

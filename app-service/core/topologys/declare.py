@@ -1,4 +1,4 @@
-import logging
+import logging.handlers
 
 from aio_pika import RobustExchange, RobustQueue
 from faststream.rabbit import RabbitExchange, ExchangeType, RabbitQueue
@@ -7,7 +7,24 @@ from core import settings
 from core.fs_broker import fs_router, broker
 from core.services.device_tasks import topology, topic_publisher, job_publisher
 
+# Настройка логгера
 log = logging.getLogger(__name__)
+
+# Ротация логов: 10 файлов по 10 МБ
+fh = logging.handlers.RotatingFileHandler(
+    "/var/log/app/fs_declare.log",
+    mode="a",
+    maxBytes=10 * 1024 * 1024,
+    backupCount=10,
+    encoding="utf-8",
+)
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter(settings.logging.log_format)
+fh.setFormatter(formatter)
+log.addHandler(fh)
+
+# Отключаем логи от logger_proxy (избыточные "Received", "Processed")
+logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 topic_exchange = RabbitExchange(
     name=topology.x_name, type=ExchangeType.TOPIC, declare=False
 )

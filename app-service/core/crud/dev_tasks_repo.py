@@ -1,13 +1,14 @@
 import logging.handlers
 import time
 import uuid
+
 from fastapi_pagination import Page
 from fastapi_pagination.ext.sqlalchemy import paginate
 from pydantic import UUID4
-from sqlalchemy import select, update, desc, func
+from sqlalchemy import select, update, desc, func, Integer
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
-from sqlalchemy.orm import Mapped
+
 from core import settings
 from core.models import Device, Org
 from core.models.common import TaskStatus, PersistentVariable
@@ -69,8 +70,10 @@ class TasksRepository:
         try:
             await session.commit()
             created_at = t.one()
-            log.info("commited new task %s", db_uuid)
-        except:
+            log.info("Committed new task %s", db_uuid)
+        except Exception as e:
+            log.error("Failed to create task %s: %s", db_uuid, e)
+            await session.rollback()
             return None
         return db_uuid, created_at.created_at
 
@@ -97,12 +100,14 @@ class TasksRepository:
                 DeviceOrgBind,
             )
             .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
-            .where(DeviceOrgBind.org_id == org_id)
+            # .where(DeviceOrgBind.org_id == org_id)
             .join(Org, DeviceOrgBind.org_id == Org.org_id)
             .where(Org.is_deleted == False)
             .join(DevTask.status)
             .where(DevTask.id == id, DevTask.is_deleted == False)
         )
+        if org_id is not None:
+            query = query.where(DeviceOrgBind.org_id == org_id)
         res_q = select(
             DevTaskResult.id.label("id"),
             DevTaskResult.ext_id.label("ext_id"),
@@ -124,7 +129,7 @@ class TasksRepository:
     async def select_task(
         cls,
         session: AsyncSession,
-        t_req: UUID4 = uuid.UUID(int=0),  # str = None,
+        t_req: UUID4 | None = None,  # str = None,
         sn: str = None,
         method_le: int = 65535,
     ) -> TaskResponsePayload | None:
@@ -134,11 +139,17 @@ class TasksRepository:
                 DevTask.ext_task_id.label("ext_task_id"),
                 DevTask.method_code.label("method_code"),
                 DevTask.device_id.label("device_id"),
-                func.extract("EPOCH", DevTask.created_at).label("created_at"),
+                func.extract("EPOCH", DevTask.created_at)
+                .cast(Integer)
+                .label("created_at"),
                 DevTaskStatus.priority.label("priority"),
                 DevTaskStatus.status.label("status"),
-                func.extract("EPOCH", DevTaskStatus.pending_at).label("pending_at"),
-                func.extract("EPOCH", DevTaskStatus.locked_at).label("locked_at"),
+                func.extract("EPOCH", DevTaskStatus.pending_at)
+                .cast(Integer)
+                .label("pending_at"),
+                func.extract("EPOCH", DevTaskStatus.locked_at)
+                .cast(Integer)
+                .label("locked_at"),
                 DevTaskStatus.ttl.label("ttl"),
                 DevTaskPayload.payload.label("payload"),
             )
@@ -149,19 +160,18 @@ class TasksRepository:
                 DevTaskStatus.status < TaskStatus.DONE,
             )
         )
-        if t_req is not None and t_req != uuid.UUID(int=0):
-            query = query.where(
-                DevTask.id == t_req,
-                DevTask.method_code <= method_le,
-            )
-        else:
+        if t_req is not None:
+            query = query.where(DevTask.id == t_req, DevTask.method_code <= method_le)
+        elif sn is not None:
             subq = select(Device).where(Device.sn == sn).subquery()
             query = query.where(
                 DevTask.device_id == subq.c.device_id,
+                DevTask.method_code <= method_le,
             )
             query = query.order_by(desc(DevTaskStatus.priority), DevTask.created_at)
             query = query.limit(1)
-
+        else:
+            return None
         t = await session.execute(query)
         if t is None:
             return None
@@ -173,9 +183,9 @@ class TasksRepository:
             header=header,
             id=resp.id,
             status=resp.status,
-            created_at=int(resp.created_at),
-            pending_at=int(resp.pending_at) if resp.pending_at is not None else None,
-            locked_at=int(resp.locked_at) if resp.locked_at is not None else None,
+            created_at=resp.created_at,
+            pending_at=resp.pending_at if resp.pending_at is not None else None,
+            locked_at=resp.locked_at if resp.locked_at is not None else None,
             payload=resp.payload,
         )
         return task
@@ -199,11 +209,11 @@ class TasksRepository:
                 DevTask.created_at.label("created_at"),
                 DevTaskStatus.pending_at.label("pending_at"),
                 DevTaskStatus.locked_at.label("locked_at"),
-                Org,
-                DeviceOrgBind,
+                Org.org_id.label("org_id"),
+
             )
-            .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
-            .where(DeviceOrgBind.org_id == org_id)
+            # .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
+            # .where(DeviceOrgBind.org_id == org_id)
             .join(Org, DeviceOrgBind.org_id == Org.org_id)
             .where(Org.is_deleted == False)
             .join(DevTask.status)
@@ -212,6 +222,10 @@ class TasksRepository:
             .order_by(DevTask.created_at.desc())
             .limit(settings.db.limit_tasks_result)
         )
+        if org_id and org_id > 0:
+            query = query.join(
+                DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id
+            ).where(DeviceOrgBind.org_id == org_id)
         return await paginate(session, query)
 
     @classmethod
@@ -225,14 +239,16 @@ class TasksRepository:
         q1 = (
             update(DevTask)
             .where(
-                DevTask.id
-                == select(DevTask.id)
-                .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
-                .where(DeviceOrgBind.org_id == org_id)
-                .join(Org, DeviceOrgBind.org_id == Org.org_id)
-                .where(Org.is_deleted == False)
-                .where(DevTask.id == id)
-                .where(DevTask.is_deleted == False)
+                DevTask.id == id,
+                DevTask.is_deleted == False,
+                DevTask.device_id.in_(
+                    select(DeviceOrgBind.device_id)
+                    .join(Org, DeviceOrgBind.org_id == Org.org_id)
+                    .where(
+                        DeviceOrgBind.org_id == org_id,
+                        Org.is_deleted == False,
+                    )
+                ),
             )
             .values(is_deleted=True, deleted_at=func.current_timestamp())
             .returning(func.extract("EPOCH", DevTask.deleted_at).label("deleted_at"))
@@ -258,67 +274,61 @@ class TasksRepository:
         )
 
     @classmethod
-    async def tasks_ttl_update(cls, session: AsyncSession, delta_ttl: int | None = 1):
-
-        await session.execute(
-            update(DevTaskStatus)
-            .where(
-                DevTaskStatus.status < TaskStatus.DONE,
-                DevTaskStatus.ttl > (delta_ttl - 1),
+    async def tasks_ttl_update(cls, session: AsyncSession, delta_ttl: int = 1):
+        # Уменьшаем TTL
+        try:
+            await session.execute(
+                update(DevTaskStatus)
+                .where(
+                    DevTaskStatus.status < TaskStatus.DONE,
+                    DevTaskStatus.ttl > (delta_ttl - 1),
+                )
+                .values(ttl=DevTaskStatus.ttl - delta_ttl)
             )
-            .values(ttl=DevTaskStatus.ttl - delta_ttl)
-        )
-        await session.commit()
-        await session.execute(
-            update(DevTaskStatus)
-            .where(
-                DevTaskStatus.status < TaskStatus.DONE,
-                DevTaskStatus.ttl <= (delta_ttl - 1),
+            # Помечаем как EXPIRED
+            await session.execute(
+                update(DevTaskStatus)
+                .where(
+                    DevTaskStatus.status < TaskStatus.DONE,
+                    DevTaskStatus.ttl <= (delta_ttl - 1),
+                )
+                .values(status=TaskStatus.EXPIRED, ttl=0)
             )
-            .values(status=TaskStatus.EXPIRED, ttl=0)
-        )
-        await session.commit()
-        return
-
+            await session.commit()  # Один коммит на всю операцию
+        except Exception as e:
+            await session.rollback()
+            log.error("Failed to update TTLs: %s", e)
+            raise
     @classmethod
     async def task_status_update(
-        cls, session: AsyncSession, task_id: Mapped[uuid.UUID] | None, status: int
+        cls, session: AsyncSession, task_id: UUID4 | None, status: int
     ) -> bool:
         if task_id is None:
             return True
-        if status in [TaskStatus.PENDING, TaskStatus.DONE]:
-
-            qur = (
-                update(DevTaskStatus)
-                .where(DevTaskStatus.task_id == task_id)
-                .values(status=status, pending_at=func.current_timestamp())
-            )
-        elif status == TaskStatus.LOCK:
-
-            qur = (
-                update(DevTaskStatus)
-                .where(DevTaskStatus.task_id == task_id)
-                .values(status=TaskStatus.LOCK, locked_at=func.current_timestamp())
-            )
-        elif status == TaskStatus.DELETED:
-            qur = (
-                update(DevTaskStatus)
-                .where(
-                    DevTaskStatus.task_id == task_id,
-                    DevTaskStatus.status < TaskStatus.DONE,
+        stmt = update(DevTaskStatus).where(DevTaskStatus.task_id == task_id)
+        match status:
+            case TaskStatus.PENDING | TaskStatus.DONE:
+                stmt = stmt.values(status=status, pending_at=func.current_timestamp())
+            case TaskStatus.LOCK:
+                stmt = stmt.values(
+                    status=TaskStatus.LOCK, locked_at=func.current_timestamp()
                 )
-                .values(status=status)
-            )
-        elif status < TaskStatus.UNDEFINED:
-            qur = (
-                update(DevTaskStatus)
-                .where(DevTaskStatus.task_id == task_id)
-                .values(status=status)
-            )
-        else:
+            case TaskStatus.DELETED:
+                stmt = stmt.where(DevTaskStatus.status < TaskStatus.DONE).values(
+                    status=status
+                )
+            case status if status < TaskStatus.UNDEFINED:
+                stmt = stmt.values(status=status)
+            case _:
+                return False
+        await session.execute(stmt)
+        try:
+            await session.commit()
+            log.info("Updated task-status %s", str(task_id))
+        except Exception as e:
+            log.error("Failed to update task-status %s: %s", str(task_id), e)
+            await session.rollback()
             return False
-        await session.execute(qur)
-        await session.commit()
         return True
 
     @classmethod
@@ -357,17 +367,16 @@ class TasksRepository:
                 status_code=status_code,
                 result=result,
             )
-            .returning(DevTaskResult.id.label("id"))
+            .returning(DevTaskResult.id)
         )
-        t = await session.execute(tsk_q)
+        result = await session.execute(tsk_q)
+        new_id = result.scalar_one()
 
         try:
             await session.commit()
-            id_new = t.one()
-            log.info(
-                "Task result commited, task_id= %s, tb_id=%s", task_id, str(id_new.id)
-            )
+            log.info("Task result committed, task_id=%s, result_id=%s", task_id, new_id)
         except Exception as e:
-            log.info("ERROR task result commited, id = %s, exception = %s", task_id, e)
+            log.error("Failed to commit task result for task %s: %s", task_id, e)
+            await session.rollback()
             return None
-        return id_new.id
+        return new_id

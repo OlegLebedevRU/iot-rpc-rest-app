@@ -1,12 +1,10 @@
-import logging
+import logging.handlers
 from typing import Any
 
 from sqlalchemy import select, not_, func, update
-
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import joinedload, load_only
-import logging.handlers
 
 from core import settings
 from core.models import (

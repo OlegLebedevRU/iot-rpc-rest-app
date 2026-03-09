@@ -1,4 +1,5 @@
-import logging
+import logging.handlers
+
 from faststream.rabbit.fastapi import RabbitMessage
 
 from core import settings
@@ -15,14 +16,23 @@ from core.topologys import (
 )
 from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
 
-
 log = logging.getLogger(__name__)
-fh = logging.FileHandler("/var/log/app/fs_queues.log")
+# Ротация логов: 10 файлов по 10 МБ
+fh = logging.handlers.RotatingFileHandler(
+    "/var/log/app/fs_queues.log",
+    mode="a",
+    maxBytes=10 * 1024 * 1024,
+    backupCount=10,
+    encoding="utf-8",
+)
 fh.setLevel(logging.INFO)
 formatter = logging.Formatter(settings.logging.log_format)
 fh.setFormatter(formatter)
-
 log.addHandler(fh)
+
+# Отключаем логи от FastStream вида "Received", "Processed" через logger_proxy
+logging.getLogger("logger_proxy").setLevel(logging.WARNING)
+
 # {'x-correlation-id': b'\x96\xce\xe8\xd2\xf4\x1fK_\x81\xcc|w\x0bu\x92\xae',
 # 'x-reply-to-topic': 'srv.a3b0000000c99999d250813.rsp'}
 
