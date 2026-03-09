@@ -4,6 +4,10 @@ import httpx
 from core import settings
 from core.schemas.rmq_admin import DeviceConnectionDetails
 
+# Отключаем подробное логирование HTTP-запросов от httpx
+logging.getLogger("httpx").setLevel(logging.WARNING)
+#ogging.getLogger("httpx._client").setLevel(logging.WARNING)
+
 log = logging.getLogger(__name__)
 fh = logging.handlers.RotatingFileHandler(
     "/var/log/app/rmq_api.log",

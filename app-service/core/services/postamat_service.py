@@ -1,14 +1,32 @@
 # services/postamat_service.py
+import logging.handlers
 from typing import Optional, List, Dict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core import settings
 from core.crud.cell import CRUDCell as crud_cell
 from core.crud.postamat import CRUDPostamat as crud_postamat
 from core.models import Postamat, Cell, Device, DeviceOrgBind
 from core.schemas.device_tasks import TaskCreate
 from core.services.device_tasks import DeviceTasksService
+
+# Настройка логгера
+log = logging.getLogger(__name__)
+
+# Ротация логов: 10 файлов по 10 МБ
+fh = logging.handlers.RotatingFileHandler(
+    "/var/log/app/srv_postamat.log",  # Соответствует шаблону: srv_<сервис>.log
+    mode="a",
+    maxBytes=10 * 1024 * 1024,  # 10 МБ
+    backupCount=10,
+    encoding="utf-8",
+)
+fh.setLevel(logging.INFO)
+formatter = logging.Formatter(settings.logging.log_format)
+fh.setFormatter(formatter)
+log.addHandler(fh)
 
 
 class PostamatService:

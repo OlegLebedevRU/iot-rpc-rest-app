@@ -6,7 +6,7 @@ from sqlalchemy import select, not_, func, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import joinedload, load_only
-
+import logging.handlers
 
 from core import settings
 from core.models import (
@@ -22,10 +22,17 @@ from core.models import (
 from core.schemas.devices import DeviceConnectStatus
 
 log = logging.getLogger(__name__)
-fh = logging.FileHandler("/var/log/app/repo_devices.log")
+fh = logging.handlers.RotatingFileHandler(
+    "/var/log/app/repo_devices.log",
+    mode="a",
+    maxBytes=10 * 1024 * 1024,
+    backupCount=10,
+    encoding="utf-8",
+)
 fh.setLevel(logging.INFO)
 formatter = logging.Formatter(settings.logging.log_format)
 fh.setFormatter(formatter)
+log.addHandler(fh)
 
 
 class DeviceRepo:
