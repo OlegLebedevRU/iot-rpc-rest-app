@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
 from core.models import db_helper
-#from core.schemas.legacy import LegacyCertRequest
+
+# from core.schemas.legacy import LegacyCertRequest
 from core.services.legacy import process_legacy_certificate
 
 log = logging.getLogger(__name__)
@@ -21,9 +22,7 @@ legacy_router = APIRouter(
 
 @legacy_router.get("/map_legacy_crt/")
 async def map_cert(
-    session: Annotated[
-        AsyncSession, Depends(db_helper.session_getter)
-    ],
+    session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
     x_ssl_client_cert: Annotated[str | None, Header()] = None,
 ):
     """
@@ -79,6 +78,7 @@ async def map_cert(
             status_code=500,
             media_type="application/json",
         )
+
 
 #
 # @legacy_router.get("/certificates/")
