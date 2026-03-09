@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core import settings
 from core.models import db_helper
-from core.schemas.legacy import LegacyCertRequest
+#from core.schemas.legacy import LegacyCertRequest
 from core.services.legacy import process_legacy_certificate
 
 log = logging.getLogger(__name__)
@@ -23,25 +23,18 @@ legacy_router = APIRouter(
 async def map_cert(
     session: Annotated[
         AsyncSession, Depends(db_helper.session_getter)
-    ],  # Добавляем сессию через внедрение зависимости
+    ],
     x_ssl_client_cert: Annotated[str | None, Header()] = None,
 ):
     """
-    Принимает X-SSL-Client-Cert, декодирует и возвращает информацию о сертификате.
-    Добавляет:
-    - device_sn — существующий или сгенерированный серийный номер
-    - private_key — закрытый ключ в формате PEM
-    - csr — CSR в PEM
-    - cert_data — данные сертификата от внешнего сервиса (после подписи CSR)
+    Принимает X-SSL-Client-Cert, декодирует и возвращает PFX + метаданные.
+    Не сохраняет ключи и сертификаты в БД.
     """
-    try:
-        # Валидация наличия заголовка
-        req_data = LegacyCertRequest(client_cert=x_ssl_client_cert)
-    except Exception as e:
-        log.warning("Validation error in /map_legacy_crt/: %s", e)
+    # Валидация входных данных
+    if not x_ssl_client_cert:
         error_response = {
-            "error": "Invalid or missing client certificate",
-            "details": str(e),
+            "error": "Missing required header",
+            "details": "X-SSL-Client-Cert is required",
         }
         return Response(
             content=json.dumps(error_response),
@@ -49,23 +42,43 @@ async def map_cert(
             media_type="application/json",
         )
 
-    # Передаём сессию в сервисную функцию
-    result = await process_legacy_certificate(req_data.client_cert, session)
+    try:
+        # Передаём сессию в сервис
+        result = await process_legacy_certificate(x_ssl_client_cert, session)
 
-    if "error" in result:
-        status_code = result.get("status_code", 500) if "status_code" in result else 400
+        # Определяем статус по наличию ошибки
+        if "error" in result:
+            log.warning("Certificate processing failed: %s", result["error"])
+            status_code = 400
+            # Если в ответе есть код — используем его
+            if result.get("status_code"):
+                status_code = result["status_code"]
+            elif "Invalid or missing certificate" in str(result.get("details", "")):
+                status_code = 400
+            else:
+                status_code = 500
+            return Response(
+                content=json.dumps(result),
+                status_code=status_code,
+                media_type="application/json",
+            )
+
+        # Успешный ответ
+        status_code = 206 if result.get("code") == 206 else 200
         return Response(
             content=json.dumps(result),
             status_code=status_code,
             media_type="application/json",
         )
-    status_code = 206 if result.get("code") == 206 else 200
-    return Response(
-        content=json.dumps(result),
-        status_code=status_code,
-        media_type="application/json",
-    )
 
+    except Exception as e:
+        log.error("Unexpected error in /map_legacy_crt/: %s", e)
+        error_response = {"error": "Internal server error", "details": str(e)}
+        return Response(
+            content=json.dumps(error_response),
+            status_code=500,
+            media_type="application/json",
+        )
 
 #
 # @legacy_router.get("/certificates/")

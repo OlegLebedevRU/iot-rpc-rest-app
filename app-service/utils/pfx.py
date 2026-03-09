@@ -4,10 +4,7 @@ from cryptography.x509 import load_pem_x509_certificate
 
 
 def create_pfx(
-    private_key_pem: str,
-    cert_pem: str,
-    ca_pem: str,
-    password: str
+    private_key_pem: str, cert_pem: str, ca_pem: str, password: str
 ) -> bytes:
     """
     Создаёт PKCS#12 (.pfx) файл с цепочкой доверия.
@@ -23,6 +20,6 @@ def create_pfx(
         key=private_key,
         cert=cert,
         cas=[ca_cert],
-        encryption_algorithm=serialization.BestAvailableEncryption(password.encode())
+        encryption_algorithm=serialization.BestAvailableEncryption(password.encode()),
     )
     return pfx

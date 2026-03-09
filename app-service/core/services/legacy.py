@@ -131,7 +131,15 @@ async def fetch_signed_certificate(csr_pem: str) -> dict:
         }
 
     body = response_data.get("body", {})
-    required = ["cert", "ca_pem", "not_valid_before", "not_valid_after", "valid_days", "sn", "device_id"]
+    required = [
+        "cert",
+        "ca_pem",
+        "not_valid_before",
+        "not_valid_after",
+        "valid_days",
+        "sn",
+        "device_id",
+    ]
     if not all(k in body for k in required):
         return {"error": "Incomplete response from CA", "received": body}
 
