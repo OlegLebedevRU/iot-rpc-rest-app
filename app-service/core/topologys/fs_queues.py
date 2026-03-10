@@ -1,5 +1,6 @@
 import logging.handlers
-from typing import TYPE_CHECKING
+
+# from typing import TYPE_CHECKING
 
 from faststream.rabbit.fastapi import RabbitMessage
 from core.fs_broker import fs_router
@@ -14,9 +15,10 @@ from core.topologys import (
 from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
 
 # Use TYPE_CHECKING to avoid runtime import
-if TYPE_CHECKING:
-    from core.services.device_tasks import DeviceTasksService
-    from core.services.device_events import DeviceEventsService
+# if TYPE_CHECKING:
+from core.services.device_tasks import DeviceTasksService
+from core.services.device_events import DeviceEventsService
+
 log = setup_module_logger(__name__, "topology_queues.log")
 
 # Отключаем логи от FastStream вида "Received", "Processed" через logger_proxy
