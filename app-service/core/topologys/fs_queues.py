@@ -86,8 +86,7 @@ fs_router._router._subscribers_registered = True
 # Логируем результат
 try:
     subscribers = [
-        f"{s.queue.name} → {s.call.__name__}"
-        for s in fs_router._router.subscribers
+        f"{s.queue.name} → {s.call.__name__}" for s in fs_router._router.subscribers
     ]
     log.info(f"✅ Subscribers registered: {subscribers}")
 except Exception as e:
