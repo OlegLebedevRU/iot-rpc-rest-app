@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -24,6 +25,7 @@ import core.topologys.fs_queues
 # from starlette.responses import HTMLResponse
 
 log = setup_module_logger(__name__, "app_create_app.log")
+logging.getLogger("logger_proxy").disabled = True
 
 
 @asynccontextmanager
