@@ -20,19 +20,6 @@ from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
 from core.services.device_tasks import DeviceTasksService
 from core.services.device_events import DeviceEventsService
 
-# 🔒 Защита от повторного выполнения
-if "core.topologys.fs_queues" in sys.modules and hasattr(
-    sys.modules["core.topologys.fs_queues"], "_loaded"
-):
-    print("⚠️ core.topologys.fs_queues already loaded, skipping")
-    log = logging.getLogger(__name__)
-    log.warning(
-        "Module core.topologys.fs_queues is already loaded. Skipping re-import."
-    )
-    sys.modules["core.topologys.fs_queues"]._loaded = True
-    del log
-    del sys
-    exit()
 log = setup_module_logger(__name__, "topology_queues.log")
 
 # Отключаем логи от FastStream вида "Received", "Processed" через logger_proxy
@@ -43,13 +30,14 @@ logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 # 'x-reply-to-topic': 'srv.a3b0000000c99999d250813.rsp'}
 # def start_queues():
 # ✅ Проверяем текущих подписчиков через публичный/защищённый API
-try:
-    current_subscribers = [f"{s.queue} ({s.call.__name__})" for s in fs_router._router.subscribers]
-    print(f"📋 Current subscribers before registration: {current_subscribers}")
-except Exception as e:
-    print(f"📋 Could not list subscribers: {e}")
+# 🔒 Флаг: были ли подписчики уже зарегистрированы?
+if hasattr(fs_router._router, "_subscribers_registered"):
+    log.warning("Subscribers already registered. Skipping duplicate subscription.")
+    del sys
+    exit()
 
 # === Регистрация подписчиков ===
+
 
 @fs_router.subscriber(q_evt)
 async def add_one_event(
@@ -91,15 +79,19 @@ async def result(
     log.info("Subscribe res queue")
     await DeviceTasksService(session, 0).save(msg, sn, corr_id)
 
-# ✅ После регистрации — выводим обновлённый список
+
+# ✅ Устанавливаем флаг, что подписчики зарегистрированы
+fs_router._router._subscribers_registered = True
+
+# Логируем результат
 try:
-    current_subscribers = [f"{s.queue} ({s.call.__name__})" for s in fs_router._router.subscribers]
-    print(f"✅ Final subscribers registered: {current_subscribers}")
+    subscribers = [
+        f"{s.queue.name} → {s.call.__name__}"
+        for s in fs_router._router.subscribers
+    ]
+    log.info(f"✅ Subscribers registered: {subscribers}")
 except Exception as e:
-    print(f"📋 Could not list final subscribers: {e}")
+    log.error(f"Could not log subscribers: {e}")
 
-# Устанавливаем флаг загрузки
-sys.modules["core.topologys.fs_queues"]._loaded = True
-
-# Удаляем sys, чтобы нельзя было случайно использовать после
+# Безопасно удаляем sys
 del sys
