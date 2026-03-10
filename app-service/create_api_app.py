@@ -17,8 +17,7 @@ from core import settings
 from core.fs_broker import broker, fs_router
 from core.logging_config import setup_module_logger
 from core.models import db_helper
-from core.services.device_tasks import act_ttl
-import core.topologys.fs_queues
+from core.services.device_task_processing import act_ttl
 from core.topologys.declare import declare_x_q
 
 # from starlette.responses import HTMLResponse

@@ -97,7 +97,11 @@ class TasksRepository:
                 device_id=task.device_id,
                 method_code=task.method_code,
             )
-            .returning(func.extract("EPOCH", DevTask.created_at).label("created_at"))
+            .returning(
+                func.extract("EPOCH", DevTask.created_at)
+                .cast(Integer)
+                .label("created_at")
+            )
         )
         payload_q = insert(DevTaskPayload).values(task_id=db_uuid, payload=task.payload)
         status_q = insert(DevTaskStatus).values(

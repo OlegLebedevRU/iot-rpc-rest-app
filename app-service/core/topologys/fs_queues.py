@@ -6,6 +6,7 @@ import sys
 from faststream.rabbit.fastapi import RabbitMessage
 from core.fs_broker import fs_router
 from core.logging_config import setup_module_logger
+from core.services.device_events_collect import DeviceEventsCollect
 
 from core.topologys.declare import (
     q_ack,
@@ -18,7 +19,6 @@ from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
 # Use TYPE_CHECKING to avoid runtime import
 # if TYPE_CHECKING:
 from core.services.device_tasks import DeviceTasksService
-from core.services.device_events import DeviceEventsService
 
 log = setup_module_logger(__name__, "topology_queues.log")
 
@@ -46,7 +46,7 @@ async def add_one_event(
     sn: Sn_dep,
 ):
     log.info("Subscribe event queue")
-    await DeviceEventsService(session, sn, 0).add(msg)
+    await DeviceEventsCollect(session, sn, 0).add(msg)
 
 
 @fs_router.subscriber(q_ack)
