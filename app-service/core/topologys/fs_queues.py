@@ -31,11 +31,11 @@ logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 # def start_queues():
 # ✅ Проверяем текущих подписчиков через публичный/защищённый API
 # 🔒 Флаг: были ли подписчики уже зарегистрированы?
-if hasattr(fs_router._router, "_subscribers_registered"):
+# 🔒 Проверяем, были ли подписчики уже зарегистрированы
+if getattr(fs_router, "_subscribers_registered", False):
     log.warning("Subscribers already registered. Skipping duplicate subscription.")
     del sys
     exit()
-
 # === Регистрация подписчиков ===
 
 
@@ -81,13 +81,11 @@ async def result(
 
 
 # ✅ Устанавливаем флаг, что подписчики зарегистрированы
-fs_router._router._subscribers_registered = True
+fs_router._subscribers_registered = True
 
-# Логируем результат
+# Логируем список подписчиков
 try:
-    subscribers = [
-        f"{s.queue.name} → {s.call.__name__}" for s in fs_router._router.subscribers
-    ]
+    subscribers = [f"{s.queue.name} → {s.call.__name__}" for s in fs_router.subscribers]
     log.info(f"✅ Subscribers registered: {subscribers}")
 except Exception as e:
     log.error(f"Could not log subscribers: {e}")
