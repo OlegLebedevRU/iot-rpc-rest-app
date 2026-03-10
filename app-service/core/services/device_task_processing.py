@@ -1,3 +1,4 @@
+import logging
 from uuid import UUID
 
 from core.config import RoutingKey, settings
@@ -12,6 +13,7 @@ from core.topologys.declare import (
 )
 
 log = setup_module_logger(__name__, "srv_dev_task_processing.log")
+logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 topology = settings.rmq
 
 

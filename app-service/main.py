@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
 
 # from core.fs_broker import fs_router
-#from core.topologys.declare import declare_x_q
+# from core.topologys.declare import declare_x_q
 from create_api_app import create_app
 
 # import core.topologys.fs_queues
