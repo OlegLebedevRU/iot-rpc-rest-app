@@ -28,8 +28,9 @@ log = setup_module_logger(__name__, "app_create_app.log")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    await declare_x_q()  # ← здесь
+
     await fs_router.broker.start()
+    await declare_x_q()  # ← здесь
     scheduler = AsyncIOScheduler()
     scheduler.configure(
         jobstores={
