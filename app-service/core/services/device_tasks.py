@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import RoutingKey, settings
 from core.crud.dev_tasks_repo import TasksRepository
 from core.crud.device_repo import DeviceRepo
-from core.fs_broker import fs_router
+
+# from core.fs_broker import fs_router
 from core.logging_config import setup_module_logger
 from core.models.common import TaskStatus
 from core.schemas.device_tasks import (
@@ -22,12 +23,12 @@ from core.schemas.device_tasks import (
     TaskResponse,
 )
 from core.schemas.rmq_admin import RmqClientsAction
-from core.topologys.declare import topic_exchange, def_x
+from core.topologys.declare import topic_exchange, def_x, job_publisher, topic_publisher
 
 topology = settings.rmq
 
-job_publisher = fs_router.publisher()
-topic_publisher = fs_router.publisher()
+# job_publisher = fs_router.publisher()
+# topic_publisher = fs_router.publisher()
 log = setup_module_logger(__name__, "srv_dev_tasks.log")
 
 
