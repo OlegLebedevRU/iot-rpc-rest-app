@@ -7,13 +7,19 @@ from faststream.rabbit import RabbitExchange, ExchangeType, RabbitQueue
 
 from core import settings
 from core.fs_broker import fs_router, broker
-from core.services.device_tasks import topology, topic_publisher, job_publisher
+
+# from core.services.device_tasks import  topic_publisher, job_publisher
 
 # Настройка логгера
 log = setup_module_logger(__name__, "topology_declare.log")
 
 # Отключаем логи от logger_proxy (избыточные "Received", "Processed")
 logging.getLogger("logger_proxy").setLevel(logging.WARNING)
+
+topology = settings.rmq
+job_publisher = fs_router.publisher()
+topic_publisher = fs_router.publisher()
+
 
 topic_exchange = RabbitExchange(
     name=topology.x_name, type=ExchangeType.TOPIC, declare=False
