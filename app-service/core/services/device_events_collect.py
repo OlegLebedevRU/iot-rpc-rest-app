@@ -51,7 +51,8 @@ class DeviceEventsCollect:
                 dev_timestamp = int(time.time())
             if event_type_code != 44:
                 log.info(
-                    "Mqtt received EVENT: event_type_code =%d, dev_event_id=%d",
+                    "Mqtt received EVENT: <dev.%s.evt>, event_type_code =%d, dev_event_id=%d",
+                    self.sn,
                     event_type_code,
                     dev_event_id,
                 )
