@@ -1,13 +1,13 @@
 import logging
 import uvicorn
-from fastapi import FastAPI
+
+# from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi_pagination import add_pagination
+
 from core.config import settings
-from api import router as api_router
-from core.fs_broker import fs_router
+
+# from core.fs_broker import fs_router
 from core.topologys.declare import declare_x_q
-from core.topologys.fs_queues import start_queues
 from create_api_app import create_app
 
 # import core.topologys.fs_queues
@@ -23,13 +23,7 @@ logging.basicConfig(
 main_app = create_app(
     create_custom_static_urls=True,
 )
-add_pagination(main_app)
-main_app.include_router(
-    api_router,
-)
-main_app.include_router(
-    fs_router,
-)
+
 # --- ЗАКОММЕНТИРОВАНО: page_app больше не используется ---
 # page_app = create_page_app()
 # main_app.mount("/web", page_app)
@@ -47,16 +41,6 @@ main_app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@fs_router.after_startup
-async def declare_topology(main_app: FastAPI):
-    await declare_x_q()
-
-
-@fs_router.after_startup
-def start_q(app: FastAPI) -> None:
-    start_queues()
 
 
 if __name__ == "__main__":
