@@ -11,7 +11,7 @@ from core.logging_config import setup_module_logger
 
 # from core.fs_broker import fs_router
 from core.schemas.device_events import DevEventBody
-from core.topologys.declare import def_x, topic_publisher
+from core.topologys.declare import topic_publisher, direct_exchange
 
 log = setup_module_logger(__name__, "srv_dev_evnt_collect.log")
 logging.getLogger("logger_proxy").setLevel(logging.WARNING)
@@ -86,7 +86,7 @@ class DeviceEventsCollect:
                 await topic_publisher.publish(
                     routing_key=settings.webhook.webhooks_queue,  # "srv.a3b0000000c99999d250813.tsk",
                     message=msg.body,
-                    exchange=def_x,  # settings.rmq.x_name_direct,
+                    exchange=direct_exchange,  # settings.rmq.x_name_direct,
                     # correlation_id=task.id,
                     expiration=10 * 60_000,
                     headers={
