@@ -59,6 +59,7 @@ webhook_action = RabbitQueue(
 
 
 async def declare_x_q():
+    log.info(f"Declaring topology")
     # declare queues, exchange, bindings
     amq_ex: RobustExchange = await fs_router.broker.declare_exchange(topic_exchange)
     topic_publisher.exchange = topic_exchange

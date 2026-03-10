@@ -34,6 +34,7 @@ async def add_one_event(
     session: Session_dep,
     sn: Sn_dep,
 ):
+    log.info("Subscribe event queue")
     await DeviceEventsService(session, sn, 0).add(msg)
 
 
@@ -42,6 +43,7 @@ async def ack(
     session: Session_dep,
     corr_id: Corr_id_dep,
 ):
+    log.info("Subscribe ack queue")
     await DeviceTasksService(session, 0).pending(corr_id)
 
 
@@ -52,6 +54,7 @@ async def req(
     sn: Sn_dep,
     corr_id: Corr_id_dep,
 ):
+    log.info("Subscribe req queue")
     await DeviceTasksService(session, 0).select(sn, corr_id, msg)
 
 
@@ -62,4 +65,5 @@ async def result(
     sn: Sn_dep,
     corr_id: Corr_id_dep,
 ):
+    log.info("Subscribe res queue")
     await DeviceTasksService(session, 0).save(msg, sn, corr_id)
