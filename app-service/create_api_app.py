@@ -107,4 +107,5 @@ def create_app(
     )
     if create_custom_static_urls:
         register_static_docs_routes(app)
+
     return app
