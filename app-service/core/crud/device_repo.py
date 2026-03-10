@@ -149,7 +149,7 @@ class DeviceRepo:
         lu_q = select(Device.sn).where(not_(Device.sn.in_(sn_list)))
         lu = await session.execute(lu_q)
         lu1 = lu.scalars().all()
-        log.info("## device repo get exist devices = %s", lu1)
+        log.debug("## device repo get exist devices = %s", lu1)
         return lu1
 
     @classmethod
@@ -244,7 +244,7 @@ class DeviceRepo:
         sn_arr_q = select(DeviceConnection.client_id)
         sn_arr = await session.execute(sn_arr_q)
         lu2 = sn_arr.scalars().all()
-        log.info("#### device repo list device as scalar select: %s", lu2)
+        log.debug("#### device repo list device as scalar select: %s", lu2)
         return lu2
 
     @classmethod
