@@ -10,8 +10,8 @@ from core.topologys.declare import q_ack, q_req, q_evt, q_result
 from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
 
 # Use TYPE_CHECKING to avoid runtime import
-if TYPE_CHECKING:
-    from core.services.device_tasks import DeviceTasksService
+#if TYPE_CHECKING:
+from core.services.device_tasks import DeviceTasksService
 
 log = setup_module_logger(__name__, "topology_queues.log")
 
