@@ -1,5 +1,6 @@
 import logging
-import uvicorn
+
+# import uvicorn
 
 # from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -43,10 +44,10 @@ main_app.add_middleware(
 )
 
 
-if __name__ == "__main__":
-    uvicorn.run(
-        "main:main_app",
-        host=settings.run.host,
-        port=settings.run.port,
-        reload=True,
-    )
+# if __name__ == "__main__":
+#     uvicorn.run(
+#         "main:main_app",
+#         host=settings.run.host,
+#         port=settings.run.port,
+#         reload=True,
+#     )

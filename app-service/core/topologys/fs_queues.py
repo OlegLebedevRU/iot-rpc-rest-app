@@ -1,4 +1,5 @@
 import logging.handlers
+import sys
 
 # from typing import TYPE_CHECKING
 
@@ -19,6 +20,19 @@ from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
 from core.services.device_tasks import DeviceTasksService
 from core.services.device_events import DeviceEventsService
 
+# 🔒 Защита от повторного выполнения
+if "core.topologys.fs_queues" in sys.modules and hasattr(
+    sys.modules["core.topologys.fs_queues"], "_loaded"
+):
+    print("⚠️ core.topologys.fs_queues already loaded, skipping")
+    log = logging.getLogger(__name__)
+    log.warning(
+        "Module core.topologys.fs_queues is already loaded. Skipping re-import."
+    )
+    sys.modules["core.topologys.fs_queues"]._loaded = True
+    del log
+    del sys
+    exit()
 log = setup_module_logger(__name__, "topology_queues.log")
 
 # Отключаем логи от FastStream вида "Received", "Processed" через logger_proxy
@@ -28,6 +42,7 @@ logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 # {'x-correlation-id': b'\x96\xce\xe8\xd2\xf4\x1fK_\x81\xcc|w\x0bu\x92\xae',
 # 'x-reply-to-topic': 'srv.a3b0000000c99999d250813.rsp'}
 # def start_queues():
+print(f"📋 Current subscribers in fs_router: {[r.path for r in fs_router._routes]}")
 
 
 @fs_router.subscriber(q_evt)
@@ -69,3 +84,10 @@ async def result(
 ):
     log.info("Subscribe res queue")
     await DeviceTasksService(session, 0).save(msg, sn, corr_id)
+
+
+# Устанавливаем флаг в sys.modules
+sys.modules["core.topologys.fs_queues"]._loaded = True
+
+# Удаляем sys, чтобы нельзя было случайно использовать после
+del sys
