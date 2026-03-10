@@ -34,7 +34,7 @@ async def corr_id_getter_dep(msg: RabbitMessage) -> UUID4 | None:
         if msg.correlation_id:
             # logging.info("Raw corr_id = %s", msg.correlation_id)
             corr_id = uuid.UUID(msg.correlation_id)
-            log.info("Received msg.correlation_id = %s", corr_id)
+            log.debug("Received msg.correlation_id = %s", corr_id)
             return corr_id
         else:
             corr_id = None

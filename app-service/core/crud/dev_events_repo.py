@@ -73,20 +73,27 @@ class EventRepository:
             interval_m = 15
         if limit is None or limit > 10:
             limit = 10
-        stmt_txt = text(
-            "SELECT created_at, ((payload #>> '{}')::jsonb -> '300'->0->:tag)::text as value,\
-                    (EXTRACT(EPOCH FROM current_timestamp - created_at))::Integer AS interval_sec \
-                    from tb_dev_events \
-                    WHERE device_id = :did and event_type_code = :etc and created_at > current_timestamp - (:mins || ' MINUTES')::INTERVAL \
-                    order by created_at desc limit :limit"
-        )
+        stmt = text("""
+                    SELECT 
+                        created_at,
+                        (payload -> '300' -> 0 ->> :tag) AS value,
+                        EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at))::INTEGER AS interval_sec
+                    FROM tb_dev_events
+                    WHERE 
+                        device_id = :did 
+                        AND event_type_code = :etc
+                        AND created_at > CURRENT_TIMESTAMP - (:mins || ' MINUTES')::INTERVAL
+                    ORDER BY created_at DESC 
+                    LIMIT :limit
+                """)
+
         result = await session.execute(
-            stmt_txt,
+            stmt,
             {
                 "did": device_id,
                 "etc": event_type_code,
                 "tag": str(tag),
-                "mins": str(interval_m),
+                "mins": interval_m,
                 "limit": limit,
             },
         )

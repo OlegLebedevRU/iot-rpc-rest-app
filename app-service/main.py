@@ -8,8 +8,9 @@ from api import router as api_router
 from core.fs_broker import fs_router
 from core.topologys.declare import declare_x_q
 from create_api_app import create_app
-from create_page_app import create_app as create_page_app
-from pages import router as pg_router
+
+# from create_page_app import create_app as create_page_app
+# from pages import router as pg_router
 
 logging.basicConfig(
     level=settings.logging.log_level_value,
@@ -26,12 +27,12 @@ main_app.include_router(
 main_app.include_router(
     fs_router,
 )
-
-page_app = create_page_app()
-main_app.mount("/web", page_app)
-page_app.include_router(
-    pg_router,
-)
+# --- ЗАКОММЕНТИРОВАНО: page_app больше не используется ---
+# page_app = create_page_app()
+# main_app.mount("/web", page_app)
+# page_app.include_router(
+#    pg_router,
+# )
 origins = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",

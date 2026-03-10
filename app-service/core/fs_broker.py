@@ -1,17 +1,12 @@
 __all__ = ("broker", "fs_router")
 
-import logging
 
 from faststream.rabbit.fastapi import RabbitRouter
 from core.config import settings
+from core.logging_config import setup_module_logger
 
+log = setup_module_logger(__name__, "broker_core.log")
 
-log = logging.getLogger(__name__)
-fh = logging.FileHandler("/var/log/app/broker.log")
-fh.setLevel(logging.WARNING)
-formatter = logging.Formatter(settings.logging.log_format)
-fh.setFormatter(formatter)
-log.addHandler(fh)
 
 fs_router = RabbitRouter(
     str(settings.faststream.url),
