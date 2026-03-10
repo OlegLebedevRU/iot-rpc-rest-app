@@ -18,7 +18,7 @@ log.info(f"Initializing RabbitRouter with URL: {settings.faststream.url}")
 fs_router = RabbitRouter(
     url=str(settings.faststream.url),
     logger=log,
-    log_level=logging.WARNING,
+    log_level=logging.DEBUG,
     # max_retries=None,#
     # max_retries=3,
     # retry_delay=2,
