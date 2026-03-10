@@ -1,5 +1,4 @@
 import json
-import logging
 import time
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,13 +8,13 @@ from core.crud.dev_events_repo import EventRepository
 from core.crud.device_repo import DeviceRepo
 from core.logging_config import setup_module_logger
 
-# from core.fs_broker import fs_router
 from core.schemas.device_events import DevEventBody
 from core.topologys.declare import topic_publisher, direct_exchange
 
 log = setup_module_logger(__name__, "srv_dev_evnt_collect.log")
-logging.getLogger("logger_proxy").setLevel(logging.WARNING)
-# topic_publisher = fs_router.publisher()
+
+# Удалена строка: logging.getLogger("logger_proxy").setLevel(logging.WARNING)
+# Это приводило к нежелательному логированию от "logger_proxy"
 
 
 class DeviceEventsCollect:
@@ -43,7 +42,7 @@ class DeviceEventsCollect:
             else:
                 event_type_code = 0
             if "dev_event_id" in msg_headers:
-                dev_event_id = int(msg.headers["dev_event_id"])
+                dev_event_id = int(msg_headers["dev_event_id"])
             else:
                 dev_event_id = 0
             if "dev_timestamp" in msg_headers:
@@ -58,13 +57,8 @@ class DeviceEventsCollect:
                 )
             try:
                 payload_dict = json.loads(msg.body.decode())
-            except ValueError or TypeError:
+            except ValueError, TypeError:
                 payload_dict = {}
-            # payload = msg.body.decode()
-            # if payload:
-            #     payload_dict = json.loads(msg.body.decode())
-            # else:
-            #     payload_dict = {}
             event = DevEventBody(
                 device_id=dev_id,
                 event_type_code=event_type_code,
@@ -82,12 +76,10 @@ class DeviceEventsCollect:
                     gauges=payload_dict,
                 )
             else:
-                # webhook_queue(payload, routing_key = 'webhook_action.'+str(dev_id)
                 await topic_publisher.publish(
-                    routing_key=settings.webhook.webhooks_queue,  # "srv.a3b0000000c99999d250813.tsk",
+                    routing_key=settings.webhook.webhooks_queue,
                     message=msg.body,
-                    exchange=direct_exchange,  # settings.rmq.x_name_direct,
-                    # correlation_id=task.id,
+                    exchange=direct_exchange,
                     expiration=10 * 60_000,
                     headers={
                         "x-device-id": str(dev_id),
