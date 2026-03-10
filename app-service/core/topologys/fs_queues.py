@@ -6,7 +6,7 @@ from faststream.rabbit.fastapi import RabbitMessage
 from core.fs_broker import fs_router
 from core.logging_config import setup_module_logger
 
-from core.topologys import (
+from core.topologys.declare import (
     q_ack,
     q_req,
     q_evt,
