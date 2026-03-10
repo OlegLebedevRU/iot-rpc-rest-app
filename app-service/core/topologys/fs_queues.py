@@ -29,13 +29,13 @@ logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 # {'x-correlation-id': b'\x96\xce\xe8\xd2\xf4\x1fK_\x81\xcc|w\x0bu\x92\xae',
 # 'x-reply-to-topic': 'srv.a3b0000000c99999d250813.rsp'}
 # def start_queues():
-# ✅ Проверяем текущих подписчиков через публичный/защищённый API
-# 🔒 Флаг: были ли подписчики уже зарегистрированы?
+
 # 🔒 Проверяем, были ли подписчики уже зарегистрированы
 if getattr(fs_router, "_subscribers_registered", False):
     log.warning("Subscribers already registered. Skipping duplicate subscription.")
     del sys
     exit()
+
 # === Регистрация подписчиков ===
 
 
@@ -83,12 +83,12 @@ async def result(
 # ✅ Устанавливаем флаг, что подписчики зарегистрированы
 fs_router._subscribers_registered = True
 
-# Логируем список подписчиков
+# 📝 Логируем количество подписчиков (без доступа к .name — он тоже может быть приватным)
 try:
-    subscribers = [f"{s.queue.name} → {s.call.__name__}" for s in fs_router.subscribers]
-    log.info(f"✅ Subscribers registered: {subscribers}")
+    count = len(getattr(fs_router, "_subscribers", []))
+    log.info(f"✅ Subscribers registered: {count} handlers")
 except Exception as e:
-    log.error(f"Could not log subscribers: {e}")
+    log.error(f"Could not log subscribers count: {e}")
 
 # Безопасно удаляем sys
 del sys
