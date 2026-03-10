@@ -35,7 +35,7 @@ async def act_ttl(step: int):
     await job_publisher.publish(
         message="ttl_decrement",
         routing_key=settings.ttl_job.queue_name,
-        expiration=str(1 * 60_000),
+        expiration=1 * 60_000,
     )
 
     # api_test_msg: RmqClientsAction = RmqClientsAction(
@@ -51,7 +51,7 @@ async def act_ttl(step: int):
     await job_publisher.publish(
         routing_key=settings.rmq.api_clients_queue,
         message=api_test2_msg,
-        expiration=str(1 * 60_000),
+        expiration=1 * 60_000,
     )
 
 
@@ -88,7 +88,7 @@ class DeviceTasksService:
             message=notify,
             exchange=topic_exchange,  # settings.rmq.x_name,
             correlation_id=task.id,
-            expiration=str(task_create.ttl * 60_000),
+            expiration=task_create.ttl * 60_000,
             headers={
                 "method_code": str(notify.header.method_code),
                 "correlationData": str(task.id),
@@ -193,7 +193,7 @@ class DeviceTasksService:
             message=t_resp,
             correlation_id=correlation_id,  # str(correlation_id),uuid.UUID(correlation_id).bytes,
             exchange=topic_exchange,  # settings.rmq.x_name,
-            expiration=str(task.ttl * 60_000),
+            expiration=task.ttl * 60_000,
             headers={
                 "method_code": method_code,
                 "correlationData": str(correlation_id),
@@ -262,7 +262,7 @@ class DeviceTasksService:
             message=msg.body,
             exchange=def_x,  # settings.rmq.x_name_direct,
             correlation_id=corr_id,
-            expiration=str(30 * 60_000),
+            expiration=30 * 60_000,
             headers={
                 "x-device-id": str(dev_id),
                 "x-msg-type": "msg-task-result",

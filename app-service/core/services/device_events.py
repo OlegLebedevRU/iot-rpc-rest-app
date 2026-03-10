@@ -88,7 +88,7 @@ class DeviceEventsService:
                     message=msg.body,
                     exchange=def_x,  # settings.rmq.x_name_direct,
                     # correlation_id=task.id,
-                    expiration=str(10 * 60_000),
+                    expiration=10 * 60_000,
                     headers={
                         "x-device-id": str(dev_id),
                         "x-msg-type": "msg-event",
