@@ -42,8 +42,14 @@ logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 # {'x-correlation-id': b'\x96\xce\xe8\xd2\xf4\x1fK_\x81\xcc|w\x0bu\x92\xae',
 # 'x-reply-to-topic': 'srv.a3b0000000c99999d250813.rsp'}
 # def start_queues():
-print(f"📋 Current subscribers in fs_router: {[r.path for r in fs_router._routes]}")
+# ✅ Проверяем текущих подписчиков через публичный/защищённый API
+try:
+    current_subscribers = [f"{s.queue} ({s.call.__name__})" for s in fs_router._router.subscribers]
+    print(f"📋 Current subscribers before registration: {current_subscribers}")
+except Exception as e:
+    print(f"📋 Could not list subscribers: {e}")
 
+# === Регистрация подписчиков ===
 
 @fs_router.subscriber(q_evt)
 async def add_one_event(
@@ -85,8 +91,14 @@ async def result(
     log.info("Subscribe res queue")
     await DeviceTasksService(session, 0).save(msg, sn, corr_id)
 
+# ✅ После регистрации — выводим обновлённый список
+try:
+    current_subscribers = [f"{s.queue} ({s.call.__name__})" for s in fs_router._router.subscribers]
+    print(f"✅ Final subscribers registered: {current_subscribers}")
+except Exception as e:
+    print(f"📋 Could not list final subscribers: {e}")
 
-# Устанавливаем флаг в sys.modules
+# Устанавливаем флаг загрузки
 sys.modules["core.topologys.fs_queues"]._loaded = True
 
 # Удаляем sys, чтобы нельзя было случайно использовать после
