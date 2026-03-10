@@ -1,4 +1,6 @@
 import json
+import logging
+
 from core.logging_config import setup_module_logger
 import time
 from typing import Optional, List
@@ -9,12 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core import settings
 from core.crud.dev_events_repo import EventRepository
 from core.crud.device_repo import DeviceRepo
-from core.fs_broker import fs_router
+
+# from core.fs_broker import fs_router
 from core.schemas.device_events import DevEventBody, DevEventFields, DevEventOut
 from core.topologys.declare import def_x, topic_publisher
 
 log = setup_module_logger(__name__, "srv_dev_evnt.log")
-
+logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 # topic_publisher = fs_router.publisher()
 
 
