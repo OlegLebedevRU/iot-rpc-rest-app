@@ -11,7 +11,7 @@ from core.schemas.rmq_admin import RmqClientsAction
 from core.services.devices import DeviceService
 from core.services.rmq_admin import RmqAdmin
 from core.topologys.fs_depends import Session_dep
-from core.topologys import q_jobs, rmq_api_client_action, webhook_action
+from core.topologys.declare import q_jobs, rmq_api_client_action, webhook_action
 
 # Use TYPE_CHECKING to avoid runtime import
 if TYPE_CHECKING:

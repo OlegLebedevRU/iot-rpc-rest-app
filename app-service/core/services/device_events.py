@@ -11,7 +11,7 @@ from core.crud.dev_events_repo import EventRepository
 from core.crud.device_repo import DeviceRepo
 from core.fs_broker import fs_router
 from core.schemas.device_events import DevEventBody, DevEventFields, DevEventOut
-from core.topologys import def_x
+from core.topologys.declare import def_x
 
 log = setup_module_logger(__name__, "srv_dev_evnt.log")
 

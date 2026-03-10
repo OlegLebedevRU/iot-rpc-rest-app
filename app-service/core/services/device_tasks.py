@@ -22,7 +22,7 @@ from core.schemas.device_tasks import (
     TaskResponse,
 )
 from core.schemas.rmq_admin import RmqClientsAction
-from core.topologys import topic_exchange, def_x
+from core.topologys.declare import topic_exchange, def_x
 
 topology = settings.rmq
 
