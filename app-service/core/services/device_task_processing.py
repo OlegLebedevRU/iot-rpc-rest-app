@@ -4,7 +4,12 @@ from core.config import RoutingKey, settings
 from core.logging_config import setup_module_logger
 from core.schemas.device_tasks import TaskCreate, TaskResponse, TaskNotify
 from core.schemas.rmq_admin import RmqClientsAction
-from core.topologys.declare import topic_exchange, topic_publisher, def_x, job_publisher
+from core.topologys.declare import (
+    # topic_exchange,
+    topic_publisher,
+    job_publisher,
+    direct_exchange,
+)
 
 log = setup_module_logger(__name__, "srv_dev_task_processing.log")
 topology = settings.rmq
@@ -21,7 +26,7 @@ async def send_tsk(sn: str, task: TaskCreate, stask: TaskResponse):
     await topic_publisher.publish(
         routing_key=task_device_topic,  # "srv.a3b0000000c99999d250813.tsk",
         message=notify,
-        exchange=topic_exchange,  # settings.rmq.x_name,
+        # exchange=topic_exchange,  # settings.rmq.x_name,
         correlation_id=stask.id,
         expiration=task.ttl * 60_000,
         headers={
@@ -41,7 +46,7 @@ async def send_rsp(
         routing_key=routing_key,
         message=t_resp,
         correlation_id=correlation_id,  # str(correlation_id),uuid.UUID(correlation_id).bytes,
-        exchange=topic_exchange,  # settings.rmq.x_name,
+        # exchange=topic_exchange,  # settings.rmq.x_name,
         expiration=expiration,
         headers={
             "method_code": method_code,
@@ -67,7 +72,7 @@ async def send_cmt(
         routing_key=routing_key,
         message=rmsg,
         correlation_id=corr_id,
-        exchange=topic_exchange,  # settings.rmq.x_name,
+        # exchange=topic_exchange,  # settings.rmq.x_name,
         expiration=180 * 60_000,
         headers={
             "ext_id": str(ext_id),
@@ -79,7 +84,7 @@ async def send_cmt(
     await topic_publisher.publish(
         routing_key=settings.webhook.webhooks_queue,  # "srv.a3b0000000c99999d250813.tsk",
         message=msg,
-        exchange=def_x,  # settings.rmq.x_name_direct,
+        exchange=direct_exchange,  # settings.rmq.x_name_direct,
         correlation_id=corr_id,
         expiration=30 * 60_000,
         headers={
