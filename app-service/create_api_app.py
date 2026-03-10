@@ -28,6 +28,8 @@ log = setup_module_logger(__name__, "app_create_app.log")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    await declare_x_q()  # ← здесь
+    await fs_router.broker.start()
     scheduler = AsyncIOScheduler()
     scheduler.configure(
         jobstores={
@@ -55,12 +57,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     scheduler.shutdown()
 
     # FastStream broker
-    await broker().stop()
+    await fs_router.broker.close()
 
 
-@fs_router.after_startup
-async def declare_topology(app: FastAPI):
-    await declare_x_q()
+# @fs_router.after_startup
+# async def declare_topology(app: FastAPI):
+#     await declare_x_q()
 
 
 def register_static_docs_routes(app: FastAPI) -> None:
