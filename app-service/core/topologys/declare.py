@@ -96,4 +96,3 @@ async def declare_x_q():
     )
 
     job_publisher.exchange = def_x
-    import core.topologys.fs_queues

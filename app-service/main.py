@@ -7,6 +7,7 @@ from core.config import settings
 from api import router as api_router
 from core.fs_broker import fs_router
 from core.topologys.declare import declare_x_q
+from core.topologys.fs_queues import start_queues
 from create_api_app import create_app
 
 # import core.topologys.fs_queues
@@ -51,6 +52,11 @@ main_app.add_middleware(
 @fs_router.after_startup
 async def declare_topology(main_app: FastAPI):
     await declare_x_q()
+
+
+@fs_router.after_startup
+def start_q(app: FastAPI) -> None:
+    start_queues()
 
 
 if __name__ == "__main__":
