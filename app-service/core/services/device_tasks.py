@@ -22,6 +22,7 @@ from core.schemas.device_tasks import (
     TaskResponse,
 )
 from core.schemas.rmq_admin import RmqClientsAction
+from core.topologys import topic_exchange, def_x
 
 topology = settings.rmq
 
@@ -32,7 +33,9 @@ log = setup_module_logger(__name__, "srv_dev_tasks.log")
 
 async def act_ttl(step: int):
     await job_publisher.publish(
-        message="ttl_decrement", routing_key=settings.ttl_job.queue_name
+        message="ttl_decrement",
+        routing_key=settings.ttl_job.queue_name,
+        expiration=str(1 * 60_000),
     )
 
     # api_test_msg: RmqClientsAction = RmqClientsAction(
@@ -46,7 +49,9 @@ async def act_ttl(step: int):
         action="update_online_status", clients=[]
     )
     await job_publisher.publish(
-        routing_key=settings.rmq.api_clients_queue, message=api_test2_msg
+        routing_key=settings.rmq.api_clients_queue,
+        message=api_test2_msg,
+        expiration=str(1 * 60_000),
     )
 
 
@@ -81,8 +86,9 @@ class DeviceTasksService:
         await topic_publisher.publish(
             routing_key=task_device_topic,  # "srv.a3b0000000c99999d250813.tsk",
             message=notify,
-            exchange=settings.rmq.x_name,
+            exchange=topic_exchange,  # settings.rmq.x_name,
             correlation_id=task.id,
+            expiration=str(task_create.ttl * 60_000),
             headers={
                 "method_code": str(notify.header.method_code),
                 "correlationData": str(task.id),
@@ -186,7 +192,8 @@ class DeviceTasksService:
             routing_key=routing_key,
             message=t_resp,
             correlation_id=correlation_id,  # str(correlation_id),uuid.UUID(correlation_id).bytes,
-            exchange=settings.rmq.x_name,
+            exchange=topic_exchange,  # settings.rmq.x_name,
+            expiration=str(task.ttl * 60_000),
             headers={
                 "method_code": method_code,
                 "correlationData": str(correlation_id),
@@ -242,7 +249,7 @@ class DeviceTasksService:
             routing_key=routing_key,
             message=rmsg,
             correlation_id=corr_id,
-            exchange=settings.rmq.x_name,
+            exchange=topic_exchange,  # settings.rmq.x_name,
             headers={
                 "ext_id": str(ext_id),
                 "result_id": str(result_id),
@@ -253,8 +260,9 @@ class DeviceTasksService:
         await topic_publisher.publish(
             routing_key=settings.webhook.webhooks_queue,  # "srv.a3b0000000c99999d250813.tsk",
             message=msg.body,
-            exchange=settings.rmq.x_name_direct,
+            exchange=def_x,  # settings.rmq.x_name_direct,
             correlation_id=corr_id,
+            expiration=str(30 * 60_000),
             headers={
                 "x-device-id": str(dev_id),
                 "x-msg-type": "msg-task-result",

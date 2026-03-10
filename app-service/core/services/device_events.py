@@ -11,6 +11,7 @@ from core.crud.dev_events_repo import EventRepository
 from core.crud.device_repo import DeviceRepo
 from core.fs_broker import fs_router
 from core.schemas.device_events import DevEventBody, DevEventFields, DevEventOut
+from core.topologys import def_x
 
 log = setup_module_logger(__name__, "srv_dev_evnt.log")
 
@@ -49,11 +50,12 @@ class DeviceEventsService:
                 dev_timestamp = msg.headers["dev_timestamp"]
             else:
                 dev_timestamp = int(time.time())
-            log.info(
-                "Mqtt received EVENT: event_type_code =%d, dev_event_id=%d",
-                event_type_code,
-                dev_event_id,
-            )
+            if event_type_code != 44:
+                log.info(
+                    "Mqtt received EVENT: event_type_code =%d, dev_event_id=%d",
+                    event_type_code,
+                    dev_event_id,
+                )
             try:
                 payload_dict = json.loads(msg.body.decode())
             except ValueError or TypeError:
@@ -84,8 +86,9 @@ class DeviceEventsService:
                 await topic_publisher.publish(
                     routing_key=settings.webhook.webhooks_queue,  # "srv.a3b0000000c99999d250813.tsk",
                     message=msg.body,
-                    exchange=settings.rmq.x_name_direct,
+                    exchange=def_x,  # settings.rmq.x_name_direct,
                     # correlation_id=task.id,
+                    expiration=str(10 * 60_000),
                     headers={
                         "x-device-id": str(dev_id),
                         "x-msg-type": "msg-event",

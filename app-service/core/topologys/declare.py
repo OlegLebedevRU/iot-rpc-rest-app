@@ -35,7 +35,7 @@ q_jobs = RabbitQueue(
     name=settings.ttl_job.queue_name,
     durable=False,
     # exclusive=True,
-    arguments=settings.rmq.def_queue_args,
+    arguments=settings.rmq.job_queue_args,
 )
 rmq_api_client_action = RabbitQueue(
     name=settings.rmq.api_clients_queue,
@@ -57,9 +57,13 @@ async def declare_x_q():
     amq_ex: RobustExchange = await fs_router.broker.declare_exchange(topic_exchange)
     topic_publisher.exchange = topic_exchange
     # queues
+    # queue for requests from devices
     req_queue: RobustQueue = await broker().declare_queue(q_req)
+    # queue for ack task from device
     ack_queue: RobustQueue = await fs_router.broker.declare_queue(q_ack)
+    # events from devices
     evt_queue: RobustQueue = await broker().declare_queue(q_evt)
+    # queue for results of tasks from devices
     res_queue: RobustQueue = await broker().declare_queue(q_result)
     # bind queues to exchange with routing key
     await req_queue.bind(
