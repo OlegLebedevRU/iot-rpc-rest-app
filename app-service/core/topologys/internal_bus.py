@@ -1,5 +1,6 @@
 import json
 import logging
+from typing import TYPE_CHECKING
 
 from core.logging_config import setup_module_logger
 from faststream.rabbit.fastapi import RabbitMessage
@@ -7,12 +8,14 @@ from core.crud.device_repo import DeviceRepo
 from core.fs_broker import fs_router
 from core.integrations.webhooks import Webhook
 from core.schemas.rmq_admin import RmqClientsAction
-from core.services.device_tasks import DeviceTasksService
 from core.services.devices import DeviceService
 from core.services.rmq_admin import RmqAdmin
 from core.topologys.fs_depends import Session_dep
 from core.topologys import q_jobs, rmq_api_client_action, webhook_action
 
+# Use TYPE_CHECKING to avoid runtime import
+if TYPE_CHECKING:
+    from core.services.device_tasks import DeviceTasksService
 # Отключаем логи от FastStream вида "Received", "Processed" через logger_proxy
 logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 
