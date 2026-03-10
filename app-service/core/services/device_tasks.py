@@ -179,11 +179,14 @@ class DeviceTasksService:
                 self.session, task.id, TaskStatus.LOCK
             )
             correlation_id = task.id
+            expiration = task.header.ttl * 60_000  # Use actual TTL
         else:
             t_resp = settings.task_proc_cfg.nop_resp
             log.debug("from DB select task = None")
             correlation_id = settings.task_proc_cfg.zero_corr_id
             method_code = "0"
+            expiration = 3 * 60 * 1000  # Fallback TTL: 3 minutes (or use config)
+
         routing_key: str = str(
             RoutingKey(
                 prefix=topology.prefix_srv, sn=sn, suffix=topology.suffix_response
@@ -194,7 +197,7 @@ class DeviceTasksService:
             message=t_resp,
             correlation_id=correlation_id,  # str(correlation_id),uuid.UUID(correlation_id).bytes,
             exchange=topic_exchange,  # settings.rmq.x_name,
-            expiration=task.ttl * 60_000,
+            expiration=expiration,
             headers={
                 "method_code": method_code,
                 "correlationData": str(correlation_id),
@@ -251,6 +254,7 @@ class DeviceTasksService:
             message=rmsg,
             correlation_id=corr_id,
             exchange=topic_exchange,  # settings.rmq.x_name,
+            expiration=180 * 60_000,
             headers={
                 "ext_id": str(ext_id),
                 "result_id": str(result_id),
