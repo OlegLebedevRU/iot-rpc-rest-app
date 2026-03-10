@@ -1,7 +1,5 @@
 import logging
 import sys
-from typing import TYPE_CHECKING
-
 from faststream.rabbit.fastapi import RabbitMessage
 from core.fs_broker import fs_router
 from core.logging_config import setup_module_logger
@@ -9,8 +7,6 @@ from core.services.device_events_collect import DeviceEventsCollect
 from core.topologys.declare import q_ack, q_req, q_evt, q_result
 from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
 
-# Use TYPE_CHECKING to avoid runtime import
-#if TYPE_CHECKING:
 from core.services.device_tasks import DeviceTasksService
 
 log = setup_module_logger(__name__, "topology_queues.log")
@@ -44,7 +40,7 @@ async def add_one_event(
     session: Session_dep,
     sn: Sn_dep,
 ):
-    log.info("Subscribe event queue")
+    # log.info("Subscribe event queue")
     await DeviceEventsCollect(session, sn, 0).add(msg)
 
 
@@ -53,7 +49,7 @@ async def ack(
     session: Session_dep,
     corr_id: Corr_id_dep,
 ):
-    log.info("Subscribe ack queue")
+    # log.info("Subscribe ack queue")
     await DeviceTasksService(session, 0).pending(corr_id)
 
 
@@ -64,7 +60,7 @@ async def req(
     sn: Sn_dep,
     corr_id: Corr_id_dep,
 ):
-    log.info("Subscribe req queue")
+    # log.info("Subscribe req queue")
     await DeviceTasksService(session, 0).select(sn, corr_id, msg)
 
 
@@ -75,7 +71,7 @@ async def result(
     sn: Sn_dep,
     corr_id: Corr_id_dep,
 ):
-    log.info("Subscribe res queue")
+    log.info("Processing message from the results queue sn = %s", sn)
     await DeviceTasksService(session, 0).save(msg, sn, corr_id)
 
 

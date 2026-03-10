@@ -14,7 +14,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi_pagination import add_pagination
 from api import router as api_router
 from core import settings
-from core.fs_broker import broker, fs_router
+from core.fs_broker import fs_router
 from core.logging_config import setup_module_logger
 from core.models import db_helper
 from core.services.device_task_processing import act_ttl
