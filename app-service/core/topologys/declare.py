@@ -19,7 +19,7 @@ from core.logging_config import setup_module_logger
 log = setup_module_logger(__name__, "topology_declare.log")
 logging.getLogger("aio_pika").setLevel(logging.WARNING)
 logging.getLogger("aiormq").setLevel(logging.WARNING)
-
+logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 
 # === Топология RMQ ===
 topology = settings.rmq

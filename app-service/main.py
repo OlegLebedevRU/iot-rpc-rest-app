@@ -7,6 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
 
+logging.basicConfig(
+    level=settings.logging.log_level_value,
+    format=settings.logging.log_format,
+)
 # from core.fs_broker import fs_router
 # from core.topologys.declare import declare_x_q
 from create_api_app import create_app
@@ -16,10 +20,6 @@ from create_api_app import create_app
 # from create_page_app import create_app as create_page_app
 # from pages import router as pg_router
 
-logging.basicConfig(
-    level=settings.logging.log_level_value,
-    format=settings.logging.log_format,
-)
 
 main_app = create_app(
     create_custom_static_urls=True,

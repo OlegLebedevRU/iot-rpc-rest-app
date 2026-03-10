@@ -1,10 +1,12 @@
 # __all__ = ("broker", "fs_router")
+import logging
+
 from faststream.rabbit.fastapi import RabbitRouter
 from core.config import settings
 from core.logging_config import setup_module_logger
 
 log = setup_module_logger(__name__, "broker_core.log")
-
+logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 # Логируем первый запуск
 print(f"🔧 Creating RabbitRouter for {settings.faststream.url}")
 log.info(f"Initializing RabbitRouter with URL: {settings.faststream.url}")
@@ -16,6 +18,7 @@ log.info(f"Initializing RabbitRouter with URL: {settings.faststream.url}")
 fs_router = RabbitRouter(
     url=str(settings.faststream.url),
     logger=log,
+    log_level=logging.WARNING,
     # max_retries=None,#
     # max_retries=3,
     # retry_delay=2,

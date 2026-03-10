@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,8 +14,7 @@ from core.topologys.declare import topic_publisher, direct_exchange
 
 log = setup_module_logger(__name__, "srv_dev_evnt_collect.log")
 
-# Удалена строка: logging.getLogger("logger_proxy").setLevel(logging.WARNING)
-# Это приводило к нежелательному логированию от "logger_proxy"
+logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 
 
 class DeviceEventsCollect:
