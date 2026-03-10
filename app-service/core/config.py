@@ -124,7 +124,7 @@ class RabbitQXConfig(BaseModel):
     x_name: str = "amq.topic"
     x_name_direct: str = "amq.direct"
     def_queue_args: dict = {"x-message-ttl": 600000}
-    job_queue_args: dict = {"x-message-ttl": 60000}
+    job_queue_args: dict = {"x-message-ttl": 600000}
     prefix_dev: str = "dev"
     prefix_srv: str = "srv"
     # core -> dev
