@@ -1,44 +1,43 @@
-import logging.handlers
+import logging
 import sys
-
-# from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from faststream.rabbit.fastapi import RabbitMessage
 from core.fs_broker import fs_router
 from core.logging_config import setup_module_logger
 from core.services.device_events_collect import DeviceEventsCollect
-
-from core.topologys.declare import (
-    q_ack,
-    q_req,
-    q_evt,
-    q_result,
-)
+from core.topologys.declare import q_ack, q_req, q_evt, q_result
 from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
 
 # Use TYPE_CHECKING to avoid runtime import
-# if TYPE_CHECKING:
-from core.services.device_tasks import DeviceTasksService
+if TYPE_CHECKING:
+    from core.services.device_tasks import DeviceTasksService
 
 log = setup_module_logger(__name__, "topology_queues.log")
 
-# Отключаем логи от FastStream вида "Received", "Processed" через logger_proxy
+# Отключаем логи от FastStream вида "Received", "Processed"
 logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 
 
-# {'x-correlation-id': b'\x96\xce\xe8\xd2\xf4\x1fK_\x81\xcc|w\x0bu\x92\xae',
-# 'x-reply-to-topic': 'srv.a3b0000000c99999d250813.rsp'}
-# def start_queues():
+# === Защита от повторной регистрации ===
+_SUBSCRIBERS_REGISTERED = False
 
-# 🔒 Проверяем, были ли подписчики уже зарегистрированы
-if getattr(fs_router, "_subscribers_registered", False):
-    log.warning("Subscribers already registered. Skipping duplicate subscription.")
+
+def _ensure_single_registration():
+    global _SUBSCRIBERS_REGISTERED
+    if _SUBSCRIBERS_REGISTERED:
+        log.warning("Subscribers already registered. Skipping duplicate subscription.")
+        return False
+    _SUBSCRIBERS_REGISTERED = True
+    return True
+
+
+if not _ensure_single_registration():
     del sys
     exit()
 
+
 # === Регистрация подписчиков ===
-
-
 @fs_router.subscriber(q_evt)
 async def add_one_event(
     msg: RabbitMessage,
@@ -80,15 +79,11 @@ async def result(
     await DeviceTasksService(session, 0).save(msg, sn, corr_id)
 
 
-# ✅ Устанавливаем флаг, что подписчики зарегистрированы
-fs_router._subscribers_registered = True
-
-# 📝 Логируем количество подписчиков (без доступа к .name — он тоже может быть приватным)
+# Логируем количество подписчиков
 try:
     count = len(getattr(fs_router, "_subscribers", []))
     log.info(f"✅ Subscribers registered: {count} handlers")
 except Exception as e:
     log.error(f"Could not log subscribers count: {e}")
 
-# Безопасно удаляем sys
 del sys
