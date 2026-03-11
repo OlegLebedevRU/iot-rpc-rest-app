@@ -35,6 +35,9 @@ async def get_task(
     session: Session_dep,
     org_id: Org_dep,
 ) -> TaskResponseResult:
+    """
+    Get task by ID with full details including results.
+    """
     return await DeviceTasksService(session, org_id).get(id)
 
 

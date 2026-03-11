@@ -28,7 +28,7 @@ import core.topologys.internal_bus
 log = setup_module_logger(__name__, "app_create_app.log")
 logging.getLogger("logger_proxy").disabled = True
 SUMMARY = """
-## 📚 Основные элементы документации
+## 📚 Основные элементы АПИ
 
 ### 🧩 Поддерживаемые разделы
 | Тег | Краткое описание |

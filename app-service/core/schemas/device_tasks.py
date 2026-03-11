@@ -1,12 +1,10 @@
-import json
 import uuid
 from datetime import datetime
 from typing import Any, Annotated, Optional, List, Dict
+
 from pydantic import (
     BaseModel,
     Field,
-    JsonValue,
-    field_validator,
     UUID4,
     ConfigDict,
     AfterValidator,
@@ -108,6 +106,35 @@ class ResultArray(BaseModel):
 class TaskResponseResult(TaskResponseStatus):
     results: List[ResultArray]
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "id": "5c75b4ed-2488-4769-b23a-2afae64ea22d",
+                    "created_at": 1773089559,
+                    "header": {
+                        "ext_task_id": "wwhdtkuwgzihwlvi2ule",
+                        "device_id": 4619,
+                        "method_code": 20,
+                        "priority": 0,
+                        "ttl": 1,
+                    },
+                    "status": 3,
+                    "pending_at": 1773089560,
+                    "locked_at": 1773089560,
+                    "results": [
+                        {
+                            "id": 292,
+                            "ext_id": 0,
+                            "status_code": 200,
+                            "result": '{"status":"OK"}',
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+
 
 class TaskResponsePayload(TaskResponseStatus):
     payload: Optional[Dict[str, Any]] = Field(
@@ -132,6 +159,7 @@ class TaskListOut(TaskHeader):
     pending_at: Optional[datetime] = None
     locked_at: Optional[datetime] = None
     org_id: int | None  # ← Это важно!
+
 
 class TaskPublish(BaseModel):
     routing_key: str

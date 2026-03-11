@@ -179,7 +179,7 @@ class EventRepository:
                 # Upsert: INSERT ... ON CONFLICT UPDATE
                 upsert_stmt = (
                     insert(DeviceEventOffset)
-                    .values(device_id=dev_id, org_id=org_id, last_event_id=max_id)
+                    .values(device_id=dev_id, last_event_id=max_id)
                     .on_conflict_do_update(
                         index_elements=["device_id"],
                         set_=dict(last_event_id=max_id),
