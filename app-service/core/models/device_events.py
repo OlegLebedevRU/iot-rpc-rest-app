@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Dict, Any
 
 from sqlalchemy import Integer, func, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
@@ -19,7 +20,7 @@ class DevEvent(Base):
         default=None,
     )
     dev_timestamp: Mapped[int] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    payload: Mapped[str] = mapped_column(JSONB)
+    payload: Mapped[Dict[str, Any]] = mapped_column(JSONB)
 
 
 class DeviceEventOffset(Base):
