@@ -23,7 +23,9 @@ class OrgWebhook(Base):
     # __tablename__ = "org_webhooks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    org_id: Mapped[int] = mapped_column(Integer, ForeignKey(Org.org_id), nullable=False)
+    org_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tb_orgs.org_id"), nullable=False
+    )
     event_type: Mapped[str] = mapped_column(String, nullable=False)
     url: Mapped[str] = mapped_column(String, nullable=False)
     headers: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
