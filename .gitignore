@@ -163,3 +163,4 @@ cython_debug/
 /compose.yaml.bak
 /nginx-configs/local-light/nginx.conf.bak
 /app-service/alembic/README
+/docs/protokol-vzaimodeistviya-s-kontrollerom.md
