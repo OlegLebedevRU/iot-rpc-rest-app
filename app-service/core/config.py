@@ -69,6 +69,7 @@ class ApiV1Prefix(BaseModel):
     device_events: str = "/device-events"
     devices: str = "/devices"
     accounts: str = "/accounts"
+    webhooks: str = "/webhooks"
 
 
 class ApiPrefix(BaseModel):
@@ -215,6 +216,7 @@ class WebhookConfigModel(BaseModel):
     webhooks_queue: str = "webhook_action"
     def_queue_args: dict = {"x-message-ttl": 600000}
     max_per_org: int = 2
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(

@@ -3,11 +3,14 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core import settings
+from core.logging_config import setup_module_logger
 from core.models import db_helper
 from core.crud.webhook_repo import WebhookRepo
 from core.schemas.webhook import WebhookCreateUpdate, WebhookResponse
 from api.api_v1.api_depends import Org_dep  # ← org_id из API-ключа
 
+log = setup_module_logger(__name__, "api_webhooks.log")
 # Описание для роутера — можно добавить кратко + ссылку
 WEBHOOKS_DESCRIPTION = """
 # 🌐 Вебхуки
@@ -22,7 +25,7 @@ WEBHOOKS_DESCRIPTION = """
 """
 
 router = APIRouter(
-    prefix="/webhooks",
+    prefix=settings.api.v1.webhooks,
     tags=["Webhooks"],
     # description=WEBHOOKS_DESCRIPTION,  # ← Появится в Swagger
 )
@@ -34,7 +37,7 @@ SUPPORTED_EVENT_TYPES = ["msg-event", "msg-task-result"]
 @router.get("/", response_model=list[WebhookResponse])
 async def get_webhooks(
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
-    org_id=Org_dep,
+    org_id: Org_dep,
 ):
     """
     Получить все вебхуки текущей организации (по API-ключу)
@@ -49,7 +52,7 @@ async def set_webhook(
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
     event_type: str,
     data: WebhookCreateUpdate,
-    org_id=Org_dep,
+    org_id: Org_dep,
 ):
     """
     Установить или обновить вебхук для типа события.
@@ -80,7 +83,7 @@ async def set_webhook(
 async def delete_webhook(
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
     event_type: str,
-    org_id=Org_dep,
+    org_id: Org_dep,
 ):
     """
     Удалить вебхук по типу события.
