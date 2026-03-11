@@ -28,6 +28,24 @@ import core.topologys.internal_bus
 log = setup_module_logger(__name__, "app_create_app.log")
 logging.getLogger("logger_proxy").disabled = True
 
+# Описание тегов
+tags_metadata = [
+    {
+        "name": "Webhooks",
+        "description": """
+# 🌐 Вебхуки
+
+Управление вебхуками для интеграции событий с внешними системами.
+
+- Поддерживаемые типы: `msg-event`, `msg-task-result`
+- Организация определяется по `x-api-key`
+- Максимум вебхуков на организацию: настраивается через `APP_CONFIG__WEBHOOK__MAX_PER_ORG`
+
+📄 [Полная документация по вебхукам](https://gitverse.ru/Oleg_Lebedev_ru/iot-rpc-rest-app/content/master/docs/webhooks.md)
+        """,
+    },
+]
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -99,6 +117,7 @@ def create_app(create_custom_static_urls: bool = False) -> FastAPI:
         title="Leo4",
         default_response_class=JSONResponse,
         lifespan=lifespan,
+        openapi_tags=tags_metadata,
         docs_url="/docs" if create_custom_static_urls else "/legacy-docs",
         redoc_url=None if create_custom_static_urls else "/redoc",
     )

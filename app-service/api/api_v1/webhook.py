@@ -8,7 +8,25 @@ from core.crud.webhook_repo import WebhookRepo
 from core.schemas.webhook import WebhookCreateUpdate, WebhookResponse
 from api.api_v1.api_depends import Org_dep  # ← org_id из API-ключа
 
-router = APIRouter(prefix="/webhooks", tags=["Webhooks"])
+# Описание для роутера — можно добавить кратко + ссылку
+WEBHOOKS_DESCRIPTION = """
+# 🌐 Вебхуки
+
+Управление вебхуками для интеграции событий с внешними системами.
+
+- Поддерживаемые типы: `msg-event`, `msg-task-result`
+- Организация определяется по `x-api-key`
+- Максимум вебхуков на организацию: настраивается через `APP_CONFIG__WEBHOOK__MAX_PER_ORG`
+
+📄 [Полная документация по вебхукам](https://gitverse.ru/Oleg_Lebedev_ru/iot-rpc-rest-app/content/master/docs/webhooks.md)
+"""
+
+router = APIRouter(
+    prefix="/webhooks",
+    tags=["Webhooks"],
+    # description=WEBHOOKS_DESCRIPTION,  # ← Появится в Swagger
+)
+
 
 SUPPORTED_EVENT_TYPES = ["msg-event", "msg-task-result"]
 
