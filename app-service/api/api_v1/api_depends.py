@@ -14,10 +14,10 @@ log = setup_module_logger(__name__, "api_depends.log")
 
 
 async def org_id_dep(
-    orgId: Annotated[int, Header(convert_underscores=True)],
+    org_id: Annotated[int, Header(convert_underscores=True)],
 ):
-    log.info("header request, org-id=%s", orgId)
-    return orgId
+    log.info("header request, org-id=%s", org_id)
+    return org_id
 
 
 Session_dep = Annotated[

@@ -1,6 +1,7 @@
 from pydantic import BaseModel, HttpUrl, Field
 from typing import Dict, Optional
 from datetime import datetime
+from core.examples import EXAMPLE_WEBHOOK_RESPONSE, EXAMPLE_WEBHOOK_CREATE_UPDATE
 
 
 class WebhookCreateUpdate(BaseModel):
@@ -15,13 +16,7 @@ class WebhookCreateUpdate(BaseModel):
     is_active: bool = Field(True, description="Включён ли вебхук")
 
     class Config:
-        json_schema_extra = {
-            "example": {
-                "url": "https://your-api.com/webhook/events",
-                "headers": {"Authorization": "Bearer abc123"},
-                "is_active": True,
-            }
-        }
+        json_schema_extra = {"example": EXAMPLE_WEBHOOK_CREATE_UPDATE}
 
 
 class WebhookResponse(BaseModel):
@@ -35,14 +30,4 @@ class WebhookResponse(BaseModel):
 
     class Config:
         from_attributes = True
-        json_schema_extra = {
-            "example": {
-                "org_id": 100,
-                "event_type": "msg-event",
-                "url": "https://your-api.com/webhook/events",
-                "headers": {"Authorization": "Bearer abc123"},
-                "is_active": True,
-                "created_at": "2025-04-05T10:00:00+00:00",
-                "updated_at": "2025-04-05T10:05:00+00:00",
-            }
-        }
+        json_schema_extra = {"example": EXAMPLE_WEBHOOK_RESPONSE}

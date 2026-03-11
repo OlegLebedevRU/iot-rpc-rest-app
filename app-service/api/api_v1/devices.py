@@ -1,8 +1,6 @@
 from typing import Annotated, List
-
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-
 from api.api_v1.api_depends import Org_dep
 from core import settings
 from core.logging_config import setup_module_logger

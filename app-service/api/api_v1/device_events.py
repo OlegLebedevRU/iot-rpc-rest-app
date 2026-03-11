@@ -18,11 +18,20 @@ router = APIRouter(
     tags=["Device events"],
 )
 
+# Примеры ответа
+from core.examples import EXAMPLE_PAGINATED_RESPONSE, EXAMPLE_INCREMENTAL_RESPONSE
+
 
 @router.get(
     "/",
     description="Events search by device_id with pagination",
     response_model=Page[DevEventOut],
+    responses={
+        200: {
+            "description": "Список событий с пагинацией",
+            "content": {"application/json": {"example": EXAMPLE_PAGINATED_RESPONSE}},
+        }
+    },
 )
 async def list_device_events(
     device_id: Annotated[int, Query()],
@@ -34,52 +43,6 @@ async def list_device_events(
     return await DeviceEventsService(session, None, org_id).list(
         device_id, events_include, events_exclude
     )
-
-
-# Пример ответа для /incremental
-EXAMPLE_INCREMENTAL_RESPONSE = [
-    {
-        "id": 1095037,
-        "device_id": 4619,
-        "event_type_code": 3,
-        "dev_event_id": 48846,
-        "created_at": "2026-03-11T17:50:37.458000Z",
-        "dev_timestamp": "2026-03-11T17:50:37Z",
-        "payload": {
-            "101": 48847,
-            "102": "2026-03-11T20:50:37ZMSK",
-            "200": 3,
-            "300": [{"301": "044AFE42C76781", "302": 6, "303": 0}],
-        },
-    },
-    {
-        "id": 1095038,
-        "device_id": 4619,
-        "event_type_code": 44,
-        "dev_event_id": 48848,
-        "created_at": "2026-03-11T17:50:54.950000Z",
-        "dev_timestamp": "2026-03-11T17:50:54Z",
-        "payload": {
-            "101": 48848,
-            "102": "2026-03-11T20:50:54ZMSK",
-            "200": 44,
-            "300": [
-                {
-                    "310": "leo4_gateway_v_1.1",
-                    "311": 0,
-                    "312": 0,
-                    "313": 4239604,
-                    "314": "d4:e9:f4:e4:cb:4b",
-                    "323": "192.168.1.179",
-                    "324": "a2b0004619c16072d240126",
-                    "325": "192.168.1.179",
-                    "336": 0,
-                    "338": 0,
-                }
-            ],
-        },
-    },
-]
 
 
 @router.get(
