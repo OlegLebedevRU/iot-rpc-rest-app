@@ -23,6 +23,7 @@ fs_router = RabbitRouter(
     # max_retries=3,
     # retry_delay=2,
     timeout=10.0,
+    include_in_schema=False,
 )
 
 

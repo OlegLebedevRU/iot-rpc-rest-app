@@ -31,6 +31,66 @@ logging.getLogger("logger_proxy").disabled = True
 # Описание тегов
 tags_metadata = [
     {
+        "name": "Device tasks",
+        "description": """
+# 📦 Управление задачами
+
+Отправка команд устройствам и получение результатов.
+
+- Создание задач (например, открыть ячейку)
+- Получение статуса задачи
+- Просмотр истории задач по `device_id`
+- Поддержка пагинации
+
+> Все операции требуют `x-api-key` и проверяют принадлежность устройства к организации.
+        """,
+    },
+    {
+        "name": "Device events",
+        "description": """
+# 🔔 События с устройств
+
+Получение событий, генерируемых устройствами (например, открытие двери, сканирование QR).
+
+### Доступные эндпоинты:
+- `/events/` — пагинированный список событий по `device_id`
+- `/events/incremental` — строго инкрементальная выборка (для синхронизации)
+- `/events/fields` — агрегация данных по полям (например, температура за период)
+
+> Поддерживает фильтрацию, лимиты и временные интервалы.
+        """,
+    },
+    {
+        "name": "Devices",
+        "description": """
+# 💡 Устройства
+
+Работа с устройствами (postamat, терминалы и т.п.).
+
+### Функции:
+- Получение списка устройств с их статусом
+- Привязка `tags` к устройству (например, `location`, `zone`)
+- Поиск по `device_id`
+
+> Доступ только к устройствам своей организации.
+        """,
+    },
+    {
+        "name": "Postamats",
+        "description": """
+# 📦 Почтоматы
+
+API для управления почтоматами и их ячейками.
+
+### Возможности:
+- Получить список всех почтоматов
+- Получить почтомат с детализацией по ячейкам
+- Отправить команду (например, `lock_cells`, `unlock_door`)
+
+Каждая команда возвращает `task_id` для отслеживания результата.
+        """,
+    },
+    {
         "name": "Webhooks",
         "description": """
 # 🌐 Вебхуки
@@ -117,7 +177,7 @@ def create_app(create_custom_static_urls: bool = False) -> FastAPI:
         title="Leo4",
         default_response_class=JSONResponse,
         lifespan=lifespan,
-        # openapi_tags=tags_metadata,
+        openapi_tags=tags_metadata,
         docs_url="/docs" if create_custom_static_urls else "/legacy-docs",
         redoc_url=None if create_custom_static_urls else "/redoc",
     )
