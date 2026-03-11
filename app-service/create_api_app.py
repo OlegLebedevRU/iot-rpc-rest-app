@@ -117,7 +117,7 @@ def create_app(create_custom_static_urls: bool = False) -> FastAPI:
         title="Leo4",
         default_response_class=JSONResponse,
         lifespan=lifespan,
-        openapi_tags=tags_metadata,
+        #openapi_tags=tags_metadata,
         docs_url="/docs" if create_custom_static_urls else "/legacy-docs",
         redoc_url=None if create_custom_static_urls else "/redoc",
     )

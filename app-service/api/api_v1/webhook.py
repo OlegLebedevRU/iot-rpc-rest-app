@@ -34,7 +34,7 @@ SUPPORTED_EVENT_TYPES = ["msg-event", "msg-task-result"]
 @router.get("/", response_model=list[WebhookResponse])
 async def get_webhooks(
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
-    org_id: int = Depends(Org_dep),
+    org_id: int = Org_dep,
 ):
     """
     Получить все вебхуки текущей организации (по API-ключу)
@@ -49,7 +49,7 @@ async def set_webhook(
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
     event_type: str,
     data: WebhookCreateUpdate,
-    org_id: int = Depends(Org_dep),
+    org_id: int =Org_dep,
 ):
     """
     Установить или обновить вебхук для типа события.
@@ -80,7 +80,7 @@ async def set_webhook(
 async def delete_webhook(
     session: Annotated[AsyncSession, Depends(db_helper.session_getter)],
     event_type: str,
-    org_id: int = Depends(Org_dep),
+    org_id: int = Org_dep,
 ):
     """
     Удалить вебхук по типу события.
