@@ -94,9 +94,7 @@ def register_static_docs_routes(app: FastAPI) -> None:
         )
 
 
-def create_app(
-    create_custom_static_urls: bool = False,
-) -> FastAPI:
+def create_app(create_custom_static_urls: bool = False) -> FastAPI:
     app = FastAPI(
         title="Leo4",
         default_response_class=JSONResponse,
@@ -108,9 +106,7 @@ def create_app(
     app.include_router(
         api_router,
     )
-    app.include_router(
-        fs_router,
-    )
+    app.include_router(fs_router, include_in_schema=False)
     if create_custom_static_urls:
         register_static_docs_routes(app)
 
