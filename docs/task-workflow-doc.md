@@ -240,7 +240,7 @@ task_id = "a1b2c3d4-e5f6-..."
 while True: 
     resp = requests.get(f"https://api.example.com/api/v1/device-tasks/{task_id}") 
     data = resp.json() 
-    if data["status"] in [4, 5]: 
+    if data["status"] in [3, 4, 5, 6, 7]: 
         print("Result:", data["results"]) 
         break 
     time.sleep(2)
