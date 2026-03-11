@@ -214,7 +214,7 @@ class WebhookConfigModel(BaseModel):
     backoff_factor: float = 0.5
     webhooks_queue: str = "webhook_action"
     def_queue_args: dict = {"x-message-ttl": 600000}
-
+    max_per_org: int = 2
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(

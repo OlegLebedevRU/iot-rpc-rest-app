@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.models import Postamat
+    from core.models.webhook import OrgWebhook
 
 
 class Device(Base):
@@ -186,6 +187,12 @@ class Org(Base):
     o_bind: Mapped["DeviceOrgBind"] = relationship(
         back_populates="org",
         # lazy="joined",
+    )
+    webhooks: Mapped[List["OrgWebhook"]] = relationship(
+        "OrgWebhook",
+        back_populates="org",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
 
