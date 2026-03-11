@@ -22,8 +22,15 @@ API предназначено для инициации и управления
 
 ## Жизненный цикл задачи
 ````mermaid 
-    graph 
-        TD A[Клиент] -->|POST /| B(touch_task) B --> C[Создание задачи] C --> D{Ожидание} D -->|Polling| E[GET /{id}] D -->|Webhook| F[msg-task-result] E --> G{Статус?} F --> G G -->|completed/failed| H[Получение результата]
+    graph TB
+        A[Клиент] -->|POST /| B(touch_task)
+        B --> C[Создание задачи]
+        C --> D[Registered callback]
+        D -->|Polling| E["GET /{id}"]
+        D -->|Webhook| F[msg-task-result]
+        E --> G[on_message]
+        F --> G
+        G -->|completed/failed| H[Получение результата]
 ````
 
 ---
