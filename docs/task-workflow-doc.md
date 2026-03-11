@@ -226,8 +226,8 @@ API интегрировано с MQTT v5:
 
 ### Шаг 1: Создать задачу
 ````bash 
-curl -X POST https://api.example.com/api/v1/device-tasks
--H "Authorization: ApiKey xxx"
+curl -X POST https://dev.leo4.ru/api/v1/device-tasks
+-H "x-api-key: xxx"
 -H "Content-Type: application/json"
 -d '{ "ext_task_id": "hello-001", "device_id": 4619, "method_code": 20, "payload": {"dt": [{"mt": 0}]} }'
 ````
@@ -238,7 +238,7 @@ import time
 import requests
 task_id = "a1b2c3d4-e5f6-..." 
 while True: 
-    resp = requests.get(f"https://api.example.com/api/v1/device-tasks/{task_id}") 
+    resp = requests.get(f"https://dev.leo4.ru/api/v1/device-tasks/{task_id}") 
     data = resp.json() 
     if data["status"] in [3, 4, 5, 6, 7]: 
         print("Result:", data["results"]) 
@@ -249,7 +249,7 @@ while True:
 ### Шаг 2: Ожидание результата (вариант 2 — webhook)
 ````python
 #Установите вебхук один раз
-requests.put( "https://api.example.com/api/v1/webhooks/msg-task-result", json={"url": "your.app/hook"} )
+requests.put( "https://dev.leo4.ru/api/v1/webhooks/msg-task-result", json={"url": "your.app/hook"} )
 #Ваш сервер получит результат автоматически
 ````
 
@@ -257,8 +257,8 @@ requests.put( "https://api.example.com/api/v1/webhooks/msg-task-result", json={"
 
 ## 🔐 Безопасность
 
-- Все запросы требуют `Authorization: ApiKey <key>` или JWT
-- `org_id` извлекается из ключа и используется для изоляции данных
+- Все запросы для авторизации требуют `x-api-key: ApiKey <key>`, JWT или сертификат АПИ-клиента 
+- `org_id` извлекается из данныз авторизации и используется для изоляции ресурсов
 - HTTPS обязательно
 - Webhook-запросы могут подписываться (опционально)
 
