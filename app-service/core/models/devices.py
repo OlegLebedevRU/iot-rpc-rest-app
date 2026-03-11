@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.models import Postamat
-    from core.models.webhook import OrgWebhook
+from core.models.webhook import OrgWebhook
 
 
 class Device(Base):

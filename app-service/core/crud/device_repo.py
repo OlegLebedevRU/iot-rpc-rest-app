@@ -95,17 +95,14 @@ class DeviceRepo:
 
     @classmethod
     async def get_org_id_by_device_id(
-        cls, session: AsyncSession, device_id: int | None = 0
+        cls, session: AsyncSession, device_id: int
     ) -> int | None:
-        data = await session.execute(
-            select(DeviceOrgBind).where(DeviceOrgBind.device_id == device_id).limit(1)
+        result = await session.execute(
+            select(DeviceOrgBind.org_id)
+            .where(DeviceOrgBind.device_id == device_id)
+            .limit(1)
         )
-        r = data.unique().mappings().one_or_none()
-        if r is not None:
-            resp = r.DeviceOrgBind.org_id
-        else:
-            resp = None
-        return resp
+        return result.scalar_one_or_none()
 
     @classmethod
     async def get_device_id(

@@ -54,7 +54,7 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
 
     # Получаем org_id
     org_id = await DeviceRepo.get_org_id_by_device_id(session, device_id=device_id)
-    if not org_id:
+    if org_id is None:
         log.info("No org_id found for device_id=%d", device_id)
         return
 
@@ -88,7 +88,7 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
         f"/{device_id}" if msg_type == "msg-event" else f"/{msg.correlation_id}"
     )
     async with Webhook(
-        url=webhook_obj.url,
+        url=str(webhook_obj.url),
         path_suffix=path_suffix,
         headers=headers,
     ) as wh:
