@@ -27,7 +27,22 @@ import core.topologys.internal_bus
 
 log = setup_module_logger(__name__, "app_create_app.log")
 logging.getLogger("logger_proxy").disabled = True
+SUMMARY = """
+## 📚 Основные элементы документации
+### 🧩 Поддерживаемые разделы
+| Тег | Краткое описание |
+|-----|------------------|
+| **Device tasks** | Команды устройствам (создание и отслеживание задач) |
+| **Device events** | Получение и фильтрация событий с пагинацией и инкрементальной выборкой |
+| **Devices** | Управление устройствами и тегами |
+| **Postamats** | Работа с постаматами и ячейками |
+| **Webhooks** | Настройка вебхуков с ссылкой на полную документацию |
 
+### 🔐 Безопасность
+- Все эндпоинты требуют `x-api-key`
+- Принадлежность ресурсов к организации проверяется автоматически
+
+"""
 # Описание тегов
 tags_metadata = [
     {
@@ -78,13 +93,13 @@ tags_metadata = [
     {
         "name": "Postamats",
         "description": """
-# 📦 Почтоматы
+# 📦 Постаматы
 
-API для управления почтоматами и их ячейками.
+API для управления постаматами и их ячейками.
 
 ### Возможности:
-- Получить список всех почтоматов
-- Получить почтомат с детализацией по ячейкам
+- Получить список всех постаматов
+- Получить ростамат с детализацией по ячейкам
 - Отправить команду (например, `lock_cells`, `unlock_door`)
 
 Каждая команда возвращает `task_id` для отслеживания результата.
@@ -99,7 +114,7 @@ API для управления почтоматами и их ячейками.
 
 - Поддерживаемые типы: `msg-event`, `msg-task-result`
 - Организация определяется по `x-api-key`
-- Максимум вебхуков на организацию: настраивается через `APP_CONFIG__WEBHOOK__MAX_PER_ORG`
+- Максимум вебхуков на организацию: 2
 
 📄 [Полная документация по вебхукам](https://gitverse.ru/Oleg_Lebedev_ru/iot-rpc-rest-app/content/master/docs/webhooks.md)
         """,
@@ -175,6 +190,7 @@ def register_static_docs_routes(app: FastAPI) -> None:
 def create_app(create_custom_static_urls: bool = False) -> FastAPI:
     app = FastAPI(
         title="Leo4",
+        version="0.2.1",
         default_response_class=JSONResponse,
         lifespan=lifespan,
         openapi_tags=tags_metadata,
