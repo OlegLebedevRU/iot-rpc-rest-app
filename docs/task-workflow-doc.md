@@ -159,7 +159,7 @@ PUT /api/v1/webhooks/msg-task-result Content-Type: application/json
 POST https://your-webhook-url.com/hooks/task-result Content-Type: application/json X-Signature: sha256=... (опционально)
 ````
 ````json 
-{ "event_type": "msg-task-result", "timestamp": 1712345690, "data": { "id": "a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8", "created_at": 1712345678, "header": { "ext_task_id": "task-001", "device_id": 4619, "method_code": 20 }, "status": 4, "results": [ { "id": 101, "ext_id": 0, "status_code": 200, "result": "{"200":0,"300":[{"310":"1.04.025"}]}" } ] } }
+{ "event_type": "msg-task-result", "timestamp": 1712345690, "data": { "id": "a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8", "created_at": 1712345678, "header": { "ext_task_id": "task-001", "device_id": 4619, "method_code": 20 }, "status": 3, "results": [ { "id": 101, "ext_id": 0, "status_code": 200, "result": "{\"200\":0,\"300\":[{\"310\":\"1.04.025\"}]}" } ] } }
 ````
 
 ---
