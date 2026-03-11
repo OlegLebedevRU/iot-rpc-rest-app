@@ -19,7 +19,9 @@ class DevEvent(Base):
         server_default=func.current_timestamp(3),
         default=None,
     )
-    dev_timestamp: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    dev_timestamp: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
     payload: Mapped[Dict[str, Any]] = mapped_column(JSONB)
 
 
