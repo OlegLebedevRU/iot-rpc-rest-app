@@ -192,6 +192,7 @@ def create_app(create_custom_static_urls: bool = False) -> FastAPI:
     app = FastAPI(
         title="Leo4",
         version="0.2.1",
+        summary=f"{SUMMARY}",
         default_response_class=JSONResponse,
         lifespan=lifespan,
         openapi_tags=tags_metadata,
