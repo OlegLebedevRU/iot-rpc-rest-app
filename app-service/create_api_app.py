@@ -73,6 +73,7 @@ tags_metadata = [
 - `/events/fields` — агрегация данных по полям (например, температура за период)
 
 > Поддерживает фильтрацию, лимиты и временные интервалы.
+
 📄 [Документация по форматам событий](https://gitverse.ru/Oleg_Lebedev_ru/iot-rpc-rest-app/content/master/docs/events-api-format-description.md)
         """,
     },
