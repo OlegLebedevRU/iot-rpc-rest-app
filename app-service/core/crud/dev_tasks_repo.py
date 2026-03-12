@@ -122,7 +122,7 @@ class TasksRepository:
             log.info("Committed new task %s", db_uuid)
             return db_uuid, created_at
         except Exception as e:
-            log.error("Failed to create task %s: %s", db_uuid, e)
+            log.error("Failed to create task %s: %s", db_uuid, e, exc_info=True)
             await session.rollback()
             return None
 
@@ -131,7 +131,7 @@ class TasksRepository:
         cls,
         session: AsyncSession,
         id: UUID4,
-        org_id: int | None = 0,
+        org_id: int,
     ) -> tuple[dict | None, list[dict] | None]:
         query = cls._base_task_query().join(DevTask.status)
         query = cls._apply_org_filter(query, org_id)
@@ -221,9 +221,9 @@ class TasksRepository:
         if resp is None:
             return None
 
-        header: TaskHeader = TaskHeader.model_validate(resp)
+        # header: TaskHeader = TaskHeader.model_validate(resp)
         task: TaskResponsePayload = TaskResponsePayload(
-            header=header,
+            header=TaskHeader.model_validate(resp),
             id=resp.id,
             status=resp.status,
             created_at=resp.created_at,
@@ -237,8 +237,8 @@ class TasksRepository:
     async def get_tasks(
         cls,
         session: AsyncSession,
-        device_id: int | None = 0,
-        org_id: int | None = 0,
+        device_id: int,
+        org_id: int,
     ) -> Page[TaskListOut]:
         query = cls._base_task_query()
         query = query.join(DevTask.status)
@@ -259,7 +259,7 @@ class TasksRepository:
         cls,
         session: AsyncSession,
         id: UUID4,
-        org_id: int | None = 0,
+        org_id: int,
     ) -> TaskResponseDeleted | None:
         exists_q = (
             select(1)
@@ -415,6 +415,11 @@ class TasksRepository:
             log.info("Task result committed, task_id=%s, result_id=%s", task_id, new_id)
             return new_id
         except Exception as e:
-            log.error("Failed to commit task result for task %s: %s", task_id, e)
+            log.error(
+                "Failed to commit task result for task %s: %s",
+                task_id,
+                e,
+                exc_info=True,
+            )
             await session.rollback()
             return None
