@@ -13,6 +13,8 @@ from fastapi.openapi.docs import (
 )
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi_pagination import add_pagination
+
+# Импортируем маршруты и конфигурацию
 from api import router as api_router
 from core import settings
 from core.fs_broker import fs_router
@@ -23,10 +25,12 @@ from core.topologys.declare import declare_x_q
 import core.topologys.fs_queues
 import core.topologys.internal_bus
 
-# from starlette.responses import HTMLResponse
+# Импортируем теги и константы из нового файла
+from config.tags import TAGS_METADATA
 
 log = setup_module_logger(__name__, "app_create_app.log")
 logging.getLogger("logger_proxy").disabled = True
+
 SUMMARY = """
 ## 📚 Основные элементы АПИ
 
@@ -44,105 +48,19 @@ SUMMARY = """
 - Принадлежность ресурсов к организации проверяется автоматически
 
 """
-# Описание тегов
-tags_metadata = [
-    {
-        "name": "Device tasks",
-        "description": """
-# 📦 Управление задачами
-
-Отправка команд устройствам и получение результатов.
-
-- Создание задач (например, открыть ячейку)
-- Получение статуса задачи
-- Просмотр истории задач по `device_id`
-- Поддержка пагинации
-
-> Все операции требуют `x-api-key` и проверяют принадлежность устройства к организации.
-        """,
-    },
-    {
-        "name": "Device events",
-        "description": """
-# 🔔 События с устройств
-
-Получение событий, генерируемых устройствами (например, открытие двери, сканирование QR).
-
-### Доступные эндпоинты:
-- `/events/` — пагинированный список событий по `device_id`
-- `/events/incremental` — строго инкрементальная выборка (для синхронизации)
-- `/events/fields` — агрегация данных по полям (например, температура за период)
-
-> Поддерживает фильтрацию, лимиты и временные интервалы.
-
-📄 [Документация по форматам событий](https://gitverse.ru/Oleg_Lebedev_ru/iot-rpc-rest-app/content/master/docs/events-api-format-description.md)
-        """,
-    },
-    {
-        "name": "Devices",
-        "description": """
-# 💡 Устройства
-
-Работа с устройствами (postamat, терминалы и т.п.).
-
-### Функции:
-- Получение списка устройств с их статусом
-- Привязка `tags` к устройству (например, `location`, `zone`)
-- Поиск по `device_id`
-
-> Доступ только к устройствам своей организации.
-        """,
-    },
-    {
-        "name": "Postamats",
-        "description": """
-# 📦 Постаматы
-
-API для управления постаматами и их ячейками.
-
-### Возможности:
-- Получить список всех постаматов
-- Получить ростамат с детализацией по ячейкам
-- Отправить команду (например, `lock_cells`, `unlock_door`)
-
-Каждая команда возвращает `task_id` для отслеживания результата.
-        """,
-    },
-    {
-        "name": "Webhooks",
-        "description": """
-# 🌐 Вебхуки
-
-Управление вебхуками для интеграции событий с внешними системами.
-
-- Поддерживаемые типы: `msg-event`, `msg-task-result`
-- Организация определяется по `x-api-key`
-- Максимум вебхуков на организацию: 2
-
-📄 [Полная документация по вебхукам](https://gitverse.ru/Oleg_Lebedev_ru/iot-rpc-rest-app/content/master/docs/webhooks.md)
-        """,
-    },
-]
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-
     await fs_router.broker.start()
-    await declare_x_q()  # ← здесь
+    await declare_x_q()
     scheduler = AsyncIOScheduler()
-    scheduler.configure(
-        jobstores={
-            "default": MemoryJobStore()
-            #    'default': SQLAlchemyJobStore(url=db_url2)
-        }
-    )
+    scheduler.configure(jobstores={"default": MemoryJobStore()})
     try:
         scheduler.add_job(
             act_ttl,
             args=[settings.ttl_job.tick_interval],
             coalesce=True,
-            # misfire_grace_time=10,
             trigger=IntervalTrigger(minutes=settings.ttl_job.tick_interval),
             id=settings.ttl_job.id_name,
             replace_existing=True,
@@ -155,14 +73,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     await db_helper.dispose()
     scheduler.shutdown()
-
-    # FastStream broker
     await fs_router.broker.close()
-
-
-# @fs_router.after_startup
-# async def declare_topology(app: FastAPI):
-#     await declare_x_q()
 
 
 def register_static_docs_routes(app: FastAPI) -> None:
@@ -197,14 +108,12 @@ def create_app(create_custom_static_urls: bool = False) -> FastAPI:
         description=f"{SUMMARY}",
         default_response_class=JSONResponse,
         lifespan=lifespan,
-        openapi_tags=tags_metadata,
+        openapi_tags=TAGS_METADATA,
         docs_url="/docs" if create_custom_static_urls else "/legacy-docs",
         redoc_url=None if create_custom_static_urls else "/redoc",
     )
     add_pagination(app)
-    app.include_router(
-        api_router,
-    )
+    app.include_router(api_router)
     app.include_router(fs_router, include_in_schema=False)
     if create_custom_static_urls:
         register_static_docs_routes(app)

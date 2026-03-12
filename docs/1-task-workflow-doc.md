@@ -178,6 +178,7 @@ PUT /api/v1/webhooks/msg-task-result Content-Type: application/json
 POST https://your-webhook-url.com/hooks/task-result/fddf6675-42d3-478a-b81c-3abfc7ed84e0
     Content-Type: application/json
     X-Msg-Type: msg-task-result
+    X-Device-Id: 4619
     X-Ext-Id: 12345
     X-Result-Id: 304
     X-Status-Code: 200
@@ -198,6 +199,7 @@ POST https://your-webhook-url.com/hooks/task-result/fddf6675-42d3-478a-b81c-3abf
 >- Коды ответов и формат выдачи результатов нужно уточнять согласно задачам интеграции.
 >- Заголовок `X-Ext-Id: xxx` хранит внешний идентификатор, строку `ext_task_id` и передается из первоначального запроса клиента.
 >- Заголовок `X-Result-Id: yyy` содержит внутренний (на устройстве) числовой идентификатор результата, чаще всего инкрементальный.
+>- Заголовок `X-Device-Id: zzzz` содержит числовой идентификатор устройства `device_id`
 ---
 
 ## 📝 Поддерживаемые методы и форматы
