@@ -178,7 +178,7 @@ class DeviceRepo:
         """
         Пакетное обновление статуса соединений по client_id.
         Использует UNNEST для массивов в PostgreSQL.
-        Общее время checked_at берётся один раз на всю операцию.
+        Все параметры корректно передаются через именованные переменные.
         """
         if not device_conn:
             return
@@ -193,24 +193,24 @@ class DeviceRepo:
         # Единый timestamp для всей операции
         checked_at = func.current_timestamp()
 
-        stmt = text(f"""
-            UPDATE {DeviceConnection.__tablename__}
-            SET 
-                checked_at = :checked_at,
-                last_checked_result = TRUE,
-                details = u.details::jsonb,
-                connected_at = CASE 
-                    WHEN u.connected_at IS NOT NULL THEN to_timestamp(u.connected_at)
-                    ELSE NULL 
-                END
-            FROM (
-                SELECT 
-                    UNNEST(:client_ids::text[]) AS client_id,
-                    UNNEST(:details_list::jsonb[]) AS details,
-                    UNNEST(:connected_at_list) AS connected_at
-            ) AS u
-            WHERE {DeviceConnection.__tablename__}.client_id = u.client_id
-        """)
+        stmt = text("""
+                UPDATE tb_device_connections
+                SET 
+                    checked_at = :checked_at,
+                    last_checked_result = TRUE,
+                    details = u.details::jsonb,
+                    connected_at = CASE 
+                        WHEN u.connected_at IS NOT NULL THEN to_timestamp(u.connected_at)
+                        ELSE NULL 
+                    END
+                FROM (
+                    SELECT 
+                        UNNEST(:client_ids::text[]) AS client_id,
+                        UNNEST(:details_list::jsonb[]) AS details,
+                        UNNEST(:connected_at_list) AS connected_at
+                ) AS u
+                WHERE tb_device_connections.client_id = u.client_id
+            """)
 
         await session.execute(
             stmt,
