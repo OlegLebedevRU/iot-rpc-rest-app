@@ -37,9 +37,10 @@ class DeviceService:
             )
             for d in dev_online
         ]
-        log.debug("service DeviceService: update device connections %s", dev_statuses)
+        # log.debug("service DeviceService: update device connections %s", dev_statuses)
         await DeviceRepo.reset_connection_flag(session, list_devices)
         await DeviceRepo.update_connections(session, dev_statuses)
+        await session.commit()
 
     @classmethod
     async def proxy_upsert_tag(

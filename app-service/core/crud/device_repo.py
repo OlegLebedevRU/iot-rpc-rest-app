@@ -204,7 +204,9 @@ class DeviceRepo:
                 "json_data": json_data,
             },
         )
-        await session.commit()
+        # commit in service layer after all updates
+        # await session.commit()
+        log.info("Updated %d connections", len(device_conn))
 
     @classmethod
     async def reset_connection_flag(cls, session: AsyncSession, sn_arr: list[str]):
@@ -218,7 +220,8 @@ class DeviceRepo:
             .values(last_checked_result=False)
             .where(DeviceConnection.client_id.in_(sn_arr))
         )
-        await session.commit()
+        # commit in service with transaction (reset-update)
+        # await session.commit()
 
     @classmethod
     async def list(cls, session: AsyncSession) -> List[str]:
