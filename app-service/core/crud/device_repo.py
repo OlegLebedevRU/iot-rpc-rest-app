@@ -177,9 +177,8 @@ class DeviceRepo:
     ):
         """
         Пакетное обновление статуса соединений по client_id.
-        Использует временную таблицу через JSON и функцию json_to_recordset,
-        чтобы избежать проблем с параметрами в VALUES/UNNEST.
-        Совместимо с asyncpg и SQLAlchemy.
+        Использует временную таблицу через JSON и функцию json_to_recordset.
+        Время checked_at вычисляется прямо в SQL через now().
         """
         if not device_conn:
             return
@@ -198,15 +197,13 @@ class DeviceRepo:
             )
 
         # Преобразуем в JSON-строку
-        import json
-
         json_data = json.dumps(data)
 
-        # Используем json_to_recordset для преобразования JSON в таблицу
+        # Убираем передачу checked_at как параметра — используем now() в SQL
         stmt = text("""
                 UPDATE tb_device_connections AS conn
                 SET 
-                    checked_at = :checked_at,
+                    checked_at = NOW(),
                     last_checked_result = TRUE,
                     details = data.details::jsonb,
                     connected_at = CASE 
@@ -224,7 +221,6 @@ class DeviceRepo:
         await session.execute(
             stmt,
             {
-                "checked_at": func.current_timestamp(),
                 "json_data": json_data,
             },
         )
