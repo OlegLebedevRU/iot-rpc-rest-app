@@ -177,26 +177,33 @@ class DeviceRepo:
     ):
         """
         Пакетное обновление статуса соединений по client_id.
-        Использует временную таблицу через VALUES для совместимости с asyncpg.
-        Устраняет проблему смешения $1 и :param в SQL.
+        Использует временную таблицу через JSON и функцию json_to_recordset,
+        чтобы избежать проблем с параметрами в VALUES/UNNEST.
+        Совместимо с asyncpg и SQLAlchemy.
         """
         if not device_conn:
             return
 
-        # Подготавливаем данные
-        client_ids = [dc.client_id for dc in device_conn]
-        details_list = [dc.details.model_dump(mode="json") for dc in device_conn]
-        connected_at_timestamps = [
-            (dc.connected_at / 1000) if dc.connected_at else None for dc in device_conn
-        ]
+        # Подготавливаем данные в виде списка словарей
+        data = []
+        for dc in device_conn:
+            data.append(
+                {
+                    "client_id": dc.client_id,
+                    "details": dc.details.model_dump(mode="json"),
+                    "connected_at": (
+                        (dc.connected_at / 1000) if dc.connected_at else None
+                    ),
+                }
+            )
 
-        # Единый timestamp для всей операции
-        checked_at = func.current_timestamp()
+        # Преобразуем в JSON-строку
+        import json
 
-        # Формируем список строк для VALUES
-        values_rows = ", ".join([f"(%s, %s, %s)" for _ in device_conn])
+        json_data = json.dumps(data)
 
-        stmt = text(f"""
+        # Используем json_to_recordset для преобразования JSON в таблицу
+        stmt = text("""
                 UPDATE tb_device_connections AS conn
                 SET 
                     checked_at = :checked_at,
@@ -206,25 +213,19 @@ class DeviceRepo:
                         WHEN data.connected_at IS NOT NULL THEN to_timestamp(data.connected_at)
                         ELSE NULL 
                     END
-                FROM (
-                    VALUES {values_rows}
-                ) AS data(client_id, details, connected_at)
-                WHERE conn.client_id = data.client_id::text
+                FROM json_to_recordset(:json_data) AS data(
+                    client_id text,
+                    details jsonb,
+                    connected_at double precision
+                )
+                WHERE conn.client_id = data.client_id
             """)
 
-        # Формируем плоский список параметров
-        params_flat = []
-        for i in range(len(device_conn)):
-            params_flat.append(client_ids[i])
-            params_flat.append(details_list[i])
-            params_flat.append(connected_at_timestamps[i])
-
-        # Передаём параметры как позиционные ($1, $2, ...)
         await session.execute(
             stmt,
             {
-                "checked_at": checked_at,
-                **{f"p{i+1}": val for i, val in enumerate(params_flat)},
+                "checked_at": func.current_timestamp(),
+                "json_data": json_data,
             },
         )
         await session.commit()
