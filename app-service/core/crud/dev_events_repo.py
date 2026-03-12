@@ -69,10 +69,8 @@ class EventRepository:
         interval_m: int | None,
         limit: int | None = 10,
     ):
-        if interval_m is None or interval_m > 3600:
-            interval_m = 15
-        if limit is None or limit > 10:
-            limit = 10
+        interval_m = 15 if interval_m is None or interval_m > 3600 else interval_m
+        limit = 10 if limit is None or limit > 10 else limit
         stmt = text("""
                     SELECT 
                         created_at,
@@ -111,6 +109,7 @@ class EventRepository:
         """
         Возвращает новые события (id > last_event_id или сохранённого offset).
         Автоматически обновляет смещение в tb_device_event_offsets.
+        Использует FOR UPDATE для предотвращения race condition и SQL-агрегацию для производительности.
         """
         try:
             # Получаем device_id, принадлежащие орге
@@ -124,9 +123,11 @@ class EventRepository:
             if not target_device_ids:
                 return []
 
-            # Получаем текущие смещения
-            offsets_stmt = select(DeviceEventOffset).where(
-                DeviceEventOffset.device_id.in_(target_device_ids)
+            # Блокируем offset-записи для предотвращения race condition
+            offsets_stmt = (
+                select(DeviceEventOffset)
+                .where(DeviceEventOffset.device_id.in_(target_device_ids))
+                .with_for_update()
             )
             offsets_result = await session.execute(offsets_stmt)
             offsets = {
@@ -134,49 +135,61 @@ class EventRepository:
                 for offset in offsets_result.scalars().all()
             }
 
-            # Формируем условия WHERE
-            conditions = [DevEvent.device_id.in_(target_device_ids)]
-
+            # Формируем условие: id > max(last_event_id, offset)
             if last_event_id is not None:
-                last_id: int = last_event_id
-                conditions.append(and_(DevEvent.id > last_id))
+                base_id = last_event_id
+                conditions = [
+                    DevEvent.device_id.in_(target_device_ids),
+                    DevEvent.id > base_id,
+                ]
             else:
-                or_conds = []
-                for dev_id in target_device_ids:
-                    last_id = offsets.get(dev_id, 0)
-                    or_conds.append(
-                        and_(DevEvent.device_id == dev_id, DevEvent.id > last_id)
-                    )
-                conditions.append(or_(*or_conds))
+                conditions = [
+                    DevEvent.device_id.in_(target_device_ids),
+                    or_(
+                        *[
+                            and_(
+                                DevEvent.device_id == dev_id,
+                                DevEvent.id > offsets.get(dev_id, 0),
+                            )
+                            for dev_id in target_device_ids
+                        ]
+                    ),
+                ]
 
-            # Выбираем события
-            stmt = (
+            # Получаем события, отсортированные по id
+            events_stmt = (
                 select(DevEvent)
                 .where(*conditions)
                 .order_by(DevEvent.id.asc())
                 .limit(limit)
             )
-            result = await session.execute(stmt)
-            events = result.scalars().all()
+            events_result = await session.execute(events_stmt)
+            events = events_result.scalars().all()
 
             if not events:
                 return []
 
-            # Группируем события по device_id и находим max(id)
-            events_by_device = {}
-            for ev in events:
-                if ev.device_id not in events_by_device:
-                    events_by_device[ev.device_id] = []
-                events_by_device[ev.device_id].append(ev)
+            # Используем SQL для нахождения max(id) по каждому device_id
+            update_offsets_stmt = (
+                select(
+                    DevEvent.device_id,
+                    func.max(DevEvent.id).label("max_id"),
+                )
+                .where(DevEvent.id.in_([ev.id for ev in events]))
+                .group_by(DevEvent.device_id)
+            )
+            offsets_update_result = await session.execute(update_offsets_stmt)
+            # Явно конвертируем результат в словарь {device_id: max_id}
+            new_offsets = {
+                row.device_id: row.max_id for row in offsets_update_result.mappings()
+            }
 
-            # Подготавливаем batch upsert для смещений
-            for dev_id, ev_list in events_by_device.items():
-                max_id = max(ev.id for ev in ev_list)
+            # Подготавливаем upsert для offset
+            for dev_id, max_id in new_offsets.items():
                 current_offset = offsets.get(dev_id, 0)
                 if max_id <= current_offset:
-                    continue  # не обновляем, если уже было выше
+                    continue
 
-                # Upsert: INSERT ... ON CONFLICT UPDATE
                 upsert_stmt = (
                     insert(DeviceEventOffset)
                     .values(device_id=dev_id, last_event_id=max_id)
@@ -189,38 +202,15 @@ class EventRepository:
 
             await session.commit()
 
-            # Возвращаем Pydantic-модели
             return [
                 DevEventOut.model_validate(event, from_attributes=True)
                 for event in events
             ]
+
         except Exception as e:
             await session.rollback()
-            log.error(f"Ошибка при получении инкрементальных событий: {e}")
+            log.error(
+                f"Ошибка при получении инкрементальных событий: org_id={org_id}, "
+                f"device_id={device_id}, last_event_id={last_event_id}, {e}"
+            )
             raise
-
-
-#
-# """"
-# SELECT (payload #>> '{}')::jsonb -> '300'->0->'301' as res, (EXTRACT(EPOCH FROM current_timestamp - created_at)/60)::Integer AS "Minute passes"
-# from public.tb_dev_events
-# WHERE device_id = 4617 and event_type_code = 3 and created_at > current_timestamp - interval '50000 minutes'
-# order by created_at desc limit 1
-#
-# SELECT (payload #>> '{}')::jsonb -> '300'->0->'338' as res, (EXTRACT(EPOCH FROM current_timestamp - created_at)/60)::Integer AS "Minute passes"
-# from public.tb_dev_events
-# WHERE device_id = 4618 and event_type_code = 44 and created_at > current_timestamp - interval '15 minutes'
-# order by created_at desc limit 1
-#
-# SELECT created_at, (payload #>> '{}')::jsonb -> '300'->0->'399' as field,
-# (EXTRACT(EPOCH FROM current_timestamp - created_at))::Integer AS "interval_sec"
-# from public.tb_dev_events
-# WHERE device_id = 4618 and event_type_code = 1000 and created_at > current_timestamp - interval '5500 minutes'
-# order by created_at desc limit 10
-#
-# SELECT created_at, ((payload #>> '{}')::jsonb -> '300'->0->'338')::text as field,
-# (EXTRACT(EPOCH FROM current_timestamp - created_at))::Integer AS "interval_sec"
-# from public.tb_dev_events
-# WHERE device_id = 4618 and event_type_code = 44 and created_at > current_timestamp - interval '5500 minutes'
-# order by created_at desc limit 10
-# """
