@@ -9,6 +9,7 @@ from sqlalchemy import (
     func,
     sql,
     UniqueConstraint,
+    Index,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
 from sqlalchemy.orm import (
@@ -163,13 +164,18 @@ class DeviceConnection(Base):
     client_id: Mapped[str] = mapped_column(String, nullable=True)
     last_checked_result: Mapped[bool] = mapped_column(Boolean, default=False)
     details: Mapped[str] = mapped_column(JSONB, nullable=True)
+    # Определение индекса на поле client_id
+    # CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_tb_device_connections_client_id ON tb_device_connections(client_id)
+
+    __table_args__ = (
+        Index("ix_tb_device_connections_client_id", "client_id"),
+        # Если нужно — уникальный индекс (если client_id уникален):
+        UniqueConstraint("client_id", name="uq_tb_device_connections_client_id"),
+    )
     device_conn: Mapped["Device"] = relationship(
         back_populates="connection",
-        # secondaryjoin="Device.device_id==DeviceConnection.device_id",
         single_parent=True,
         uselist=False,
-        # secondaryjoin="and_(DeviceOrgBind.org_id==Org.org_id, Org.is_deleted ==sql.false())",
-        # innerjoin=True,
     )
 
 

@@ -25,7 +25,7 @@ class RmqAdmin:
     async def set_device_definitions(cls, session: AsyncSession):
         names = await RmqAdminApi.get_exist_devices()
         if names:
-            lu1 = await DeviceRepo.get_exist_device_sn(session, names)
+            lu1 = await DeviceRepo.find_missing_devices(session, names)
             # defns = {"users": [], "permissions": []}
             if lu1:
                 await RmqAdminApi.set_device_definitions(lu1)

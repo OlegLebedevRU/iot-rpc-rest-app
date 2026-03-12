@@ -1,7 +1,7 @@
 from core.logging_config import setup_module_logger
-from typing import Any
+from typing import Any, List
 
-from sqlalchemy import select, not_, func, update
+from sqlalchemy import select, not_, func, update, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import joinedload, load_only
@@ -14,8 +14,6 @@ from core.models import (
     DeviceOrgBind,
     DeviceGauge,
 )
-
-# from core.models.devices import DeviceOrgBind, DeviceGauge
 from core.schemas.devices import DeviceConnectStatus
 
 log = setup_module_logger(__name__, "repo_devices.log")
@@ -40,25 +38,22 @@ class DeviceRepo:
 
         stmt_44 = (
             select(
-                #  DeviceGauge,
                 DeviceGauge.device_id,
-                (DeviceGauge.gauges["300"][0]["338"]).label(
-                    "active_ws"
-                ),  # ["300"][0]["338"]
+                (DeviceGauge.gauges["300"][0]["338"]).label("active_ws"),
                 (func.now() - DeviceGauge.updated_at).label("interval_sec"),
-            )  # .where(DeviceGauge.type == "44")
+            )
         ).subquery("gauge_44_338")
+
         stmt = (
             select(Device)
             .options(load_only(Device.device_id, Device.sn))
             .options(joinedload(Device.connection))
             .options(joinedload(Device.device_tags))
             .options(joinedload(Device.device_gauges))
-            #  .join_from(Device, stmt_44, Device.device_id == stmt_44.c.device_id)
             .where(Device.device_id.in_(select(stmt_org.c.device_id)))
             .where(Device.is_deleted == False)
-            # .outerjoin(stmt_44, Device.device_id == stmt_44.c.device_id)
         )
+
         devs = await session.execute(stmt)
         return devs.unique().scalars().all()
 
@@ -68,7 +63,7 @@ class DeviceRepo:
     ) -> str | None:
         stmt = (
             select(Device.sn)
-            .join(Device.org_bind)  # явный JOIN через relationship
+            .join(Device.org_bind)
             .where(Device.device_id == device_id)
             .where(Device.is_deleted == False)
             .where(DeviceOrgBind.org_id == org_id)
@@ -76,22 +71,6 @@ class DeviceRepo:
         )
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
-
-    # async def get_device_sn(
-    #     cls, session: AsyncSession, device_id: int | None = 0, org_id: int | None = 0
-    # ) -> str | None:
-    #     data = await session.execute(
-    #         select(Device)
-    #         .where(Device.device_id == device_id)
-    #         .where(Device.is_deleted == False)
-    #         .where(DeviceOrgBind.org_id == org_id)
-    #     )
-    #     r = data.unique().mappings().one_or_none()
-    #     if r is not None:
-    #         resp = r.Device.sn
-    #     else:
-    #         resp = None
-    #     return resp
 
     @classmethod
     async def get_org_id_by_device_id(
@@ -120,34 +99,18 @@ class DeviceRepo:
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
 
-    # async def get_device_id(
-    #     cls, session: AsyncSession, sn: str | None = "", org_id: int | None = 0
-    # ) -> int | None:
-    #     if sn == "" or sn is None:
-    #         return None
-    #     stmt = (
-    #         select(Device)
-    #         .where(Device.sn == sn)
-    #         .where(Device.is_deleted == False)
-    #         .limit(1)
-    #     )
-    #     if org_id > 0:
-    #         stmt = stmt.where(DeviceOrgBind.org_id == org_id)
-    #     data = await session.execute(stmt)
-    #     r = data.unique().one_or_none()
-    #     if r is not None:
-    #         resp = r.Device.device_id
-    #     else:
-    #         resp = None
-    #     return resp
-
     @classmethod
-    async def get_exist_device_sn(cls, session, sn_list):
+    async def find_missing_devices(cls, session, sn_list) -> List[str]:
+        """
+        Возвращает список серийных номеров из `sn_list`, которых НЕТ в базе.
+        На самом деле — логика противоположная названию.
+        """
+        # Исправлено: ищем те, что НЕ входят в переданный список
         lu_q = select(Device.sn).where(not_(Device.sn.in_(sn_list)))
         lu = await session.execute(lu_q)
-        lu1 = lu.scalars().all()
-        log.debug("## device repo get exist devices = %s", lu1)
-        return lu1
+        result = lu.scalars().all()
+        log.debug("## device repo get not in list devices = %s", result)
+        return result
 
     @classmethod
     async def add_devices(cls, session: AsyncSession, device_list: Any):
@@ -161,19 +124,17 @@ class DeviceRepo:
                 ]
             )
             .on_conflict_do_update(
-                index_elements=[
-                    "device_id"
-                ],  # или ["sn"] — зависит от вашего UNIQUE индекса
-                set_=dict(
-                    sn=ins_device.excluded.sn
-                ),  # sql.excluded ссылается на новые значения
+                index_elements=["device_id"],
+                set_=dict(sn=ins_device.excluded.sn),
             )
         )
+
         insert_stmt1 = (
             insert(Org)
             .values([{"org_id": int(d["org_id"])} for d in device_list])
             .on_conflict_do_nothing()
         )
+
         ins_bind = insert(DeviceOrgBind)
         insert_stmt2 = (
             insert(DeviceOrgBind)
@@ -184,10 +145,11 @@ class DeviceRepo:
                 ]
             )
             .on_conflict_do_update(
-                index_elements=["device_id"],  # предполагаем, что device_id уникален
+                index_elements=["device_id"],
                 set_=dict(org_id=ins_bind.excluded.org_id),
             )
         )
+
         ins_conn = insert(DeviceConnection)
         insert_dev_conn = (
             insert(DeviceConnection)
@@ -213,22 +175,59 @@ class DeviceRepo:
     async def update_connections(
         cls, session: AsyncSession, device_conn: list[DeviceConnectStatus]
     ):
-        for dev_con in device_conn:
-            con_upd = (
-                update(DeviceConnection)
-                .values(
-                    checked_at=func.current_timestamp(),
-                    last_checked_result=True,
-                    details=dev_con.details.model_dump(mode="json"),
-                    connected_at=func.to_timestamp(dev_con.connected_at / 1000),
-                )
-                .where(DeviceConnection.client_id == dev_con.client_id)
-            )
-            await session.execute(con_upd)
+        """
+        Пакетное обновление статуса соединений по client_id.
+        Использует UNNEST для массивов в PostgreSQL.
+        Общее время checked_at берётся один раз на всю операцию.
+        """
+        if not device_conn:
+            return
+
+        # Подготавливаем данные
+        client_ids = [dc.client_id for dc in device_conn]
+        details_list = [dc.details.model_dump(mode="json") for dc in device_conn]
+        connected_at_timestamps = [
+            (dc.connected_at / 1000) if dc.connected_at else None for dc in device_conn
+        ]
+
+        # Единый timestamp для всей операции
+        checked_at = func.current_timestamp()
+
+        stmt = text(f"""
+            UPDATE {DeviceConnection.__tablename__}
+            SET 
+                checked_at = :checked_at,
+                last_checked_result = TRUE,
+                details = u.details::jsonb,
+                connected_at = CASE 
+                    WHEN u.connected_at IS NOT NULL THEN to_timestamp(u.connected_at)
+                    ELSE NULL 
+                END
+            FROM (
+                SELECT 
+                    UNNEST(:client_ids::text[]) AS client_id,
+                    UNNEST(:details_list::jsonb[]) AS details,
+                    UNNEST(:connected_at_list) AS connected_at
+            ) AS u
+            WHERE {DeviceConnection.__tablename__}.client_id = u.client_id
+        """)
+
+        await session.execute(
+            stmt,
+            {
+                "checked_at": checked_at,
+                "client_ids": client_ids,
+                "details_list": details_list,
+                "connected_at_list": connected_at_timestamps,
+            },
+        )
         await session.commit()
 
     @classmethod
     async def reset_connection_flag(cls, session: AsyncSession, sn_arr: list[str]):
+        """
+        Сбрасывает флаг последней проверки для списка serial numbers.
+        """
         await session.execute(
             update(DeviceConnection)
             .values(last_checked_result=False)
@@ -237,15 +236,20 @@ class DeviceRepo:
         await session.commit()
 
     @classmethod
-    async def list(cls, session):
-        sn_arr_q = select(DeviceConnection.client_id)
-        sn_arr = await session.execute(sn_arr_q)
-        lu2 = sn_arr.scalars().all()
-        log.debug("#### device repo list device as scalar select: %s", lu2)
-        return lu2
+    async def list(cls, session: AsyncSession) -> List[str]:
+        """
+        Возвращает все client_id (serial numbers) из таблицы подключений.
+        """
+        stmt = select(DeviceConnection.client_id)
+        result = await session.execute(stmt)
+        sn_list = result.scalars().all()
+        log.debug("#### device repo list device as scalar select: %s", sn_list)
+        return list(sn_list)
 
     @classmethod
-    async def upsert_tag(cls, session, org_id, device_id, tag, value) -> int:
+    async def upsert_tag(
+        cls, session: AsyncSession, org_id: int, device_id: int, tag: str, value: str
+    ) -> int:
         stmt = (
             insert(DeviceTag)
             .values(device_id=device_id, tag=tag, value=value)
@@ -255,13 +259,14 @@ class DeviceRepo:
             )
             .returning(DeviceTag.id)
         )
-        res = await session.execute(stmt)
+        result = await session.execute(stmt)
         await session.commit()
-        tag_id = res.unique().scalars().one()
-        return tag_id
+        return result.unique().scalars().one()
 
     @classmethod
-    async def upsert_gauge(cls, session, org_id, device_id, type, gauges) -> int:
+    async def upsert_gauge(
+        cls, session: AsyncSession, org_id: int, device_id: int, type: str, gauges: dict
+    ) -> int:
         stmt = (
             insert(DeviceGauge)
             .values(device_id=device_id, type=type, gauges=gauges)
@@ -271,15 +276,6 @@ class DeviceRepo:
             )
             .returning(DeviceGauge.id)
         )
-        res = await session.execute(stmt)
+        result = await session.execute(stmt)
         await session.commit()
-        gauge_id = res.unique().scalars().one()
-        return gauge_id
-
-    # async def add_event(cls, session: AsyncSession, event: DevEventBody) -> None:
-    #     evt_q = DevEvent(
-    #         **event.model_dump(exclude={"dev_timestamp"}),
-    #         dev_timestamp=func.to_timestamp(event.dev_timestamp),
-    #     )
-    #     session.add(evt_q)
-    #     await session.commit()
+        return result.unique().scalars().one()
