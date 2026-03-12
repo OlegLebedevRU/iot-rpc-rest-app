@@ -155,8 +155,8 @@ class TasksRepository:
             return None, None
 
         r = await session.execute(res_q)
-        task_results = r.unique().mappings().all()
-
+        # task_results = r.unique().mappings().all()
+        task_results = r.mappings().all()
         # Преобразуем RowMapping → dict для совместимости с типами
         result_data = [dict(row) for row in task_results]
         task_data = dict(resp_task_w_status)
