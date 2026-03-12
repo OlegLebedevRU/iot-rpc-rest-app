@@ -177,8 +177,8 @@ class DeviceRepo:
     ):
         """
         Пакетное обновление статуса соединений по client_id.
-        Использует UNNEST для массивов в PostgreSQL.
-        Все параметры корректно передаются через именованные переменные.
+        Использует временную таблицу через VALUES для совместимости с asyncpg.
+        Устраняет проблему смешения $1 и :param в SQL.
         """
         if not device_conn:
             return
@@ -193,32 +193,38 @@ class DeviceRepo:
         # Единый timestamp для всей операции
         checked_at = func.current_timestamp()
 
-        stmt = text("""
-                UPDATE tb_device_connections
+        # Формируем список строк для VALUES
+        values_rows = ", ".join([f"(%s, %s, %s)" for _ in device_conn])
+
+        stmt = text(f"""
+                UPDATE tb_device_connections AS conn
                 SET 
                     checked_at = :checked_at,
                     last_checked_result = TRUE,
-                    details = u.details::jsonb,
+                    details = data.details::jsonb,
                     connected_at = CASE 
-                        WHEN u.connected_at IS NOT NULL THEN to_timestamp(u.connected_at)
+                        WHEN data.connected_at IS NOT NULL THEN to_timestamp(data.connected_at)
                         ELSE NULL 
                     END
                 FROM (
-                    SELECT 
-                        UNNEST(:client_ids::text[]) AS client_id,
-                        UNNEST(:details_list::jsonb[]) AS details,
-                        UNNEST(:connected_at_list) AS connected_at
-                ) AS u
-                WHERE tb_device_connections.client_id = u.client_id
+                    VALUES {values_rows}
+                ) AS data(client_id, details, connected_at)
+                WHERE conn.client_id = data.client_id::text
             """)
 
+        # Формируем плоский список параметров
+        params_flat = []
+        for i in range(len(device_conn)):
+            params_flat.append(client_ids[i])
+            params_flat.append(details_list[i])
+            params_flat.append(connected_at_timestamps[i])
+
+        # Передаём параметры как позиционные ($1, $2, ...)
         await session.execute(
             stmt,
             {
                 "checked_at": checked_at,
-                "client_ids": client_ids,
-                "details_list": details_list,
-                "connected_at_list": connected_at_timestamps,
+                **{f"p{i+1}": val for i, val in enumerate(params_flat)},
             },
         )
         await session.commit()
