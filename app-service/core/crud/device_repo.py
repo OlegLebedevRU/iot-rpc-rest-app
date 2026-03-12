@@ -22,29 +22,22 @@ log = setup_module_logger(__name__, "repo_devices.log")
 
 
 class DeviceRepo:
+
     @classmethod
     async def get(cls, session: AsyncSession, org_id: int, device_id: int | None):
         stmt_org = (
-            (
+            select(DeviceOrgBind.device_id)
+            .where(DeviceOrgBind.org_id == org_id)
+            .subquery("devices")
+        )
+        if device_id is not None:
+            stmt_org = (
                 select(DeviceOrgBind.device_id)
-                .where(DeviceOrgBind.org_id == org_id)
-                .subquery("devices")
-            )
-            if device_id is None
-            else (
-                select(DeviceOrgBind.device_id).where(
+                .where(
                     DeviceOrgBind.org_id == org_id, DeviceOrgBind.device_id == device_id
                 )
-            ).subquery("devices")
-        )
-
-        stmt_44 = (
-            select(
-                DeviceGauge.device_id,
-                (DeviceGauge.gauges["300"][0]["338"]).label("active_ws"),
-                (func.now() - DeviceGauge.updated_at).label("interval_sec"),
+                .subquery("devices")
             )
-        ).subquery("gauge_44_338")
 
         stmt = (
             select(Device)
@@ -56,8 +49,8 @@ class DeviceRepo:
             .where(Device.is_deleted == False)
         )
 
-        devs = await session.execute(stmt)
-        return devs.unique().scalars().all()
+        result = await session.execute(stmt)
+        return result.unique().scalars().all()
 
     @classmethod
     async def get_device_sn(
@@ -66,9 +59,11 @@ class DeviceRepo:
         stmt = (
             select(Device.sn)
             .join(Device.org_bind)
-            .where(Device.device_id == device_id)
-            .where(Device.is_deleted == False)
-            .where(DeviceOrgBind.org_id == org_id)
+            .where(
+                Device.device_id == device_id,
+                Device.is_deleted == False,
+                DeviceOrgBind.org_id == org_id,
+            )
             .limit(1)
         )
         result = await session.execute(stmt)
@@ -116,61 +111,47 @@ class DeviceRepo:
 
     @classmethod
     async def add_devices(cls, session: AsyncSession, device_list: Any):
-        ins_device = insert(Device)
-        insert_stmt = (
+        # Подготовка данных
+        device_values = [
+            {"device_id": int(d["device_id"]), "sn": d["serial_number"]}
+            for d in device_list
+        ]
+        org_values = [{"org_id": int(d["org_id"])} for d in device_list]
+        bind_values = [
+            {"device_id": int(d["device_id"]), "org_id": int(d["org_id"])}
+            for d in device_list
+        ]
+        conn_values = [
+            {"device_id": int(d["device_id"]), "client_id": d["serial_number"]}
+            for d in device_list
+        ]
+
+        # Выполнение в одном порядке, без commit между
+        await session.execute(
             insert(Device)
-            .values(
-                [
-                    {"device_id": int(d["device_id"]), "sn": d["serial_number"]}
-                    for d in device_list
-                ]
-            )
+            .values(device_values)
             .on_conflict_do_update(
-                index_elements=["device_id"],
-                set_=dict(sn=ins_device.excluded.sn),
+                index_elements=["device_id"], set_=dict(sn=insert(Device).excluded.sn)
             )
         )
-
-        insert_stmt1 = (
-            insert(Org)
-            .values([{"org_id": int(d["org_id"])} for d in device_list])
-            .on_conflict_do_nothing()
-        )
-
-        ins_bind = insert(DeviceOrgBind)
-        insert_stmt2 = (
+        await session.execute(insert(Org).values(org_values).on_conflict_do_nothing())
+        await session.execute(
             insert(DeviceOrgBind)
-            .values(
-                [
-                    {"device_id": int(d["device_id"]), "org_id": int(d["org_id"])}
-                    for d in device_list
-                ]
-            )
+            .values(bind_values)
             .on_conflict_do_update(
                 index_elements=["device_id"],
-                set_=dict(org_id=ins_bind.excluded.org_id),
+                set_=dict(org_id=insert(DeviceOrgBind).excluded.org_id),
             )
         )
-
-        ins_conn = insert(DeviceConnection)
-        insert_dev_conn = (
+        await session.execute(
             insert(DeviceConnection)
-            .values(
-                [
-                    {"device_id": int(d["device_id"]), "client_id": d["serial_number"]}
-                    for d in device_list
-                ]
-            )
+            .values(conn_values)
             .on_conflict_do_update(
                 index_elements=["device_id"],
-                set_=dict(client_id=ins_conn.excluded.client_id),
+                set_=dict(client_id=insert(DeviceConnection).excluded.client_id),
             )
         )
 
-        await session.execute(insert_stmt)
-        await session.execute(insert_stmt1)
-        await session.execute(insert_stmt2)
-        await session.execute(insert_dev_conn)
         await session.commit()
 
     @classmethod
@@ -186,17 +167,14 @@ class DeviceRepo:
             return
 
         # Подготавливаем данные в виде списка словарей
-        data = []
-        for dc in device_conn:
-            data.append(
-                {
-                    "client_id": dc.client_id,
-                    "details": dc.details.model_dump(mode="json"),
-                    "connected_at": (
-                        (dc.connected_at / 1000) if dc.connected_at else None
-                    ),
-                }
-            )
+        data = [
+            {
+                "client_id": dc.client_id,
+                "details": dc.details.model_dump(mode="json"),
+                "connected_at": (dc.connected_at / 1000) if dc.connected_at else None,
+            }
+            for dc in device_conn
+        ]
 
         # Преобразуем в JSON-строку
         json_data = json.dumps(data)
@@ -233,6 +211,8 @@ class DeviceRepo:
         """
         Сбрасывает флаг последней проверки для списка serial numbers.
         """
+        if not sn_arr:
+            return
         await session.execute(
             update(DeviceConnection)
             .values(last_checked_result=False)
@@ -247,9 +227,8 @@ class DeviceRepo:
         """
         stmt = select(DeviceConnection.client_id)
         result = await session.execute(stmt)
-        sn_list = result.scalars().all()
-        log.debug("#### device repo list device as scalar select: %s", sn_list)
-        return list(sn_list)
+        return list(result.scalars().all())
+        # log.debug("#### device repo list device as scalar select: %s", sn_list)
 
     @classmethod
     async def upsert_tag(
@@ -266,7 +245,7 @@ class DeviceRepo:
         )
         result = await session.execute(stmt)
         await session.commit()
-        return result.unique().scalars().one()
+        return result.scalar_one()
 
     @classmethod
     async def upsert_gauge(
@@ -283,4 +262,4 @@ class DeviceRepo:
         )
         result = await session.execute(stmt)
         await session.commit()
-        return result.unique().scalars().one()
+        return result.scalar_one()
