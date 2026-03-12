@@ -100,7 +100,9 @@ class ResultArray(BaseModel):
     id: int
     ext_id: int
     status_code: int
-    result: str = None
+    result: dict | None = None  # Теперь это словарь, а не строка
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class TaskResponseResult(TaskResponseStatus):

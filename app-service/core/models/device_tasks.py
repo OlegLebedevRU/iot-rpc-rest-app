@@ -70,7 +70,9 @@ class DevTaskResult(Base):
     task_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(DevTask.id))
     ext_id: Mapped[int] = mapped_column(Integer, default=0)
     status_code: Mapped[int] = mapped_column(Integer, default=501)
-    result: Mapped[str] = mapped_column(String, default="default")
+    result: Mapped[dict] = mapped_column(
+        JSONB, default="{}", nullable=False
+    )  # Изменено!
     task_result: Mapped["DevTask"] = relationship(
         single_parent=True, cascade="all, delete-orphan"
     )

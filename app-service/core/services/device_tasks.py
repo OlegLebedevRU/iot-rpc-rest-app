@@ -1,3 +1,4 @@
+import json
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -147,38 +148,10 @@ class DeviceTasksService:
         await send_rsp(sn, t_resp, correlation_id, expiration, method_code)
 
     async def save(self, msg, sn, corr_id: UUID4):
-        if "ext_id" in msg.headers:
-            ext_id = int(msg.headers["ext_id"])
-        else:
-            ext_id = 0
-        if "status_code" in msg.headers:
-            status_code = int(msg.headers["status_code"])
-        else:
-            status_code = 501
-        if corr_id:
-            if msg.body:
-                res = msg.body.decode()
-            else:
-                res = "default"
-            log.info(
-                "Mqtt received RESULT ext_id=%d, status_code=%d",
-                ext_id,
-                status_code,
-            )
+        ext_id = int(msg.headers.get("ext_id", 0))
+        status_code = int(msg.headers.get("status_code", 501))
 
-            result_id = await TasksRepository.save_task_result(
-                self.session, corr_id, ext_id, status_code, res
-            )
-            rmsg = "commited"
-            try:
-                await TasksRepository.task_status_update(
-                    self.session, corr_id, TaskStatus.DONE
-                )
-            except Exception as e:
-                log.error("Task status update error %s", e)
-                rmsg = "Partial error= result commited, but status updated fail"
-        else:
-
+        if not corr_id:
             log.info(
                 "Mqtt received RESULT with ERROR <dev.%s.res> - No corr_id, ext_id=%d, status_code=%d",
                 sn,
@@ -186,8 +159,39 @@ class DeviceTasksService:
                 status_code,
             )
             return
-        dev_id = await DeviceRepo.get_device_id(session=self.session, sn=sn)
 
+        # Декодируем тело
+        raw_body = msg.body.decode() if msg.body else "{}"
+
+        # Пытаемся распарсить как JSON
+        try:
+            res_data = json.loads(raw_body)
+            if not isinstance(res_data, dict):
+                res_data = {"result": res_data}
+        except json.JSONDecodeError, TypeError:
+            res_data = {"result": raw_body}
+
+        log.info(
+            "Mqtt received RESULT ext_id=%d, status_code=%d, parsed result: %s",
+            ext_id,
+            status_code,
+            res_data,
+        )
+
+        result_id = await TasksRepository.save_task_result(
+            self.session, corr_id, ext_id, status_code, res_data
+        )
+
+        rmsg = "committed"
+        try:
+            await TasksRepository.task_status_update(
+                self.session, corr_id, TaskStatus.DONE
+            )
+        except Exception as e:
+            log.error("Task status update error %s", e)
+            rmsg = "Partial error: result committed, but status update failed"
+
+        dev_id = await DeviceRepo.get_device_id(session=self.session, sn=sn)
         await send_cmt(sn, rmsg, msg.body, corr_id, dev_id, result_id, ext_id)
 
     async def ttl(self, decrement: int = 1):

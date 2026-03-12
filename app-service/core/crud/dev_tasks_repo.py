@@ -1,3 +1,5 @@
+import json
+
 from core.logging_config import setup_module_logger
 import time
 import uuid
@@ -385,21 +387,30 @@ class TasksRepository:
         task_id: UUID4,
         ext_id: int,
         status_code: int,
-        result: str,
+        result: dict | str,  # Поддержка обоих типов
     ) -> int | None:
+        # Если result — строка, попробуем распарсить как JSON, иначе обернём
+        if isinstance(result, str):
+            try:
+                parsed_result = json.loads(result)
+            except json.JSONDecodeError, TypeError:
+                parsed_result = {"result": result}
+        else:
+            parsed_result = result
+
         tsk_q = (
             insert(DevTaskResult)
             .values(
                 task_id=task_id,
                 ext_id=ext_id,
                 status_code=status_code,
-                result=result,
+                result=parsed_result,  # Теперь передаётся как dict → JSONB
             )
             .returning(DevTaskResult.id)
         )
         try:
-            result = await session.execute(tsk_q)
-            new_id = result.scalar_one()
+            result_row = await session.execute(tsk_q)
+            new_id = result_row.scalar_one()
             await session.commit()
             log.info("Task result committed, task_id=%s, result_id=%s", task_id, new_id)
             return new_id
