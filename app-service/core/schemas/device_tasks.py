@@ -129,7 +129,9 @@ class TaskResponseResult(TaskResponseStatus):
                             "id": 292,
                             "ext_id": 0,
                             "status_code": 200,
-                            "result": '{"status":"OK"}',
+                            "result": {
+                                "status": "OK"
+                            },  # ← Изменено: теперь dict, а не строка
                         }
                     ],
                 }

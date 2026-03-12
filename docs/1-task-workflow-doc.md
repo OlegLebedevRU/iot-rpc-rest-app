@@ -81,15 +81,34 @@ GET /api/v1/device-tasks/a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8
 
 **Ответ (200 OK, выполнена):**
 ````json 
-{
-  "id": "a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8", 
-  "created_at": 1712345678, 
-  "header": { "ext_task_id": "task-001", "device_id": 4619, "method_code": 20, "priority": 1, "ttl": 5 }, 
-  "status": 3, 
-  "pending_at": 1712345680, 
-  "locked_at": 1712345682, 
-  "results": [ { "id": 101, "ext_id": 0, "status_code": 200, "result": "{\"200\":0,\"300\":[{\"310\":\"1.04.025\",\"311\":null},{\"310\":\"\",\"311\":13}]}" } ]
-}  
+ {
+    "id": "5c75b4ed-2488-4769-b23a-2afae64ea22d",
+    "created_at": 1773089559,
+    "header": {
+        "ext_task_id": "wwhdtkuwgzihwlvi2ule",
+        "device_id": 4619,
+        "method_code": 20,
+        "priority": 0,
+        "ttl": 1
+    },
+    "status": 3,
+    "pending_at": 1773089560,
+    "locked_at": 1773089560,
+    "results": [
+       {
+            "id": 291,
+            "ext_id": 77,
+            "status_code": 206,
+            "result": {"data": "IoT data from device"}
+        } ,
+      {
+            "id": 292,
+            "ext_id": 77,
+            "status_code": 200,
+            "result": {"status": "OK"}
+        }
+    ]
+}
 ````
 
 **Ответ (200 OK, в процессе):**
@@ -101,7 +120,7 @@ GET /api/v1/device-tasks/a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8
 
 ### `GET /` — Поиск задач по device_id
 
-Пагинированный список задач для указанного устройства.
+Пагинированный список задач для указанного устройства (не включает тело параметров и список результатов).
 
 **Запрос:**
 ````http 
@@ -156,10 +175,22 @@ PUT /api/v1/webhooks/msg-task-result Content-Type: application/json
 
 ### Формат вебхука `msg-task-result`
 ````http 
-POST https://your-webhook-url.com/hooks/task-result Content-Type: application/json X-Signature: sha256=... (опционально)
+POST https://your-webhook-url.com/hooks/task-result/fddf6675-42d3-478a-b81c-3abfc7ed84e0
+    Content-Type: application/json
+    X-Msg-Type: msg-task-result
+    X-Ext-Id: 12345
+    X-Result-Id: 304
+    X-Status-Code: 200
+    X-Signature: sha256=... (пример кастомного header - опционально, если установлен при регистрации вебхука)
+ 
 ````
 ````json 
-{ "event_type": "msg-task-result", "timestamp": 1712345690, "data": { "id": "a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8", "created_at": 1712345678, "header": { "ext_task_id": "task-001", "device_id": 4619, "method_code": 20 }, "status": 3, "results": [ { "id": 101, "ext_id": 0, "status_code": 200, "result": "{\"200\":0,\"300\":[{\"310\":\"1.04.025\"}]}" } ] } }
+{ 
+
+    "result": {
+        "data": "IoT data from device"
+    }
+}
 ````
 
 ---

@@ -82,6 +82,8 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
             headers["x-ext-id"] = msg.headers["x-ext-id"]
         if msg.headers.get("x-result-id"):
             headers["x-result-id"] = msg.headers["x-result-id"]
+        if msg.headers.get("x-status-code"):
+            headers["x-status-code"] = msg.headers["x-status-code"]
 
     # Отправляем
     path_suffix = (

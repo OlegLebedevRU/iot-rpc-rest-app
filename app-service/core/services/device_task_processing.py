@@ -65,6 +65,7 @@ async def send_cmt(
     dev_id: int,
     result_id: int,
     ext_id: int,
+    status_code: int,
 ):
 
     routing_key: str = str(
@@ -94,6 +95,7 @@ async def send_cmt(
             "x-msg-type": "msg-task-result",
             "x-ext-id": str(ext_id),
             "x-result-id": str(result_id),
+            "x-status-code": str(status_code),
         },
     )
 

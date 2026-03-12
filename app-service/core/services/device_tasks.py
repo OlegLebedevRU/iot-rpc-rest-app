@@ -192,7 +192,16 @@ class DeviceTasksService:
             rmsg = "Partial error: result committed, but status update failed"
 
         dev_id = await DeviceRepo.get_device_id(session=self.session, sn=sn)
-        await send_cmt(sn, rmsg, json.dumps(res_data), corr_id, dev_id, result_id, ext_id)
+        await send_cmt(
+            sn,
+            rmsg,
+            json.dumps(res_data),
+            corr_id,
+            dev_id,
+            result_id,
+            ext_id,
+            status_code,
+        )
 
     async def ttl(self, decrement: int = 1):
         await TasksRepository.update_ttl(self.session, decrement)
