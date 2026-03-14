@@ -1,5 +1,7 @@
 import json
 
+from fastapi_pagination.ext.sqlalchemy import apaginate
+
 from core.logging_config import setup_module_logger
 from typing import Any, List
 
@@ -266,3 +268,32 @@ class DeviceRepo:
         result = await session.execute(stmt)
         await session.commit()
         return result.scalar_one()
+
+    @classmethod
+    async def get_gauges_page(
+        cls,
+        session: AsyncSession,
+        org_id: int,
+        device_id: int | None = None,
+        type: str | None = None,
+    ):
+        """
+        Возвращает страницу с гаузами устройств в организации.
+        Поддерживает фильтрацию по device_id и type.
+        """
+        stmt = (
+            select(DeviceGauge)
+            .join(Device)
+            .join(Device.org_bind)
+            .where(Device.is_deleted == False)
+            .where(DeviceOrgBind.org_id == org_id)
+            .where(DeviceGauge.is_deleted == False)
+        )
+
+        if device_id is not None:
+            stmt = stmt.where(Device.device_id == device_id)
+
+        if type is not None:
+            stmt = stmt.where(DeviceGauge.type == type)
+
+        return await apaginate(session, stmt)

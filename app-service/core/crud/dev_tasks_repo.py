@@ -6,7 +6,7 @@ import uuid
 from typing import Any
 
 from fastapi_pagination import Page
-from fastapi_pagination.ext.sqlalchemy import paginate
+from fastapi_pagination.ext.sqlalchemy import apaginate
 from pydantic import UUID4
 from sqlalchemy import (
     select,
@@ -252,7 +252,7 @@ class TasksRepository:
             settings.db.limit_tasks_result
         )
 
-        return await paginate(session, query)
+        return await apaginate(session, query)
 
     @classmethod
     async def delete_task(

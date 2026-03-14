@@ -216,6 +216,9 @@ class WebhookConfigModel(BaseModel):
     webhooks_queue: str = "webhook_action"
     def_queue_args: dict = {"x-message-ttl": 600000}
     max_per_org: int = 2
+    gauge_event_types: list[int] = [
+        44
+    ]  # Список event_type_code, которые считаются гаузами
 
 
 class Settings(BaseSettings):

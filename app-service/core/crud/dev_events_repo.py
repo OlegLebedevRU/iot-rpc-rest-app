@@ -5,7 +5,7 @@ from fastapi_pagination import Page
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import text, and_, or_, select, func
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi_pagination.ext.sqlalchemy import paginate
+from fastapi_pagination.ext.sqlalchemy import apaginate
 from core.models import DevEvent, DeviceOrgBind
 from core.models.device_events import DeviceEventOffset
 from core.schemas.device_events import DevEventBody, DevEventOut
@@ -37,7 +37,7 @@ class EventRepository:
         events_exclude: list[int] | None = None,
     ) -> Page[DevEventOut]:
         if events_include is not None:
-            return await paginate(
+            return await apaginate(
                 session,
                 select(DevEvent)
                 .where(
@@ -47,7 +47,7 @@ class EventRepository:
                 .order_by(DevEvent.created_at.desc()),
             )
         else:
-            return await paginate(
+            return await apaginate(
                 session,
                 select(DevEvent)
                 .where(

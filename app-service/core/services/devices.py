@@ -61,3 +61,28 @@ class DeviceService:
         else:
             raise HTTPException(status_code=404, detail="Tag is not ascii")
         return tag_id
+
+    @classmethod
+    async def get_gauges(
+        cls,
+        session,
+        org_id,
+        device_id: int | None = None,
+        type: str | None = None,
+    ):
+        """
+        Получить gauges по устройствам в организации с пагинацией.
+        """
+        try:
+            result = await DeviceRepo.get_gauges_page(
+                session,
+                org_id=org_id,
+                device_id=device_id,
+                type=type,
+            )
+            if result is None or len(result.items) == 0:
+                raise HTTPException(status_code=404, detail="No gauges found")
+            return result
+        except Exception as e:
+            log.error("Error fetching gauges: %s", e)
+            raise HTTPException(status_code=500, detail="Internal server error")
