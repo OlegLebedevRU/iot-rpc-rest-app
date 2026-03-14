@@ -12,7 +12,9 @@ log = setup_module_logger(__name__, "api_depends.log")
 
 
 async def org_id_dep(
-    org_id: Annotated[int, Header(convert_underscores=False)],  # Отключаем преобразование, т.к. заголовок с CamelCase
+    org_id: Annotated[
+        int, Header(convert_underscores=False)
+    ],  # Отключаем преобразование, т.к. заголовок с CamelCase
 ):
     log.info("header request, orgId=%s", org_id)
     return org_id
@@ -30,9 +32,15 @@ api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 # === Обновлённая зависимость: сначала x-api-key, потом orgId в заголовке ===
 async def get_org_id_dependency(
     api_key: Optional[str] = Security(api_key_header),
-    org_id: Optional[int] = Header(None, alias="orgId"),  # Явно указываем имя заголовка как 'orgId'
+    org_id: Optional[int] = Header(
+        None, alias="orgId"
+    ),  # Явно указываем имя заголовка как 'orgId'
 ) -> int:
-    log.info("Resolving org_id: api_key present=%s, orgId header=%s", api_key is not None, org_id)
+    log.info(
+        "Resolving org_id: api_key present=%s, orgId header=%s",
+        api_key is not None,
+        org_id,
+    )
 
     # Попытка 1: через x-api-key
     if api_key:
