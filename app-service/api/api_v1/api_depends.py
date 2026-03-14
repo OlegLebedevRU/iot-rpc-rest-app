@@ -10,16 +10,6 @@ from core.models import db_helper
 
 log = setup_module_logger(__name__, "api_depends.log")
 
-
-async def org_id_dep(
-    org_id: Annotated[
-        int, Header(convert_underscores=False)
-    ],  # Отключаем преобразование, т.к. заголовок с CamelCase
-):
-    log.info("header request, orgId=%s", org_id)
-    return org_id
-
-
 Session_dep = Annotated[
     AsyncSession,
     Depends(db_helper.session_getter),
@@ -32,14 +22,14 @@ api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 # === Обновлённая зависимость: сначала x-api-key, потом orgId в заголовке ===
 async def get_org_id_dependency(
     api_key: Optional[str] = Security(api_key_header),
-    org_id: Optional[int] = Header(
+    org_id_str: Optional[str] = Header(
         None, alias="orgId"
-    ),  # Явно указываем имя заголовка как 'orgId'
+    ),  # Получаем orgId как строку
 ) -> int:
     log.info(
         "Resolving org_id: api_key present=%s, orgId header=%s",
         api_key is not None,
-        org_id,
+        org_id_str,
     )
 
     # Попытка 1: через x-api-key
@@ -51,10 +41,18 @@ async def get_org_id_dependency(
         else:
             log.warning("Invalid API key provided: %s", api_key)
 
-    # Попытка 2: через заголовок orgId (CamelCase, без преобразования)
-    if org_id is not None:
-        log.info("Using org_id from 'orgId' header: %s", org_id)
-        return org_id
+    # Попытка 2: через заголовок orgId (как строка, которую нужно преобразовать)
+    if org_id_str is not None:
+        try:
+            org_id = int(org_id_str)
+            log.info("Successfully parsed orgId header as int: %s", org_id)
+            return org_id
+        except ValueError, TypeError:
+            log.error("Invalid orgId format in header: %s (not a number)", org_id_str)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid 'orgId' header: must be a valid integer",
+            )
 
     # Не удалось определить org_id
     log.error("Failed to resolve org_id: no valid api_key or orgId header")
