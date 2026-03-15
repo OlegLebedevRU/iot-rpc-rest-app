@@ -10,6 +10,7 @@ from sqlalchemy import (
     sql,
     UniqueConstraint,
     Index,
+    text,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
 from sqlalchemy.orm import (
@@ -125,14 +126,15 @@ class DeviceGauge(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
-        nullable=True,
-        server_onupdate=func.current_timestamp(0),
+        nullable=False,  # ← Теперь NOT NULL
+        server_default=text("NOW()"),  # ← Значение по умолчанию при INSERT
+        server_onupdate=func.current_timestamp(0),  # ← При UPDATE
     )
     deleted_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True, deferred=True
     )
     type: Mapped[str] = mapped_column(String)
-    gauges: Mapped[str] = mapped_column(JSONB, nullable=True)
+    gauges: Mapped[dict] = mapped_column(JSONB, nullable=True)
     UniqueConstraint(
         device_id,
         type,
