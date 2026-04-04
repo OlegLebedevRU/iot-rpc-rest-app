@@ -73,6 +73,70 @@ sequenceDiagram
 
 ---
 
+## Получение ключа LLM-провайдера
+
+### OpenAI
+
+1. Зарегистрируйтесь в [OpenAI Platform](https://platform.openai.com/).
+2. Перейдите в раздел управления API-ключами.
+3. Создайте новый secret key.
+4. Сохраните ключ в безопасном месте — повторно он обычно не показывается.
+5. Передавайте ключ через переменную окружения, а не храните его в коде.
+
+```bash
+export OPENAI_API_KEY="sk-..."
+```
+
+Пример использования в Python:
+
+```python
+import os
+from openai import OpenAI
+
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+```
+
+> ⚠️ Не храните API-ключ в исходном коде, Dockerfile, публичных `.env` или репозитории Git.
+
+### Yandex AI Studio (Responses API)
+
+Yandex AI Studio можно использовать как альтернативного LLM-провайдера, если это подходит по требованиям инфраструктуры и доступности.
+
+#### Как получить API-ключ Yandex AI Studio
+
+1. Откройте интерфейс [Yandex AI Studio](https://aistudio.yandex.ru/).
+2. Перейдите в раздел управления API-ключами.
+3. Создайте новый API-ключ.
+4. Сохраните ключ в безопасном месте.
+5. Передавайте его в приложение через переменную окружения.
+
+Подробная инструкция: [aistudio.yandex.ru — получение API-ключа](https://aistudio.yandex.ru/docs/ru/ai-studio/operations/get-api-key.html)
+
+```bash
+export YANDEX_AI_API_KEY="yandex_..."
+```
+
+> ⚠️ API-ключ даёт доступ к вашей квоте и должен храниться так же аккуратно, как и ключ OpenAI.
+
+#### Как отправить запрос через Responses API
+
+Yandex AI Studio предоставляет собственный Responses API для генерации ответов. Базовая схема интеграции:
+
+1. Выберите модель в Yandex AI Studio.
+2. Сформируйте запрос в формате Responses API.
+3. Передайте API-ключ в заголовке авторизации.
+4. Получите текст ответа модели и используйте его в цикле AI-агента.
+
+Документация: [aistudio.yandex.ru — Responses API](https://aistudio.yandex.ru/docs/ru/ai-studio/operations/generation/create-prompt.html)
+
+> ⚠️ Перед внедрением обязательно сверьтесь с актуальной документацией Yandex AI Studio:
+> - точный URL endpoint;
+> - формат заголовка авторизации;
+> - имя модели;
+> - поддержка tools / function calling / structured output для вашего сценария.
+
+---
+
 ## Проверка связи (curl)
 
 ```bash
@@ -170,6 +234,7 @@ AI-агент: чат-сообщение → POST /device-tasks/ → GET /device
 Зависимости: pip install openai httpx
 """
 import json
+import os
 import time
 
 import httpx
@@ -179,7 +244,10 @@ from openai import OpenAI
 LEO4_API_URL = "https://dev.leo4.ru/api/v1"
 LEO4_API_KEY = "ApiKey ВАШ_КЛЮЧ"            # x-api-key из ЛК LEO4
 DEVICE_ID = 4619                             # ID целевого устройства
-OPENAI_KEY = "sk-..."                       # Ключ OpenAI (или другой LLM)
+
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
+OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+YANDEX_AI_API_KEY = os.getenv("YANDEX_AI_API_KEY")
 
 client = OpenAI(api_key=OPENAI_KEY)
 
