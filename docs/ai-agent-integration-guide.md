@@ -27,44 +27,37 @@ AI-агент → "Ячейка 5 физически открыта ✅"
 
 ### Общая схема потока данных
 
-```
-┌──────────────┐     ┌──────────────────┐     ┌───────────────┐     ┌──────────────┐
-│ Пользователь │     │    AI-агент       │     │  LEO4 REST API │     │  Устройство  │
-│  (чат/голос)  │     │  (LLM + Tools)   │     │  dev.leo4.ru   │     │  (ESP32)     │
-└──────┬───────┘     └────────┬─────────┘     └───────┬───────┘     └──────┬───────┘
-       │ "Открой ячейку 5"   │                        │                     │
-       │────────────────────>│                        │                     │
-       │                     │                        │                     │
-       │                     │ ① POST /device-tasks/  │                     │
-       │                     │ {method_code:51,        │                     │
-       │                     │  payload:{dt:[{cl:5}]}} │                     │
-       │                     │───────────────────────>│                     │
-       │                     │  {"id": "uuid..."}     │                     │
-       │                     │<───────────────────────│                     │
-       │                     │                        │ MQTT RPC            │
-       │                     │                        │────────────────────>│
-       │                     │                        │<────────────────────│
-       │                     │                        │                     │
-       │                     │ ② GET /device-tasks/id │                     │
-       │                     │───────────────────────>│                     │
-       │                     │  {status:3, DONE}      │ ← доставка ✔       │
-       │                     │<───────────────────────│                     │
-       │                     │                        │                     │
-       │                     │                        │  ячейка открылась   │
-       │                     │                        │  физически          │
-       │                     │                        │<──── evt code=13 ───│
-       │                     │                        │      {304: 5}       │
-       │                     │                        │                     │
-       │                     │ ③ GET /device-events/  │                     │
-       │                     │    incremental         │                     │
-       │                     │───────────────────────>│                     │
-       │                     │  [{event_type_code:13, │                     │
-       │                     │    payload.300.304:5}] │ ← физ. факт ✔      │
-       │                     │<───────────────────────│                     │
-       │                     │                        │                     │
-       │ "Ячейка 5 открыта ✅ │                        │                     │
-       │  (подтверждено)"    │                        │                     │
-       │<────────────────────│                        │                     │
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Пользователь
+    participant Agent as AI-агент
+    participant API as LEO4 REST API
+    participant Device as Устройство
+
+    User->>Agent: Запрос "Открой ячейку 5"
+    Note over Agent: Агент определяет device_id, method_code=51,<br/>формирует payload и ext_task_id.
+
+    Agent->>API: POST /device-tasks/\n{device_id, method_code: 51, ttl, payload:{dt:[{cl:5}]}}
+    API-->>Agent: 200 OK\n{id, created_at}
+    Note right of API: API принял команду и создал задачу.<br/>На этом этапе действие еще не подтверждено физически.
+
+    API->>Device: MQTT RPC доставка команды
+    Device-->>API: ACK или последующий запрос задачи
+    Note over API,Device: Команда передается устройству через MQTT RPC.<br/>Даже успешная доставка не равна факту выполнения.
+
+    Agent->>API: GET /device-tasks/{id}
+    API-->>Agent: {status: 3, status_name: DONE}
+    Note left of Agent: DONE = команда доставлена устройству.<br/>Это проверка транспорта, а не механического результата.
+
+    Device-->>API: Event code 13\nCellOpenEvent {304: 5}
+    Note right of Device: Устройство отдельно сообщает,<br/>что ячейка 5 действительно открылась.
+
+    Agent->>API: GET /device-events/incremental
+    API-->>Agent: [{event_type_code:13, payload:{300:{304:5}}}]
+    Note over Agent: Агент сверяет код события и номер ячейки.<br/>Только после этого подтверждает физическое исполнение.
+
+    Agent-->>User: Ответ: "Ячейка 5 физически открыта"
 ```
 
 ---
