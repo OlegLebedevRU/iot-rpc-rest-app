@@ -1,6 +1,6 @@
 # Практическое руководство: Интеграция AI-агента с LEO4 API
 
-> **Версия:** 1.0  
+> **Версия:** 2.0  
 > **Дата:** 2026-04-04  
 > **Платформа:** dev.leo4.ru  
 > **Контакты:** info@platerra.ru | https://platerra.ru
@@ -9,39 +9,61 @@
 
 ## Введение
 
-Данное руководство описывает, как практически подключить AI-агента (LLM с Function Calling, MCP-сервер, чат-бот) к REST API платформы LEO4, чтобы по текстовой или голосовой команде пользователя выполнялись действия на IoT-устройствах.
+Данное руководство описывает, как практически подключить AI-агента (LLM с Function Calling, MCP-сервер, чат-бот) к REST API платформы LEO4 для управления IoT-устройствами.
+
+> ⚠️ **Важно:** Task status = 3 (DONE) означает только **доставку** команды на устройство. Для подтверждения **физического исполнения** (например, открытия ячейки) необходимо отследить событие `CellOpenEvent` (код 13) с номером ячейки в теге `304` через `GET /device-events/incremental` или вебхук `msg-event`.
 
 **Итоговый сценарий:**
 
 ```
 Пользователь: "Открой ячейку 5"
-AI-агент    → POST /device-tasks/ {method_code: 51, payload: {dt: [{cl: 5}]}}
-            → GET /device-tasks/{id} → status: DONE
-AI-агент    → "Ячейка 5 открыта ✅"
+
+① AI-агент → POST /device-tasks/ {method_code: 51, payload: {dt: [{cl: 5}]}}
+② AI-агент → GET /device-tasks/{id}          → status: 3 (DONE) — команда доставлена
+③ AI-агент → GET /device-events/incremental  → event_type_code: 13, 304: 5 — ячейка физически открыта
+
+AI-агент → "Ячейка 5 физически открыта ✅"
 ```
 
 ### Общая схема потока данных
 
 ```
 ┌──────────────┐     ┌──────────────────┐     ┌───────────────┐     ┌──────────────┐
-│  Пользователь │     │    AI-агент       │     │  LEO4 REST API │     │  Устройство  │
+│ Пользователь │     │    AI-агент       │     │  LEO4 REST API │     │  Устройство  │
 │  (чат/голос)  │     │  (LLM + Tools)   │     │  dev.leo4.ru   │     │  (ESP32)     │
 └──────┬───────┘     └────────┬─────────┘     └───────┬───────┘     └──────┬───────┘
        │ "Открой ячейку 5"   │                        │                     │
        │────────────────────>│                        │                     │
-       │                     │ POST /device-tasks/    │                     │
-       │                     │ x-api-key: ApiKey xxx  │                     │
-       │                     │ {method_code:51, ...}  │                     │
+       │                     │                        │                     │
+       │                     │ ① POST /device-tasks/  │                     │
+       │                     │ {method_code:51,        │                     │
+       │                     │  payload:{dt:[{cl:5}]}} │                     │
        │                     │───────────────────────>│                     │
+       │                     │  {"id": "uuid..."}     │                     │
+       │                     │<───────────────────────│                     │
        │                     │                        │ MQTT RPC            │
-       │                     │                        │ TSK→REQ→RSP→RES→CMT│
        │                     │                        │────────────────────>│
        │                     │                        │<────────────────────│
-       │                     │ GET /device-tasks/{id} │  status=200         │
+       │                     │                        │                     │
+       │                     │ ② GET /device-tasks/id │                     │
        │                     │───────────────────────>│                     │
-       │                     │  {status:3, DONE}      │                     │
+       │                     │  {status:3, DONE}      │ ← доставка ✔       │
        │                     │<───────────────────────│                     │
-       │ "Ячейка 5 открыта ✅"│                        │                     │
+       │                     │                        │                     │
+       │                     │                        │  ячейка открылась   │
+       │                     │                        │  физически          │
+       │                     │                        │<──── evt code=13 ───│
+       │                     │                        │      {304: 5}       │
+       │                     │                        │                     │
+       │                     │ ③ GET /device-events/  │                     │
+       │                     │    incremental         │                     │
+       │                     │───────────────────────>│                     │
+       │                     │  [{event_type_code:13, │                     │
+       │                     │    payload.300.304:5}] │ ← физ. факт ✔      │
+       │                     │<───────────────────────│                     │
+       │                     │                        │                     │
+       │ "Ячейка 5 открыта ✅ │                        │                     │
+       │  (подтверждено)"    │                        │                     │
        │<────────────────────│                        │                     │
 ```
 
@@ -53,7 +75,8 @@ AI-агент    → "Ячейка 5 открыта ✅"
 2. **Узнайте `device_id`** целевого устройства (виден в ЛК → левая панель → Номер связи)
 3. **Проверьте связь** — отправьте hello-запрос (см. раздел ниже)
 4. **Подключите LLM** с Function Calling (см. раздел «Полный пример AI-агента»)
-5. **Для продакшена** — настройте вебхуки вместо polling (см. раздел «Webhook»)
+5. **Проверьте события** — после открытия ячейки убедитесь, что приходит CellOpenEvent (код 13) через `GET /device-events/incremental`
+6. **Для продакшена** — настройте вебхуки вместо polling (см. раздел «Webhook»)
 
 ---
 
@@ -130,7 +153,7 @@ POST https://dev.leo4.ru/api/v1/device-tasks/
 | 0 | READY | Задача создана, ожидает устройство |
 | 1 | PENDING | Устройство подтвердило получение |
 | 2 | LOCK | Устройство выполняет задачу |
-| 3 | DONE | Успешно выполнена |
+| 3 | DONE | Команда доставлена на устройство; физический результат подтверждайте отдельным событием |
 | 4 | EXPIRED | TTL истёк |
 | 5 | DELETED | Удалена через API |
 | 6 | FAILED | Ошибка выполнения |
@@ -149,18 +172,21 @@ pip install openai httpx
 
 ```python
 """
-AI-агент: чат-сообщение → POST /device-tasks/ → результат пользователю
+AI-агент: чат-сообщение → POST /device-tasks/ → GET /device-tasks/{id}
+→ GET /device-events/incremental → результат пользователю
 Зависимости: pip install openai httpx
 """
-import httpx
 import json
+import time
+
+import httpx
 from openai import OpenAI
 
 # ── Конфигурация ──
 LEO4_API_URL = "https://dev.leo4.ru/api/v1"
-LEO4_API_KEY = "ApiKey ВАШ_КЛЮЧ"          # x-api-key из ЛК LEO4
-DEVICE_ID    = 4619                         # ID целевого устройства
-OPENAI_KEY   = "sk-..."                     # Ключ OpenAI (или другой LLM)
+LEO4_API_KEY = "ApiKey ВАШ_КЛЮЧ"            # x-api-key из ЛК LEO4
+DEVICE_ID = 4619                             # ID целевого устройства
+OPENAI_KEY = "sk-..."                       # Ключ OpenAI (или другой LLM)
 
 client = OpenAI(api_key=OPENAI_KEY)
 
@@ -201,7 +227,10 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_task_status",
-            "description": "Проверить статус выполнения задачи на устройстве",
+            "description": (
+                "Проверить статус доставки задачи на устройство. "
+                "status=3 (DONE) означает только доставку команды, а не физическое исполнение."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -211,6 +240,37 @@ TOOLS = [
                     }
                 },
                 "required": ["task_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "poll_cell_open_event",
+            "description": (
+                "Дождаться физического подтверждения открытия ячейки. "
+                "Ищет событие CellOpenEvent (код 13) с номером ячейки в теге 304. "
+                "Вызывай после того, как get_task_status вернул status=3 (DONE)."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "cell_number": {
+                        "type": "integer",
+                        "description": "Номер ячейки, которую нужно подтвердить"
+                    },
+                    "last_event_id": {
+                        "type": "integer",
+                        "description": "Последний известный ID события перед началом ожидания",
+                        "default": 0
+                    },
+                    "timeout_s": {
+                        "type": "integer",
+                        "description": "Сколько секунд ждать событие",
+                        "default": 30
+                    }
+                },
+                "required": ["cell_number"]
             }
         }
     }
@@ -238,11 +298,11 @@ def create_device_task(method_code: int, payload: dict, ttl: int = 5) -> dict:
             },
         )
         response.raise_for_status()
-        return response.json()  # {"id": "uuid...", "created_at": 1712345678}
+        return response.json()
 
 
 def get_task_status(task_id: str) -> dict:
-    """GET /api/v1/device-tasks/{id} — получение статуса задачи."""
+    """GET /api/v1/device-tasks/{id} — подтверждение доставки задачи."""
     with httpx.Client() as http:
         response = http.get(
             f"{LEO4_API_URL}/device-tasks/{task_id}",
@@ -252,11 +312,59 @@ def get_task_status(task_id: str) -> dict:
         return response.json()
 
 
+def poll_cell_open_event(
+    cell_number: int,
+    last_event_id: int = 0,
+    timeout_s: int = 30,
+) -> dict:
+    """GET /api/v1/device-events/incremental — ожидание CellOpenEvent."""
+    deadline = time.time() + timeout_s
+    current_event_id = last_event_id
+
+    with httpx.Client() as http:
+        while time.time() < deadline:
+            response = http.get(
+                f"{LEO4_API_URL}/device-events/incremental",
+                headers={"x-api-key": LEO4_API_KEY},
+                params={
+                    "device_id": DEVICE_ID,
+                    "last_event_id": current_event_id,
+                    "limit": 50,
+                },
+            )
+            response.raise_for_status()
+            events = response.json()
+
+            for event in events:
+                current_event_id = max(current_event_id, event["id"])
+                if event.get("event_type_code") != 13:
+                    continue
+
+                for row in event.get("payload", {}).get("300", []):
+                    if row.get("304") == cell_number:
+                        return {
+                            "confirmed": True,
+                            "event_id": event["id"],
+                            "cell_number": cell_number,
+                            "event": event,
+                        }
+
+            time.sleep(2)
+
+    return {
+        "confirmed": False,
+        "cell_number": cell_number,
+        "last_event_id": current_event_id,
+        "message": "CellOpenEvent не найден за отведённое время",
+    }
+
+
 # ── Маршрутизатор tool-вызовов ──
 
 TOOL_DISPATCH = {
     "create_device_task": create_device_task,
     "get_task_status": get_task_status,
+    "poll_cell_open_event": poll_cell_open_event,
 }
 
 
@@ -274,21 +382,18 @@ def chat(user_message: str) -> str:
         {
             "role": "system",
             "content": (
-                "Ты — AI-ассистент для управления IoT-устройствами "
-                "через платформу LEO4. "
-                "Когда пользователь просит выполнить действие с устройством, "
-                "используй create_device_task. "
-                "Коды команд: 51 — открыть ячейку "
-                '(payload: {"dt": [{"cl": N}]}), '
-                "20 — короткая команда (mt=0 — hello, mt=4 — список ячеек), "
-                "21 — перезагрузка. "
-                "После создания задачи проверь её статус через get_task_status."
+                "Ты — AI-ассистент для управления IoT-устройствами через платформу LEO4. "
+                "Когда пользователь просит открыть ячейку, сначала вызови create_device_task, "
+                "затем проверь доставку через get_task_status. "
+                "Если status=3 (DONE), это значит только, что команда доставлена. "
+                "После этого обязательно вызови poll_cell_open_event, чтобы подтвердить "
+                "физическое открытие ячейки по событию CellOpenEvent (код 13, тег 304). "
+                "Для других команд используй create_device_task и get_task_status по ситуации."
             ),
         },
         {"role": "user", "content": user_message},
     ]
 
-    # Шаг 1: LLM решает, нужен ли tool-вызов
     response = client.chat.completions.create(
         model="gpt-4o",
         messages=messages,
@@ -297,8 +402,9 @@ def chat(user_message: str) -> str:
 
     msg = response.choices[0].message
 
-    # Шаг 2: Если LLM запросил tool — выполняем
     while msg.tool_calls:
+        messages.append(msg)
+
         for tool_call in msg.tool_calls:
             name = tool_call.function.name
             args = json.loads(tool_call.function.arguments)
@@ -307,15 +413,12 @@ def chat(user_message: str) -> str:
             result = execute_tool(name, args)
             print(f"  ✅ Результат: {result}")
 
-            messages.append(msg)
             messages.append({
                 "role": "tool",
                 "tool_call_id": tool_call.id,
                 "content": json.dumps(result, ensure_ascii=False),
             })
 
-        # Шаг 3: LLM формирует ответ пользователю
-        # (или вызывает ещё один tool)
         response = client.chat.completions.create(
             model="gpt-4o",
             messages=messages,
@@ -344,19 +447,21 @@ if __name__ == "__main__":
   ✅ Результат: {"id": "a1b2c3d4-...", "created_at": 1712345678}
   🔧 Вызов: get_task_status({"task_id": "a1b2c3d4-..."})
   ✅ Результат: {"status": 3, "results": [{"status_code": 200, ...}]}
-🤖 Агент: Ячейка 5 успешно открыта ✅
+  🔧 Вызов: poll_cell_open_event({"cell_number": 5, "last_event_id": 150280, "timeout_s": 30})
+  ✅ Результат: {"confirmed": true, "event_id": 150283, "cell_number": 5, "event": {"event_type_code": 13, ...}}
+🤖 Агент: Ячейка 5 физически открыта и подтверждена событием CellOpenEvent ✅
 
 💬 Вы: Перезагрузи устройство
   🔧 Вызов: create_device_task({"method_code": 21, "payload": {"dt": [{"mt": 0}]}, "ttl": 5})
   ✅ Результат: {"id": "b2c3d4e5-...", "created_at": 1712345700}
-🤖 Агент: Команда на перезагрузку отправлена. Устройство перезагрузится в течение минуты.
+🤖 Агент: Команда на перезагрузку отправлена. Подтверждение физического открытия здесь не требуется.
 
 💬 Вы: Какие ячейки есть?
   🔧 Вызов: create_device_task({"method_code": 20, "payload": {"dt": [{"mt": 4}]}, "ttl": 5})
   ✅ Результат: {"id": "c3d4e5f6-...", "created_at": 1712345720}
   🔧 Вызов: get_task_status({"task_id": "c3d4e5f6-..."})
   ✅ Результат: {"status": 3, "results": [{"status_code": 200, "result": {...}}]}
-🤖 Агент: На устройстве доступны ячейки 1–12. Все в рабочем состоянии.
+🤖 Агент: Команда доставлена, устройство вернуло список доступных ячеек 1–12.
 ```
 
 ---
@@ -365,55 +470,110 @@ if __name__ == "__main__":
 
 ### Вариант A — Polling (простой)
 
-Подходит для отладки и простых сценариев:
+Подходит для отладки и простых сценариев, но помните: `status=3 (DONE)` подтверждает только доставку команды.
 
 ```python
 import time
 import httpx
 
-def wait_for_result(task_id: str, timeout: int = 30) -> dict:
-    """Ожидание результата задачи с polling."""
+
+def wait_for_task_delivery(task_id: str, timeout: int = 30) -> dict:
+    """Ждём, пока задача дойдёт до финального статуса."""
     headers = {"x-api-key": "ApiKey ВАШ_КЛЮЧ"}
     deadline = time.time() + timeout
 
     while time.time() < deadline:
         resp = httpx.get(
-            f"https://dev.leo4.ru/api/v1/device-tasks/{{task_id}}",
+            f"https://dev.leo4.ru/api/v1/device-tasks/{task_id}",
             headers=headers,
         )
         data = resp.json()
-        # статус >= 3 означает финальное состояние:
-        # 3=DONE, 4=EXPIRED, 5=DELETED, 6=FAILED
         if data["status"] >= 3:
             return data
         time.sleep(2)
 
-    raise TimeoutError(f"Задача {{task_id}} не завершилась за {{timeout}}с")
+    raise TimeoutError(f"Задача {task_id} не завершилась за {timeout}с")
+
+
+def wait_for_cell_open_event(
+    device_id: int,
+    cell_number: int,
+    last_event_id: int = 0,
+    timeout: int = 30,
+) -> dict:
+    """Ждём физическое подтверждение открытия ячейки через incremental events."""
+    headers = {"x-api-key": "ApiKey ВАШ_КЛЮЧ"}
+    deadline = time.time() + timeout
+    current_event_id = last_event_id
+
+    while time.time() < deadline:
+        resp = httpx.get(
+            "https://dev.leo4.ru/api/v1/device-events/incremental",
+            headers=headers,
+            params={
+                "device_id": device_id,
+                "last_event_id": current_event_id,
+                "limit": 50,
+            },
+        )
+        events = resp.json()
+
+        for event in events:
+            current_event_id = max(current_event_id, event["id"])
+            if event.get("event_type_code") != 13:
+                continue
+
+            for row in event.get("payload", {}).get("300", []):
+                if row.get("304") == cell_number:
+                    return event
+
+        time.sleep(2)
+
+    raise TimeoutError(f"CellOpenEvent для ячейки {cell_number} не пришёл за {timeout}с")
 
 
 # Использование:
 # task = create_device_task(method_code=51, payload={"dt": [{"cl": 5}]})
-# result = wait_for_result(task["id"])
-# print(f"Статус: {{result['status']}}, Результаты: {{result['results']}}")
+# delivery = wait_for_task_delivery(task["id"])
+# if delivery["status"] == 3:
+#     event = wait_for_cell_open_event(device_id=4619, cell_number=5, last_event_id=150280)
+#     print(f"Открытие подтверждено событием {event['id']}")
 ```
 
 ### Вариант B — Webhook (рекомендуется для продакшена)
 
-#### Шаг 1: Регистрация вебхука (один раз)
+Для полного 3-шагового цикла удобно подписаться сразу на два вебхука: `msg-task-result` и `msg-event`.
+
+#### Шаг 1: Регистрация вебхуков (один раз)
 
 ```python
 import httpx
 
+headers = {
+    "x-api-key": "ApiKey ВАШ_КЛЮЧ",
+    "Content-Type": "application/json",
+}
+
+auth_payload = {
+    "headers": {"Authorization": "Bearer ваш-токен"},
+    "is_active": True,
+}
+
 httpx.put(
     "https://dev.leo4.ru/api/v1/webhooks/msg-task-result",
-    headers={
-        "x-api-key": "ApiKey ВАШ_КЛЮЧ",
-        "Content-Type": "application/json",
-    },
+    headers=headers,
     json={
         "url": "https://your-ai-agent.com/hooks/task-result",
-        "headers": {"Authorization": "Bearer ваш-токен"},
-        "is_active": True,
+        **auth_payload,
+    },
+)
+
+httpx.put(
+    "https://dev.leo4.ru/api/v1/webhooks/msg-event",
+    headers=headers,
+    json={
+        "url": "https://your-ai-agent.com/hooks/device-event",
+        **auth_payload,
     },
 )
 ```
@@ -425,46 +585,53 @@ from fastapi import FastAPI, Request
 
 app = FastAPI()
 
+
 @app.post("/hooks/task-result")
 async def handle_task_result(request: Request):
-    """Обработка входящего вебхука от LEO4."""
-    device_id   = request.headers.get("X-Device-Id")
-    status_code = request.headers.get("X-Status-Code")
-    ext_id      = request.headers.get("X-Ext-Id")
-    result_id   = request.headers.get("X-Result-Id")
+    """msg-task-result: команда доставлена или завершилась ошибкой."""
+    device_id = request.headers.get("x-device-id")
+    status_code = request.headers.get("x-status-code")
+    ext_id = request.headers.get("x-ext-id")
     body = await request.json()
 
-    print(f"Устройство {{device_id}}: статус={{status_code}}, ext_id={{ext_id}}")
-    print(f"Результат: {{body}}")
+    print(f"Устройство {device_id}: status_code={status_code}, ext_id={ext_id}")
+    print(f"Результат задачи: {body}")
+    return {"ok": True}
 
-    # Здесь AI-агент может:
-    # - сформировать ответ пользователю в чат
-    # - запустить следующий шаг сценария (каскадная оркестрация)
-    # - записать результат в лог / БД
+
+@app.post("/hooks/device-event")
+async def handle_device_event(request: Request):
+    """msg-event: физическое событие от устройства."""
+    device_id = request.headers.get("x-device-id")
+    body = await request.json()
+
+    event_type = body.get("event_type_code") or body.get("200")
+    payload = body.get("payload", body)
+
+    if event_type == 13:
+        for row in payload.get("300", []):
+            if "304" in row:
+                print(
+                    f"Устройство {device_id}: ячейка {row['304']} подтверждена событием CellOpenEvent"
+                )
+
     return {"ok": True}
 ```
 
-#### Заголовки входящего вебхука
+#### Как интерпретировать вебхуки
 
-| Заголовок | Описание |
-|-----------|----------|
-| `X-Device-Id` | ID устройства |
-| `X-Status-Code` | Код статуса выполнения |
-| `X-Ext-Id` | Внешний идентификатор задачи (`ext_task_id`) |
-| `X-Result-Id` | ID результата |
+| Тип события | Что подтверждает |
+|------------|------------------|
+| `msg-task-result` | Доставка команды и результат выполнения на уровне task/result |
+| `msg-event` | Физическое событие устройства, например `CellOpenEvent` с тегом `304` |
 
-#### Типы вебхуков
-
-| Тип события | Описание |
-|------------|----------|
-| `msg-task-result` | Результат выполнения задачи (ответ на команду) |
-| `msg-event` | Асинхронное событие от устройства (телеметрия, NFC, и т.д.) |
+> ⚠️ Для команды открытия ячейки ответ пользователю стоит отправлять после получения `msg-event` с `event_type_code = 13`.
 
 ---
 
 ## 3. Интеграция через MCP (Model Context Protocol)
 
-Для LLM с поддержкой MCP (Claude, GPT и др.) API LEO4 описывается как набор tools:
+Для LLM с поддержкой MCP (Claude, GPT и др.) API LEO4 удобно описывать как набор tools, где открытие ячейки состоит из трёх последовательных шагов.
 
 ```json
 {
@@ -477,7 +644,7 @@ async def handle_task_result(request: Request):
         "properties": {
           "device_id":   { "type": "integer", "description": "ID устройства" },
           "method_code": { "type": "integer", "description": "Код команды (51=открыть, 20=короткая, 21=reboot)" },
-          "payload":     { "type": "object",  "description": "Параметры: {\"dt\": [{\"cl\": 5}]}" },
+          "payload":     { "type": "object", "description": "Параметры: {\"dt\": [{\"cl\": 5}]}" },
           "ttl":         { "type": "integer", "description": "TTL в минутах", "default": 5 }
         },
         "required": ["device_id", "method_code", "payload"]
@@ -485,7 +652,7 @@ async def handle_task_result(request: Request):
     },
     {
       "name": "get_task_status",
-      "description": "Получить статус задачи по UUID",
+      "description": "Проверить статус доставки задачи по UUID; DONE подтверждает только доставку команды",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -495,14 +662,17 @@ async def handle_task_result(request: Request):
       }
     },
     {
-      "name": "list_device_events",
-      "description": "Получить список событий устройства",
+      "name": "poll_cell_open_event",
+      "description": "Найти физическое подтверждение открытия ячейки через CellOpenEvent (код 13, тег 304)",
       "inputSchema": {
         "type": "object",
         "properties": {
-          "device_id": { "type": "integer", "description": "ID устройства" }
+          "device_id":     { "type": "integer", "description": "ID устройства" },
+          "cell_number":   { "type": "integer", "description": "Номер ожидаемой ячейки" },
+          "last_event_id": { "type": "integer", "description": "Последний обработанный event id", "default": 0 },
+          "limit":         { "type": "integer", "description": "Лимит событий за запрос", "default": 50 }
         },
-        "required": ["device_id"]
+        "required": ["device_id", "cell_number"]
       }
     },
     {
@@ -518,7 +688,7 @@ async def handle_task_result(request: Request):
     },
     {
       "name": "configure_webhook",
-      "description": "Настроить вебхук для получения событий/результатов",
+      "description": "Настроить вебхук для получения событий и результатов",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -540,11 +710,11 @@ async def handle_task_result(request: Request):
 |----------|------------|-------------------|
 | `create_device_task` | `POST` | `/api/v1/device-tasks/` |
 | `get_task_status` | `GET` | `/api/v1/device-tasks/{id}` |
-| `list_device_events` | `GET` | `/api/v1/device-events/` |
+| `poll_cell_open_event` | `GET` | `/api/v1/device-events/incremental` |
 | `get_telemetry` | `GET` | `/api/v1/device-events/fields/` |
 | `configure_webhook` | `PUT` | `/api/v1/webhooks/{event_type}` |
 
-> Любой MCP-сервер или LLM с поддержкой Function Calling может быть подключён к LEO4 через описание этих эндпоинтов как инструментов.
+> MCP-агенту для команды открытия ячейки нужно сначала вызвать `create_device_task`, затем `get_task_status`, и только после `status=3` ожидать `poll_cell_open_event`.
 
 ---
 
