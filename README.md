@@ -26,7 +26,7 @@ flowchart LR
 
     App --> Gateway
     Gateway --> Server
-    TasksQueue --> Server
+    Server --> TasksQueue
     Server --> Broker
     Broker --> Device
 ````
