@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 
 from pydantic import BaseModel, Field
 
@@ -28,7 +28,7 @@ class DevEventOut(BaseModel):
 
 class DevEventFields(BaseModel):
     created_at: datetime
-    value: str
+    value: str | int | float | dict[str, Any] | None
     interval_sec: int
 
 

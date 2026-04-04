@@ -72,16 +72,16 @@ class EventRepository:
         interval_m = 15 if interval_m is None or interval_m > 3600 else interval_m
         limit = 10 if limit is None or limit > 10 else limit
         stmt = text("""
-                    SELECT 
+                    SELECT
                         created_at,
-                        (payload -> '300' -> 0 ->> :tag) AS value,
+                        (payload -> '300' -> 0 -> :tag) AS value,
                         EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at))::INTEGER AS interval_sec
                     FROM tb_dev_events
-                    WHERE 
-                        device_id = :did 
+                    WHERE
+                        device_id = :did
                         AND event_type_code = :etc
-                        AND created_at > CURRENT_TIMESTAMP - (:mins || ' MINUTES')::INTERVAL
-                    ORDER BY created_at DESC 
+                        AND created_at > CURRENT_TIMESTAMP - MAKE_INTERVAL(mins => CAST(:mins AS INTEGER))
+                    ORDER BY created_at DESC
                     LIMIT :limit
                 """)
 
