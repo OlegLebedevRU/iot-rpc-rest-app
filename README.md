@@ -8,27 +8,27 @@ A transport framework for creating secure control systems and telemetry for a di
 ### Architecture
 
 ````mermaid
-architecture-beta
-    group client(server)[Client]
-    service app(server)[App] in client
+flowchart LR
+    subgraph Client["Client"]
+        App["App"]
+    end
 
-    group api(cloud)[API]
+    subgraph API["API"]
+        Gateway["Gateway"]
+        Server["Server"]
+        TasksQueue["Tasks Queue"]
+        Broker["Broker"]
+    end
 
-    service db(database)[Tasks Queue] in api
-    service gw(internet)[Gateway] in api
-    service server(server)[Server] in api
-    service broker(internet)[Broker] in api
+    subgraph Devices["Devices"]
+        Device["Device"]
+    end
 
-    group device(internet)[Devices]
-    service dev(server)[Device] in device
-    db:T -- B:server
-    gw:R -- L:server
-    broker:L -- R:server
-
-    app:R -- L:gw
-    dev:L -- R:broker
-
-    
+    App --> Gateway
+    Gateway --> Server
+    Server --> TasksQueue
+    Server --> Broker
+    Broker --> Device
 ````
 
 ### Concepts:
