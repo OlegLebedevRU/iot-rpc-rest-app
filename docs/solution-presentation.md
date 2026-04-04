@@ -48,6 +48,8 @@ flowchart LR
         ESP["ESP32<br/>ESP-IDF / ESP-ADF"]
         STM["STM32<br/>sip_periph"]
         PYAGENT["Python Agent"]
+        CSAGENT["C# Agent<br/>.NET / MQTTnet"]
+        MORE["...and more<br/>MQTT 5 Agents"]
         ESP --- STM
     end
 
@@ -55,6 +57,8 @@ flowchart LR
     EXTAPP -->|HTTPS| GW
     BROKER <-->|MQTTS| ESP
     BROKER <-->|MQTTS| PYAGENT
+    BROKER <-->|MQTTS| CSAGENT
+    BROKER <-->|MQTTS| MORE
 ```
 
 ### Компоненты системы
@@ -64,7 +68,7 @@ flowchart LR
 | **Cloud Core (Backend)** | [iot-rpc-rest-app](https://github.com/OlegLebedevRU/iot-rpc-rest-app) | REST API, RPC-ядро, брокер сообщений, БД |
 | **Личный кабинет (Frontend)** | [lk-leo4](https://github.com/OlegLebedevRU/lk-leo4) | Веб-интерфейс управления устройствами |
 | **Периферийный модуль (Firmware)** | [sip_periph](https://github.com/OlegLebedevRU/sip_periph) | Прошивка STM32F411 — замки, датчики, NFC, дисплей |
-| **SIP-модуль** | [siplite](https://github.com/OlegLebedevRU/siplite) | SIP-клиент для ESP32 (голосовая связь и домофония) |
+| **SIP-модуль / микро-Edge Cloud** | [siplite](https://github.com/OlegLebedevRU/siplite) | SIP-клиент для ESP32 (голосовая связь, домофония), микро-Edge Cloud для облачной интеграции |
 
 ---
 
@@ -82,12 +86,19 @@ graph TB
         AVAHI["avahi mDNS<br/>LAN discovery"]
     end
 
+    subgraph "Внешний контур"
+        CA["CA (PKI)<br/>Собственный<br/>удостоверяющий центр"]
+        JWT_SVC["JWT Service<br/>Генерация токенов<br/>(RSA)"]
+    end
+
     NGINX_JWT -->|proxy| APP
     NGINX_MTLS -->|client cert auth| APP
     APP -->|SQLAlchemy + Alembic| PG
     APP -->|FastStream AMQP| RMQ
-    RMQ -->|MQTTS 8883| DEVICES["Устройства"]
-    NGINX_JWT -->|HTTPS 443| CLIENTS["Клиенты / ЛК"]
+    CA -.->|сертификаты| NGINX_MTLS
+    JWT_SVC -.->|токены| NGINX_JWT
+    RMQ -->|MQTTS 8883| DEVICES["Устройства<br/>(с UI: дисплей, NFC, HMI)"]
+    NGINX_JWT -->|HTTPS 443| CLIENTS["Клиенты / ЛК /<br/>Интеграции API"]
 ```
 
 ### Стек приложения
@@ -280,7 +291,7 @@ PUT /api/v1/webhooks/msg-task-result
 ```json
 {
   "101": 20338,
-  "102": "2026-02-18T01:43:16ZMSK",
+  "102": "2026-02-18T01:43:16+03:00",
   "200": 13,
   "300": [{ "304": 12, "305": 1, "306": 22 }]
 }
@@ -289,20 +300,31 @@ PUT /api/v1/webhooks/msg-task-result
 | Тег | Назначение |
 |-----|-----------|
 | `101` | ID события на устройстве |
-| `102` | Временная метка (ISO 8601) |
+| `102` | Временная метка (ISO 8601, числовой TZ-offset, например `+03:00`) |
 | `200` | Код типа события |
 | `300` | Массив параметров |
 
 ### Основные типы событий
 
+#### Общие (системные) события
+
 | Код | Название | Описание |
 |-----|---------|----------|
 | 0 | Hello | Инициализация устройства |
 | 3 | IdInput | Ввод идентификатора (NFC, пинкод) |
-| 13 | CellOpenEvent | Открытие ячейки/двери |
-| 14 | CellCloseEvent | Закрытие ячейки/двери |
 | 44 | DevHealthCheck | Пинг от устройства (раз в 10 минут) |
 | 46 | UartToCloud | Данные UART → облако |
+
+#### Примеры доменных (частных) событий
+
+| Код | Название | Описание |
+|-----|---------|----------|
+| 13 | CellOpenEvent | Открытие ячейки/двери |
+| 14 | CellCloseEvent | Закрытие ячейки/двери |
+| 27 | CardDeleteEvent | Удаление карты/идентификатора |
+| 54 | SlotBindEvent | Привязка слота/ячейки |
+
+> Список доменных событий расширяется в зависимости от прикладного профиля устройства.
 
 ### Events API
 
@@ -317,6 +339,12 @@ PUT /api/v1/webhooks/msg-task-result
 ## 9. Личный кабинет (lk-leo4)
 
 Веб-приложение для управления IoT-устройствами, доступное по адресу **dev.leo4.ru**.
+
+### Назначение
+
+- Управление устройствами и задачами через веб-интерфейс
+- Мониторинг событий и состояния устройств
+- **Поддержка интеграции с внешними системами** (API-ключи, вебхуки, внешние приложения)
 
 ### Технологии
 
@@ -352,6 +380,33 @@ PUT /api/v1/webhooks/msg-task-result
 - Статусы: Выполнено ✅, Таймаут ⏱️
 - Код команды, приоритет, TTL (мин) для каждой задачи
 
+### Консоль создания задач
+
+«Создать задачу» предоставляет интерактивную консоль с набором готовых команд. Каждая команда формирует JSON-пакет задачи с параметрами `ext_task_id`, `device_id`, `method_code`, `priority`, `ttl` и `payload.dt`.
+
+Набор доступных команд определяется шаблоном [methodCodes.json](https://github.com/OlegLebedevRU/lk-leo4/blob/main/src/features/tasks/domain/methodCodes.json), что позволяет гибко расширять список команд.
+
+![Скриншот консоли создания задач](https://github.com/user-attachments/assets/8ef14f51-a510-4727-8168-472a8904071d)
+
+#### Основные команды (method_code)
+
+| Код | Команда | Описание |
+|-----|---------|----------|
+| 16 | Привязка карты/пинкода | Привязка ID карты/пинкода к слоту/ячейке |
+| 20 | Короткие команды | Отправка коротких команд (mt-подкоманды) |
+| 21 | Перезагрузка | Удалённая перезагрузка устройства |
+| 35 | Ввод пинкода | Удалённый ввод пинкода |
+| 47 | Удаление привязок | Удаление привязок к слоту/списку слотов |
+| 49 | Запись данных в БД (NVS) | Запись параметров в NVS-хранилище контроллера |
+| 50 | Чтение данных из БД (NVS) | Получение данных из NVS-хранилища контроллера |
+
+#### Удалённая работа с NVS-хранилищем
+
+Команды `method_code: 49` (запись) и `method_code: 50` (чтение) обеспечивают удалённый доступ к флеш-хранилищу контроллера (NVS — Non-Volatile Storage). Это позволяет:
+
+- **Чтение**: получить текущие параметры конфигурации устройства (разделы `cfg_sip`, `cfg_eth`, `system` и др.)
+- **Запись**: удалённо изменить конфигурацию устройства, задав раздел (`ns`), ключ (`k`), тип данных (`t`: i8, u8, i16, u16, i32, u32, str) и значение (`v`)
+
 ![Скриншот личного кабинета](https://github.com/user-attachments/assets/01ede88c-f7d0-43be-94f0-2a05c8f1dccc)
 
 ---
@@ -365,10 +420,10 @@ PUT /api/v1/webhooks/msg-task-result
 - **Функции:**
   - MQTT-клиент с поддержкой RPC-протокола
   - I2C Master для периферийного модуля (STM32)
+  - I2C HW Bootloader для STM32 (обновление прошивки периферии)
   - SIP-клиент (siplite) для голосовой связи
   - RS-485, UART-шлюз
-  - PWM-управление
-  - WebRTC (Raspberry Pi)
+  - OTA — обновление прошивки по воздуху
 
 ### STM32F411 (sip_periph) — Периферийный модуль
 
@@ -458,6 +513,56 @@ graph TB
 
 ## 12. Сценарии применения
 
+### Сценарий: Начало от HMI устройства (NFC → Siplite Frontend)
+
+```mermaid
+sequenceDiagram
+    actor User as Пользователь
+    participant HMI as UI устройства<br/>(NFC/Дисплей)
+    participant ESP as ESP32 (siplite)
+    participant STM as STM32 (sip_periph)
+    participant Core as Cloud Core
+
+    User->>HMI: Прикладывает NFC-карту
+    HMI->>STM: PN532 считывает ID карты
+    STM->>ESP: I2C → событие IdInput
+    ESP->>ESP: Siplite Frontend обрабатывает<br/>ввод по локальным спискам
+    ESP->>STM: I2C → команда на открытие
+    STM->>HMI: Дисплей: Доступ разрешён
+    ESP->>Core: MQTT evt (код 3, IdInput)
+```
+
+> **Siplite Frontend** — встроенный интерфейс ввода на устройстве ([документация](https://github.com/OlegLebedevRU/siplite/blob/master/docs/l4_input_frontend.md)), обрабатывающий NFC, пинкоды и другие способы идентификации.
+
+### Сценарий: Использование через API (iot-rpc-rest-app)
+
+```mermaid
+sequenceDiagram
+    actor ExtSys as Внешняя система
+    participant API as REST API<br/>iot-rpc-rest-app
+    participant Core as Cloud Core
+    participant Device as ESP32
+
+    ExtSys->>API: POST /api/v1/device-tasks/<br/>(x-api-key, method_code=51)
+    API->>Core: Создаёт задачу, state=READY
+    Core->>Device: MQTT tsk → req → rsp
+    Device->>Core: res status=200
+    Core->>API: Задача DONE
+    API->>ExtSys: Webhook POST msg-task-result<br/>или GET /device-tasks/{id}
+```
+
+> Внешние системы интегрируются напрямую через REST API с использованием API-ключей, без необходимости использования личного кабинета.
+
+### Локальные сценарии (без облака)
+
+Ряд сценариев могут работать **полностью автономно**, без подключения к облаку. Siplite-контроллер обеспечивает локальную обратную связь по заранее загруженным спискам пользователей и их скриптам:
+
+- **NFC/пинкод → открытие замка** — идентификация и выполнение действия по локальной базе
+- **Управление по расписанию** — выполнение запрограммированных действий без сетевого подключения
+- **Офлайн-журналирование** — накопление событий в локальном хранилище с последующей синхронизацией при восстановлении связи
+
+> Это критически важно для объектов с нестабильным интернетом: устройство продолжает функционировать автономно.
+
 ### Системы контроля доступа (Постаматы, локеры)
 
 ```mermaid
@@ -489,10 +594,66 @@ sequenceDiagram
 | Удаление карт | 26 | Очистка базы идентификаторов |
 | SIP-вызов | — | Инициация голосового вызова (ESP-ADF + siplite) |
 | Шлюз UART→Cloud | 46 | Проброс данных с порта в облако |
+| Чтение NVS | 50 | Удалённое чтение конфигурации из флеш-хранилища |
+| Запись NVS | 49 | Удалённая запись конфигурации во флеш-хранилище |
+| NFC → локальное открытие | — (офлайн) | Идентификация и действие по локальной базе без облака |
+| Интеграция через API | любой | Внешняя система отправляет задачу через REST API |
 
 ---
 
-## 13. Полный Workflow — от кнопки в ЛК до устройства и обратно
+## 13. Полный Workflow — API-сценарии и онлайн-пользовательская петля
+
+### Workflow через REST API (интеграция внешней системы)
+
+```mermaid
+sequenceDiagram
+    actor ExtSys as Внешняя система
+    participant NGINX as nginx (JWT / API-Key)
+    participant API as FastAPI
+    participant PG as PostgreSQL
+    participant RMQ as RabbitMQ
+    participant MQTT as MQTT 5 Broker
+    participant ESP as ESP32 (Device)
+    participant STM as STM32 (sip_periph)
+
+    ExtSys->>NGINX: POST /api/v1/device-tasks/ (x-api-key)
+    NGINX->>API: Proxy + validate API-Key
+    API->>PG: INSERT task (state=READY)
+    API->>RMQ: Publish to task queue
+    API-->>ExtSys: 200 OK id=uuid, created_at
+
+    RMQ->>MQTT: Route to srv/SN/tsk
+    MQTT->>ESP: Deliver TSK (correlationData, method_code)
+    ESP->>MQTT: Publish dev/SN/req
+    MQTT->>RMQ: Route REQ to server
+    RMQ->>API: Consume REQ
+    API->>PG: UPDATE task (state=LOCK)
+    API->>RMQ: Publish RSP with payload
+    RMQ->>MQTT: Route to srv/SN/rsp
+    MQTT->>ESP: Deliver RSP (method_code + payload.dt)
+
+    ESP->>STM: I2C command
+    STM-->>ESP: I2C response (OK)
+
+    ESP->>MQTT: Publish dev/SN/res (status=200)
+    MQTT->>RMQ: Route RES
+    RMQ->>API: Consume RES
+    API->>PG: UPDATE task (state=DONE), save result
+    API->>RMQ: Publish CMT
+    RMQ->>MQTT: Route to srv/SN/cmt
+    MQTT->>ESP: Deliver CMT
+
+    alt Webhook
+        API->>ExtSys: POST webhook msg-task-result<br/>(X-Device-Id, X-Status-Code, X-Ext-Id)
+    else Polling
+        ExtSys->>NGINX: GET /api/v1/device-tasks/{id}
+        NGINX->>API: Proxy
+        API->>PG: SELECT task
+        API-->>ExtSys: status=3 (DONE), results=[...]
+    end
+```
+
+### Workflow через Личный кабинет (онлайн-пользовательская петля)
 
 ```mermaid
 sequenceDiagram
@@ -523,7 +684,7 @@ sequenceDiagram
     RMQ->>MQTT: Route to srv/SN/rsp
     MQTT->>ESP: Deliver RSP (method_code + payload.dt)
 
-    ESP->>STM: I2C command (open cell)
+    ESP->>STM: I2C command
     STM-->>ESP: I2C response (OK)
 
     ESP->>MQTT: Publish dev/SN/res (status=200)
@@ -534,14 +695,14 @@ sequenceDiagram
     RMQ->>MQTT: Route to srv/SN/cmt
     MQTT->>ESP: Deliver CMT
 
-    loop Polling или Webhook
-        LK->>NGINX: GET /api/v1/device-tasks/id
+    loop Polling результата
+        LK->>NGINX: GET /api/v1/device-tasks/{id}
         NGINX->>API: Proxy
         API->>PG: SELECT task
         API-->>LK: status=3, results=[...]
     end
 
-    User->>LK: Видит статус Выполнено
+    User->>LK: Видит статус Выполнено ✅
 ```
 
 ---
