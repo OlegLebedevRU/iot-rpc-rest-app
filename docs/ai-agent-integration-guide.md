@@ -11,7 +11,7 @@
 
 Данное руководство описывает, как практически подключить AI-агента (LLM с Function Calling, MCP-сервер, чат-бот) к REST API платформы LEO4 для управления IoT-устройствами.
 
-> ⚠️ **Важно:** Task status = 3 (DONE) означает только **доставку** команды на устройство. Для подтверждения **физического исполнения** (например, открытия ячейки) необходимо отследить событие `CellOpenEvent` (код 13) с номером ячейки в теге `304` через `GET /device-events/incremental` или вебхук `msg-event`.
+> ⚠️ **Важно:** Task status = 3 (DONE) означает только **доставку** команды на устройство. Для подтверждения **физического исполнения** (например, открытия ячейки) необходимо отследить событие `CellOpenEvent` (код 13) с номером ячейки в теге `304` через polling-запрос `GET /device-events/fields/` или вебхук `msg-event`.
 
 **Итоговый сценарий:**
 
@@ -20,7 +20,7 @@
 
 ① AI-агент → POST /device-tasks/ {method_code: 51, payload: {dt: [{cl: 5}]}}
 ② AI-агент → GET /device-tasks/{id}          → status: 3 (DONE) — команда доставлена
-③ AI-агент → GET /device-events/incremental  → event_type_code: 13, 304: 5 — ячейка физически открыта
+③ AI-агент → GET /device-events/fields/      → event_type_code: 13, tag: 304, value: 5 — ячейка физически открыта
 
 AI-агент → "Ячейка 5 физически открыта ✅"
 ```
@@ -53,9 +53,9 @@ sequenceDiagram
     Device-->>API: Event code 13\nCellOpenEvent {304: 5}
     Note right of Device: Устройство отдельно сообщает,<br/>что ячейка 5 действительно открылась.
 
-    Agent->>API: GET /device-events/incremental
-    API-->>Agent: [{event_type_code:13, payload:{300:{304:5}}}]
-    Note over Agent: Агент сверяет код события и номер ячейки.<br/>Только после этого подтверждает физическое исполнение.
+    Agent->>API: GET /device-events/fields/?event_type_code=13&tag=304
+    API-->>Agent: [{value:5, created_at:"2026-02-18T01:43:16Z"}]
+    Note over Agent: Агент сверяет значение тега 304 с номером ячейки.<br/>Только после этого подтверждает физическое исполнение.
 
     Agent-->>User: Ответ: "Ячейка 5 физически открыта"
 ```
@@ -68,7 +68,7 @@ sequenceDiagram
 2. **Узнайте `device_id`** целевого устройства (виден в ЛК → левая панель → Номер связи)
 3. **Проверьте связь** — отправьте hello-запрос (см. раздел ниже)
 4. **Подключите LLM** с Function Calling (см. раздел «Полный пример AI-агента»)
-5. **Проверьте события** — после открытия ячейки убедитесь, что приходит CellOpenEvent (код 13) через `GET /device-events/incremental`
+5. **Проверьте события** — после открытия ячейки убедитесь, что через `GET /device-events/fields/` приходит значение тега `304` для `CellOpenEvent` (`event_type_code=13`)
 6. **Для продакшена** — настройте вебхуки вместо polling (см. раздел «Webhook»)
 
 ---
@@ -230,7 +230,7 @@ pip install openai httpx
 ```python
 """
 AI-агент: чат-сообщение → POST /device-tasks/ → GET /device-tasks/{id}
-→ GET /device-events/incremental → результат пользователю
+→ GET /device-events/fields/ → результат пользователю
 Зависимости: pip install openai httpx
 """
 import json
@@ -320,10 +320,10 @@ TOOLS = [
                         "type": "integer",
                         "description": "Номер ячейки, которую нужно подтвердить"
                     },
-                    "last_event_id": {
+                    "interval_m": {
                         "type": "integer",
-                        "description": "Последний известный ID события перед началом ожидания",
-                        "default": 0
+                        "description": "Глубина поиска в минутах для polling `/device-events/fields/`",
+                        "default": 5
                     },
                     "timeout_s": {
                         "type": "integer",
@@ -375,47 +375,42 @@ def get_task_status(task_id: str) -> dict:
 
 def poll_cell_open_event(
     cell_number: int,
-    last_event_id: int = 0,
+    interval_m: int = 5,
     timeout_s: int = 30,
 ) -> dict:
-    """GET /api/v1/device-events/incremental — ожидание CellOpenEvent."""
+    """GET /api/v1/device-events/fields/ — polling ожидание CellOpenEvent."""
     deadline = time.time() + timeout_s
-    current_event_id = last_event_id
 
     with httpx.Client() as http:
         while time.time() < deadline:
             response = http.get(
-                f"{LEO4_API_URL}/device-events/incremental",
+                f"{LEO4_API_URL}/device-events/fields/",
                 headers={"x-api-key": LEO4_API_KEY},
                 params={
                     "device_id": DEVICE_ID,
-                    "last_event_id": current_event_id,
-                    "limit": 50,
+                    "event_type_code": 13,
+                    "tag": 304,
+                    "interval_m": interval_m,
+                    "limit": 10,
                 },
             )
             response.raise_for_status()
-            events = response.json()
+            rows = response.json()
 
-            for event in events:
-                current_event_id = max(current_event_id, event["id"])
-                if event.get("event_type_code") != 13:
-                    continue
-
-                for row in event.get("payload", {}).get("300", []):
-                    if row.get("304") == cell_number:
-                        return {
-                            "confirmed": True,
-                            "event_id": event["id"],
-                            "cell_number": cell_number,
-                            "event": event,
-                        }
+            for row in rows:
+                if row.get("value") == cell_number:
+                    return {
+                        "confirmed": True,
+                        "cell_number": cell_number,
+                        "event": row,
+                    }
 
             time.sleep(2)
 
     return {
         "confirmed": False,
         "cell_number": cell_number,
-        "last_event_id": current_event_id,
+        "interval_m": interval_m,
         "message": "CellOpenEvent не найден за отведённое время",
     }
 
@@ -508,8 +503,8 @@ if __name__ == "__main__":
   ✅ Результат: {"id": "a1b2c3d4-...", "created_at": 1712345678}
   🔧 Вызов: get_task_status({"task_id": "a1b2c3d4-..."})
   ✅ Результат: {"status": 3, "results": [{"status_code": 200, ...}]}
-  🔧 Вызов: poll_cell_open_event({"cell_number": 5, "last_event_id": 150280, "timeout_s": 30})
-  ✅ Результат: {"confirmed": true, "event_id": 150283, "cell_number": 5, "event": {"event_type_code": 13, ...}}
+  🔧 Вызов: poll_cell_open_event({"cell_number": 5, "interval_m": 5, "timeout_s": 30})
+  ✅ Результат: {"confirmed": true, "cell_number": 5, "event": {"created_at": "2026-02-18T01:43:16Z", "value": 5, "interval_sec": 12}}
 🤖 Агент: Ячейка 5 физически открыта и подтверждена событием CellOpenEvent ✅
 
 💬 Вы: Перезагрузи устройство
@@ -532,6 +527,15 @@ if __name__ == "__main__":
 ### Вариант A — Polling (простой)
 
 Подходит для отладки и простых сценариев, но помните: `status=3 (DONE)` подтверждает только доставку команды.
+
+Пример HTTP-запроса для polling события:
+
+```bash
+curl -X 'GET' \
+  'https://dev.leo4.ru/api/v1/device-events/fields/?device_id=4617&event_type_code=13&tag=304&interval_m=5&limit=10' \
+  -H 'accept: application/json' \
+  -H 'x-api-key: ApiKey <key>'
+```
 
 ```python
 import time
@@ -559,34 +563,30 @@ def wait_for_task_delivery(task_id: str, timeout: int = 30) -> dict:
 def wait_for_cell_open_event(
     device_id: int,
     cell_number: int,
-    last_event_id: int = 0,
+    interval_m: int = 5,
     timeout: int = 30,
 ) -> dict:
-    """Ждём физическое подтверждение открытия ячейки через incremental events."""
+    """Ждём физическое подтверждение открытия ячейки через polling `/device-events/fields/`."""
     headers = {"x-api-key": "ApiKey ВАШ_КЛЮЧ"}
     deadline = time.time() + timeout
-    current_event_id = last_event_id
 
     while time.time() < deadline:
         resp = httpx.get(
-            "https://dev.leo4.ru/api/v1/device-events/incremental",
+            "https://dev.leo4.ru/api/v1/device-events/fields/",
             headers=headers,
             params={
                 "device_id": device_id,
-                "last_event_id": current_event_id,
-                "limit": 50,
+                "event_type_code": 13,
+                "tag": 304,
+                "interval_m": interval_m,
+                "limit": 10,
             },
         )
-        events = resp.json()
+        rows = resp.json()
 
-        for event in events:
-            current_event_id = max(current_event_id, event["id"])
-            if event.get("event_type_code") != 13:
-                continue
-
-            for row in event.get("payload", {}).get("300", []):
-                if row.get("304") == cell_number:
-                    return event
+        for row in rows:
+            if row.get("value") == cell_number:
+                return row
 
         time.sleep(2)
 
@@ -597,8 +597,8 @@ def wait_for_cell_open_event(
 # task = create_device_task(method_code=51, payload={"dt": [{"cl": 5}]})
 # delivery = wait_for_task_delivery(task["id"])
 # if delivery["status"] == 3:
-#     event = wait_for_cell_open_event(device_id=4619, cell_number=5, last_event_id=150280)
-#     print(f"Открытие подтверждено событием {event['id']}")
+#     event = wait_for_cell_open_event(device_id=4619, cell_number=5, interval_m=5)
+#     print(f"Открытие подтверждено polling-ответом {event['created_at']}")
 ```
 
 ### Вариант B — Webhook (рекомендуется для продакшена)
@@ -730,8 +730,8 @@ async def handle_device_event(request: Request):
         "properties": {
           "device_id":     { "type": "integer", "description": "ID устройства" },
           "cell_number":   { "type": "integer", "description": "Номер ожидаемой ячейки" },
-          "last_event_id": { "type": "integer", "description": "Последний обработанный event id", "default": 0 },
-          "limit":         { "type": "integer", "description": "Лимит событий за запрос", "default": 50 }
+          "interval_m":    { "type": "integer", "description": "Глубина поиска в минутах для polling `/device-events/fields/`", "default": 5 },
+          "limit":         { "type": "integer", "description": "Лимит строк за запрос", "default": 10 }
         },
         "required": ["device_id", "cell_number"]
       }
@@ -771,7 +771,7 @@ async def handle_device_event(request: Request):
 |----------|------------|-------------------|
 | `create_device_task` | `POST` | `/api/v1/device-tasks/` |
 | `get_task_status` | `GET` | `/api/v1/device-tasks/{id}` |
-| `poll_cell_open_event` | `GET` | `/api/v1/device-events/incremental` |
+| `poll_cell_open_event` | `GET` | `/api/v1/device-events/fields/` |
 | `get_telemetry` | `GET` | `/api/v1/device-events/fields/` |
 | `configure_webhook` | `PUT` | `/api/v1/webhooks/{event_type}` |
 
