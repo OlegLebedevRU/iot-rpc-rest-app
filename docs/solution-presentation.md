@@ -28,31 +28,33 @@
 ## 2. Архитектура системы
 
 ```mermaid
-architecture-beta
-    group client(server)[Client]
-    service lk(server)[Личный кабинет lk-leo4] in client
-    service extapp(server)[External App / Webhook] in client
+flowchart LR
+    subgraph Client
+        LK["Личный кабинет<br/>lk-leo4"]
+        EXTAPP["External App<br/>Webhook"]
+    end
 
-    group api(cloud)[API Cloud Core]
-    service db(database)[PostgreSQL Tasks Queue] in api
-    service gw(internet)[nginx + JWT / mTLS Gateway] in api
-    service server(server)[FastAPI + FastStream Server] in api
-    service broker(internet)[RabbitMQ + MQTT 5 Broker] in api
+    subgraph Core ["API Cloud Core"]
+        GW["nginx<br/>JWT / mTLS Gateway"]
+        SERVER["FastAPI +<br/>FastStream Server"]
+        DB[("PostgreSQL<br/>Tasks Queue")]
+        BROKER["RabbitMQ +<br/>MQTT 5 Broker"]
+        GW --- SERVER
+        SERVER --- DB
+        SERVER --- BROKER
+    end
 
-    group device(internet)[Devices]
-    service esp(server)[ESP32 ESP-IDF / ESP-ADF] in device
-    service stm(server)[STM32 sip_periph] in device
-    service pyagent(server)[Python Agent] in device
+    subgraph Devices
+        ESP["ESP32<br/>ESP-IDF / ESP-ADF"]
+        STM["STM32<br/>sip_periph"]
+        PYAGENT["Python Agent"]
+        ESP --- STM
+    end
 
-    db:T -- B:server
-    gw:R -- L:server
-    broker:L -- R:server
-
-    lk:R -- L:gw
-    extapp:R -- L:gw
-    esp:L -- R:broker
-    stm:L -- R:esp
-    pyagent:L -- R:broker
+    LK -->|HTTPS| GW
+    EXTAPP -->|HTTPS| GW
+    BROKER <-->|MQTTS| ESP
+    BROKER <-->|MQTTS| PYAGENT
 ```
 
 ### Компоненты системы
@@ -112,18 +114,18 @@ graph TB
 
 ```mermaid
 flowchart LR
-    subgraph dev ["Устройство → Сервер (pub)"]
-        REQ["dev/⟨SN⟩/req<br/>Запрос задачи"]
-        ACK["dev/⟨SN⟩/ack<br/>Подтверждение"]
-        RES["dev/⟨SN⟩/res<br/>Результат"]
-        EVT["dev/⟨SN⟩/evt<br/>Событие"]
+    subgraph dev ["Устройство - Сервер (pub)"]
+        REQ["dev/SN/req<br/>Запрос задачи"]
+        ACK["dev/SN/ack<br/>Подтверждение"]
+        RES["dev/SN/res<br/>Результат"]
+        EVT["dev/SN/evt<br/>Событие"]
     end
 
-    subgraph srv ["Сервер → Устройство (sub)"]
-        TSK["srv/⟨SN⟩/tsk<br/>Анонс задачи"]
-        RSP["srv/⟨SN⟩/rsp<br/>Параметры задачи"]
-        CMT["srv/⟨SN⟩/cmt<br/>Подтверждение результата"]
-        EVA["srv/⟨SN⟩/eva<br/>Подтверждение события"]
+    subgraph srv ["Сервер - Устройство (sub)"]
+        TSK["srv/SN/tsk<br/>Анонс задачи"]
+        RSP["srv/SN/rsp<br/>Параметры задачи"]
+        CMT["srv/SN/cmt<br/>Подтверждение результата"]
+        EVA["srv/SN/eva<br/>Подтверждение события"]
     end
 
     REQ <-->|correlationData| RSP
@@ -132,7 +134,7 @@ flowchart LR
     EVT <-->|correlationData| EVA
 ```
 
-> `⟨SN⟩` — серийный номер устройства из x509-сертификата (CN).
+> **SN** — серийный номер устройства из x509-сертификата (CN).
 
 ### Жизненный цикл задачи (RPC)
 
@@ -143,11 +145,11 @@ flowchart LR
 
 | Этап | Топик | Направление | Описание |
 |------|-------|------------|----------|
-| **TSK** | `srv/⟨SN⟩/tsk` | Сервер → Устройство | Анонс задачи (method_code, без payload) |
-| **REQ** | `dev/⟨SN⟩/req` | Устройство → Сервер | Запрос параметров задачи |
-| **RSP** | `srv/⟨SN⟩/rsp` | Сервер → Устройство | Тело задачи (method_code + payload.dt) |
-| **RES** | `dev/⟨SN⟩/res` | Устройство → Сервер | Результат выполнения (status_code) |
-| **CMT** | `srv/⟨SN⟩/cmt` | Сервер → Устройство | Подтверждение приёма результата |
+| **TSK** | `srv/<SN>/tsk` | Сервер → Устройство | Анонс задачи (method_code, без payload) |
+| **REQ** | `dev/<SN>/req` | Устройство → Сервер | Запрос параметров задачи |
+| **RSP** | `srv/<SN>/rsp` | Сервер → Устройство | Тело задачи (method_code + payload.dt) |
+| **RES** | `dev/<SN>/res` | Устройство → Сервер | Результат выполнения (status_code) |
+| **CMT** | `srv/<SN>/cmt` | Сервер → Устройство | Подтверждение приёма результата |
 
 ### Сквозная корреляция
 
@@ -271,7 +273,7 @@ PUT /api/v1/webhooks/msg-task-result
 
 ## 8. События устройств (Events API)
 
-Асинхронные события передаются по отдельному каналу (`dev/⟨SN⟩/evt`), независимо от RPC.
+Асинхронные события передаются по отдельному каналу (`dev/<SN>/evt`), независимо от RPC.
 
 ### Формат событий
 
@@ -418,29 +420,31 @@ PUT /api/v1/webhooks/msg-task-result
 
 ```mermaid
 graph TB
-    subgraph "Уровень 1: Транспорт"
+    subgraph L1 ["Уровень 1: Транспорт"]
         TLS["TLS 1.2+ шифрование"]
         MTLS["Mutual TLS (устройства)"]
         HTTPS["HTTPS (API клиенты)"]
     end
 
-    subgraph "Уровень 2: Аутентификация"
+    subgraph L2 ["Уровень 2: Аутентификация"]
         X509["x509 сертификаты устройств"]
         JWT_AUTH["JWT (RSA) токены"]
         APIKEY["API-ключи (x-api-key)"]
     end
 
-    subgraph "Уровень 3: Авторизация"
+    subgraph L3 ["Уровень 3: Авторизация"]
         ACL["MQTT ACL на базе CN сертификата"]
         ORG["Изоляция по org_id"]
         TOPIC["Строгие правила топиков"]
     end
 
-    subgraph "Уровень 4: Инфраструктура"
+    subgraph L4 ["Уровень 4: Инфраструктура"]
         CA["Собственный CA (PKI)"]
         RMQ_DEF["RabbitMQ Definitions (политики)"]
         CERT_BOT["certbot / Let's Encrypt"]
     end
+
+    L1 --> L2 --> L3 --> L4
 ```
 
 | Слой | Механизм | Применение |
@@ -464,13 +468,13 @@ sequenceDiagram
     participant Core as Cloud Core
     participant Device as ESP32 + STM32
 
-    User->>LK: Нажимает "Открыть ячейку #5"
-    LK->>API: POST touch_task (method=51, cl=5)
+    User->>LK: Нажимает Открыть ячейку 5
+    LK->>API: POST touch_task method=51, cl=5
     API->>Core: Создаёт задачу, state=READY
-    Core->>Device: MQTT tsk (correlationData)
+    Core->>Device: MQTT tsk correlationData
     Device->>Core: req → rsp → открытие замка
-    Device->>Core: res (status=200)
-    Core->>LK: Статус: Выполнено ✅
+    Device->>Core: res status=200
+    Core->>LK: Статус: Выполнено
 ```
 
 ### Дополнительные сценарии
@@ -507,37 +511,37 @@ sequenceDiagram
     NGINX->>API: Proxy + validate JWT
     API->>PG: INSERT task (state=READY)
     API->>RMQ: Publish to task queue
-    API-->>LK: 200 OK {id: uuid}
+    API-->>LK: 200 OK id=uuid
 
-    RMQ->>MQTT: Route to srv/⟨SN⟩/tsk
+    RMQ->>MQTT: Route to srv/SN/tsk
     MQTT->>ESP: Deliver TSK (correlationData, method_code)
-    ESP->>MQTT: Publish dev/⟨SN⟩/req
+    ESP->>MQTT: Publish dev/SN/req
     MQTT->>RMQ: Route REQ to server
     RMQ->>API: Consume REQ
     API->>PG: UPDATE task (state=LOCK)
     API->>RMQ: Publish RSP with payload
-    RMQ->>MQTT: Route to srv/⟨SN⟩/rsp
+    RMQ->>MQTT: Route to srv/SN/rsp
     MQTT->>ESP: Deliver RSP (method_code + payload.dt)
 
     ESP->>STM: I2C command (open cell)
     STM-->>ESP: I2C response (OK)
 
-    ESP->>MQTT: Publish dev/⟨SN⟩/res (status=200)
+    ESP->>MQTT: Publish dev/SN/res (status=200)
     MQTT->>RMQ: Route RES
     RMQ->>API: Consume RES
     API->>PG: UPDATE task (state=DONE), save result
     API->>RMQ: Publish CMT
-    RMQ->>MQTT: Route to srv/⟨SN⟩/cmt
+    RMQ->>MQTT: Route to srv/SN/cmt
     MQTT->>ESP: Deliver CMT
 
     loop Polling или Webhook
-        LK->>NGINX: GET /api/v1/device-tasks/{id}
+        LK->>NGINX: GET /api/v1/device-tasks/id
         NGINX->>API: Proxy
         API->>PG: SELECT task
-        API-->>LK: {status: 3, results: [...]}
+        API-->>LK: status=3, results=[...]
     end
 
-    User->>LK: Видит статус "Выполнено" ✅
+    User->>LK: Видит статус Выполнено
 ```
 
 ---
