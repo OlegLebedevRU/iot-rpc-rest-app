@@ -28,7 +28,7 @@ class DevEventOut(BaseModel):
 
 class DevEventFields(BaseModel):
     created_at: datetime
-    value: str | int | float | dict[str, Any] | None
+    value: str | int | float | bool | dict[str, Any] | list[Any] | None
     interval_sec: int
 
 
@@ -56,9 +56,9 @@ class DevEventFieldsRequest(BaseModel):
         lt=3600,
     )
     limit: int = Field(
-        1,
+        50,
         title="Limit rows in response",
         description="",
         ge=1,
-        lt=10,
+        le=100,
     )

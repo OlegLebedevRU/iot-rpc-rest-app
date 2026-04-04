@@ -67,14 +67,17 @@ class EventRepository:
         event_type_code: int,
         tag: int,
         interval_m: int | None,
-        limit: int | None = 10,
+        limit: int | None = 50,
     ):
         interval_m = 15 if interval_m is None or interval_m > 3600 else interval_m
-        limit = 10 if limit is None or limit > 10 else limit
+        limit = 50 if limit is None else min(limit, 100)
         stmt = text("""
                     SELECT
                         created_at,
-                        (payload -> '300' -> 0 -> :tag) AS value,
+                        COALESCE(
+                            payload -> '300' -> 0 -> :tag,
+                            payload -> :tag
+                        ) AS value,
                         EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - created_at))::INTEGER AS interval_sec
                     FROM tb_dev_events
                     WHERE
@@ -95,7 +98,7 @@ class EventRepository:
                 "limit": limit,
             },
         )
-        return result.unique().mappings().all()
+        return result.mappings().all()
 
     @classmethod
     async def get_incremental_events(

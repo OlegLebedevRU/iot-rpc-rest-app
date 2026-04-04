@@ -56,9 +56,9 @@ class DeviceEventsService:
             raise HTTPException(status_code=404, detail="Fields not found")
         fres: list[DevEventFields] = [
             DevEventFields(
-                created_at=f.created_at,
-                value=f.value,
-                interval_sec=f.interval_sec if f.interval_sec is not None else 0,
+                created_at=f["created_at"],
+                value=f["value"],
+                interval_sec=f["interval_sec"] if f["interval_sec"] is not None else 0,
             )
             for f in fields
         ]
