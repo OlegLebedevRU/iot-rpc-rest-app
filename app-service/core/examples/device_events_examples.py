@@ -187,3 +187,16 @@ EXAMPLE_INCREMENTAL_RESPONSE = [
         },
     },
 ]
+
+EXAMPLE_FIELDS_RESPONSE = [
+    {
+        "created_at": "2026-03-11T17:50:37.458000Z",
+        "value": 5,
+        "interval_sec": 12,
+    },
+    {
+        "created_at": "2026-03-11T17:49:11.102000Z",
+        "value": 5,
+        "interval_sec": 98,
+    },
+]

@@ -19,7 +19,11 @@ router = APIRouter(
 )
 
 # Примеры ответа
-from core.examples import EXAMPLE_PAGINATED_RESPONSE, EXAMPLE_INCREMENTAL_RESPONSE
+from core.examples import (
+    EXAMPLE_PAGINATED_RESPONSE,
+    EXAMPLE_INCREMENTAL_RESPONSE,
+    EXAMPLE_FIELDS_RESPONSE,
+)
 
 
 @router.get(
@@ -81,8 +85,27 @@ async def get_incremental_events(
 
 @router.get(
     "/fields/",
-    description="Fields select from events",
+    description="""
+Fields select from events.
+
+Can be used in polling mode to confirm a specific event by tag value, for example
+`CellOpenEvent` with `event_type_code=13` and `tag=304`.
+
+Example:
+```bash
+curl -X 'GET' \\
+  'https://dev.leo4.ru/api/v1/device-events/fields/?device_id=4617&event_type_code=13&tag=304&interval_m=5&limit=10' \\
+  -H 'accept: application/json' \\
+  -H 'x-api-key: ApiKey <key>'
+```
+""",
     response_model=List[DevEventFields],
+    responses={
+        200: {
+            "description": "Список значений поля из событий за интервал; подходит для polling по event_type_code и tag",
+            "content": {"application/json": {"example": EXAMPLE_FIELDS_RESPONSE}},
+        }
+    },
 )
 async def get_event_fields(
     session: Session_dep,
