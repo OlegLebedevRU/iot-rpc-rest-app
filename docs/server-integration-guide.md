@@ -156,229 +156,150 @@ POST https://dev.leo4.ru/api/v1/device-tasks/
 
 ---
 
-## 1. Полный пример серверного приложения (Kotlin + Spring Boot)
+## 1. Полный пример серверного приложения (Python)
 
 Зависимости:
 
-```kotlin
-implementation("org.springframework.boot:spring-boot-starter-web")
-implementation("org.springframework.boot:spring-boot-starter-validation")
-implementation("com.fasterxml.jackson.module:jackson-module-kotlin")
-implementation("org.jetbrains.kotlin:kotlin-reflect")
+```bash
+pip install fastapi uvicorn httpx
 ```
 
 ### Код сервера
 
-```kotlin
-import com.fasterxml.jackson.annotation.JsonProperty
-import jakarta.validation.Valid
-import jakarta.validation.constraints.Max
-import jakarta.validation.constraints.Min
-import org.springframework.boot.autoconfigure.SpringBootApplication
-import org.springframework.boot.runApplication
-import org.springframework.http.HttpHeaders
-import org.springframework.http.HttpStatus
-import org.springframework.http.MediaType
-import org.springframework.http.ResponseEntity
-import org.springframework.stereotype.Service
-import org.springframework.validation.annotation.Validated
-import org.springframework.web.bind.annotation.ExceptionHandler
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PostMapping
-import org.springframework.web.bind.annotation.RequestBody
-import org.springframework.web.bind.annotation.RequestHeader
-import org.springframework.web.bind.annotation.RequestMapping
-import org.springframework.web.bind.annotation.RestController
-import org.springframework.web.client.RestClient
-import org.springframework.web.client.RestClientResponseException
-import org.springframework.web.server.ResponseStatusException
-import java.time.Instant
-import java.util.UUID
+```python
+import time
+from uuid import uuid4
 
-private const val LEO4_API_URL = "https://dev.leo4.ru/api/v1"
-private const val LEO4_API_KEY = "ApiKey ВАШ_КЛЮЧ"
-private const val DEVICE_ID = 4619
+import httpx
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 
-@SpringBootApplication
-class ServerExampleApplication
+LEO4_API_URL = "https://dev.leo4.ru/api/v1"
+LEO4_API_KEY = "ApiKey ВАШ_КЛЮЧ"
+DEVICE_ID = 4619
 
-fun main(args: Array<String>) {
-    runApplication<ServerExampleApplication>(*args)
-}
+app = FastAPI()
 
-data class OpenCellRequest(
-    @field:JsonProperty("cell_number")
-    @field:Min(1)
-    val cellNumber: Int,
-    @field:Min(1)
-    @field:Max(60)
-    val ttl: Int = 5,
-)
 
-data class CreateTaskRequest(
-    @JsonProperty("ext_task_id")
-    val extTaskId: String,
-    @JsonProperty("device_id")
-    val deviceId: Int,
-    @JsonProperty("method_code")
-    val methodCode: Int,
-    val priority: Int = 1,
-    val ttl: Int,
-    val payload: Map<String, Any>,
-)
+class OpenCellRequest(BaseModel):
+    cell_number: int = Field(..., ge=1, description="Номер ячейки")
+    ttl: int = Field(default=5, ge=1, le=60, description="TTL задачи в минутах")
 
-data class TaskCreateResponse(
-    val id: String,
-    @JsonProperty("created_at")
-    val createdAt: Long? = null,
-)
 
-data class TaskStatusResponse(
-    val id: String,
-    val status: Int,
-    @JsonProperty("status_name")
-    val statusName: String? = null,
-)
+def create_device_task(method_code: int, payload: dict, ttl: int = 5) -> dict:
+    with httpx.Client(timeout=15) as http:
+        response = http.post(
+            f"{LEO4_API_URL}/device-tasks/",
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": LEO4_API_KEY,
+            },
+            json={
+                "ext_task_id": f"server-{method_code}-{uuid4()}",
+                "device_id": DEVICE_ID,
+                "method_code": method_code,
+                "priority": 1,
+                "ttl": ttl,
+                "payload": payload,
+            },
+        )
+        response.raise_for_status()
+        return response.json()
 
-data class DeviceEventRow(
-    @JsonProperty("created_at")
-    val createdAt: Instant? = null,
-    val value: Int? = null,
-    @JsonProperty("interval_sec")
-    val intervalSec: Int? = null,
-)
 
-data class OpenCellResponse(
-    val confirmed: Boolean,
-    val message: String,
-    @JsonProperty("task_id")
-    val taskId: String,
-    @JsonProperty("task_status")
-    val taskStatus: Int,
-    val event: DeviceEventRow,
-)
+def get_task_status(task_id: str) -> dict:
+    with httpx.Client(timeout=15) as http:
+        response = http.get(
+            f"{LEO4_API_URL}/device-tasks/{task_id}",
+            headers={"x-api-key": LEO4_API_KEY},
+        )
+        response.raise_for_status()
+        return response.json()
 
-@Service
-class Leo4Service {
-    val restClient: RestClient = RestClient.builder()
-        .baseUrl(LEO4_API_URL)
-        .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-        .defaultHeader("x-api-key", LEO4_API_KEY)
-        .build()
 
-    fun createDeviceTask(methodCode: Int, payload: Map<String, Any>, ttl: Int): TaskCreateResponse =
-        restClient.post()
-            .uri("/device-tasks/")
-            .body(
-                CreateTaskRequest(
-                    extTaskId = "server-$methodCode-${UUID.randomUUID()}",
-                    deviceId = DEVICE_ID,
-                    methodCode = methodCode,
-                    ttl = ttl,
-                    payload = payload,
-                )
+def wait_for_task_delivery(task_id: str, timeout_s: int = 30) -> dict:
+    deadline = time.time() + timeout_s
+
+    while time.time() < deadline:
+        task = get_task_status(task_id)
+        if task["status"] >= 3:
+            return task
+        time.sleep(2)
+
+    raise TimeoutError(f"Задача {task_id} не дошла до финального статуса за {timeout_s}с")
+
+
+def wait_for_cell_open_event(
+    cell_number: int,
+    interval_m: int = 5,
+    timeout_s: int = 30,
+) -> dict:
+    deadline = time.time() + timeout_s
+
+    with httpx.Client(timeout=15) as http:
+        while time.time() < deadline:
+            response = http.get(
+                f"{LEO4_API_URL}/device-events/fields/",
+                headers={"x-api-key": LEO4_API_KEY},
+                params={
+                    "device_id": DEVICE_ID,
+                    "event_type_code": 13,
+                    "tag": 304,
+                    "interval_m": interval_m,
+                    "limit": 10,
+                },
             )
-            .retrieve()
-            .body(TaskCreateResponse::class.java)
-            ?: error("Пустой ответ от LEO4 API")
+            response.raise_for_status()
+            rows = response.json()
 
-    fun getTaskStatus(taskId: String): TaskStatusResponse =
-        restClient.get()
-            .uri("/device-tasks/{taskId}", taskId)
-            .retrieve()
-            .body(TaskStatusResponse::class.java)
-            ?: error("Пустой ответ по задаче $taskId")
+            for row in rows:
+                if row.get("value") == cell_number:
+                    return row
 
-    fun waitForTaskDelivery(taskId: String, timeoutSeconds: Long = 30): TaskStatusResponse {
-        val deadline = System.currentTimeMillis() + timeoutSeconds * 1000
+            time.sleep(2)
 
-        while (System.currentTimeMillis() < deadline) {
-            val task = getTaskStatus(taskId)
-            if (task.status >= 3) {
-                return task
-            }
-            Thread.sleep(2_000)
-        }
+    raise TimeoutError(
+        f"CellOpenEvent для ячейки {cell_number} не пришёл за {timeout_s}с"
+    )
 
-        throw ResponseStatusException(
-            HttpStatus.GATEWAY_TIMEOUT,
-            "Задача $taskId не дошла до финального статуса за ${timeoutSeconds}с"
+
+@app.post("/api/open-cell")
+def open_cell(request: OpenCellRequest):
+    try:
+        task = create_device_task(
+            method_code=51,
+            payload={"dt": [{"cl": request.cell_number}]},
+            ttl=request.ttl,
         )
-    }
+        delivery = wait_for_task_delivery(task["id"])
 
-    fun waitForCellOpenEvent(
-        cellNumber: Int,
-        intervalMinutes: Int = 5,
-        timeoutSeconds: Long = 30,
-    ): DeviceEventRow {
-        val deadline = System.currentTimeMillis() + timeoutSeconds * 1000
-
-        while (System.currentTimeMillis() < deadline) {
-            val rows = restClient.get()
-                .uri { builder ->
-                    builder.path("/device-events/fields/")
-                        .queryParam("device_id", DEVICE_ID)
-                        .queryParam("event_type_code", 13)
-                        .queryParam("tag", 304)
-                        .queryParam("interval_m", intervalMinutes)
-                        .queryParam("limit", 10)
-                        .build()
-                }
-                .retrieve()
-                .body(Array<DeviceEventRow>::class.java)
-                ?.toList()
-                .orEmpty()
-
-            rows.firstOrNull { it.value == cellNumber }?.let { return it }
-            Thread.sleep(2_000)
-        }
-
-        throw ResponseStatusException(
-            HttpStatus.GATEWAY_TIMEOUT,
-            "CellOpenEvent для ячейки $cellNumber не пришёл за ${timeoutSeconds}с"
-        )
-    }
-}
-
-@RestController
-@Validated
-@RequestMapping("/api")
-class DeviceController(private val leo4Service: Leo4Service) {
-    @PostMapping("/open-cell")
-    fun openCell(@Valid @RequestBody request: OpenCellRequest): OpenCellResponse {
-        val task = leo4Service.createDeviceTask(
-            methodCode = 51,
-            payload = mapOf("dt" to listOf(mapOf("cl" to request.cellNumber))),
-            ttl = request.ttl,
-        )
-
-        val delivery = leo4Service.waitForTaskDelivery(task.id)
-        if (delivery.status != 3) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_GATEWAY,
-                "Команда не была успешно доставлена устройству"
+        if delivery["status"] != 3:
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "message": "Команда не была успешно доставлена устройству",
+                    "task": delivery,
+                },
             )
+
+        event = wait_for_cell_open_event(cell_number=request.cell_number)
+        return {
+            "confirmed": True,
+            "message": f"Ячейка {request.cell_number} физически открыта",
+            "task_id": task["id"],
+            "task_status": delivery["status"],
+            "event": event,
         }
 
-        val event = leo4Service.waitForCellOpenEvent(cellNumber = request.cellNumber)
-        return OpenCellResponse(
-            confirmed = true,
-            message = "Ячейка ${request.cellNumber} физически открыта",
-            taskId = task.id,
-            taskStatus = delivery.status,
-            event = event,
-        )
-    }
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"Ошибка вызова LEO4 API: {exc}") from exc
 
-    @GetMapping("/health")
-    fun health(): Map<String, Boolean> = mapOf("ok" to true)
 
-    @ExceptionHandler(RestClientResponseException::class)
-    fun handleLeo4Error(ex: RestClientResponseException): ResponseEntity<Map<String, String>> =
-        ResponseEntity.status(HttpStatus.BAD_GATEWAY).body(
-            mapOf("detail" to "Ошибка вызова LEO4 API: ${ex.statusCode} ${ex.responseBodyAsString}")
-        )
-}
+@app.get("/health")
+def health():
+    return {"ok": True}
 ```
 
 ### Пример вызова из приложения
@@ -426,51 +347,54 @@ curl -X 'GET' \
   -H 'x-api-key: ApiKey <key>'
 ```
 
-```kotlin
-fun waitForTaskDelivery(taskId: String, timeoutSeconds: Long = 30): TaskStatusResponse {
-    val deadline = System.currentTimeMillis() + timeoutSeconds * 1000
+```python
+def wait_for_task_delivery(task_id: str, timeout: int = 30) -> dict:
+    headers = {"x-api-key": "ApiKey ВАШ_КЛЮЧ"}
+    deadline = time.time() + timeout
 
-    while (System.currentTimeMillis() < deadline) {
-        val task = leo4Service.getTaskStatus(taskId)
-        if (task.status >= 3) {
-            return task
-        }
-        Thread.sleep(2_000)
-    }
+    while time.time() < deadline:
+        resp = httpx.get(
+            f"https://dev.leo4.ru/api/v1/device-tasks/{task_id}",
+            headers=headers,
+        )
+        data = resp.json()
+        if data["status"] >= 3:
+            return data
+        time.sleep(2)
 
-    error("Задача $taskId не завершилась за ${timeoutSeconds}с")
-}
+    raise TimeoutError(f"Задача {task_id} не завершилась за {timeout}с")
 
-fun waitForCellOpenEvent(
-    deviceId: Int,
-    cellNumber: Int,
-    intervalMinutes: Int = 5,
-    timeoutSeconds: Long = 30,
-): DeviceEventRow {
-    val deadline = System.currentTimeMillis() + timeoutSeconds * 1000
 
-    while (System.currentTimeMillis() < deadline) {
-        val rows = leo4Service.restClient.get()
-            .uri { builder ->
-                builder.path("/device-events/fields/")
-                    .queryParam("device_id", deviceId)
-                    .queryParam("event_type_code", 13)
-                    .queryParam("tag", 304)
-                    .queryParam("interval_m", intervalMinutes)
-                    .queryParam("limit", 10)
-                    .build()
-            }
-            .retrieve()
-            .body(Array<DeviceEventRow>::class.java)
-            ?.toList()
-            .orEmpty()
+def wait_for_cell_open_event(
+    device_id: int,
+    cell_number: int,
+    interval_m: int = 5,
+    timeout: int = 30,
+) -> dict:
+    headers = {"x-api-key": "ApiKey ВАШ_КЛЮЧ"}
+    deadline = time.time() + timeout
 
-        rows.firstOrNull { it.value == cellNumber }?.let { return it }
-        Thread.sleep(2_000)
-    }
+    while time.time() < deadline:
+        resp = httpx.get(
+            "https://dev.leo4.ru/api/v1/device-events/fields/",
+            headers=headers,
+            params={
+                "device_id": device_id,
+                "event_type_code": 13,
+                "tag": 304,
+                "interval_m": interval_m,
+                "limit": 10,
+            },
+        )
+        rows = resp.json()
 
-    error("CellOpenEvent для ячейки $cellNumber не пришёл за ${timeoutSeconds}с")
-}
+        for row in rows:
+            if row.get("value") == cell_number:
+                return row
+
+        time.sleep(2)
+
+    raise TimeoutError(f"CellOpenEvent для ячейки {cell_number} не пришёл за {timeout}с")
 ```
 
 ### Вариант B — Webhook (рекомендуется для продакшена)
@@ -479,76 +403,74 @@ fun waitForCellOpenEvent(
 
 #### Шаг 1: Регистрация вебхуков (один раз)
 
-```kotlin
-val webhookHeaders = HttpHeaders().apply {
-    contentType = MediaType.APPLICATION_JSON
-    set("x-api-key", "ApiKey ВАШ_КЛЮЧ")
+```python
+import httpx
+
+headers = {
+    "x-api-key": "ApiKey ВАШ_КЛЮЧ",
+    "Content-Type": "application/json",
 }
 
-val authPayload = mapOf(
-    "headers" to mapOf("Authorization" to "Bearer ваш-токен"),
-    "is_active" to true,
+auth_payload = {
+    "headers": {"Authorization": "Bearer ваш-токен"},
+    "is_active": True,
+}
+
+httpx.put(
+    "https://dev.leo4.ru/api/v1/webhooks/msg-task-result",
+    headers=headers,
+    json={
+        "url": "https://your-server.example.com/hooks/task-result",
+        **auth_payload,
+    },
 )
 
-leo4Service.restClient.put()
-    .uri("/webhooks/msg-task-result")
-    .headers { it.addAll(webhookHeaders) }
-    .body(
-        mapOf("url" to "https://your-server.example.com/hooks/task-result") + authPayload
-    )
-    .retrieve()
-    .toBodilessEntity()
-
-leo4Service.restClient.put()
-    .uri("/webhooks/msg-event")
-    .headers { it.addAll(webhookHeaders) }
-    .body(
-        mapOf("url" to "https://your-server.example.com/hooks/device-event") + authPayload
-    )
-    .retrieve()
-    .toBodilessEntity()
+httpx.put(
+    "https://dev.leo4.ru/api/v1/webhooks/msg-event",
+    headers=headers,
+    json={
+        "url": "https://your-server.example.com/hooks/device-event",
+        **auth_payload,
+    },
+)
 ```
 
 #### Шаг 2: Приём вебхуков на стороне сервера
 
-```kotlin
-@RestController
-@RequestMapping("/hooks")
-class Leo4WebhookController {
-    @PostMapping("/task-result")
-    fun handleTaskResult(
-        @RequestHeader("x-device-id", required = false) deviceId: String?,
-        @RequestHeader("x-status-code", required = false) statusCode: String?,
-        @RequestHeader("x-ext-id", required = false) extId: String?,
-        @RequestBody body: Map<String, Any>,
-    ): Map<String, Boolean> {
-        println("Устройство $deviceId: status_code=$statusCode, ext_id=$extId")
-        println("Результат задачи: $body")
-        return mapOf("ok" to true)
-    }
+```python
+from fastapi import FastAPI, Request
 
-    @PostMapping("/device-event")
-    fun handleDeviceEvent(
-        @RequestHeader("x-device-id", required = false) deviceId: String?,
-        @RequestBody body: Map<String, Any>,
-    ): Map<String, Boolean> {
-        val eventType = (body["event_type_code"] ?: body["200"])?.toString()?.toIntOrNull()
-        val payload = body["payload"] as? Map<*, *> ?: body
+app = FastAPI()
 
-        if (eventType == 13) {
-            val rows = payload["300"] as? List<Map<String, Any?>> ?: emptyList()
-            rows.forEach { row ->
-                row["304"]?.let { cell ->
-                    println(
-                        "Устройство $deviceId: ячейка $cell подтверждена событием CellOpenEvent"
-                    )
-                }
-            }
-        }
 
-        return mapOf("ok" to true)
-    }
-}
+@app.post("/hooks/task-result")
+async def handle_task_result(request: Request):
+    device_id = request.headers.get("x-device-id")
+    status_code = request.headers.get("x-status-code")
+    ext_id = request.headers.get("x-ext-id")
+    body = await request.json()
+
+    print(f"Устройство {device_id}: status_code={status_code}, ext_id={ext_id}")
+    print(f"Результат задачи: {body}")
+    return {"ok": True}
+
+
+@app.post("/hooks/device-event")
+async def handle_device_event(request: Request):
+    device_id = request.headers.get("x-device-id")
+    body = await request.json()
+
+    event_type = body.get("event_type_code") or body.get("200")
+    payload = body.get("payload", body)
+
+    if event_type == 13:
+        for row in payload.get("300", []):
+            if "304" in row:
+                print(
+                    f"Устройство {device_id}: ячейка {row['304']} подтверждена событием CellOpenEvent"
+                )
+
+    return {"ok": True}
 ```
 
 #### Как интерпретировать вебхуки
@@ -568,62 +490,70 @@ class Leo4WebhookController {
 
 Сервер получает событие через вебхук и автоматически реагирует по бизнес-правилам:
 
-```kotlin
-@PostMapping("/hooks/device-event")
-fun handleDeviceEvent(@RequestBody body: Map<String, Any>): Map<String, Boolean> {
-    val eventCode = body["200"]?.toString()?.toIntOrNull()
-    val params = body["300"] as? List<Map<String, Any?>> ?: emptyList()
+```python
+@app.post("/hooks/device-event")
+async def handle_device_event(request: Request):
+    body = await request.json()
+    event_code = body.get("200")
+    params = body.get("300", [])
 
-    if (eventCode == 44) {
-        val temperature = extractTemperature(params)
-        if (temperature != null && temperature > 85) {
-            leo4Service.createDeviceTask(
-                methodCode = 20,
-                payload = mapOf("dt" to listOf(mapOf("mt" to 7))),
-                ttl = 2,
+    if event_code == 44:
+        temperature = extract_temperature(params)
+        if temperature and temperature > 85:
+            create_device_task(
+                method_code=20,
+                payload={"dt": [{"mt": 7}]},
+                ttl=2,
             )
-            notifyOperator("⚠️ Температура ${temperature}°C — команда отправлена")
-        }
-    }
+            notify_operator(
+                f"⚠️ Температура {temperature}°C — команда отправлена"
+            )
 
-    return mapOf("ok" to true)
-}
+    return {"ok": True}
 ```
 
 ### Параллельная массовая активация
 
 Отправка команд на множество устройств одновременно:
 
-```kotlin
-fun massActivate(
-    deviceIds: List<Int>,
-    methodCode: Int,
-    payload: Map<String, Any>,
-): List<Result<TaskCreateResponse>> {
-    val results = deviceIds.map { deviceId ->
-        runCatching {
-            leo4Service.restClient.post()
-                .uri("/device-tasks/")
-                .body(
-                    CreateTaskRequest(
-                        extTaskId = "mass-$deviceId-$methodCode",
-                        deviceId = deviceId,
-                        methodCode = methodCode,
-                        ttl = 5,
-                        payload = payload,
-                    )
-                )
-                .retrieve()
-                .body(TaskCreateResponse::class.java)
-                ?: error("Пустой ответ для устройства $deviceId")
-        }
-    }
+```python
+import asyncio
+import httpx
 
-    val success = results.count { it.isSuccess }
-    val failed = results.size - success
-    println("Отправлено: ${results.size}, Успешно: $success, Ошибок: $failed")
+
+async def mass_activate(
+    device_ids: list[int],
+    method_code: int,
+    payload: dict,
+):
+    async with httpx.AsyncClient() as http:
+        tasks = [
+            http.post(
+                f"{LEO4_API_URL}/device-tasks/",
+                headers={
+                    "Content-Type": "application/json",
+                    "x-api-key": LEO4_API_KEY,
+                },
+                json={
+                    "ext_task_id": f"mass-{device_id}-{method_code}",
+                    "device_id": device_id,
+                    "method_code": method_code,
+                    "priority": 1,
+                    "ttl": 5,
+                    "payload": payload,
+                },
+            )
+            for device_id in device_ids
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    success = sum(
+        1 for r in results
+        if not isinstance(r, Exception) and r.status_code == 200
+    )
+    failed = len(device_ids) - success
+    print(f"Отправлено: {len(device_ids)}, Успешно: {success}, Ошибок: {failed}")
     return results
-}
 ```
 
 ---
