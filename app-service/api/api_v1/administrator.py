@@ -24,7 +24,6 @@ async def do_admin(
     dry_run: Annotated[
         bool,
         Query(
-            default=False,
             description="Preview mode for action=get_d/get_u (no DB/RabbitMQ writes)",
         ),
     ] = False,
