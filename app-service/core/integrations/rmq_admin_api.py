@@ -102,4 +102,4 @@ class RmqAdminApi:
             json=defns,
             headers={"Content-type": "application/json"},
         )
-        log.info("to rabbitmq api post definitions, status code= ", r.status_code)
+        log.info("to rabbitmq api post definitions, status code=%s", r.status_code)
