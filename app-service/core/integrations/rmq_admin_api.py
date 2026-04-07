@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from urllib.parse import urljoin
 
 from core.logging_config import setup_module_logger
 import httpx
@@ -24,11 +25,18 @@ class RmqAdminApi:
     user_conn = "api/connections/username/"
     conn = "api/connections/"
 
+    @staticmethod
+    def _admin_url(path: str = "") -> str:
+        base_url = str(settings.leo4.admin_url)
+        if not base_url.endswith("/"):
+            base_url += "/"
+        return urljoin(base_url, path)
+
     @classmethod
     async def get_connection(cls, sn_arr):
         try:
             async with httpx.AsyncClient(
-                base_url=str(settings.leo4.admin_url)
+                base_url=cls._admin_url()
             ) as session:
                 tasks = [fetch_one(session, cls.user_conn, sn) for sn in sn_arr]
                 connections = await asyncio.gather(*tasks)
@@ -45,11 +53,11 @@ class RmqAdminApi:
             return devices
         except Exception as e:
             log.info("Error Get connectionsFrom rabbit API =%s", e)
-            return None
+            return []
 
     @classmethod
     async def get_exist_devices(cls):
-        r = httpx.get(url=str(settings.leo4.admin_url) + "api/users")
+        r = httpx.get(url=cls._admin_url("api/users"))
         log.info("admin - get_u, body =%s", str(r))
         names = [""]
         n_obj = r.json()
@@ -98,7 +106,7 @@ class RmqAdminApi:
         log.info("set RMQ definitions = %s", defns)
 
         r = httpx.post(
-            url=str(settings.leo4.admin_url) + "api/definitions",
+            url=cls._admin_url("api/definitions"),
             json=defns,
             headers={"Content-type": "application/json"},
         )
