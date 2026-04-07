@@ -59,6 +59,11 @@ flowchart LR
 - Task states [here](./docs/task_states.md)
 - Workflow sequence [here](./docs/sequence.md)
 
+## Integration guides
+
+- AI agent guide [here](./docs/ai-agent-integration-guide.md)
+- Server app guide [here](./docs/server-integration-guide.md)
+
 ## Device code examples, simulators
 _Only two-way SSL authentication_
 ### MQTTX nocode (low code) scenarios with secure remote control:
