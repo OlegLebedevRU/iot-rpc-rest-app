@@ -15,17 +15,19 @@ class RmqAdmin:
         return devs_online
 
     @classmethod
-    async def repl_devices(cls, session: AsyncSession, api_key: str):
+    async def repl_devices(cls, session: AsyncSession, api_key: str, dry_run: bool = False):
         da = await get_factory_device_list(api_key)
-        if da:
+        if da and not dry_run:
             await DeviceRepo.add_devices(session, da)
         return da
 
     @classmethod
-    async def set_device_definitions(cls, session: AsyncSession):
+    async def set_device_definitions(cls, session: AsyncSession, dry_run: bool = False):
         names = await RmqAdminApi.get_exist_devices()
+        result = None
         if names:
             lu1 = await DeviceRepo.find_missing_devices(session, names)
             # defns = {"users": [], "permissions": []}
             if lu1:
-                await RmqAdminApi.set_device_definitions(lu1)
+                result = await RmqAdminApi.set_device_definitions(lu1, dry_run=dry_run)
+        return result

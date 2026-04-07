@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from urllib.parse import urljoin
+from urllib.parse import quote, urljoin
 
 from core.logging_config import setup_module_logger
 import httpx
@@ -25,6 +25,9 @@ class RmqAdminApi:
     user_conn = "api/connections/username/"
     conn = "api/connections/"
 
+    _vhost = "/"
+    _exchange = "amq.topic"
+
     @staticmethod
     def _admin_url(path: str = "") -> str:
         base_url = str(settings.leo4.admin_url)
@@ -32,12 +35,70 @@ class RmqAdminApi:
             base_url += "/"
         return urljoin(base_url, path)
 
+    @staticmethod
+    def _quote_path(value: str) -> str:
+        return quote(value, safe="")
+
+    @staticmethod
+    def _user_payload(name: str) -> dict:
+        return {
+            "password_hash": "",
+            "hashing_algorithm": "rabbit_password_hashing_sha256",
+            "tags": "device",
+        }
+
+    @classmethod
+    def _permission_payload(cls) -> dict:
+        return {
+            "configure": ".*",
+            "write": ".*",
+            "read": ".*",
+        }
+
+    @classmethod
+    def _topic_permission_payload(cls) -> dict:
+        return {
+            "exchange": cls._exchange,
+            "write": "^dev.{client_id}.*",
+            "read": "^srv.{client_id}.*",
+        }
+
+    @staticmethod
+    def _same_permissions(existing: dict | None, expected: dict) -> bool:
+        if not isinstance(existing, dict):
+            return False
+        return (
+            existing.get("configure") == expected["configure"]
+            and existing.get("write") == expected["write"]
+            and existing.get("read") == expected["read"]
+        )
+
+    @classmethod
+    def _same_topic_permissions(cls, existing: dict | list | None, expected: dict) -> bool:
+        if isinstance(existing, list):
+            existing = next(
+                (item for item in existing if item.get("exchange") == cls._exchange), None
+            )
+        if not isinstance(existing, dict):
+            return False
+        return (
+            existing.get("exchange") == expected["exchange"]
+            and existing.get("write") == expected["write"]
+            and existing.get("read") == expected["read"]
+        )
+
+    @staticmethod
+    async def _get_json_or_none(client: httpx.AsyncClient, path: str):
+        response = await client.get(path)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        return response.json()
+
     @classmethod
     async def get_connection(cls, sn_arr):
         try:
-            async with httpx.AsyncClient(
-                base_url=cls._admin_url()
-            ) as session:
+            async with httpx.AsyncClient(base_url=cls._admin_url()) as session:
                 tasks = [fetch_one(session, cls.user_conn, sn) for sn in sn_arr]
                 connections = await asyncio.gather(*tasks)
                 tasks1 = []
@@ -57,57 +118,94 @@ class RmqAdminApi:
 
     @classmethod
     async def get_exist_devices(cls):
-        r = httpx.get(url=cls._admin_url("api/users"))
-        log.info("admin - get_u, body =%s", str(r))
-        names = [""]
-        n_obj = r.json()
-        print(n_obj)
-        for u in n_obj:
-            names.append(u["name"])
-        return names
+        try:
+            async with httpx.AsyncClient(base_url=cls._admin_url()) as client:
+                r = await client.get("api/users")
+                r.raise_for_status()
+            log.info("admin - get_u, body =%s", str(r))
+            n_obj = r.json()
+            names = [""]
+            for u in n_obj:
+                names.append(u["name"])
+            return names
+        except Exception as e:
+            log.info("admin - get_u error =%s", e)
+            return [""]
 
     @classmethod
-    async def set_device_definitions(cls, lu1):
-        d_users = []
-        d_perm = []
-        d_topic_perm = []
-        for d in lu1:
-            d_users.append(
-                {
-                    "name": d,
-                    "password_hash": "",
-                    "hashing_algorithm": "rabbit_password_hashing_sha256",
-                    "tags": ["device"],
-                    "limits": {},
-                }
-            )
-            d_perm.append(
-                {
-                    "user": d,
-                    "vhost": "/",
-                    "configure": ".*",
-                    "write": ".*",
-                    "read": ".*",
-                }
-            )
-            d_topic_perm.append(
-                {
-                    "user": d,
-                    "vhost": "/",
-                    "exchange": "amq.topic",
-                    "write": "^dev.{client_id}.*",
-                    "read": "^srv.{client_id}.*",
-                }
-            )
-        defns = {}
-        defns["users"] = d_users
-        defns["permissions"] = d_perm
-        defns["topic_permissions"] = d_topic_perm
-        log.info("set RMQ definitions = %s", defns)
+    async def set_device_definitions(cls, lu1, dry_run: bool = False):
+        if not lu1:
+            return {
+                "created": 0,
+                "updated": 0,
+                "skipped": 0,
+                "would_create": 0,
+                "would_update": 0,
+                "errors": [],
+            }
 
-        r = httpx.post(
-            url=cls._admin_url("api/definitions"),
-            json=defns,
-            headers={"Content-type": "application/json"},
-        )
-        log.info("to rabbitmq api post definitions, status code=%s", r.status_code)
+        result = {
+            "created": 0,
+            "updated": 0,
+            "skipped": 0,
+            "would_create": 0,
+            "would_update": 0,
+            "errors": [],
+        }
+        vhost_quoted = cls._quote_path(cls._vhost)
+
+        async with httpx.AsyncClient(base_url=cls._admin_url(), timeout=10.0) as client:
+            for device_name in lu1:
+                user_quoted = cls._quote_path(device_name)
+                perm_payload = cls._permission_payload()
+                topic_payload = cls._topic_permission_payload()
+
+                try:
+                    # Пользователя создаем только если его еще нет: это безопаснее, чем bulk replace definitions.
+                    user = await cls._get_json_or_none(client, f"api/users/{user_quoted}")
+                    if user is None:
+                        if dry_run:
+                            result["would_create"] += 1
+                        else:
+                            create_user = await client.put(
+                                f"api/users/{user_quoted}", json=cls._user_payload(device_name)
+                            )
+                            create_user.raise_for_status()
+                            result["created"] += 1
+                    else:
+                        result["skipped"] += 1
+
+                    existing_perm = await cls._get_json_or_none(
+                        client, f"api/permissions/{vhost_quoted}/{user_quoted}"
+                    )
+                    if not cls._same_permissions(existing_perm, perm_payload):
+                        if dry_run:
+                            result["would_update"] += 1
+                        else:
+                            upsert_perm = await client.put(
+                                f"api/permissions/{vhost_quoted}/{user_quoted}",
+                                json=perm_payload,
+                            )
+                            upsert_perm.raise_for_status()
+                            result["updated"] += 1
+
+                    existing_topic_perm = await cls._get_json_or_none(
+                        client, f"api/topic-permissions/{vhost_quoted}/{user_quoted}"
+                    )
+                    if not cls._same_topic_permissions(existing_topic_perm, topic_payload):
+                        if dry_run:
+                            result["would_update"] += 1
+                        else:
+                            upsert_topic_perm = await client.put(
+                                f"api/topic-permissions/{vhost_quoted}/{user_quoted}",
+                                json=topic_payload,
+                            )
+                            upsert_topic_perm.raise_for_status()
+                            result["updated"] += 1
+                except Exception as e:
+                    result["errors"].append({"device": device_name, "error": str(e)})
+                    log.info("RMQ incremental definitions error for '%s': %s", device_name, e)
+
+        mode = "dry-run" if dry_run else "apply"
+        log.info("set RMQ definitions incrementally (%s) = %s", mode, result)
+        return result
