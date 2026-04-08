@@ -130,7 +130,7 @@ class DeviceTasksService:
             method_le = 2999
         task = await TasksRepository.select_task(self.session, corr_id, sn, method_le)
         if task is not None:
-            t_resp = task.model_dump_json()
+            t_resp = task.model_dump(mode="json")
             log.info("from DB select task = %s", t_resp)
             method_code = str(task.header.method_code)
             await TasksRepository.task_status_update(
@@ -191,10 +191,11 @@ class DeviceTasksService:
             log.error("Task status update error %s", e)
             rmsg = "Partial error: result committed, but status update failed"
 
+        cmt_payload = {"message": rmsg}
         dev_id = await DeviceRepo.get_device_id(session=self.session, sn=sn)
         await send_cmt(
             sn,
-            rmsg,
+            cmt_payload,
             json.dumps(res_data),
             corr_id,
             dev_id,

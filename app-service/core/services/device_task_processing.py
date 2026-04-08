@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 from uuid import UUID
 
 from core.config import RoutingKey, settings
@@ -39,7 +40,11 @@ async def send_tsk(sn: str, task: TaskCreate, stask: TaskResponse):
 
 
 async def send_rsp(
-    sn: str, t_resp: str, correlation_id: UUID | str, expiration: int, method_code: str
+    sn: str,
+    t_resp: dict[str, Any],
+    correlation_id: UUID | str,
+    expiration: int,
+    method_code: str,
 ):
     routing_key: str = str(
         RoutingKey(prefix=topology.prefix_srv, sn=sn, suffix=topology.suffix_response)
@@ -59,8 +64,8 @@ async def send_rsp(
 
 async def send_cmt(
     sn: str,
-    rmsg: str,
-    msg: str,
+    cmt_payload: dict[str, Any],
+    webhook_msg: str,
     corr_id: UUID | str,
     dev_id: int,
     result_id: int,
@@ -73,8 +78,9 @@ async def send_cmt(
     )
     await topic_publisher.publish(
         routing_key=routing_key,
-        message=rmsg,
+        message=cmt_payload,
         correlation_id=corr_id,
+        content_type="application/json",
         # exchange=topic_exchange,  # settings.rmq.x_name,
         expiration=180 * 60_000,
         headers={
@@ -86,7 +92,7 @@ async def send_cmt(
 
     await topic_publisher.publish(
         routing_key=settings.webhook.webhooks_queue,  # "srv.a3b0000000c99999d250813.tsk",
-        message=msg,
+        message=webhook_msg,
         exchange=direct_exchange,  # settings.rmq.x_name_direct,
         correlation_id=corr_id,
         expiration=30 * 60_000,

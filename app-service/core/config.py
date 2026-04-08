@@ -154,7 +154,7 @@ class JobTtlConfig(BaseModel):
 
 class TaskProcessingConfig(BaseModel):
     zero_corr_id: UUID4 = uuid.UUID(int=0)
-    nop_resp: str = '{"method_code":0}'
+    nop_resp: dict[str, int] = {"method_code": 0}
 
 
 class Leo4CloudConfig(BaseModel):
