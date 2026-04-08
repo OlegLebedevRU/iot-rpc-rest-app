@@ -41,6 +41,9 @@ namespace DeviceRpcClient
         
         private string _serialNumber;
         private bool _isDisposed;
+        
+        // Статический счётчик для уникальных ID событий
+        private static long _eventIdCounter = 0;
 
         // Топики (инициализируются после получения SN)
         private string _topicReq;
@@ -230,9 +233,42 @@ namespace DeviceRpcClient
                 ClientCertificatesProvider = new MqttClientCertificatesProvider(clientCert),
                 CertificateValidationHandler = context =>
                 {
-                    // Здесь можно реализовать дополнительную валидацию сертификата сервера
-                    Console.WriteLine($"[TLS] Проверка сертификата сервера: {context.Certificate?.Subject}");
-                    return true; // Упрощённо: доверяем CA
+                    // Валидация сертификата сервера
+                    // ⚠️ ВНИМАНИЕ: В продакшене реализуйте полную проверку!
+                    // Здесь представлена базовая проверка для примера
+                    var serverCert = context.Certificate as X509Certificate2;
+                    if (serverCert == null)
+                    {
+                        Console.WriteLine("[TLS] ОШИБКА: Сертификат сервера отсутствует!");
+                        return false;
+                    }
+
+                    Console.WriteLine($"[TLS] Проверка сертификата сервера: {serverCert.Subject}");
+                    Console.WriteLine($"[TLS] Issuer: {serverCert.Issuer}");
+                    Console.WriteLine($"[TLS] Valid until: {serverCert.NotAfter:yyyy-MM-dd}");
+                    
+                    // Проверка срока действия
+                    if (DateTime.Now > serverCert.NotAfter || DateTime.Now < serverCert.NotBefore)
+                    {
+                        Console.WriteLine("[TLS] ОШИБКА: Сертификат сервера просрочен или ещё не действителен!");
+                        return false;
+                    }
+
+                    // В продакшене добавьте:
+                    // 1. Проверку цепочки сертификатов (ChainStatus)
+                    // 2. Проверку hostname
+                    // 3. Проверку отзыва (CRL/OCSP)
+                    // 
+                    // Пример проверки цепочки:
+                    // using (var chain = context.Chain)
+                    // {
+                    //     if (chain.ChainStatus.Any(s => s.Status != X509ChainStatusFlags.NoError))
+                    //     {
+                    //         return false;
+                    //     }
+                    // }
+                    
+                    return true;
                 },
                 SslProtocol = SslProtocols.Tls12
             };
@@ -427,7 +463,8 @@ namespace DeviceRpcClient
 
             if (string.IsNullOrEmpty(devEventId))
             {
-                devEventId = new Random().Next(1000, 99999).ToString();
+                // Используем атомарный счётчик для генерации уникального ID события
+                devEventId = Interlocked.Increment(ref _eventIdCounter).ToString();
             }
 
             var message = new MqttApplicationMessageBuilder()
@@ -516,9 +553,12 @@ namespace DeviceRpcClient
         /// </summary>
         private object CreateHealthcheckPayload()
         {
+            // Используем атомарный счётчик для уникального ID события
+            var internalEventId = Interlocked.Increment(ref _eventIdCounter);
+            
             return new
             {
-                _101 = new Random().Next(1000, 99999), // Внутренний ID события
+                _101 = internalEventId, // Внутренний ID события (уникальный)
                 _102 = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
                 _200 = 44, // Код типа события (healthcheck)
                 _300 = new[]
