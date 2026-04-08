@@ -29,37 +29,59 @@ async def sn_getter_dep(msg: RabbitMessage) -> str:
 Sn_dep = Annotated[str, Depends(sn_getter_dep)]
 
 
+def _try_parse_uuid(value) -> uuid.UUID | None:
+    """Try to parse a UUID from a string or 16-byte binary value.
+
+    Attempts string parsing first (covers standard 36-char UUID strings and
+    RabbitMQ auto-converted values), then falls back to 16-byte binary parsing.
+    Returns None if neither attempt succeeds.
+    """
+    if isinstance(value, str):
+        try:
+            return uuid.UUID(value)
+        except (ValueError, AttributeError):
+            pass
+    if isinstance(value, (bytes, bytearray)) and len(value) == 16:
+        try:
+            return uuid.UUID(bytes=bytes(value))
+        except (ValueError, AttributeError):
+            pass
+    return None
+
+
 async def corr_id_getter_dep(msg: RabbitMessage) -> UUID4 | None:
     try:
+        # 1) Native AMQP correlation_id property — covers paho native clients
+        #    and RabbitMQ auto-conversions (utf8 ≤256 bytes, binary uuid, ulong).
         if msg.correlation_id:
-            # logging.info("Raw corr_id = %s", msg.correlation_id)
-            corr_id = uuid.UUID(msg.correlation_id)
-            log.debug("Received msg.correlation_id = %s", corr_id)
-            return corr_id
-        else:
-            corr_id = None
-        # logging.info("Received headers =  %s", msg.raw_message.headers)
-        if "x-correlation-id" in msg.raw_message.headers:
-            corr_id = uuid.UUID(
-                # bytes=(msg.raw_message.headers["x-correlation-id"].encode())
-                bytes=(msg.raw_message.headers["x-correlation-id"]).encode()
-            )
-            log.info("Received headers.x-correlation-id =  %s", corr_id)
-            return corr_id
-        else:
-            corr_id = None
-        if "correlationData" in msg.raw_message.headers:
-            corr_id = uuid.UUID(
-                # bytes=(msg.raw_message.headers["x-correlation-id"].encode())
-                bytes=(msg.raw_message.headers["correlationData"]).encode()
-            )
-            log.info("Received headers.correlationData =  %s", corr_id)
+            corr_id = _try_parse_uuid(msg.correlation_id)
+            if corr_id is not None:
+                log.debug("Received msg.correlation_id = %s", corr_id)
+                return corr_id
 
-        else:
-            if corr_id is None:
-                pass
-        # if corr_id == settings.task_proc_cfg.zero_corr_id:
-        #     logging.info("settings.task_proc_cfg.zero_corr_id =  %s", corr_id)
+        if msg.raw_message.headers is None:
+            log.debug("msg.raw_message.headers is None")
+        headers = msg.raw_message.headers or {}
+
+        # 2) headers["x-correlation-id"] — RabbitMQ moves utf8 >256 bytes or
+        #    arbitrary binary correlation data here.
+        if "x-correlation-id" in headers:
+            corr_id = _try_parse_uuid(headers["x-correlation-id"])
+            if corr_id is not None:
+                log.info("Received headers.x-correlation-id = %s", corr_id)
+                return corr_id
+
+        # 3) headers["correlationData"] — MQTT 5 User Property used by clients
+        #    such as C# MQTTnet (.NET 4.8) that send correlationData via User
+        #    Properties instead of the native CorrelationData MQTT field.
+        if "correlationData" in headers:
+            corr_id = _try_parse_uuid(headers["correlationData"])
+            if corr_id is not None:
+                log.info("Received headers.correlationData = %s", corr_id)
+                return corr_id
+
+        log.warning("Received from device no corr data, headers = %s", headers)
+        corr_id = None
 
     except (TypeError, ValueError, KeyError) as e:
         log.warning("Received from device no corr data, exception = %s", e)
