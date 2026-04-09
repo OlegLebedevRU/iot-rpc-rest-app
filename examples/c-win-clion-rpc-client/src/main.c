@@ -15,10 +15,19 @@
 int main(void)
 {
 #ifdef _WIN32
-    /* Корректный вывод UTF-8 в консоли Windows */
-    SetConsoleOutputCP(65001);
+    /* Настраиваем UTF-8 и для вывода, и для ввода в консоли Windows. */
+    if (!SetConsoleOutputCP(CP_UTF8)) {
+        fprintf(stderr, "[WARN] Failed to set UTF-8 output (SetConsoleOutputCP).\n");
+    }
+    if (!SetConsoleCP(CP_UTF8)) {
+        fprintf(stderr, "[WARN] Failed to set UTF-8 input (SetConsoleCP).\n");
+    }
 #endif
-    setlocale(LC_ALL, "");
+
+    if (!setlocale(LC_ALL, ".UTF-8")) {
+        /* Fallback на системную локаль, если UTF-8 недоступен. */
+        setlocale(LC_ALL, "");
+    }
 
     printf("\n");
     printf("================================================================\n");

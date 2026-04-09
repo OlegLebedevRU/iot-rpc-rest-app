@@ -49,6 +49,7 @@ add_executable(${PROJECT_NAME}
     src/message_handler.h
     src/cert_utils.c
     src/cert_utils.h
+    src/openssl_applink.c
     src/config.h
 )
 
@@ -65,6 +66,28 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 # Windows-специфичные библиотеки
 if(WIN32)
     target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 crypt32)
+
+    # CLion часто запускает exe без PATH к OpenSSL/bin, поэтому
+    # копируем runtime DLL рядом с исполняемым файлом.
+    set(OPENSSL_RUNTIME_DLLS)
+    if(OPENSSL_ROOT_DIR AND EXISTS "${OPENSSL_ROOT_DIR}/bin")
+        file(GLOB OPENSSL_RUNTIME_DLLS
+            "${OPENSSL_ROOT_DIR}/bin/libssl*.dll"
+            "${OPENSSL_ROOT_DIR}/bin/libcrypto*.dll"
+        )
+    endif()
+
+    list(REMOVE_DUPLICATES OPENSSL_RUNTIME_DLLS)
+
+    if(OPENSSL_RUNTIME_DLLS)
+        add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${OPENSSL_RUNTIME_DLLS}
+                $<TARGET_FILE_DIR:${PROJECT_NAME}>
+            COMMAND_EXPAND_LISTS
+            COMMENT "Копирование OpenSSL DLL рядом с выходным файлом"
+        )
+    endif()
 endif()
 
 # Копирование папки certificates рядом с бинарником

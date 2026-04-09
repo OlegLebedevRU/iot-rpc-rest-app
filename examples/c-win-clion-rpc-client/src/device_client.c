@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <ctype.h>
 
 #ifdef _WIN32
 #  include <windows.h>
@@ -42,6 +43,58 @@ static char g_topic_ack[MAX_TOPIC_LEN];
 
 /* Обработчик входящих сообщений */
 static MessageHandlerCtx g_msg_handler;
+
+/* ── Нормализация адреса брокера ────────────────────────────── */
+
+static int build_server_uri(const char *raw_host,
+                            int port,
+                            char *out_uri,
+                            size_t out_uri_len)
+{
+    char host_only[192];
+    const char *host = raw_host;
+    const char *scheme = strstr(raw_host ? raw_host : "", "://");
+
+    if (!raw_host || !raw_host[0]) {
+        fprintf(stderr, "[FATAL] BROKER_HOST is empty\n");
+        return -1;
+    }
+
+    if (scheme) {
+        size_t scheme_len = (size_t)(scheme - raw_host);
+        if (scheme_len > 0) {
+            printf("[WARN] BROKER_HOST contains scheme '%.*s://', it will be ignored.\n",
+                   (int)scheme_len, raw_host);
+        }
+        host = scheme + 3;
+    }
+
+    size_t i = 0;
+    while (host[i] && host[i] != '/' && !isspace((unsigned char)host[i]) && i + 1 < sizeof(host_only)) {
+        host_only[i] = host[i];
+        i++;
+    }
+    host_only[i] = '\0';
+
+    if (!host_only[0]) {
+        fprintf(stderr, "[FATAL] Invalid BROKER_HOST: '%s'\n", raw_host);
+        return -1;
+    }
+
+    if (strchr(host_only, ':')) {
+        if (snprintf(out_uri, out_uri_len, "mqtts://%s", host_only) >= (int)out_uri_len) {
+            fprintf(stderr, "[FATAL] Broker URI is too long\n");
+            return -1;
+        }
+    } else {
+        if (snprintf(out_uri, out_uri_len, "mqtts://%s:%d", host_only, port) >= (int)out_uri_len) {
+            fprintf(stderr, "[FATAL] Broker URI is too long\n");
+            return -1;
+        }
+    }
+
+    return 0;
+}
 
 /* ── Генерация UUID v4 (упрощённая) ────────────────────────── */
 
@@ -130,7 +183,7 @@ void device_client_send_request(MQTTAsync client, const char *sn,
     MQTTAsync_sendMessage(client, topic, &msg, NULL);
     MQTTProperties_free(&props);
 
-    printf("[REQ] Отправлен запрос: correlation=%s\n", corr);
+    printf("[REQ] Request sent: correlation=%s\n", corr);
 }
 
 void device_client_send_ack(MQTTAsync client, const char *sn,
@@ -150,7 +203,7 @@ void device_client_send_ack(MQTTAsync client, const char *sn,
     MQTTAsync_sendMessage(client, topic, &msg, NULL);
     MQTTProperties_free(&props);
 
-    printf("[ACK] Отправлен ACK: correlation=%s\n", correlation_data);
+    printf("[ACK] ACK sent: correlation=%s\n", correlation_data);
 }
 
 void device_client_send_result(MQTTAsync client, const char *sn,
@@ -173,7 +226,7 @@ void device_client_send_result(MQTTAsync client, const char *sn,
     MQTTAsync_sendMessage(client, topic, &msg, NULL);
     MQTTProperties_free(&props);
 
-    printf("[RES] Результат отправлен: correlation=%s\n", correlation_data);
+    printf("[RES] Result sent: correlation=%s\n", correlation_data);
 }
 
 void device_client_send_event(MQTTAsync client, const char *sn,
@@ -206,7 +259,7 @@ void device_client_send_event(MQTTAsync client, const char *sn,
     MQTTAsync_sendMessage(client, topic, &msg, NULL);
     MQTTProperties_free(&props);
 
-    printf("[EVT] Событие отправлено: type=%d, correlation=%s\n",
+    printf("[EVT] Event sent: type=%d, correlation=%s\n",
            event_type_code, uuid_buf);
 }
 
@@ -215,7 +268,7 @@ void device_client_send_event(MQTTAsync client, const char *sn,
 static void on_connect_failure(void *context, MQTTAsync_failureData5 *response)
 {
     (void)context;
-    fprintf(stderr, "[MQTT] Ошибка подключения, code=%d\n",
+    fprintf(stderr, "[MQTT] Connection failed, code=%d\n",
             response ? response->code : -1);
     g_running = 0;
 }
@@ -223,15 +276,29 @@ static void on_connect_failure(void *context, MQTTAsync_failureData5 *response)
 static void on_subscribe_success(void *context, MQTTAsync_successData5 *response)
 {
     (void)context;
-    (void)response;
-    printf("[MQTT] Подписка на топики выполнена.\n");
+    if (response) {
+        printf("[MQTT] Subscription acknowledged: reason=%d, token=%d\n",
+               (int)response->reasonCode, response->token);
+    } else {
+        printf("[MQTT] Topic subscription completed.\n");
+    }
 }
 
 static void on_subscribe_failure(void *context, MQTTAsync_failureData5 *response)
 {
     (void)context;
-    fprintf(stderr, "[MQTT] Ошибка подписки, code=%d\n",
-            response ? response->code : -1);
+    if (response) {
+        fprintf(stderr,
+                "[MQTT] Subscription failed, code=%d (%s), reason=%d, packet=%d, token=%d, msg=%s\n",
+                response->code,
+                MQTTAsync_strerror(response->code) ? MQTTAsync_strerror(response->code) : "unknown",
+                (int)response->reasonCode,
+                response->packet_type,
+                response->token,
+                response->message ? response->message : "-");
+    } else {
+        fprintf(stderr, "[MQTT] Subscription failed, code=-1\n");
+    }
 }
 
 static int on_message_arrived(void *context, char *topicName, int topicLen,
@@ -247,7 +314,7 @@ static int on_message_arrived(void *context, char *topicName, int topicLen,
 static void on_connection_lost(void *context, char *cause)
 {
     (void)context;
-    fprintf(stderr, "[MQTT] Соединение потеряно: %s\n",
+    fprintf(stderr, "[MQTT] Connection lost: %s\n",
             cause ? cause : "unknown");
 }
 
@@ -255,21 +322,31 @@ static void on_connected(void *context, char *cause)
 {
     (void)context;
     (void)cause;
-    printf("[MQTT] Подключено к MQTT-брокеру!\n");
+    printf("[MQTT] Connected to MQTT broker!\n");
 
-    /* Подписка на входящие топики */
-    char *topics[] = {
+    /* Подписка на входящие топики по одному: так проще диагностировать сбойный топик. */
+    const char *topics[] = {
         g_msg_handler.topic_rsp,
         g_msg_handler.topic_tsk,
-        g_msg_handler.topic_cmt
+        g_msg_handler.topic_cmt,
+        g_msg_handler.topic_eva
     };
-    int qos[] = { 1, 1, 1 };
 
-    MQTTAsync_responseOptions opts = MQTTAsync_responseOptions_initializer;
-    opts.onSuccess5 = on_subscribe_success;
-    opts.onFailure5 = on_subscribe_failure;
+    for (size_t i = 0; i < (sizeof(topics) / sizeof(topics[0])); i++) {
+        MQTTAsync_responseOptions opts = MQTTAsync_responseOptions_initializer;
+        opts.onSuccess5 = on_subscribe_success;
+        opts.onFailure5 = on_subscribe_failure;
 
-    MQTTAsync_subscribeMany(g_client, 3, topics, qos, &opts);
+        int rc = MQTTAsync_subscribe(g_client, topics[i], 1, &opts);
+        if (rc != MQTTASYNC_SUCCESS) {
+            fprintf(stderr,
+                    "[MQTT] Failed to send SUBSCRIBE for '%s': rc=%d (%s)\n",
+                    topics[i], rc,
+                    MQTTAsync_strerror(rc) ? MQTTAsync_strerror(rc) : "unknown");
+        } else {
+            printf("[MQTT] SUBSCRIBE sent: %s\n", topics[i]);
+        }
+    }
 }
 
 /* ── Фоновые потоки ────────────────────────────────────────── */
@@ -290,7 +367,7 @@ static void *polling_thread(void *arg)
 #endif
 {
     (void)arg;
-    printf("[POLL] Запущен цикл поллинга (интервал: %d сек)\n",
+    printf("[POLL] Polling loop started (interval: %d sec)\n",
            REQ_POLL_INTERVAL);
 
     while (g_running) {
@@ -312,7 +389,7 @@ static void *healthcheck_thread(void *arg)
 #endif
 {
     (void)arg;
-    printf("[HEALTH] Запущен цикл healthcheck (интервал: %d сек)\n",
+    printf("[HEALTH] Healthcheck loop started (interval: %d sec)\n",
            HEALTHCHECK_INTERVAL);
 
     while (g_running) {
@@ -346,12 +423,12 @@ int device_client_run(void)
     int rc;
 
     /* 1. Извлечение SN из сертификата */
-    printf("[START] Инициализация DeviceClient...\n");
+    printf("[START] Initializing DeviceClient...\n");
     if (extract_cn_from_cert(CLIENT_CERT_PATH, g_sn, sizeof(g_sn)) != 0) {
-        fprintf(stderr, "[FATAL] Не удалось извлечь SN из сертификата\n");
+        fprintf(stderr, "[FATAL] Failed to extract SN from certificate\n");
         return 1;
     }
-    printf("[SN] Серийный номер устройства: %s\n", g_sn);
+    printf("[SN] Device serial number: %s\n", g_sn);
 
     /* 2. Формирование топиков публикации */
     snprintf(g_topic_req, sizeof(g_topic_req), "dev/%s/req", g_sn);
@@ -364,8 +441,10 @@ int device_client_run(void)
 
     /* 3. Создание MQTT-клиента (MQTTv5) */
     char server_uri[256];
-    snprintf(server_uri, sizeof(server_uri), "ssl://%s:%d",
-             BROKER_HOST, BROKER_PORT);
+    if (build_server_uri(BROKER_HOST, BROKER_PORT,
+                         server_uri, sizeof(server_uri)) != 0) {
+        return 1;
+    }
 
     MQTTAsync_createOptions create_opts = MQTTAsync_createOptions_initializer5;
     create_opts.MQTTVersion = MQTTVERSION_5;
@@ -400,7 +479,7 @@ int device_client_run(void)
     /* 5. Параметры подключения */
     MQTTAsync_connectOptions conn_opts = MQTTAsync_connectOptions_initializer5;
     conn_opts.keepAliveInterval = BROKER_KEEPALIVE;
-    conn_opts.cleansession      = 1;
+    conn_opts.cleanstart        = 1;
     conn_opts.MQTTVersion       = MQTTVERSION_5;
     conn_opts.ssl               = &ssl_opts;
     conn_opts.onFailure5        = on_connect_failure;
@@ -409,7 +488,7 @@ int device_client_run(void)
     conn_opts.maxRetryInterval   = 60;
 
     /* 6. Подключение */
-    printf("[MQTT] Подключение к %s...\n", server_uri);
+    printf("[MQTT] Connecting to %s...\n", server_uri);
     rc = MQTTAsync_connect(g_client, &conn_opts);
     if (rc != MQTTASYNC_SUCCESS) {
         fprintf(stderr, "[FATAL] MQTTAsync_connect failed: %d\n", rc);
@@ -428,19 +507,19 @@ int device_client_run(void)
     pthread_create(&t_health, NULL, healthcheck_thread, NULL);
 #endif
 
-    printf("[MQTT] Фоновые задачи запущены.\n");
+    printf("[MQTT] Background tasks started.\n");
 
     /* 8. Ожидание ввода для завершения */
     printf("\n");
     printf("================================================================\n");
-    printf("  Клиент запущен и работает. Нажмите Enter для выхода.\n");
+    printf("  Client is running. Press Enter to exit.\n");
     printf("================================================================\n");
     printf("\n");
 
     (void)getchar();
 
     /* 9. Остановка */
-    printf("[STOP] Остановка DeviceClient...\n");
+    printf("[STOP] Stopping DeviceClient...\n");
     g_running = 0;
 
     /* Даём потокам завершиться */
@@ -451,6 +530,6 @@ int device_client_run(void)
     }
     MQTTAsync_destroy(&g_client);
 
-    printf("[STOP] DeviceClient остановлен.\n");
+    printf("[STOP] DeviceClient stopped.\n");
     return 0;
 }

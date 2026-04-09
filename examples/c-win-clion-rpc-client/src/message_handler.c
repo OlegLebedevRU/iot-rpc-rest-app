@@ -86,7 +86,7 @@ static void handle_task_announcement(MessageHandlerCtx *ctx,
     char method_code[32];
     get_user_property(msg, "method_code", method_code, sizeof(method_code));
 
-    printf("[TSK] Анонс задачи: correlation=%s, method=%s\n",
+    printf("[TSK] Task announcement: correlation=%s, method=%s\n",
            corr_data, method_code);
 
     /* Подтверждение получения (опционально) */
@@ -112,7 +112,7 @@ static void handle_task_response(MessageHandlerCtx *ctx,
         payload[msg->payloadlen] = '\0';
     }
 
-    printf("[RSP] Параметры задачи получены: method=%s, correlation=%s\n",
+    printf("[RSP] Task parameters received: method=%s, correlation=%s\n",
            method_code, corr_data);
     printf("[RSP] Payload: %s\n", payload);
 
@@ -120,7 +120,7 @@ static void handle_task_response(MessageHandlerCtx *ctx,
      * ⚠️ ЗДЕСЬ РЕАЛИЗУЙТЕ ВАШУ БИЗНЕС-ЛОГИКУ!
      * Парсинг payload (JSON) и выполнение задачи.
      */
-    printf("[EXEC] Выполнение задачи: method=%s\n", method_code);
+    printf("[EXEC] Executing task: method=%s\n", method_code);
 
     /* Имитация результата */
     const char *result = "{\"status\":\"completed\",\"data\":\"success\"}";
@@ -138,9 +138,9 @@ static void handle_commit(const char *corr_data, MQTTAsync_message *msg)
     char result_id[64];
     get_user_property(msg, "result_id", result_id, sizeof(result_id));
 
-    printf("[CMT] Получено подтверждение: result_id=%s, correlation=%s\n",
+    printf("[CMT] Confirmation received: result_id=%s, correlation=%s\n",
            result_id, corr_data);
-    printf("[CMT] RPC-цикл завершён успешно!\n");
+    printf("[CMT] RPC cycle completed successfully!\n");
 }
 
 /**
@@ -148,7 +148,7 @@ static void handle_commit(const char *corr_data, MQTTAsync_message *msg)
  */
 static void handle_event_ack(const char *corr_data)
 {
-    printf("[EVA] Подтверждение события получено: correlation=%s\n",
+    printf("[EVA] Event confirmation received: correlation=%s\n",
            corr_data);
 }
 
@@ -176,7 +176,7 @@ void msg_handler_on_message(MessageHandlerCtx *ctx,
     const char *corr_data = get_correlation_data(message,
                                                   corr_buf, sizeof(corr_buf));
 
-    printf("[MSG] Получено сообщение: %.*s | Correlation: %s\n",
+    printf("[MSG] Message received: %.*s | Correlation: %s\n",
            topic_len, topic, corr_data);
 
     if (strncmp(topic, ctx->topic_tsk, (size_t)topic_len) == 0) {
@@ -188,6 +188,6 @@ void msg_handler_on_message(MessageHandlerCtx *ctx,
     } else if (strncmp(topic, ctx->topic_eva, (size_t)topic_len) == 0) {
         handle_event_ack(corr_data);
     } else {
-        printf("[WARN] Неизвестный топик: %.*s\n", topic_len, topic);
+        printf("[WARN] Unknown topic: %.*s\n", topic_len, topic);
     }
 }

@@ -10,7 +10,7 @@
 #define IOT_RPC_CONFIG_H
 
 /* ── MQTT Broker ─────────────────────────────────────────────── */
-#define BROKER_HOST         "your-mqtt-broker.com"
+#define BROKER_HOST         "dev.leo4.ru"
 #define BROKER_PORT         8883
 #define BROKER_KEEPALIVE    60          /* секунды */
 

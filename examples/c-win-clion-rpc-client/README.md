@@ -111,6 +111,12 @@
 
 ### 1. Установка OpenSSL на Windows
 
+> ⚠️ **Важно про toolchain:**
+> - Для **MSVC** можно использовать обычный установщик `OpenSSL-Win64`.
+> - Для **MinGW** желательно использовать **MinGW-совместимую** сборку OpenSSL
+>   (например, через **MSYS2** или **vcpkg** с mingw-triplet), иначе возможны
+>   ошибки запуска вида `OPENSSL_Applink`.
+
 **Вариант A: Через vcpkg**
 ```powershell
 git clone https://github.com/microsoft/vcpkg.git
@@ -221,6 +227,9 @@ CN=a3b1234567c10221d290825, O=MyCompany, C=RU
 cd build\Release
 .\iot_rpc_device_client.exe
 ```
+
+> Начиная с текущей конфигурации CMake, OpenSSL runtime DLL автоматически
+> копируются рядом с `iot_rpc_device_client.exe` после сборки.
 
 ### Ожидаемый вывод
 

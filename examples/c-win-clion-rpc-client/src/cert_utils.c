@@ -20,7 +20,7 @@ int extract_cn_from_cert(const char *cert_path, char *cn_buf, size_t cn_buf_len)
     int rc = -1;
 
     if (!cert_path || !cn_buf || cn_buf_len == 0) {
-        fprintf(stderr, "[CERT] Некорректные параметры\n");
+        fprintf(stderr, "[CERT] Invalid parameters\n");
         return -1;
     }
 
@@ -30,7 +30,7 @@ int extract_cn_from_cert(const char *cert_path, char *cn_buf, size_t cn_buf_len)
     fp = fopen(cert_path, "r");
     if (!fp) {
 #endif
-        fprintf(stderr, "[CERT] Не удалось открыть файл: %s\n", cert_path);
+        fprintf(stderr, "[CERT] Failed to open file: %s\n", cert_path);
         return -1;
     }
 
@@ -38,20 +38,20 @@ int extract_cn_from_cert(const char *cert_path, char *cn_buf, size_t cn_buf_len)
     fclose(fp);
 
     if (!cert) {
-        fprintf(stderr, "[CERT] Не удалось прочитать X.509 сертификат из: %s\n",
+        fprintf(stderr, "[CERT] Failed to read X.509 certificate from: %s\n",
                 cert_path);
         return -1;
     }
 
     subject = X509_get_subject_name(cert);
     if (!subject) {
-        fprintf(stderr, "[CERT] Не удалось получить Subject из сертификата\n");
+        fprintf(stderr, "[CERT] Failed to get Subject from certificate\n");
         goto cleanup;
     }
 
     idx = X509_NAME_get_index_by_NID(subject, NID_commonName, -1);
     if (idx < 0) {
-        fprintf(stderr, "[CERT] CN не найден в Subject\n");
+        fprintf(stderr, "[CERT] CN not found in Subject\n");
         goto cleanup;
     }
 
@@ -62,12 +62,12 @@ int extract_cn_from_cert(const char *cert_path, char *cn_buf, size_t cn_buf_len)
         int len = ASN1_STRING_to_UTF8((unsigned char **)&utf8, asn1);
 
         if (len <= 0 || !utf8) {
-            fprintf(stderr, "[CERT] Не удалось преобразовать CN в UTF-8\n");
+            fprintf(stderr, "[CERT] Failed to convert CN to UTF-8\n");
             goto cleanup;
         }
 
         if ((size_t)len >= cn_buf_len) {
-            fprintf(stderr, "[CERT] Буфер слишком мал для CN (нужно %d байт)\n",
+            fprintf(stderr, "[CERT] Buffer is too small for CN (need %d bytes)\n",
                     len + 1);
             OPENSSL_free((void *)utf8);
             goto cleanup;
