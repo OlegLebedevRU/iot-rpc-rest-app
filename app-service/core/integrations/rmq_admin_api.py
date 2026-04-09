@@ -15,10 +15,12 @@ log = setup_module_logger(__name__, "rabbit_admin_api.log")
 
 
 async def fetch_one(session, suffix, param):
-    params = suffix + param
+    params = suffix + quote(param, safe="")
     resp = await session.get(url=params)
+    if resp.status_code == 404:
+        return []
     resp.raise_for_status()  # Проверка на наличие ошибок HTTP
-    return resp
+    return resp.json()
 
 
 class RmqAdminApi:
@@ -100,17 +102,32 @@ class RmqAdminApi:
         try:
             async with httpx.AsyncClient(base_url=cls._admin_url()) as session:
                 tasks = [fetch_one(session, cls.user_conn, sn) for sn in sn_arr]
-                connections = await asyncio.gather(*tasks)
-                tasks1 = []
-                for conn in connections:
-                    data = conn.json()
-                    if len(data) > 0:
-                        tasks1.append(fetch_one(session, cls.conn, data[0]["name"]))
-                device_online = await asyncio.gather(*tasks1)
-            devices: list[DeviceConnectionDetails] = [
-                DeviceConnectionDetails.model_validate(device.json())
-                for device in device_online
-            ]
+                connections = await asyncio.gather(*tasks, return_exceptions=True)
+
+            devices: list[DeviceConnectionDetails] = []
+            for sn, conn_data in zip(sn_arr, connections, strict=False):
+                if isinstance(conn_data, Exception):
+                    log.info("Error Get connectionsFrom rabbit API for '%s' = %s", sn, conn_data)
+                    continue
+
+                if not isinstance(conn_data, list):
+                    log.info(
+                        "Unexpected RabbitMQ connections payload for '%s': %s",
+                        sn,
+                        type(conn_data).__name__,
+                    )
+                    continue
+
+                for device in conn_data:
+                    try:
+                        devices.append(DeviceConnectionDetails.model_validate(device))
+                    except Exception as e:
+                        log.info(
+                            "Skip invalid RabbitMQ connection payload for '%s': %s; payload=%s",
+                            sn,
+                            e,
+                            device,
+                        )
             return devices
         except Exception as e:
             log.info("Error Get connectionsFrom rabbit API =%s", e)
