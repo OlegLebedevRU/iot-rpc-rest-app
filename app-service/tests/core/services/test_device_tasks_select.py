@@ -1,17 +1,19 @@
 import os
 import uuid
+import asyncio
 import logging
 import logging.handlers
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, call, patch
 
-import pytest
-
 
 class _DummyRotatingFileHandler(logging.Handler):
     def __init__(self, *args, **kwargs):
         super().__init__()
+
+    def emit(self, record):
+        return
 
 
 logging.handlers.RotatingFileHandler = _DummyRotatingFileHandler
@@ -52,8 +54,7 @@ def _build_task(task_id: uuid.UUID, method_code: int = 20) -> TaskResponsePayloa
     )
 
 
-@pytest.mark.asyncio
-async def test_select_treats_zero_uuid_as_polling_request():
+def test_select_treats_zero_uuid_as_polling_request():
     service = DeviceTasksService(session=object(), org_id=0)
     msg = SimpleNamespace(headers={})
     selected_task = _build_task(uuid.uuid4())
@@ -69,7 +70,7 @@ async def test_select_treats_zero_uuid_as_polling_request():
         ) as task_status_update,
         patch("core.services.device_tasks.send_rsp", new=AsyncMock()) as send_rsp,
     ):
-        await service.select("SN-1", uuid.UUID(int=0), msg)
+        asyncio.run(service.select("SN-1", uuid.UUID(int=0), msg))
 
     select_task.assert_awaited_once_with(service.session, None, "SN-1", 2999)
     task_status_update.assert_awaited_once_with(
@@ -84,8 +85,7 @@ async def test_select_treats_zero_uuid_as_polling_request():
     )
 
 
-@pytest.mark.asyncio
-async def test_select_falls_back_to_polling_when_requested_task_is_missing():
+def test_select_falls_back_to_polling_when_requested_task_is_missing():
     service = DeviceTasksService(session=object(), org_id=0)
     msg = SimpleNamespace(headers={})
     requested_task_id = uuid.uuid4()
@@ -102,7 +102,7 @@ async def test_select_falls_back_to_polling_when_requested_task_is_missing():
         ) as task_status_update,
         patch("core.services.device_tasks.send_rsp", new=AsyncMock()) as send_rsp,
     ):
-        await service.select("SN-1", requested_task_id, msg)
+        asyncio.run(service.select("SN-1", requested_task_id, msg))
 
     assert select_task.await_args_list == [
         call(service.session, requested_task_id, "SN-1", 2999),
@@ -120,8 +120,7 @@ async def test_select_falls_back_to_polling_when_requested_task_is_missing():
     )
 
 
-@pytest.mark.asyncio
-async def test_select_keeps_direct_task_lookup_when_task_exists():
+def test_select_keeps_direct_task_lookup_when_task_exists():
     service = DeviceTasksService(session=object(), org_id=0)
     msg = SimpleNamespace(headers={})
     requested_task_id = uuid.uuid4()
@@ -138,7 +137,7 @@ async def test_select_keeps_direct_task_lookup_when_task_exists():
         ) as task_status_update,
         patch("core.services.device_tasks.send_rsp", new=AsyncMock()) as send_rsp,
     ):
-        await service.select("SN-1", requested_task_id, msg)
+        asyncio.run(service.select("SN-1", requested_task_id, msg))
 
     select_task.assert_awaited_once_with(
         service.session, requested_task_id, "SN-1", 2999
