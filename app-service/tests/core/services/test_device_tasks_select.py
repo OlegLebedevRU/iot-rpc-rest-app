@@ -1,19 +1,12 @@
-import os
-import uuid
-import asyncio
 import logging
-import importlib
+import logging.handlers
+import os
+from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, call, patch
+from uuid import uuid4
+from unittest.mock import AsyncMock
 
-
-class _NoOpHandler(logging.Handler):
-    def __init__(self, *args, **kwargs):
-        super().__init__()
-
-    def emit(self, record):
-        return
-
+import pytest
 
 os.environ.setdefault(
     "APP_CONFIG__FASTSTREAM__URL", "amqp://user:pass@localhost:5672//"
@@ -21,145 +14,152 @@ os.environ.setdefault(
 os.environ.setdefault(
     "APP_CONFIG__DB__URL", "postgresql+asyncpg://user:pass@localhost:5432/postgres"
 )
-os.environ.setdefault("APP_CONFIG__LEO4__URL", "https://example.com")
-os.environ.setdefault("APP_CONFIG__LEO4__API_KEY", "test-api-key")
-os.environ.setdefault("APP_CONFIG__LEO4__ADMIN_URL", "https://example.com/admin")
-os.environ.setdefault("APP_CONFIG__LEO4__CERT_URL", "https://example.com/cert")
-os.environ.setdefault("APP_CONFIG__AUTH__API_KEYS", "test-key:1")
+os.environ.setdefault("APP_CONFIG__AUTH__API_KEYS", "test:1")
+os.environ.setdefault("APP_CONFIG__LEO4__URL", "http://localhost")
+os.environ.setdefault("APP_CONFIG__LEO4__API_KEY", "x")
+os.environ.setdefault("APP_CONFIG__LEO4__ADMIN_URL", "http://localhost")
+os.environ.setdefault("APP_CONFIG__LEO4__CERT_URL", "http://localhost")
 
-def _load_modules():
-    with (
-        patch("logging.handlers.RotatingFileHandler", _NoOpHandler),
-        patch("pathlib.Path.mkdir", return_value=None),
-    ):
-        device_tasks_module = importlib.import_module("core.services.device_tasks")
-        schemas_module = importlib.import_module("core.schemas.device_tasks")
-        common_module = importlib.import_module("core.models.common")
-    return device_tasks_module, schemas_module, common_module
+logging.handlers.RotatingFileHandler = lambda *args, **kwargs: logging.NullHandler()
+Path.mkdir = lambda self, mode=0o777, parents=False, exist_ok=False: None
+
+from core.models.common import TaskStatus
+from core.crud.dev_tasks_repo import TasksRepository
+from core.services import device_tasks as device_tasks_module
+from core.services.device_tasks import DeviceTasksService
 
 
-DEVICE_TASKS_MODULE, SCHEMAS_MODULE, COMMON_MODULE = _load_modules()
+def build_task_data(task_id):
+    return {
+        "id": task_id,
+        "ext_task_id": "ext-1",
+        "method_code": 51,
+        "device_id": 100,
+        "created_at": 1712345678,
+        "priority": 1,
+        "status": TaskStatus.READY,
+        "pending_at": None,
+        "locked_at": None,
+        "ttl": 5,
+        "payload": {"dt": [{"cl": 5}]},
+    }
 
 
-def _build_mock_task_response(task_id: uuid.UUID, method_code: int = 20):
-    return SCHEMAS_MODULE.TaskResponsePayload(
-        header=SCHEMAS_MODULE.TaskHeader(
-            ext_task_id="ext-1",
-            device_id=1,
-            method_code=method_code,
-            priority=0,
-            ttl=5,
-        ),
-        id=task_id,
-        status=COMMON_MODULE.TaskStatus.READY,
-        created_at=0,
-        pending_at=None,
-        locked_at=None,
-        payload={"dt": [{"mt": 0}]},
-    )
+class EmptyMappingsResult:
+    def one_or_none(self):
+        return None
 
 
-def test_select_treats_zero_uuid_as_polling_request():
-    service = DEVICE_TASKS_MODULE.DeviceTasksService(session=object(), org_id=0)
+class EmptyExecuteResult:
+    def mappings(self):
+        return EmptyMappingsResult()
+
+
+@pytest.mark.asyncio
+async def test_select_uses_sn_polling_for_zero_uuid(monkeypatch):
+    session = object()
+    service = DeviceTasksService(session, 0)
+    task_id = uuid4()
     msg = SimpleNamespace(headers={})
-    selected_task = _build_mock_task_response(uuid.uuid4())
 
-    with (
-        patch.object(
-            DEVICE_TASKS_MODULE.TasksRepository,
-            "select_task",
-            new=AsyncMock(return_value=selected_task),
-        ) as select_task,
-        patch.object(
-            DEVICE_TASKS_MODULE.TasksRepository,
-            "task_status_update",
-            new=AsyncMock(),
-        ) as task_status_update,
-        patch.object(DEVICE_TASKS_MODULE, "send_rsp", new=AsyncMock()) as send_rsp,
-    ):
-        asyncio.run(service.select("SN-1", uuid.UUID(int=0), msg))
+    select_next_task_by_sn = AsyncMock(return_value=build_task_data(task_id))
+    select_task_by_id = AsyncMock()
+    task_status_update = AsyncMock()
+    send_rsp = AsyncMock()
 
-    select_task.assert_awaited_once_with(service.session, None, "SN-1", 2999)
-    task_status_update.assert_awaited_once_with(
-        service.session, selected_task.id, COMMON_MODULE.TaskStatus.LOCK
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository,
+        "select_next_task_by_sn",
+        select_next_task_by_sn,
     )
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "select_task_by_id", select_task_by_id
+    )
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "task_status_update", task_status_update
+    )
+    monkeypatch.setattr(device_tasks_module, "send_rsp", send_rsp)
+
+    await service.select("SN_TEST", device_tasks_module.settings.task_proc_cfg.zero_corr_id, msg)
+
+    select_next_task_by_sn.assert_awaited_once_with(session, "SN_TEST", 2999)
+    select_task_by_id.assert_not_called()
+    task_status_update.assert_awaited_once_with(session, task_id, TaskStatus.LOCK)
     send_rsp.assert_awaited_once_with(
-        "SN-1",
-        selected_task.model_dump(mode="json"),
-        selected_task.id,
-        selected_task.header.ttl * 60_000,
-        str(selected_task.header.method_code),
+        "SN_TEST",
+        {
+            "header": {
+                "ext_task_id": "ext-1",
+                "device_id": 100,
+                "method_code": 51,
+                "priority": 1,
+                "ttl": 5,
+            },
+            "id": str(task_id),
+            "created_at": 1712345678,
+            "status": TaskStatus.READY,
+            "pending_at": None,
+            "locked_at": None,
+            "payload": {"dt": [{"cl": 5}]},
+        },
+        task_id,
+        5 * 60_000,
+        "51",
     )
 
 
-def test_select_falls_back_to_polling_when_requested_task_is_missing():
-    service = DEVICE_TASKS_MODULE.DeviceTasksService(session=object(), org_id=0)
-    msg = SimpleNamespace(headers={})
-    requested_task_id = uuid.uuid4()
-    fallback_task = _build_mock_task_response(uuid.uuid4())
+@pytest.mark.asyncio
+async def test_select_uses_task_lookup_for_non_zero_uuid(monkeypatch):
+    session = object()
+    service = DeviceTasksService(session, 0)
+    corr_id = uuid4()
+    msg = SimpleNamespace(headers={"slave_ws": "1"})
 
-    with (
-        patch.object(
-            DEVICE_TASKS_MODULE.TasksRepository,
-            "select_task",
-            new=AsyncMock(side_effect=[None, fallback_task]),
-        ) as select_task,
-        patch.object(
-            DEVICE_TASKS_MODULE.TasksRepository,
-            "task_status_update",
-            new=AsyncMock(),
-        ) as task_status_update,
-        patch.object(DEVICE_TASKS_MODULE, "send_rsp", new=AsyncMock()) as send_rsp,
-    ):
-        asyncio.run(service.select("SN-1", requested_task_id, msg))
+    select_task_by_id = AsyncMock(return_value=None)
+    select_next_task_by_sn = AsyncMock()
+    task_status_update = AsyncMock()
+    send_rsp = AsyncMock()
 
-    assert select_task.await_args_list == [
-        call(service.session, requested_task_id, "SN-1", 2999),
-        call(service.session, None, "SN-1", 2999),
-    ]
-    task_status_update.assert_awaited_once_with(
-        service.session, fallback_task.id, COMMON_MODULE.TaskStatus.LOCK
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "select_task_by_id", select_task_by_id
     )
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository,
+        "select_next_task_by_sn",
+        select_next_task_by_sn,
+    )
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "task_status_update", task_status_update
+    )
+    monkeypatch.setattr(device_tasks_module, "send_rsp", send_rsp)
+
+    await service.select("SN_TEST", corr_id, msg)
+
+    select_task_by_id.assert_awaited_once_with(session, corr_id, 3999)
+    select_next_task_by_sn.assert_not_called()
+    task_status_update.assert_not_called()
     send_rsp.assert_awaited_once_with(
-        "SN-1",
-        fallback_task.model_dump(mode="json"),
-        fallback_task.id,
-        fallback_task.header.ttl * 60_000,
-        str(fallback_task.header.method_code),
+        "SN_TEST",
+        device_tasks_module.settings.task_proc_cfg.nop_resp,
+        device_tasks_module.settings.task_proc_cfg.zero_corr_id,
+        3 * 60 * 1000,
+        "0",
     )
 
 
-def test_select_keeps_direct_task_lookup_when_task_exists():
-    service = DEVICE_TASKS_MODULE.DeviceTasksService(session=object(), org_id=0)
-    msg = SimpleNamespace(headers={})
-    requested_task_id = uuid.uuid4()
-    selected_task = _build_mock_task_response(requested_task_id, method_code=51)
+@pytest.mark.asyncio
+async def test_polling_query_prefers_high_priority_then_smallest_positive_ttl():
+    session = SimpleNamespace(execute=AsyncMock(return_value=EmptyExecuteResult()))
 
-    with (
-        patch.object(
-            DEVICE_TASKS_MODULE.TasksRepository,
-            "select_task",
-            new=AsyncMock(return_value=selected_task),
-        ) as select_task,
-        patch.object(
-            DEVICE_TASKS_MODULE.TasksRepository,
-            "task_status_update",
-            new=AsyncMock(),
-        ) as task_status_update,
-        patch.object(DEVICE_TASKS_MODULE, "send_rsp", new=AsyncMock()) as send_rsp,
-    ):
-        asyncio.run(service.select("SN-1", requested_task_id, msg))
+    await TasksRepository.select_next_task_by_sn(session, "SN_TEST", 2999)
 
-    select_task.assert_awaited_once_with(
-        service.session, requested_task_id, "SN-1", 2999
-    )
-    task_status_update.assert_awaited_once_with(
-        service.session, selected_task.id, COMMON_MODULE.TaskStatus.LOCK
-    )
-    send_rsp.assert_awaited_once_with(
-        "SN-1",
-        selected_task.model_dump(mode="json"),
-        selected_task.id,
-        selected_task.header.ttl * 60_000,
-        str(selected_task.header.method_code),
-    )
+    query = session.execute.await_args.args[0]
+    compiled = str(query)
+
+    assert "status <" in compiled
+    assert "method_code <=" in compiled
+    assert "ttl >" in compiled
+    assert "ORDER BY" in compiled
+    assert "priority DESC" in compiled
+    assert "ttl ASC" in compiled
+    assert "created_at ASC" in compiled
