@@ -2,7 +2,7 @@ import logging
 import sys
 from faststream.rabbit.fastapi import RabbitMessage
 from core.fs_broker import fs_router
-from core.logging_config import setup_module_logger
+from core.logging_config import setup_module_logger, log_rpc_debug
 from core.services.device_events_collect import DeviceEventsCollect
 from core.topologys.declare import q_ack, q_req, q_evt, q_result
 from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
@@ -47,10 +47,12 @@ async def add_one_event(
 @fs_router.subscriber(q_ack)
 async def ack(
     session: Session_dep,
+    sn: Sn_dep,
     corr_id: Corr_id_dep,
 ):
     # log.info("Subscribe ack queue")
-    await DeviceTasksService(session, 0).pending(corr_id)
+    log_rpc_debug(sn, "rpc.ack.received", corr_id=corr_id)
+    await DeviceTasksService(session, 0).pending(corr_id, sn)
 
 
 @fs_router.subscriber(q_req)
@@ -61,6 +63,13 @@ async def req(
     corr_id: Corr_id_dep,
 ):
     # log.info("Subscribe req queue")
+    headers = getattr(msg, "headers", None) or {}
+    log_rpc_debug(
+        sn,
+        "rpc.req.received",
+        corr_id=corr_id,
+        slave_ws=headers.get("slave_ws"),
+    )
     await DeviceTasksService(session, 0).select(sn, corr_id, msg)
 
 
@@ -72,6 +81,14 @@ async def result(
     corr_id: Corr_id_dep,
 ):
     log.info("Processing message from the results queue sn = %s", sn)
+    headers = getattr(msg, "headers", None) or {}
+    log_rpc_debug(
+        sn,
+        "rpc.res.received",
+        corr_id=corr_id,
+        ext_id=headers.get("ext_id"),
+        status_code=headers.get("status_code"),
+    )
     await DeviceTasksService(session, 0).save(msg, sn, corr_id)
 
 

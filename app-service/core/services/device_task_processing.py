@@ -3,7 +3,7 @@ from typing import Any
 from uuid import UUID
 
 from core.config import RoutingKey, settings
-from core.logging_config import setup_module_logger
+from core.logging_config import setup_module_logger, log_rpc_debug
 from core.schemas.device_tasks import TaskCreate, TaskResponse, TaskNotify
 from core.schemas.rmq_admin import RmqClientsAction
 from core.topologys.declare import (
@@ -25,6 +25,14 @@ async def send_tsk(sn: str, task: TaskCreate, stask: TaskResponse):
     )
     notify: TaskNotify = TaskNotify(
         id=stask.id, created_at=stask.created_at, header=task
+    )
+    log_rpc_debug(
+        sn,
+        "rpc.tsk.publish",
+        corr_id=stask.id,
+        routing_key=task_device_topic,
+        method_code=notify.header.method_code,
+        expiration=task.ttl * 60_000,
     )
     await topic_publisher.publish(
         routing_key=task_device_topic,  # "srv.a3b0000000c99999d250813.tsk",
@@ -48,6 +56,15 @@ async def send_rsp(
 ):
     routing_key: str = str(
         RoutingKey(prefix=topology.prefix_srv, sn=sn, suffix=topology.suffix_response)
+    )
+    log_rpc_debug(
+        sn,
+        "rpc.rsp.publish",
+        corr_id=correlation_id,
+        routing_key=routing_key,
+        method_code=method_code,
+        expiration=expiration,
+        payload=t_resp,
     )
     await topic_publisher.publish(
         routing_key=routing_key,
@@ -76,6 +93,16 @@ async def send_cmt(
     routing_key: str = str(
         RoutingKey(prefix=topology.prefix_srv, sn=sn, suffix=topology.suffix_commited)
     )
+    log_rpc_debug(
+        sn,
+        "rpc.cmt.publish",
+        corr_id=corr_id,
+        routing_key=routing_key,
+        ext_id=ext_id,
+        result_id=result_id,
+        status_code=status_code,
+        payload=cmt_payload,
+    )
     await topic_publisher.publish(
         routing_key=routing_key,
         message=cmt_payload,
@@ -103,6 +130,16 @@ async def send_cmt(
             "x-result-id": str(result_id),
             "x-status-code": str(status_code),
         },
+    )
+    log_rpc_debug(
+        sn,
+        "rpc.webhook.publish",
+        corr_id=corr_id,
+        routing_key=settings.webhook.webhooks_queue,
+        dev_id=dev_id,
+        ext_id=ext_id,
+        result_id=result_id,
+        status_code=status_code,
     )
 
 

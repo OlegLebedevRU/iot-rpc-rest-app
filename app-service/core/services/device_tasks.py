@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import settings
 from core.crud.dev_tasks_repo import TasksRepository
 from core.crud.device_repo import DeviceRepo
-from core.logging_config import setup_module_logger
+from core.logging_config import setup_module_logger, log_rpc_debug
 from core.models.common import TaskStatus
 from core.schemas.device_tasks import (
     TaskCreate,
@@ -117,14 +117,16 @@ class DeviceTasksService:
             raise HTTPException(status_code=404, detail="Tasks not found")
         return tasks
 
-    async def pending(self, corr_id):
+    async def pending(self, corr_id, sn: str | None = None):
         if self._is_zero_corr_id(corr_id):
             log.debug("Skip ACK status update for polling corr_id=%s", corr_id)
+            log_rpc_debug(sn, "rpc.ack.skip", corr_id=corr_id, reason="zero_corr_id")
             return
 
         await TasksRepository.task_status_update(
             self.session, corr_id, TaskStatus.PENDING
         )
+        log_rpc_debug(sn, "rpc.ack.pending", corr_id=corr_id, status=TaskStatus.PENDING)
 
     @staticmethod
     def _get_method_limit(msg) -> int:
@@ -174,6 +176,7 @@ class DeviceTasksService:
 
     async def select(self, sn, corr_id: UUID4, msg):
         method_le = self._get_method_limit(msg)
+        log_rpc_debug(sn, "rpc.req.processing", corr_id=corr_id, method_le=method_le)
         task = await self._select_task(sn, corr_id, method_le)
         if task is not None:
             t_resp = task.model_dump(mode="json")
@@ -184,12 +187,28 @@ class DeviceTasksService:
             )
             correlation_id = task.id
             expiration = task.header.ttl * 60_000  # Use actual TTL
+            log_rpc_debug(
+                sn,
+                "rpc.req.selected",
+                corr_id=corr_id,
+                task_id=task.id,
+                method_code=method_code,
+                expiration=expiration,
+                status=task.status,
+            )
         else:
             t_resp = settings.task_proc_cfg.nop_resp
             log.debug("from DB select task = None")
             correlation_id = settings.task_proc_cfg.zero_corr_id
             method_code = "0"
             expiration = 3 * 60 * 1000  # Fallback TTL: 3 minutes (or use config)
+            log_rpc_debug(
+                sn,
+                "rpc.req.nop",
+                corr_id=corr_id,
+                response_corr_id=correlation_id,
+                expiration=expiration,
+            )
 
         await send_rsp(sn, t_resp, correlation_id, expiration, method_code)
 
@@ -204,6 +223,13 @@ class DeviceTasksService:
                 ext_id,
                 status_code,
             )
+            log_rpc_debug(
+                sn,
+                "rpc.res.skip",
+                reason="missing_corr_id",
+                ext_id=ext_id,
+                status_code=status_code,
+            )
             return
 
         if self._is_zero_corr_id(corr_id):
@@ -213,6 +239,14 @@ class DeviceTasksService:
                 corr_id,
                 ext_id,
                 status_code,
+            )
+            log_rpc_debug(
+                sn,
+                "rpc.res.skip",
+                corr_id=corr_id,
+                reason="zero_corr_id",
+                ext_id=ext_id,
+                status_code=status_code,
             )
             return
 
@@ -233,6 +267,14 @@ class DeviceTasksService:
             status_code,
             res_data,
         )
+        log_rpc_debug(
+            sn,
+            "rpc.res.processing",
+            corr_id=corr_id,
+            ext_id=ext_id,
+            status_code=status_code,
+            payload=res_data,
+        )
 
         result_id = await TasksRepository.save_task_result(
             self.session, corr_id, ext_id, status_code, res_data
@@ -243,6 +285,13 @@ class DeviceTasksService:
                 corr_id,
                 ext_id,
                 status_code,
+            )
+            log_rpc_debug(
+                sn,
+                "rpc.res.orphan",
+                corr_id=corr_id,
+                ext_id=ext_id,
+                status_code=status_code,
             )
             return
 
@@ -257,6 +306,16 @@ class DeviceTasksService:
 
         cmt_payload = {"message": rmsg}
         dev_id = await DeviceRepo.get_device_id(session=self.session, sn=sn)
+        log_rpc_debug(
+            sn,
+            "rpc.res.committed",
+            corr_id=corr_id,
+            ext_id=ext_id,
+            status_code=status_code,
+            result_id=result_id,
+            dev_id=dev_id,
+            message=rmsg,
+        )
         await send_cmt(
             sn,
             cmt_payload,
