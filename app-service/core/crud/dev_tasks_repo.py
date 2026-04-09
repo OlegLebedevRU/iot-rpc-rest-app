@@ -32,8 +32,6 @@ from core.models.devices import DeviceOrgBind
 from core.schemas.device_tasks import (
     TaskCreate,
     TaskResponseDeleted,
-    TaskResponsePayload,
-    TaskHeader,
     TaskListOut,
 )
 
@@ -164,14 +162,8 @@ class TasksRepository:
         return task_data, result_data
 
     @classmethod
-    async def select_task(
-        cls,
-        session: AsyncSession,
-        t_req: UUID4 | None = None,
-        sn: str | None = None,
-        method_le: int = 65535,
-    ) -> TaskResponsePayload | None:
-        query = (
+    def _select_task_query(cls, method_le: int = 65535):
+        return (
             select(
                 DevTask.id.label("id"),
                 DevTask.ext_task_id.label("ext_task_id"),
@@ -196,42 +188,43 @@ class TasksRepository:
             .where(
                 DevTask.is_deleted == False,
                 DevTaskStatus.status < TaskStatus.DONE,
-            )
-        )
-
-        if t_req is not None:
-            query = query.where(DevTask.id == t_req, DevTask.method_code <= method_le)
-        elif sn is not None:
-            subq = (
-                select(Device.device_id)
-                .where(Device.sn == sn, Device.is_deleted == False)
-                .subquery()
-            )
-            query = query.where(
-                DevTask.device_id == subq.c.device_id,
                 DevTask.method_code <= method_le,
             )
-            query = query.order_by(desc(DevTaskStatus.priority), DevTask.created_at)
-            query = query.limit(1)
-        else:
-            return None
-
-        t = await session.execute(query)
-        resp = t.mappings().one_or_none()
-        if resp is None:
-            return None
-
-        # header: TaskHeader = TaskHeader.model_validate(resp)
-        task: TaskResponsePayload = TaskResponsePayload(
-            header=TaskHeader.model_validate(resp),
-            id=resp.id,
-            status=resp.status,
-            created_at=resp.created_at,
-            pending_at=resp.pending_at if resp.pending_at is not None else None,
-            locked_at=resp.locked_at if resp.locked_at is not None else None,
-            payload=resp.payload,
         )
-        return task
+
+    @classmethod
+    async def select_task_by_id(
+        cls,
+        session: AsyncSession,
+        task_id: UUID4,
+        method_le: int = 65535,
+    ) -> dict[str, Any] | None:
+        query = cls._select_task_query(method_le).where(DevTask.id == task_id)
+        result = await session.execute(query)
+        row = result.mappings().one_or_none()
+        return dict(row) if row is not None else None
+
+    @classmethod
+    async def select_next_task_by_sn(
+        cls,
+        session: AsyncSession,
+        sn: str,
+        method_le: int = 65535,
+    ) -> dict[str, Any] | None:
+        subq = (
+            select(Device.device_id)
+            .where(Device.sn == sn, Device.is_deleted == False)
+            .subquery()
+        )
+        query = (
+            cls._select_task_query(method_le)
+            .where(DevTask.device_id == subq.c.device_id)
+            .order_by(desc(DevTaskStatus.priority), DevTask.created_at)
+            .limit(1)
+        )
+        result = await session.execute(query)
+        row = result.mappings().one_or_none()
+        return dict(row) if row is not None else None
 
     @classmethod
     async def get_tasks(
