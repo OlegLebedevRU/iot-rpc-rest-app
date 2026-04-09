@@ -20,6 +20,7 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
+#include <stdint.h>
 
 #ifdef _WIN32
 #  include <windows.h>
@@ -126,20 +127,185 @@ static void generate_uuid(char *buf, size_t len)
     buf[bi] = '\0';
 }
 
+static CorrDataView corr_view_from_bytes(const void *data, size_t len)
+{
+    CorrDataView view;
+    view.data = (const unsigned char *)data;
+    view.len = len;
+    return view;
+}
+
+static CorrDataView corr_view_from_cstring(const char *value)
+{
+    if (!value) {
+        return corr_view_from_bytes(NULL, 0);
+    }
+
+    return corr_view_from_bytes(value, strlen(value));
+}
+
+static int is_printable_ascii(const unsigned char *data, size_t len)
+{
+    for (size_t i = 0; i < len; i++) {
+        if (data[i] < 0x20 || data[i] > 0x7E) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static void format_binary_for_log(const unsigned char *data, size_t len,
+                                  char *buf, size_t buf_len)
+{
+    size_t pos = 0;
+
+    if (!buf_len) {
+        return;
+    }
+
+    buf[0] = '\0';
+
+    if (!data || len == 0) {
+        snprintf(buf, buf_len, "<empty>");
+        return;
+    }
+
+    if (is_printable_ascii(data, len)) {
+        snprintf(buf, buf_len, "\"%.*s\"", (int)len, (const char *)data);
+        return;
+    }
+
+    pos += (size_t)snprintf(buf + pos, buf_len - pos, "0x");
+    for (size_t i = 0; i < len && pos + 3 < buf_len; i++) {
+        pos += (size_t)snprintf(buf + pos, buf_len - pos, "%02X", data[i]);
+    }
+
+    if (pos >= buf_len) {
+        buf[buf_len - 1] = '\0';
+    }
+}
+
+static void format_payload_preview(const void *payload, size_t payload_len,
+                                   char *buf, size_t buf_len)
+{
+    const unsigned char *bytes = (const unsigned char *)payload;
+    size_t preview_len = payload_len > 160 ? 160 : payload_len;
+
+    if (!buf_len) {
+        return;
+    }
+
+    buf[0] = '\0';
+
+    if (!payload || payload_len == 0) {
+        snprintf(buf, buf_len, "<empty>");
+        return;
+    }
+
+    if (is_printable_ascii(bytes, preview_len)) {
+        snprintf(buf, buf_len, "%.*s%s",
+                 (int)preview_len, (const char *)bytes,
+                 payload_len > preview_len ? "..." : "");
+        return;
+    }
+
+    format_binary_for_log(bytes, preview_len, buf, buf_len);
+}
+
+static void log_properties(const char *op_name, const MQTTProperties *props)
+{
+    if (!props || props->count <= 0) {
+        printf("[%s] Properties: none\n", op_name);
+        return;
+    }
+
+    printf("[%s] Properties (%d):\n", op_name, props->count);
+
+    for (int i = 0; i < props->count; i++) {
+        const MQTTProperty *prop = &props->array[i];
+
+        if (prop->identifier == MQTTPROPERTY_CODE_USER_PROPERTY) {
+            printf("[%s]   user_property[%d]: %.*s=%.*s\n",
+                   op_name,
+                   i,
+                   prop->value.data.len, prop->value.data.data,
+                   prop->value.value.len, prop->value.value.data);
+        } else if (prop->identifier == MQTTPROPERTY_CODE_CORRELATION_DATA) {
+            char corr_buf[160];
+            format_binary_for_log((const unsigned char *)prop->value.data.data,
+                                  (size_t)prop->value.data.len,
+                                  corr_buf, sizeof(corr_buf));
+            printf("[%s]   correlation_data[%d]: len=%d, value=%s\n",
+                   op_name, i, prop->value.data.len, corr_buf);
+        } else {
+            printf("[%s]   property[%d]: id=%d\n", op_name, i, prop->identifier);
+        }
+    }
+}
+
+static void log_publish_details(const char *op_name,
+                                const char *topic,
+                                const MQTTAsync_message *msg,
+                                const CorrDataView *corr_data)
+{
+    char corr_buf[160];
+    char payload_buf[256];
+    CorrDataView empty = corr_view_from_bytes(NULL, 0);
+    const CorrDataView *corr = corr_data ? corr_data : &empty;
+
+    format_binary_for_log(corr->data, corr->len, corr_buf, sizeof(corr_buf));
+    format_payload_preview(msg->payload, (size_t)msg->payloadlen,
+                           payload_buf, sizeof(payload_buf));
+
+    printf("[%s] Publishing: topic=%s, qos=%d, retained=%d, payload_len=%d, property_count=%d\n",
+           op_name, topic, msg->qos, msg->retained, msg->payloadlen,
+           msg->properties.count);
+    printf("[%s] correlation_data: len=%zu, value=%s\n",
+           op_name, corr->len, corr_buf);
+    printf("[%s] payload preview: %s\n", op_name, payload_buf);
+    log_properties(op_name, &msg->properties);
+}
+
+static int send_message_logged(MQTTAsync client,
+                               const char *op_name,
+                               const char *topic,
+                               MQTTAsync_message *msg,
+                               const CorrDataView *corr_data)
+{
+    int rc;
+
+    log_publish_details(op_name, topic, msg, corr_data);
+
+    rc = MQTTAsync_sendMessage(client, topic, msg, NULL);
+    if (rc != MQTTASYNC_SUCCESS) {
+        fprintf(stderr,
+                "[%s] MQTTAsync_sendMessage failed: rc=%d (%s), topic=%s\n",
+                op_name, rc,
+                MQTTAsync_strerror(rc) ? MQTTAsync_strerror(rc) : "unknown",
+                topic);
+        return rc;
+    }
+
+    printf("[%s] Publish accepted by client library.\n", op_name);
+    return rc;
+}
+
 /* ── Публикация с MQTT 5 свойствами ────────────────────────── */
 
 /**
  * Создаёт MQTTProperties с CorrelationData.
  */
-static MQTTProperties make_props_with_corr(const char *corr_data)
+static MQTTProperties make_props_with_corr(const CorrDataView *corr_data)
 {
     MQTTProperties props = MQTTProperties_initializer;
 
-    if (corr_data && corr_data[0]) {
+    if (corr_data && corr_data->data && corr_data->len > 0) {
         MQTTProperty prop;
+        memset(&prop, 0, sizeof(prop));
         prop.identifier = MQTTPROPERTY_CODE_CORRELATION_DATA;
-        prop.value.data.data = (char *)corr_data;
-        prop.value.data.len  = (int)strlen(corr_data);
+        prop.value.data.data = (char *)corr_data->data;
+        prop.value.data.len  = (int)corr_data->len;
         MQTTProperties_add(&props, &prop);
     }
 
@@ -153,6 +319,7 @@ static void add_user_property(MQTTProperties *props,
                               const char *key, const char *value)
 {
     MQTTProperty prop;
+    memset(&prop, 0, sizeof(prop));
     prop.identifier = MQTTPROPERTY_CODE_USER_PROPERTY;
     prop.value.data.data  = (char *)key;
     prop.value.data.len   = (int)strlen(key);
@@ -164,13 +331,17 @@ static void add_user_property(MQTTProperties *props,
 /* ── Публичные функции публикации ──────────────────────────── */
 
 void device_client_send_request(MQTTAsync client, const char *sn,
-                                const char *correlation_data)
+                                const CorrDataView *correlation_data)
 {
     char topic[MAX_TOPIC_LEN];
+    CorrDataView fallback_corr = corr_view_from_cstring(ZERO_UUID);
+    const CorrDataView *corr = correlation_data;
+
     snprintf(topic, sizeof(topic), "dev/%s/req", sn);
 
-    const char *corr = (correlation_data && correlation_data[0])
-                       ? correlation_data : ZERO_UUID;
+    if (!corr || !corr->data || corr->len == 0) {
+        corr = &fallback_corr;
+    }
 
     MQTTProperties props = make_props_with_corr(corr);
 
@@ -180,19 +351,26 @@ void device_client_send_request(MQTTAsync client, const char *sn,
     msg.qos        = 1;
     msg.properties = props;
 
-    MQTTAsync_sendMessage(client, topic, &msg, NULL);
+    send_message_logged(client, "REQ", topic, &msg, corr);
     MQTTProperties_free(&props);
-
-    printf("[REQ] Request sent: correlation=%s\n", corr);
 }
 
 void device_client_send_ack(MQTTAsync client, const char *sn,
-                            const char *correlation_data)
+                            const CorrDataView *correlation_data)
 {
     char topic[MAX_TOPIC_LEN];
+    const CorrDataView empty = corr_view_from_bytes(NULL, 0);
+    const CorrDataView *corr = correlation_data ? correlation_data : &empty;
+
     snprintf(topic, sizeof(topic), "dev/%s/ack", sn);
 
-    MQTTProperties props = make_props_with_corr(correlation_data);
+    if (!corr->data || corr->len == 0) {
+        fprintf(stderr,
+                "[ACK] Skip publish: incoming message did not contain correlation_data.\n");
+        return;
+    }
+
+    MQTTProperties props = make_props_with_corr(corr);
 
     MQTTAsync_message msg = MQTTAsync_message_initializer;
     msg.payload    = (void *)"";
@@ -200,20 +378,27 @@ void device_client_send_ack(MQTTAsync client, const char *sn,
     msg.qos        = 1;
     msg.properties = props;
 
-    MQTTAsync_sendMessage(client, topic, &msg, NULL);
+    send_message_logged(client, "ACK", topic, &msg, corr);
     MQTTProperties_free(&props);
-
-    printf("[ACK] ACK sent: correlation=%s\n", correlation_data);
 }
 
 void device_client_send_result(MQTTAsync client, const char *sn,
-                               const char *correlation_data,
+                               const CorrDataView *correlation_data,
                                const char *result_json)
 {
     char topic[MAX_TOPIC_LEN];
+    const CorrDataView empty = corr_view_from_bytes(NULL, 0);
+    const CorrDataView *corr = correlation_data ? correlation_data : &empty;
+
     snprintf(topic, sizeof(topic), "dev/%s/res", sn);
 
-    MQTTProperties props = make_props_with_corr(correlation_data);
+    if (!corr->data || corr->len == 0) {
+        fprintf(stderr,
+                "[RES] Skip publish: response cannot be correlated because correlation_data is missing.\n");
+        return;
+    }
+
+    MQTTProperties props = make_props_with_corr(corr);
     add_user_property(&props, "status_code", "200");
     add_user_property(&props, "ext_id", "12345");
 
@@ -223,10 +408,8 @@ void device_client_send_result(MQTTAsync client, const char *sn,
     msg.qos        = 1;
     msg.properties = props;
 
-    MQTTAsync_sendMessage(client, topic, &msg, NULL);
+    send_message_logged(client, "RES", topic, &msg, corr);
     MQTTProperties_free(&props);
-
-    printf("[RES] Result sent: correlation=%s\n", correlation_data);
 }
 
 void device_client_send_event(MQTTAsync client, const char *sn,
@@ -239,7 +422,9 @@ void device_client_send_event(MQTTAsync client, const char *sn,
     char uuid_buf[48];
     generate_uuid(uuid_buf, sizeof(uuid_buf));
 
-    MQTTProperties props = make_props_with_corr(uuid_buf);
+    CorrDataView corr = corr_view_from_cstring(uuid_buf);
+
+    MQTTProperties props = make_props_with_corr(&corr);
 
     char code_str[16];
     snprintf(code_str, sizeof(code_str), "%d", event_type_code);
@@ -256,11 +441,8 @@ void device_client_send_event(MQTTAsync client, const char *sn,
     msg.qos        = 1;
     msg.properties = props;
 
-    MQTTAsync_sendMessage(client, topic, &msg, NULL);
+    send_message_logged(client, "EVT", topic, &msg, &corr);
     MQTTProperties_free(&props);
-
-    printf("[EVT] Event sent: type=%d, correlation=%s\n",
-           event_type_code, uuid_buf);
 }
 
 /* ── Callback-и Paho ───────────────────────────────────────── */
