@@ -34,7 +34,9 @@ class DevTask(Base):
     )
     payload: Mapped["DevTaskPayload"] = relationship(back_populates="one_task_payload")
     status: Mapped["DevTaskStatus"] = relationship(back_populates="one_task_status")
-    result: Mapped["DevTaskResult"] = relationship(back_populates="task_result")
+    results: Mapped[list["DevTaskResult"]] = relationship(
+        back_populates="task", cascade="all, delete-orphan"
+    )
 
 
 class DevTaskPayload(Base):
@@ -71,8 +73,6 @@ class DevTaskResult(Base):
     ext_id: Mapped[int] = mapped_column(Integer, default=0)
     status_code: Mapped[int] = mapped_column(Integer, default=501)
     result: Mapped[dict] = mapped_column(
-        JSONB, default="{}", nullable=False
+        JSONB, default=dict, nullable=False
     )  # Изменено!
-    task_result: Mapped["DevTask"] = relationship(
-        single_parent=True, cascade="all, delete-orphan"
-    )
+    task: Mapped["DevTask"] = relationship(back_populates="results")
