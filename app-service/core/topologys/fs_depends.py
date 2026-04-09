@@ -1,4 +1,5 @@
 import logging
+import json
 import uuid
 from collections.abc import Mapping
 from typing import Annotated
@@ -80,6 +81,38 @@ def _normalize_headers(*header_sources: object) -> dict[str, object]:
     return normalized
 
 
+def _try_extract_corr_id_from_body(body: object) -> uuid.UUID | None:
+    if isinstance(body, memoryview):
+        body = body.tobytes()
+
+    if isinstance(body, bytes | bytearray):
+        try:
+            body = bytes(body).decode("utf-8")
+        except UnicodeDecodeError:
+            return None
+
+    if not isinstance(body, str) or not body.strip():
+        return None
+
+    try:
+        payload = json.loads(body)
+    except (json.JSONDecodeError, TypeError, ValueError):
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    for key in ("correlationData", "CorrelationData", "correlation_data", "corr_data", "corr_id"):
+        if key not in payload:
+            continue
+
+        corr_id = _try_parse_uuid(payload[key])
+        if corr_id is not None:
+            return corr_id
+
+    return None
+
+
 async def corr_id_getter_dep(msg: RabbitMessage) -> UUID4 | None:
     try:
         log.debug("corr_id_getter_dep: Starting extraction of correlation ID")
@@ -137,7 +170,13 @@ async def corr_id_getter_dep(msg: RabbitMessage) -> UUID4 | None:
 
             log.debug("Failed to parse headers[x-correlation-id]: %r", header_value)
 
-        # 3) Lowest priority: native AMQP correlation_id property.
+        # 3) Body fallback for MQTT->AMQP bridges that drop inbound properties.
+        corr_id = _try_extract_corr_id_from_body(getattr(msg, "body", None))
+        if corr_id is not None:
+            log.debug("Using correlation ID from message body = %s", corr_id)
+            return corr_id
+
+        # 4) Lowest priority: native AMQP correlation_id property.
         log.debug(
             "Checking msg.correlation_id = %s (type: %s)",
             msg.correlation_id,

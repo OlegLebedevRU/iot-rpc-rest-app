@@ -149,6 +149,27 @@ class DeviceTasksService:
             payload=task_data["payload"],
         )
 
+    @staticmethod
+    def _normalize_result_payload(res_data: dict | str) -> dict | str:
+        if not isinstance(res_data, dict):
+            return res_data
+
+        normalized = dict(res_data)
+        transport_keys = (
+            "correlationData",
+            "CorrelationData",
+            "correlation_data",
+            "corr_data",
+            "corr_id",
+        )
+        for key in transport_keys:
+            normalized.pop(key, None)
+
+        if set(normalized.keys()) == {"result"}:
+            return normalized["result"]
+
+        return normalized
+
     async def _select_polling_task(
         self, sn: str, method_le: int
     ) -> TaskResponsePayload | None:
@@ -260,6 +281,8 @@ class DeviceTasksService:
                 res_data = {"result": res_data}
         except (json.JSONDecodeError, TypeError):
             res_data = {"result": raw_body}
+
+        res_data = self._normalize_result_payload(res_data)
 
         log.info(
             "Mqtt received RESULT ext_id=%d, status_code=%d, parsed result: %s",

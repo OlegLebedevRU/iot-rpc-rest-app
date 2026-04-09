@@ -28,6 +28,7 @@ from core.models.common import TaskStatus
 from core.crud.dev_tasks_repo import TasksRepository
 from core.services import device_tasks as device_tasks_module
 from core.services.device_tasks import DeviceTasksService
+from core.topologys.fs_depends import corr_id_getter_dep
 
 
 def build_task_data(task_id):
@@ -281,6 +282,60 @@ async def test_save_finalizes_existing_task(monkeypatch):
         12345,
         200,
     )
+
+
+@pytest.mark.asyncio
+async def test_save_strips_transport_corr_wrapper_from_result(monkeypatch):
+    session = object()
+    service = DeviceTasksService(session, 0)
+    corr_id = uuid4()
+    msg = SimpleNamespace(
+        headers={"ext_id": "12345", "status_code": "200"},
+        body=(
+            b'{"corr_data":"'
+            + str(corr_id).encode("utf-8")
+            + b'","result":{"description":"from device final result"}}'
+        ),
+    )
+
+    save_task_result = AsyncMock(return_value=77)
+    task_status_update = AsyncMock(return_value=True)
+    get_device_id = AsyncMock(return_value=501)
+    send_cmt = AsyncMock()
+
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "save_task_result", save_task_result
+    )
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "task_status_update", task_status_update
+    )
+    monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
+    monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
+
+    await service.save(msg, "SN_TEST", corr_id)
+
+    save_task_result.assert_awaited_once_with(
+        session,
+        corr_id,
+        12345,
+        200,
+        {"description": "from device final result"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_corr_id_getter_uses_body_fallback_before_msg_correlation_id():
+    body_corr_id = uuid4()
+    msg = SimpleNamespace(
+        headers={},
+        body=f'{{"correlationData":"{body_corr_id}"}}'.encode("utf-8"),
+        correlation_id=str(uuid4()),
+        raw_message=SimpleNamespace(headers={}, correlation_id=None),
+    )
+
+    corr_id = await corr_id_getter_dep(msg)
+
+    assert corr_id == body_corr_id
 
 
 @pytest.mark.asyncio

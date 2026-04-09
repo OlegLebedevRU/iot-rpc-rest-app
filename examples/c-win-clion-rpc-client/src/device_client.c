@@ -296,6 +296,54 @@ static int send_message_logged(MQTTAsync client,
 static void add_user_property(MQTTProperties *props,
                               const char *key, const char *value);
 
+static void build_corr_json_payload(const CorrDataView *corr_data,
+                                    char *buf, size_t buf_len)
+{
+    if (!buf_len) {
+        return;
+    }
+
+    buf[0] = '\0';
+
+    if (!corr_data || !corr_data->data || corr_data->len == 0 ||
+        !is_printable_ascii(corr_data->data, corr_data->len)) {
+        snprintf(buf, buf_len, "{}");
+        return;
+    }
+
+    snprintf(buf, buf_len,
+             "{\"correlationData\":\"%.*s\"}",
+             (int)corr_data->len,
+             (const char *)corr_data->data);
+}
+
+static void build_result_payload_with_corr(const CorrDataView *corr_data,
+                                           const char *result_json,
+                                           char *buf, size_t buf_len)
+{
+    if (!buf_len) {
+        return;
+    }
+
+    buf[0] = '\0';
+
+    if (!result_json || !result_json[0]) {
+        result_json = "{}";
+    }
+
+    if (!corr_data || !corr_data->data || corr_data->len == 0 ||
+        !is_printable_ascii(corr_data->data, corr_data->len)) {
+        snprintf(buf, buf_len, "%s", result_json);
+        return;
+    }
+
+    snprintf(buf, buf_len,
+             "{\"corr_data\":\"%.*s\",\"result\":%s}",
+             (int)corr_data->len,
+             (const char *)corr_data->data,
+             result_json);
+}
+
 /**
  * Создаёт MQTTProperties с CorrelationData.
  */
@@ -349,6 +397,7 @@ void device_client_send_request(MQTTAsync client, const char *sn,
                                 const CorrDataView *correlation_data)
 {
     char topic[MAX_TOPIC_LEN];
+    char payload[128];
     CorrDataView fallback_corr = corr_view_from_cstring(ZERO_UUID);
     const CorrDataView *corr = correlation_data;
 
@@ -359,10 +408,11 @@ void device_client_send_request(MQTTAsync client, const char *sn,
     }
 
     MQTTProperties props = make_props_with_corr(corr);
+    build_corr_json_payload(corr, payload, sizeof(payload));
 
     MQTTAsync_message msg = MQTTAsync_message_initializer;
-    msg.payload    = (void *)"";
-    msg.payloadlen = 0;
+    msg.payload    = (void *)payload;
+    msg.payloadlen = (int)strlen(payload);
     msg.qos        = 1;
     msg.properties = props;
 
@@ -374,6 +424,7 @@ void device_client_send_ack(MQTTAsync client, const char *sn,
                             const CorrDataView *correlation_data)
 {
     char topic[MAX_TOPIC_LEN];
+    char payload[128];
     const CorrDataView empty = corr_view_from_bytes(NULL, 0);
     const CorrDataView *corr = correlation_data ? correlation_data : &empty;
 
@@ -386,10 +437,11 @@ void device_client_send_ack(MQTTAsync client, const char *sn,
     }
 
     MQTTProperties props = make_props_with_corr(corr);
+    build_corr_json_payload(corr, payload, sizeof(payload));
 
     MQTTAsync_message msg = MQTTAsync_message_initializer;
-    msg.payload    = (void *)"";
-    msg.payloadlen = 0;
+    msg.payload    = (void *)payload;
+    msg.payloadlen = (int)strlen(payload);
     msg.qos        = 1;
     msg.properties = props;
 
@@ -402,6 +454,7 @@ void device_client_send_result(MQTTAsync client, const char *sn,
                                const char *result_json)
 {
     char topic[MAX_TOPIC_LEN];
+    char payload[MAX_PAYLOAD_LEN];
     const CorrDataView empty = corr_view_from_bytes(NULL, 0);
     const CorrDataView *corr = correlation_data ? correlation_data : &empty;
 
@@ -416,10 +469,11 @@ void device_client_send_result(MQTTAsync client, const char *sn,
     MQTTProperties props = make_props_with_corr(corr);
     add_user_property(&props, "status_code", "200");
     add_user_property(&props, "ext_id", "12345");
+    build_result_payload_with_corr(corr, result_json, payload, sizeof(payload));
 
     MQTTAsync_message msg = MQTTAsync_message_initializer;
-    msg.payload    = (void *)result_json;
-    msg.payloadlen = (int)strlen(result_json);
+    msg.payload    = (void *)payload;
+    msg.payloadlen = (int)strlen(payload);
     msg.qos        = 1;
     msg.properties = props;
 
