@@ -389,11 +389,22 @@ class TasksRepository:
         status_code: int,
         result: dict | str,  # Поддержка обоих типов
     ) -> int | None:
+        # Verify that the referenced task exists before inserting the result
+        task_exists = await session.execute(
+            select(DevTask.id).where(DevTask.id == task_id)
+        )
+        if task_exists.scalar_one_or_none() is None:
+            log.warning(
+                "Cannot save result: task %s does not exist in the database",
+                task_id,
+            )
+            return None
+
         # Если result — строка, попробуем распарсить как JSON, иначе обернём
         if isinstance(result, str):
             try:
                 parsed_result = json.loads(result)
-            except json.JSONDecodeError, TypeError:
+            except (json.JSONDecodeError, TypeError):
                 parsed_result = {"result": result}
         else:
             parsed_result = result

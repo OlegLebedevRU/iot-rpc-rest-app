@@ -168,7 +168,7 @@ class DeviceTasksService:
             res_data = json.loads(raw_body)
             if not isinstance(res_data, dict):
                 res_data = {"result": res_data}
-        except json.JSONDecodeError, TypeError:
+        except (json.JSONDecodeError, TypeError):
             res_data = {"result": raw_body}
 
         log.info(
