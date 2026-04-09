@@ -57,6 +57,8 @@ def _try_parse_uuid(value) -> uuid.UUID | None:
 async def corr_id_getter_dep(msg: RabbitMessage) -> UUID4 | None:
     try:
         log.debug("corr_id_getter_dep: Starting extraction of correlation ID")
+        log.debug("Full message object: %s", msg)
+        log.debug("Full message dict: %s", msg.__dict__ if hasattr(msg, '__dict__') else str(msg))
         
         # 1) Native AMQP correlation_id property — covers paho native clients
         #    and RabbitMQ auto-conversions (utf8 ≤256 bytes, binary uuid, ulong).
