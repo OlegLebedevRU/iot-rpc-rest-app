@@ -140,13 +140,21 @@ class DeviceTasksService:
             payload=task_data["payload"],
         )
 
+    async def _select_polling_task(
+        self, sn: str, method_le: int
+    ) -> TaskResponsePayload | None:
+        task_data = await TasksRepository.select_next_task_by_sn(
+            self.session, sn, method_le
+        )
+        if task_data is None:
+            return None
+        return self._build_task_response(task_data)
+
     async def _select_task(
         self, sn: str, corr_id: UUID4 | None, method_le: int
     ) -> TaskResponsePayload | None:
         if corr_id is None or corr_id == settings.task_proc_cfg.zero_corr_id:
-            task_data = await TasksRepository.select_next_task_by_sn(
-                self.session, sn, method_le
-            )
+            return await self._select_polling_task(sn, method_le)
         else:
             task_data = await TasksRepository.select_task_by_id(
                 self.session, corr_id, method_le

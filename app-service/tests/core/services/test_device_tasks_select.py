@@ -24,6 +24,7 @@ logging.handlers.RotatingFileHandler = lambda *args, **kwargs: logging.NullHandl
 Path.mkdir = lambda self, mode=0o777, parents=False, exist_ok=False: None
 
 from core.models.common import TaskStatus
+from core.crud.dev_tasks_repo import TasksRepository
 from core.services import device_tasks as device_tasks_module
 from core.services.device_tasks import DeviceTasksService
 
@@ -42,6 +43,16 @@ def build_task_data(task_id):
         "ttl": 5,
         "payload": {"dt": [{"cl": 5}]},
     }
+
+
+class EmptyMappingsResult:
+    def one_or_none(self):
+        return None
+
+
+class EmptyExecuteResult:
+    def mappings(self):
+        return EmptyMappingsResult()
 
 
 @pytest.mark.asyncio
@@ -134,3 +145,21 @@ async def test_select_uses_task_lookup_for_non_zero_uuid(monkeypatch):
         3 * 60 * 1000,
         "0",
     )
+
+
+@pytest.mark.asyncio
+async def test_polling_query_prefers_high_priority_then_smallest_positive_ttl():
+    session = SimpleNamespace(execute=AsyncMock(return_value=EmptyExecuteResult()))
+
+    await TasksRepository.select_next_task_by_sn(session, "SN_TEST", 2999)
+
+    query = session.execute.await_args.args[0]
+    compiled = str(query)
+
+    assert "status <" in compiled
+    assert "method_code <=" in compiled
+    assert "ttl >" in compiled
+    assert "ORDER BY" in compiled
+    assert "priority DESC" in compiled
+    assert "ttl ASC" in compiled
+    assert "created_at ASC" in compiled

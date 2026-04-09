@@ -11,6 +11,7 @@ from pydantic import UUID4
 from sqlalchemy import (
     select,
     update,
+    asc,
     desc,
     func,
     Integer,
@@ -218,8 +219,12 @@ class TasksRepository:
         )
         query = (
             cls._select_task_query(method_le)
-            .where(DevTask.device_id == subq.c.device_id)
-            .order_by(desc(DevTaskStatus.priority), DevTask.created_at)
+            .where(DevTask.device_id == subq.c.device_id, DevTaskStatus.ttl > 0)
+            .order_by(
+                desc(DevTaskStatus.priority),
+                asc(DevTaskStatus.ttl),
+                asc(DevTask.created_at),
+            )
             .limit(1)
         )
         result = await session.execute(query)

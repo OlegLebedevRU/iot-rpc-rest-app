@@ -104,6 +104,14 @@ sequenceDiagram
 
 The device polls for pending tasks using a zero-UUID `req`. The server assigns a real UUID when it has work.
 
+Polling selection order on the server side:
+
+1. only tasks with `status < DONE` are eligible
+2. tasks with `ttl = 0` are excluded
+3. the server picks the highest `priority`
+4. ties are resolved by the smallest positive `ttl`
+5. a final tie is resolved by the earliest `created_at`
+
 ```mermaid
 sequenceDiagram
     autonumber
