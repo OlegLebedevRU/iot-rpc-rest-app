@@ -12,7 +12,18 @@
 #ifndef IOT_RPC_DEVICE_CLIENT_H
 #define IOT_RPC_DEVICE_CLIENT_H
 
+#include <stddef.h>
+
 #include "MQTTAsync.h"
+
+/**
+ * Binary-safe view of MQTT 5 Correlation Data.
+ * The payload is not required to be a null-terminated string.
+ */
+typedef struct {
+    const unsigned char *data;
+    size_t len;
+} CorrDataView;
 
 /**
  * Запускает IoT RPC-клиент.
@@ -28,19 +39,19 @@ int device_client_run(void);
  * Отправляет REQ (запрос параметров задачи / поллинг).
  */
 void device_client_send_request(MQTTAsync client, const char *sn,
-                                const char *correlation_data);
+                                const CorrDataView *correlation_data);
 
 /**
  * Отправляет ACK (подтверждение получения tsk).
  */
 void device_client_send_ack(MQTTAsync client, const char *sn,
-                            const char *correlation_data);
+                            const CorrDataView *correlation_data);
 
 /**
  * Отправляет RES (результат выполнения задачи).
  */
 void device_client_send_result(MQTTAsync client, const char *sn,
-                               const char *correlation_data,
+                               const CorrDataView *correlation_data,
                                const char *result_json);
 
 /**
