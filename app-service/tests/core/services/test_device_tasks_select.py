@@ -1,9 +1,21 @@
 import os
 import uuid
+import logging
+import logging.handlers
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, call, patch
 
 import pytest
+
+
+class _DummyRotatingFileHandler(logging.Handler):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+
+
+logging.handlers.RotatingFileHandler = _DummyRotatingFileHandler
+Path.mkdir = lambda self, mode=0o777, parents=False, exist_ok=False: None
 
 os.environ.setdefault(
     "APP_CONFIG__FASTSTREAM__URL", "amqp://user:pass@localhost:5672//"

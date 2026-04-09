@@ -129,7 +129,9 @@ class DeviceTasksService:
         else:
             method_le = 2999
         requested_task_id = (
-            corr_id if corr_id and corr_id != settings.task_proc_cfg.zero_corr_id else None
+            corr_id
+            if corr_id and corr_id != settings.task_proc_cfg.zero_corr_id
+            else None
         )
         task = await TasksRepository.select_task(
             self.session, requested_task_id, sn, method_le
