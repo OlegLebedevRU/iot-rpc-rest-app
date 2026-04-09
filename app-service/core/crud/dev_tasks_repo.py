@@ -335,6 +335,10 @@ class TasksRepository:
         if task_id is None:
             return True
 
+        if task_id == settings.task_proc_cfg.zero_corr_id:
+            log.debug("Skip task-status update for polling corr_id=%s", task_id)
+            return True
+
         stmt = update(DevTaskStatus).where(DevTaskStatus.task_id == task_id)
         match status:
             case TaskStatus.PENDING | TaskStatus.DONE:
@@ -387,6 +391,10 @@ class TasksRepository:
         status_code: int,
         result: dict | str,  # Поддержка обоих типов
     ) -> int | None:
+        if task_id == settings.task_proc_cfg.zero_corr_id:
+            log.debug("Skip task result save for polling corr_id=%s", task_id)
+            return None
+
         # Verify that the referenced task exists before inserting the result
         task_exists = await session.execute(
             select(DevTask.id).where(DevTask.id == task_id)

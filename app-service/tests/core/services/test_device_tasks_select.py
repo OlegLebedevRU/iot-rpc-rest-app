@@ -3,6 +3,7 @@ import logging.handlers
 import os
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from uuid import uuid4
 from unittest.mock import AsyncMock
 
@@ -148,8 +149,209 @@ async def test_select_uses_task_lookup_for_non_zero_uuid(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_pending_skips_status_update_for_zero_uuid(monkeypatch):
+    session = object()
+    service = DeviceTasksService(session, 0)
+    task_status_update = AsyncMock()
+
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "task_status_update", task_status_update
+    )
+
+    await service.pending(device_tasks_module.settings.task_proc_cfg.zero_corr_id)
+
+    task_status_update.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_save_skips_result_processing_for_zero_uuid(monkeypatch):
+    session = object()
+    service = DeviceTasksService(session, 0)
+    msg = SimpleNamespace(
+        headers={"ext_id": "12345", "status_code": "206"},
+        body=b'{"description": "from device partial result"}',
+    )
+
+    save_task_result = AsyncMock()
+    task_status_update = AsyncMock()
+    get_device_id = AsyncMock()
+    send_cmt = AsyncMock()
+
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "save_task_result", save_task_result
+    )
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "task_status_update", task_status_update
+    )
+    monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
+    monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
+
+    await service.save(
+        msg,
+        "SN_TEST",
+        device_tasks_module.settings.task_proc_cfg.zero_corr_id,
+    )
+
+    save_task_result.assert_not_called()
+    task_status_update.assert_not_called()
+    get_device_id.assert_not_called()
+    send_cmt.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_save_skips_finalization_for_missing_task(monkeypatch):
+    session = object()
+    service = DeviceTasksService(session, 0)
+    corr_id = uuid4()
+    msg = SimpleNamespace(
+        headers={"ext_id": "12345", "status_code": "206"},
+        body=b'{"description": "from device partial result"}',
+    )
+
+    save_task_result = AsyncMock(return_value=None)
+    task_status_update = AsyncMock()
+    get_device_id = AsyncMock()
+    send_cmt = AsyncMock()
+
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "save_task_result", save_task_result
+    )
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "task_status_update", task_status_update
+    )
+    monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
+    monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
+
+    await service.save(msg, "SN_TEST", corr_id)
+
+    save_task_result.assert_awaited_once_with(
+        session,
+        corr_id,
+        12345,
+        206,
+        {"description": "from device partial result"},
+    )
+    task_status_update.assert_not_called()
+    get_device_id.assert_not_called()
+    send_cmt.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_save_finalizes_existing_task(monkeypatch):
+    session = object()
+    service = DeviceTasksService(session, 0)
+    corr_id = uuid4()
+    msg = SimpleNamespace(
+        headers={"ext_id": "12345", "status_code": "200"},
+        body=b'{"description": "from device final result"}',
+    )
+
+    save_task_result = AsyncMock(return_value=77)
+    task_status_update = AsyncMock(return_value=True)
+    get_device_id = AsyncMock(return_value=501)
+    send_cmt = AsyncMock()
+
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "save_task_result", save_task_result
+    )
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "task_status_update", task_status_update
+    )
+    monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
+    monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
+
+    await service.save(msg, "SN_TEST", corr_id)
+
+    save_task_result.assert_awaited_once_with(
+        session,
+        corr_id,
+        12345,
+        200,
+        {"description": "from device final result"},
+    )
+    task_status_update.assert_awaited_once_with(session, corr_id, TaskStatus.DONE)
+    get_device_id.assert_awaited_once_with(session=session, sn="SN_TEST")
+    send_cmt.assert_awaited_once_with(
+        "SN_TEST",
+        {"message": "committed"},
+        '{"description": "from device final result"}',
+        corr_id,
+        501,
+        77,
+        12345,
+        200,
+    )
+
+
+@pytest.mark.asyncio
+async def test_repository_task_status_update_skips_zero_uuid():
+    session: Any = SimpleNamespace(
+        execute=AsyncMock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+
+    updated = await TasksRepository.task_status_update(
+        session,
+        device_tasks_module.settings.task_proc_cfg.zero_corr_id,
+        TaskStatus.PENDING,
+    )
+
+    assert updated is True
+    session.execute.assert_not_called()
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_repository_save_task_result_skips_zero_uuid():
+    session: Any = SimpleNamespace(
+        execute=AsyncMock(),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+
+    result_id = await TasksRepository.save_task_result(
+        session,
+        device_tasks_module.settings.task_proc_cfg.zero_corr_id,
+        12345,
+        206,
+        {"description": "from device partial result"},
+    )
+
+    assert result_id is None
+    session.execute.assert_not_called()
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_repository_save_task_result_returns_none_for_missing_task():
+    session: Any = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=SimpleNamespace(scalar_one_or_none=lambda: None)
+        ),
+        commit=AsyncMock(),
+        rollback=AsyncMock(),
+    )
+
+    result_id = await TasksRepository.save_task_result(
+        session,
+        uuid4(),
+        12345,
+        206,
+        {"description": "from device partial result"},
+    )
+
+    assert result_id is None
+    session.execute.assert_awaited_once()
+    session.commit.assert_not_called()
+    session.rollback.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_polling_query_prefers_high_priority_then_smallest_positive_ttl():
-    session = SimpleNamespace(execute=AsyncMock(return_value=EmptyExecuteResult()))
+    session: Any = SimpleNamespace(execute=AsyncMock(return_value=EmptyExecuteResult()))
 
     await TasksRepository.select_next_task_by_sn(session, "SN_TEST", 2999)
 

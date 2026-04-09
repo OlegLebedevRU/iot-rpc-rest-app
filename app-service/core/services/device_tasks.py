@@ -35,6 +35,10 @@ class DeviceTasksService:
         self.session: AsyncSession = session
         self.org_id = org_id
 
+    @staticmethod
+    def _is_zero_corr_id(corr_id: UUID4 | UUID | None) -> bool:
+        return corr_id is None or corr_id == settings.task_proc_cfg.zero_corr_id
+
     # @classmethod
     async def create(self, task_create: TaskCreate):
         sn = await DeviceRepo.get_device_sn(
@@ -114,10 +118,13 @@ class DeviceTasksService:
         return tasks
 
     async def pending(self, corr_id):
-        if corr_id is not None:
-            await TasksRepository.task_status_update(
-                self.session, corr_id, TaskStatus.PENDING
-            )
+        if self._is_zero_corr_id(corr_id):
+            log.debug("Skip ACK status update for polling corr_id=%s", corr_id)
+            return
+
+        await TasksRepository.task_status_update(
+            self.session, corr_id, TaskStatus.PENDING
+        )
 
     @staticmethod
     def _get_method_limit(msg) -> int:
@@ -153,7 +160,7 @@ class DeviceTasksService:
     async def _select_task(
         self, sn: str, corr_id: UUID4 | None, method_le: int
     ) -> TaskResponsePayload | None:
-        if corr_id is None or corr_id == settings.task_proc_cfg.zero_corr_id:
+        if self._is_zero_corr_id(corr_id):
             return await self._select_polling_task(sn, method_le)
         else:
             task_data = await TasksRepository.select_task_by_id(
@@ -190,10 +197,20 @@ class DeviceTasksService:
         ext_id = int(msg.headers.get("ext_id", 0))
         status_code = int(msg.headers.get("status_code", 501))
 
-        if not corr_id:
+        if corr_id is None:
             log.info(
                 "Mqtt received RESULT with ERROR <dev.%s.res> - No corr_id, ext_id=%d, status_code=%d",
                 sn,
+                ext_id,
+                status_code,
+            )
+            return
+
+        if self._is_zero_corr_id(corr_id):
+            log.info(
+                "Skip RESULT processing for polling corr_id <dev.%s.res> - corr_id=%s, ext_id=%d, status_code=%d",
+                sn,
+                corr_id,
                 ext_id,
                 status_code,
             )
@@ -220,6 +237,14 @@ class DeviceTasksService:
         result_id = await TasksRepository.save_task_result(
             self.session, corr_id, ext_id, status_code, res_data
         )
+        if result_id is None:
+            log.warning(
+                "Skip RESULT finalization for missing/uncommitted task corr_id=%s, ext_id=%d, status_code=%d",
+                corr_id,
+                ext_id,
+                status_code,
+            )
+            return
 
         rmsg = "committed"
         try:
