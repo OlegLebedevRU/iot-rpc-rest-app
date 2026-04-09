@@ -128,7 +128,14 @@ class DeviceTasksService:
             method_le = 3999
         else:
             method_le = 2999
-        task = await TasksRepository.select_task(self.session, corr_id, sn, method_le)
+        requested_task_id = (
+            corr_id if corr_id and corr_id != settings.task_proc_cfg.zero_corr_id else None
+        )
+        task = await TasksRepository.select_task(
+            self.session, requested_task_id, sn, method_le
+        )
+        if task is None and requested_task_id is not None:
+            task = await TasksRepository.select_task(self.session, None, sn, method_le)
         if task is not None:
             t_resp = task.model_dump(mode="json")
             log.info("from DB select task = %s", t_resp)
