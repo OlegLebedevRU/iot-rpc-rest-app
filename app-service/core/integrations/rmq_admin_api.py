@@ -18,7 +18,7 @@ async def fetch_one(session, suffix, param):
     params = suffix + quote(param, safe="")
     resp = await session.get(url=params)
     if resp.status_code == 404:
-        return []
+        return None
     resp.raise_for_status()  # Проверка на наличие ошибок HTTP
     return resp.json()
 
@@ -104,30 +104,71 @@ class RmqAdminApi:
                 tasks = [fetch_one(session, cls.user_conn, sn) for sn in sn_arr]
                 connections = await asyncio.gather(*tasks, return_exceptions=True)
 
-            devices: list[DeviceConnectionDetails] = []
-            for sn, conn_data in zip(sn_arr, connections, strict=False):
-                if isinstance(conn_data, Exception):
-                    log.info("Error Get connectionsFrom rabbit API for '%s' = %s", sn, conn_data)
-                    continue
+                detail_requests: list[tuple[str, str, asyncio.Future]] = []
+                for sn, conn_data in zip(sn_arr, connections, strict=False):
+                    if isinstance(conn_data, Exception):
+                        log.info("Error Get connectionsFrom rabbit API for '%s' = %s", sn, conn_data)
+                        continue
 
-                if not isinstance(conn_data, list):
+                    if conn_data is None:
+                        continue
+
+                    if not isinstance(conn_data, list):
+                        log.info(
+                            "Unexpected RabbitMQ connections payload for '%s': %s",
+                            sn,
+                            type(conn_data).__name__,
+                        )
+                        continue
+
+                    for device in conn_data:
+                        connection_name = device.get("name")
+                        if not connection_name:
+                            log.info(
+                                "RabbitMQ connection summary for '%s' has no name: payload=%s",
+                                sn,
+                                device,
+                            )
+                            continue
+                        detail_requests.append(
+                            (sn, connection_name, fetch_one(session, cls.conn, connection_name))
+                        )
+
+                detail_results = await asyncio.gather(
+                    *(request for _, _, request in detail_requests),
+                    return_exceptions=True,
+                )
+
+            devices: list[DeviceConnectionDetails] = []
+            for (sn, connection_name, _), conn_data in zip(
+                detail_requests, detail_results, strict=False
+            ):
+                if isinstance(conn_data, Exception):
                     log.info(
-                        "Unexpected RabbitMQ connections payload for '%s': %s",
+                        "Error Get connection details from rabbit API for '%s' (%s) = %s",
                         sn,
-                        type(conn_data).__name__,
+                        connection_name,
+                        conn_data,
                     )
                     continue
 
-                for device in conn_data:
-                    try:
-                        devices.append(DeviceConnectionDetails.model_validate(device))
-                    except Exception as e:
-                        log.info(
-                            "Skip invalid RabbitMQ connection payload for '%s': %s; payload=%s",
-                            sn,
-                            e,
-                            device,
-                        )
+                if conn_data is None:
+                    log.info(
+                        "RabbitMQ connection disappeared before details fetch for '%s': %s",
+                        sn,
+                        connection_name,
+                    )
+                    continue
+
+                try:
+                    devices.append(DeviceConnectionDetails.model_validate(conn_data))
+                except Exception as e:
+                    log.info(
+                        "Skip invalid RabbitMQ connection payload for '%s': %s; payload=%s",
+                        sn,
+                        e,
+                        conn_data,
+                    )
             return devices
         except Exception as e:
             log.info("Error Get connectionsFrom rabbit API =%s", e)

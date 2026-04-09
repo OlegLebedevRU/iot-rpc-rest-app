@@ -47,22 +47,14 @@ async def test_get_connection_uses_username_connections_payload(monkeypatch):
             200,
             [
                 {
+                    "name": "127.0.0.1:50000 -> 172.18.0.2:8883",
+                    "vhost": "/",
                     "user": "SN_001",
-                    "connected_at": 1710000000,
-                    "peer_host": "127.0.0.1",
-                    "peer_cert_subject": "CN=SN_001",
-                    "protocol": "mqtt",
-                    "peer_cert_validity": "valid",
-                    "client_properties": {"client_id": "12345678901234567890123"},
                 },
                 {
+                    "name": "127.0.0.2:50001 -> 172.18.0.2:8883",
+                    "vhost": "/",
                     "user": "SN_001",
-                    "connected_at": 1710000001,
-                    "peer_host": "127.0.0.2",
-                    "peer_cert_subject": "CN=SN_001-second",
-                    "protocol": "mqtt",
-                    "peer_cert_validity": "valid",
-                    "client_properties": {"client_id": "ABCDEFGHIJKLMNO12345678"},
                 },
             ],
             "api/connections/username/SN_001",
@@ -71,6 +63,34 @@ async def test_get_connection_uses_username_connections_payload(monkeypatch):
             200,
             [],
             "api/connections/username/SN_002",
+        ),
+        "api/connections/127.0.0.1%3A50000%20-%3E%20172.18.0.2%3A8883": DummyResponse(
+            200,
+            {
+                "name": "127.0.0.1:50000 -> 172.18.0.2:8883",
+                "user": "SN_001",
+                "connected_at": 1710000000,
+                "peer_host": "127.0.0.1",
+                "peer_cert_subject": "CN=SN_001",
+                "protocol": "mqtt",
+                "peer_cert_validity": "valid",
+                "client_properties": {"client_id": "12345678901234567890123"},
+            },
+            "api/connections/127.0.0.1%3A50000%20-%3E%20172.18.0.2%3A8883",
+        ),
+        "api/connections/127.0.0.2%3A50001%20-%3E%20172.18.0.2%3A8883": DummyResponse(
+            200,
+            {
+                "name": "127.0.0.2:50001 -> 172.18.0.2:8883",
+                "user": "SN_001",
+                "connected_at": 1710000001,
+                "peer_host": "127.0.0.2",
+                "peer_cert_subject": "CN=SN_001-second",
+                "protocol": "mqtt",
+                "peer_cert_validity": "valid",
+                "client_properties": {"client_id": "ABCDEFGHIJKLMNO12345678"},
+            },
+            "api/connections/127.0.0.2%3A50001%20-%3E%20172.18.0.2%3A8883",
         ),
     }
 
@@ -94,24 +114,45 @@ async def test_get_connection_uses_username_connections_payload(monkeypatch):
 async def test_get_connection_keeps_other_devices_when_one_request_fails(monkeypatch):
     responses = {
         "api/connections/username/SN_FAIL": DummyResponse(
-            500,
-            {"error": "boom"},
+            200,
+            [
+                {
+                    "name": "10.0.0.1:12345 -> 172.18.0.2:8883",
+                    "vhost": "/",
+                    "user": "SN_FAIL",
+                }
+            ],
             "api/connections/username/SN_FAIL",
         ),
         "api/connections/username/SN_OK": DummyResponse(
             200,
             [
                 {
+                    "name": "127.0.0.10:54321 -> 172.18.0.2:8883",
+                    "vhost": "/",
                     "user": "SN_OK",
-                    "connected_at": 1710000100,
-                    "peer_host": "127.0.0.10",
-                    "peer_cert_subject": "CN=SN_OK",
-                    "protocol": "mqtt",
-                    "peer_cert_validity": "valid",
-                    "client_properties": {"client_id": "ZYXWVUTSRQPONMLKJIHGFED"},
                 }
             ],
             "api/connections/username/SN_OK",
+        ),
+        "api/connections/10.0.0.1%3A12345%20-%3E%20172.18.0.2%3A8883": DummyResponse(
+            404,
+            {"error": "not_found"},
+            "api/connections/10.0.0.1%3A12345%20-%3E%20172.18.0.2%3A8883",
+        ),
+        "api/connections/127.0.0.10%3A54321%20-%3E%20172.18.0.2%3A8883": DummyResponse(
+            200,
+            {
+                "name": "127.0.0.10:54321 -> 172.18.0.2:8883",
+                "user": "SN_OK",
+                "connected_at": 1710000100,
+                "peer_host": "127.0.0.10",
+                "peer_cert_subject": "CN=SN_OK",
+                "protocol": "mqtt",
+                "peer_cert_validity": "valid",
+                "client_properties": {"client_id": "ZYXWVUTSRQPONMLKJIHGFED"},
+            },
+            "api/connections/127.0.0.10%3A54321%20-%3E%20172.18.0.2%3A8883",
         ),
     }
 
