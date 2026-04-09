@@ -4,11 +4,10 @@ import asyncio
 import logging
 import importlib
 from types import SimpleNamespace
-from functools import lru_cache
 from unittest.mock import AsyncMock, call, patch
 
 
-class _NoOpRotatingFileHandler(logging.Handler):
+class _NoOpHandler(logging.Handler):
     def __init__(self, *args, **kwargs):
         super().__init__()
 
@@ -28,11 +27,9 @@ os.environ.setdefault("APP_CONFIG__LEO4__ADMIN_URL", "https://example.com/admin"
 os.environ.setdefault("APP_CONFIG__LEO4__CERT_URL", "https://example.com/cert")
 os.environ.setdefault("APP_CONFIG__AUTH__API_KEYS", "test-key:1")
 
-
-@lru_cache(maxsize=1)
 def _load_modules():
     with (
-        patch("logging.handlers.RotatingFileHandler", _NoOpRotatingFileHandler),
+        patch("logging.handlers.RotatingFileHandler", _NoOpHandler),
         patch("pathlib.Path.mkdir", return_value=None),
     ):
         device_tasks_module = importlib.import_module("core.services.device_tasks")
@@ -41,10 +38,12 @@ def _load_modules():
     return device_tasks_module, schemas_module, common_module
 
 
+DEVICE_TASKS_MODULE, SCHEMAS_MODULE, COMMON_MODULE = _load_modules()
+
+
 def _build_mock_task_response(task_id: uuid.UUID, method_code: int = 20):
-    _, schemas_module, common_module = _load_modules()
-    return schemas_module.TaskResponsePayload(
-        header=schemas_module.TaskHeader(
+    return SCHEMAS_MODULE.TaskResponsePayload(
+        header=SCHEMAS_MODULE.TaskHeader(
             ext_task_id="ext-1",
             device_id=1,
             method_code=method_code,
@@ -52,7 +51,7 @@ def _build_mock_task_response(task_id: uuid.UUID, method_code: int = 20):
             ttl=5,
         ),
         id=task_id,
-        status=common_module.TaskStatus.READY,
+        status=COMMON_MODULE.TaskStatus.READY,
         created_at=0,
         pending_at=None,
         locked_at=None,
@@ -61,29 +60,28 @@ def _build_mock_task_response(task_id: uuid.UUID, method_code: int = 20):
 
 
 def test_select_treats_zero_uuid_as_polling_request():
-    device_tasks_module, _, common_module = _load_modules()
-    service = device_tasks_module.DeviceTasksService(session=object(), org_id=0)
+    service = DEVICE_TASKS_MODULE.DeviceTasksService(session=object(), org_id=0)
     msg = SimpleNamespace(headers={})
     selected_task = _build_mock_task_response(uuid.uuid4())
 
     with (
         patch.object(
-            device_tasks_module.TasksRepository,
+            DEVICE_TASKS_MODULE.TasksRepository,
             "select_task",
             new=AsyncMock(return_value=selected_task),
         ) as select_task,
         patch.object(
-            device_tasks_module.TasksRepository,
+            DEVICE_TASKS_MODULE.TasksRepository,
             "task_status_update",
             new=AsyncMock(),
         ) as task_status_update,
-        patch.object(device_tasks_module, "send_rsp", new=AsyncMock()) as send_rsp,
+        patch.object(DEVICE_TASKS_MODULE, "send_rsp", new=AsyncMock()) as send_rsp,
     ):
         asyncio.run(service.select("SN-1", uuid.UUID(int=0), msg))
 
     select_task.assert_awaited_once_with(service.session, None, "SN-1", 2999)
     task_status_update.assert_awaited_once_with(
-        service.session, selected_task.id, common_module.TaskStatus.LOCK
+        service.session, selected_task.id, COMMON_MODULE.TaskStatus.LOCK
     )
     send_rsp.assert_awaited_once_with(
         "SN-1",
@@ -95,24 +93,23 @@ def test_select_treats_zero_uuid_as_polling_request():
 
 
 def test_select_falls_back_to_polling_when_requested_task_is_missing():
-    device_tasks_module, _, common_module = _load_modules()
-    service = device_tasks_module.DeviceTasksService(session=object(), org_id=0)
+    service = DEVICE_TASKS_MODULE.DeviceTasksService(session=object(), org_id=0)
     msg = SimpleNamespace(headers={})
     requested_task_id = uuid.uuid4()
     fallback_task = _build_mock_task_response(uuid.uuid4())
 
     with (
         patch.object(
-            device_tasks_module.TasksRepository,
+            DEVICE_TASKS_MODULE.TasksRepository,
             "select_task",
             new=AsyncMock(side_effect=[None, fallback_task]),
         ) as select_task,
         patch.object(
-            device_tasks_module.TasksRepository,
+            DEVICE_TASKS_MODULE.TasksRepository,
             "task_status_update",
             new=AsyncMock(),
         ) as task_status_update,
-        patch.object(device_tasks_module, "send_rsp", new=AsyncMock()) as send_rsp,
+        patch.object(DEVICE_TASKS_MODULE, "send_rsp", new=AsyncMock()) as send_rsp,
     ):
         asyncio.run(service.select("SN-1", requested_task_id, msg))
 
@@ -121,7 +118,7 @@ def test_select_falls_back_to_polling_when_requested_task_is_missing():
         call(service.session, None, "SN-1", 2999),
     ]
     task_status_update.assert_awaited_once_with(
-        service.session, fallback_task.id, common_module.TaskStatus.LOCK
+        service.session, fallback_task.id, COMMON_MODULE.TaskStatus.LOCK
     )
     send_rsp.assert_awaited_once_with(
         "SN-1",
@@ -133,24 +130,23 @@ def test_select_falls_back_to_polling_when_requested_task_is_missing():
 
 
 def test_select_keeps_direct_task_lookup_when_task_exists():
-    device_tasks_module, _, common_module = _load_modules()
-    service = device_tasks_module.DeviceTasksService(session=object(), org_id=0)
+    service = DEVICE_TASKS_MODULE.DeviceTasksService(session=object(), org_id=0)
     msg = SimpleNamespace(headers={})
     requested_task_id = uuid.uuid4()
     selected_task = _build_mock_task_response(requested_task_id, method_code=51)
 
     with (
         patch.object(
-            device_tasks_module.TasksRepository,
+            DEVICE_TASKS_MODULE.TasksRepository,
             "select_task",
             new=AsyncMock(return_value=selected_task),
         ) as select_task,
         patch.object(
-            device_tasks_module.TasksRepository,
+            DEVICE_TASKS_MODULE.TasksRepository,
             "task_status_update",
             new=AsyncMock(),
         ) as task_status_update,
-        patch.object(device_tasks_module, "send_rsp", new=AsyncMock()) as send_rsp,
+        patch.object(DEVICE_TASKS_MODULE, "send_rsp", new=AsyncMock()) as send_rsp,
     ):
         asyncio.run(service.select("SN-1", requested_task_id, msg))
 
@@ -158,7 +154,7 @@ def test_select_keeps_direct_task_lookup_when_task_exists():
         service.session, requested_task_id, "SN-1", 2999
     )
     task_status_update.assert_awaited_once_with(
-        service.session, selected_task.id, common_module.TaskStatus.LOCK
+        service.session, selected_task.id, COMMON_MODULE.TaskStatus.LOCK
     )
     send_rsp.assert_awaited_once_with(
         "SN-1",
