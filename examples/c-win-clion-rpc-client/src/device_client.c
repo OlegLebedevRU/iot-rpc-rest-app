@@ -293,6 +293,9 @@ static int send_message_logged(MQTTAsync client,
 
 /* ── Публикация с MQTT 5 свойствами ────────────────────────── */
 
+static void add_user_property(MQTTProperties *props,
+                              const char *key, const char *value);
+
 /**
  * Создаёт MQTTProperties с CorrelationData.
  */
@@ -301,12 +304,24 @@ static MQTTProperties make_props_with_corr(const CorrDataView *corr_data)
     MQTTProperties props = MQTTProperties_initializer;
 
     if (corr_data && corr_data->data && corr_data->len > 0) {
+        char corr_text[160];
         MQTTProperty prop;
+
+        format_binary_for_log(corr_data->data, corr_data->len,
+                              corr_text, sizeof(corr_text));
+
         memset(&prop, 0, sizeof(prop));
         prop.identifier = MQTTPROPERTY_CODE_CORRELATION_DATA;
         prop.value.data.data = (char *)corr_data->data;
         prop.value.data.len  = (int)corr_data->len;
         MQTTProperties_add(&props, &prop);
+
+        if (is_printable_ascii(corr_data->data, corr_data->len)) {
+            add_user_property(&props, "correlationData", (const char *)corr_data->data);
+        } else {
+            printf("[MQTT] Correlation data is binary-only, user_property duplication skipped: %s\n",
+                   corr_text);
+        }
     }
 
     return props;
@@ -529,6 +544,10 @@ static void on_connected(void *context, char *cause)
             printf("[MQTT] SUBSCRIBE sent: %s\n", topics[i]);
         }
     }
+
+    if (!msg_handler_has_active_task(&g_msg_handler)) {
+        device_client_send_request(g_client, g_sn, NULL);
+    }
 }
 
 /* ── Фоновые потоки ────────────────────────────────────────── */
@@ -553,6 +572,17 @@ static void *polling_thread(void *arg)
            REQ_POLL_INTERVAL);
 
     while (g_running) {
+        if (!g_client || !MQTTAsync_isConnected(g_client)) {
+            sleep_seconds(REQ_POLL_INTERVAL);
+            continue;
+        }
+
+        if (msg_handler_has_active_task(&g_msg_handler)) {
+            printf("[POLL] Skip polling request: active RPC task is still in progress.\n");
+            sleep_seconds(REQ_POLL_INTERVAL);
+            continue;
+        }
+
         device_client_send_request(g_client, g_sn, NULL);
         sleep_seconds(REQ_POLL_INTERVAL);
     }
@@ -575,6 +605,11 @@ static void *healthcheck_thread(void *arg)
            HEALTHCHECK_INTERVAL);
 
     while (g_running) {
+        if (!g_client || !MQTTAsync_isConnected(g_client)) {
+            sleep_seconds(HEALTHCHECK_INTERVAL);
+            continue;
+        }
+
         /*
          * Healthcheck event (event_type_code = 44).
          * Payload имитирует реальные данные устройства.
@@ -710,6 +745,7 @@ int device_client_run(void)
     if (MQTTAsync_isConnected(g_client)) {
         MQTTAsync_disconnect(g_client, NULL);
     }
+    msg_handler_cleanup(&g_msg_handler);
     MQTTAsync_destroy(&g_client);
 
     printf("[STOP] DeviceClient stopped.\n");

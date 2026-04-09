@@ -1,6 +1,7 @@
 import json
 import logging
 import logging.handlers
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,8 @@ RPC_DEBUG_SNS = frozenset(
         "a4b0000737c35554d070426",
     }
 )
+
+RPC_REQ_VERBOSE_DEBUG_SNS = frozenset({"a2b0004620c25068d090426"})
 
 
 class SnDebugFilter(logging.Filter):
@@ -84,6 +87,77 @@ def log_rpc_debug(sn: str | None, event: str, **fields: Any) -> None:
         payload.append(f"{key}={rendered}")
 
     get_rpc_debug_logger().info(" ".join(payload), extra={"sn": sn})
+
+
+def _render_debug_value(value: Any, depth: int = 0) -> Any:
+    if depth > 3:
+        return repr(value)
+
+    if value is None or isinstance(value, bool | int | float | str):
+        return value
+
+    if isinstance(value, bytes | bytearray):
+        try:
+            return bytes(value).decode("utf-8")
+        except UnicodeDecodeError:
+            return bytes(value).hex()
+
+    if isinstance(value, memoryview):
+        return _render_debug_value(value.tobytes(), depth + 1)
+
+    if isinstance(value, Mapping):
+        return {
+            str(key): _render_debug_value(item, depth + 1)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, (list, tuple, set)):
+        return [_render_debug_value(item, depth + 1) for item in value]
+
+    if hasattr(value, "__dict__"):
+        return {
+            key: _render_debug_value(item, depth + 1)
+            for key, item in vars(value).items()
+            if not key.startswith("_")
+        }
+
+    return repr(value)
+
+
+def build_rabbit_message_debug_snapshot(msg: Any) -> dict[str, Any]:
+    raw_message = getattr(msg, "raw_message", None)
+    body = getattr(msg, "body", None)
+    body_bytes = bytes(body) if isinstance(body, memoryview) else body
+
+    if isinstance(body_bytes, bytes):
+        try:
+            body_preview = body_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            body_preview = body_bytes.hex()
+        if len(body_preview) > 1000:
+            body_preview = body_preview[:1000] + "..."
+    else:
+        body_preview = _render_debug_value(body_bytes)
+
+    return {
+        "msg_type": type(msg).__name__,
+        "msg_repr": repr(msg),
+        "correlation_id": _render_debug_value(getattr(msg, "correlation_id", None)),
+        "message_id": _render_debug_value(getattr(msg, "message_id", None)),
+        "headers": _render_debug_value(getattr(msg, "headers", None)),
+        "body_len": len(body_bytes) if isinstance(body_bytes, (bytes, bytearray)) else None,
+        "body_preview": body_preview,
+        "raw_message": {
+            "type": type(raw_message).__name__ if raw_message is not None else None,
+            "repr": repr(raw_message) if raw_message is not None else None,
+            "correlation_id": _render_debug_value(getattr(raw_message, "correlation_id", None)),
+            "message_id": _render_debug_value(getattr(raw_message, "message_id", None)),
+            "reply_to": _render_debug_value(getattr(raw_message, "reply_to", None)),
+            "routing_key": _render_debug_value(getattr(raw_message, "routing_key", None)),
+            "headers": _render_debug_value(getattr(raw_message, "headers", None)),
+            "properties": _render_debug_value(getattr(raw_message, "properties", None)),
+        },
+    }
 
 
 def setup_module_logger(module_name: str, log_file: str) -> logging.Logger:

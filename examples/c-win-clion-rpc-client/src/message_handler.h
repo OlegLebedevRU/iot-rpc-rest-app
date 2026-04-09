@@ -6,7 +6,17 @@
 #ifndef IOT_RPC_MESSAGE_HANDLER_H
 #define IOT_RPC_MESSAGE_HANDLER_H
 
+#include <stddef.h>
+
+#include "config.h"
+#include "device_client.h"
 #include "MQTTAsync.h"
+
+#ifdef _WIN32
+#  include <windows.h>
+#else
+#  include <pthread.h>
+#endif
 
 /**
  * Контекст обработчика сообщений.
@@ -24,6 +34,17 @@ typedef struct {
 
     /* Указатель на MQTT-клиент для отправки ответов */
     MQTTAsync client;
+
+    /* Активный RPC corr_id, чтобы polling REQ(UUID0) не перебивал trigger/payload flow */
+    unsigned char active_corr_data[MAX_CORR_DATA_LEN];
+    size_t active_corr_len;
+    int active_task;
+
+#ifdef _WIN32
+    CRITICAL_SECTION state_lock;
+#else
+    pthread_mutex_t state_lock;
+#endif
 } MessageHandlerCtx;
 
 /**
@@ -34,6 +55,12 @@ typedef struct {
  * @param client MQTT-клиент.
  */
 void msg_handler_init(MessageHandlerCtx *ctx, const char *sn, MQTTAsync client);
+
+/** Освобождает ресурсы контекста. */
+void msg_handler_cleanup(MessageHandlerCtx *ctx);
+
+/** Возвращает 1, если клиент уже обрабатывает активную RPC-задачу. */
+int msg_handler_has_active_task(MessageHandlerCtx *ctx);
 
 /**
  * Обрабатывает входящее MQTT-сообщение.

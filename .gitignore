@@ -164,3 +164,4 @@ cython_debug/
 /nginx-configs/local-light/nginx.conf.bak
 /app-service/alembic/README
 /docs/protokol-vzaimodeistviya-s-kontrollerom.md
+/docs/server-rpc-debug-runbook.md

@@ -18,6 +18,14 @@
 #include <stdlib.h>
 #include <ctype.h>
 
+#ifdef _WIN32
+#  define LOCK_CTX(ctx) EnterCriticalSection(&(ctx)->state_lock)
+#  define UNLOCK_CTX(ctx) LeaveCriticalSection(&(ctx)->state_lock)
+#else
+#  define LOCK_CTX(ctx) pthread_mutex_lock(&(ctx)->state_lock)
+#  define UNLOCK_CTX(ctx) pthread_mutex_unlock(&(ctx)->state_lock)
+#endif
+
 /* ── Вспомогательные функции ───────────────────────────────── */
 
 /**
@@ -229,6 +237,125 @@ static void log_incoming_message(const char *topic, size_t topic_len,
     log_user_properties(msg);
 }
 
+static int corr_data_equals_bytes(const CorrDataView *corr_data,
+                                  const unsigned char *data,
+                                  size_t len)
+{
+    if (!corr_data || !corr_data->data || !data) {
+        return 0;
+    }
+
+    return corr_data->len == len && memcmp(corr_data->data, data, len) == 0;
+}
+
+static int corr_data_is_zero_uuid(const CorrDataView *corr_data)
+{
+    return corr_data_equals_bytes(
+        corr_data,
+        (const unsigned char *)ZERO_UUID,
+        strlen(ZERO_UUID)
+    );
+}
+
+static int ctx_has_active_task_locked(const MessageHandlerCtx *ctx)
+{
+    return ctx->active_task && ctx->active_corr_len > 0;
+}
+
+static int ctx_active_corr_matches_locked(const MessageHandlerCtx *ctx,
+                                          const CorrDataView *corr_data)
+{
+    if (!ctx_has_active_task_locked(ctx) || !corr_data || !corr_data->data) {
+        return 0;
+    }
+
+    return corr_data_equals_bytes(corr_data, ctx->active_corr_data, ctx->active_corr_len);
+}
+
+static int ctx_try_activate_task(MessageHandlerCtx *ctx,
+                                 const CorrDataView *corr_data,
+                                 const char *source)
+{
+    int accepted = 0;
+
+    if (!corr_data || !corr_data->data || corr_data->len == 0) {
+        return 0;
+    }
+
+    LOCK_CTX(ctx);
+
+    if (!ctx_has_active_task_locked(ctx)) {
+        size_t copy_len = corr_data->len;
+        if (copy_len > sizeof(ctx->active_corr_data)) {
+            copy_len = sizeof(ctx->active_corr_data);
+        }
+
+        memcpy(ctx->active_corr_data, corr_data->data, copy_len);
+        ctx->active_corr_len = copy_len;
+        ctx->active_task = 1;
+        accepted = 1;
+    } else if (ctx_active_corr_matches_locked(ctx, corr_data)) {
+        accepted = 1;
+    }
+
+    UNLOCK_CTX(ctx);
+
+    if (!accepted) {
+        char active_buf[160];
+
+        LOCK_CTX(ctx);
+        format_binary_for_log(ctx->active_corr_data, ctx->active_corr_len,
+                              active_buf, sizeof(active_buf));
+        UNLOCK_CTX(ctx);
+
+        printf("[RPC] Ignore %s for a different corr_id while task %s is still active.\n",
+               source ? source : "message",
+               active_buf);
+    }
+
+    return accepted;
+}
+
+static void ctx_clear_active_task(MessageHandlerCtx *ctx, const char *reason)
+{
+    char corr_buf[160];
+
+    LOCK_CTX(ctx);
+    format_binary_for_log(ctx->active_corr_data, ctx->active_corr_len,
+                          corr_buf, sizeof(corr_buf));
+    memset(ctx->active_corr_data, 0, sizeof(ctx->active_corr_data));
+    ctx->active_corr_len = 0;
+    ctx->active_task = 0;
+    UNLOCK_CTX(ctx);
+
+    printf("[RPC] Active task state cleared (%s), corr_id=%s\n",
+           reason ? reason : "unknown",
+           corr_buf);
+}
+
+static int ctx_has_active_task(MessageHandlerCtx *ctx)
+{
+    int active;
+
+    LOCK_CTX(ctx);
+    active = ctx_has_active_task_locked(ctx);
+    UNLOCK_CTX(ctx);
+
+    return active;
+}
+
+static int ctx_active_corr_matches(MessageHandlerCtx *ctx,
+                                   const CorrDataView *corr_data)
+{
+    int matches;
+
+    LOCK_CTX(ctx);
+    matches = ctx_active_corr_matches_locked(ctx, corr_data);
+    UNLOCK_CTX(ctx);
+
+    return matches;
+}
+
 /* ── Обработчики по топикам ────────────────────────────────── */
 
 /**
@@ -247,6 +374,10 @@ static void handle_task_announcement(MessageHandlerCtx *ctx,
     if (!corr_data || !corr_data->data || corr_data->len == 0) {
         fprintf(stderr,
                 "[TSK] Skip ACK/REQ: task announcement does not contain correlation_data.\n");
+        return;
+    }
+
+    if (!ctx_try_activate_task(ctx, corr_data, "TSK")) {
         return;
     }
 
@@ -278,6 +409,11 @@ static void handle_task_response(MessageHandlerCtx *ctx,
     printf("[RSP] Payload: %s\n", payload[0] ? payload : "<empty>");
 
     if (strcmp(method_code, "0") == 0) {
+        if (ctx_has_active_task(ctx) && corr_data_is_zero_uuid(corr_data)) {
+            printf("[RSP] Ignoring stale polling NOP while another task is active.\n");
+            return;
+        }
+
         printf("[RSP] No pending task on server (method_code=0). Result publish skipped.\n");
         return;
     }
@@ -285,6 +421,12 @@ static void handle_task_response(MessageHandlerCtx *ctx,
     if (!corr_data || !corr_data->data || corr_data->len == 0) {
         fprintf(stderr,
                 "[RSP] Skip result publish: response does not contain correlation_data.\n");
+        return;
+    }
+
+    if (!ctx_try_activate_task(ctx, corr_data, "RSP")) {
+        fprintf(stderr,
+                "[RSP] Skip result publish: response corr_id does not match active task.\n");
         return;
     }
 
@@ -310,10 +452,16 @@ static void handle_commit(const CorrDataView *corr_data, MQTTAsync_message *msg)
     char result_id[64];
     get_user_property(msg, "result_id", result_id, sizeof(result_id));
 
-    (void)corr_data;
     printf("[CMT] Result confirmation received: result_id=%s\n",
            result_id[0] ? result_id : "<missing>");
     printf("[CMT] RPC cycle completed successfully.\n");
+
+    if (corr_data && corr_data->data) {
+        char corr_buf[160];
+        format_binary_for_log(corr_data->data, corr_data->len,
+                              corr_buf, sizeof(corr_buf));
+        printf("[CMT] corr_id=%s\n", corr_buf);
+    }
 }
 
 /**
@@ -339,6 +487,26 @@ void msg_handler_init(MessageHandlerCtx *ctx, const char *sn,
     snprintf(ctx->topic_eva, sizeof(ctx->topic_eva), "srv/%s/eva", sn);
 
     ctx->client = client;
+
+#ifdef _WIN32
+    InitializeCriticalSection(&ctx->state_lock);
+#else
+    pthread_mutex_init(&ctx->state_lock, NULL);
+#endif
+}
+
+void msg_handler_cleanup(MessageHandlerCtx *ctx)
+{
+#ifdef _WIN32
+    DeleteCriticalSection(&ctx->state_lock);
+#else
+    pthread_mutex_destroy(&ctx->state_lock);
+#endif
+}
+
+int msg_handler_has_active_task(MessageHandlerCtx *ctx)
+{
+    return ctx_has_active_task(ctx);
 }
 
 void msg_handler_on_message(MessageHandlerCtx *ctx,
@@ -358,7 +526,13 @@ void msg_handler_on_message(MessageHandlerCtx *ctx,
     } else if (topic_equals(topic, actual_topic_len, ctx->topic_rsp)) {
         handle_task_response(ctx, &corr_data, message);
     } else if (topic_equals(topic, actual_topic_len, ctx->topic_cmt)) {
-        handle_commit(&corr_data, message);
+        if (ctx_active_corr_matches(ctx, &corr_data)) {
+            handle_commit(&corr_data, message);
+            ctx_clear_active_task(ctx, "commit_received");
+        } else {
+            printf("[CMT] Received commit for unknown/stale corr_id. Active task state unchanged.\n");
+            handle_commit(&corr_data, message);
+        }
     } else if (topic_equals(topic, actual_topic_len, ctx->topic_eva)) {
         handle_event_ack(&corr_data);
     } else {

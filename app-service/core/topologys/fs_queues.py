@@ -2,7 +2,12 @@ import logging
 import sys
 from faststream.rabbit.fastapi import RabbitMessage
 from core.fs_broker import fs_router
-from core.logging_config import setup_module_logger, log_rpc_debug
+from core.logging_config import (
+    setup_module_logger,
+    log_rpc_debug,
+    build_rabbit_message_debug_snapshot,
+    RPC_REQ_VERBOSE_DEBUG_SNS,
+)
 from core.services.device_events_collect import DeviceEventsCollect
 from core.topologys.declare import q_ack, q_req, q_evt, q_result
 from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
@@ -70,6 +75,13 @@ async def req(
         corr_id=corr_id,
         slave_ws=headers.get("slave_ws"),
     )
+    if sn in RPC_REQ_VERBOSE_DEBUG_SNS:
+        log_rpc_debug(
+            sn,
+            "rpc.req.debug_dump",
+            extracted_corr_id=corr_id,
+            snapshot=build_rabbit_message_debug_snapshot(msg),
+        )
     await DeviceTasksService(session, 0).select(sn, corr_id, msg)
 
 
