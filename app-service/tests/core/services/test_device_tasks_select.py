@@ -339,6 +339,31 @@ async def test_corr_id_getter_uses_body_fallback_before_msg_correlation_id():
 
 
 @pytest.mark.asyncio
+async def test_get_task_normalizes_list_result_payload(monkeypatch):
+    session = object()
+    service = DeviceTasksService(session, 0)
+    task_id = uuid4()
+    task_data = build_task_data(task_id)
+    results_data = [
+        {
+            "id": 1,
+            "ext_id": 12345,
+            "status_code": 200,
+            "result": [{"k": "send_options", "t": "i32", "v": 1}],
+        }
+    ]
+
+    get_task = AsyncMock(return_value=(task_data, results_data))
+    monkeypatch.setattr(device_tasks_module.TasksRepository, "get_task", get_task)
+
+    task_response = await service.get(task_id)
+
+    assert task_response.results[0].result == {
+        "value": [{"k": "send_options", "t": "i32", "v": 1}]
+    }
+
+
+@pytest.mark.asyncio
 async def test_repository_task_status_update_skips_zero_uuid():
     session: Any = SimpleNamespace(
         execute=AsyncMock(),

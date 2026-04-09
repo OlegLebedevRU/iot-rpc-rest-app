@@ -8,6 +8,7 @@ from pydantic import (
     UUID4,
     ConfigDict,
     AfterValidator,
+    field_validator,
 )
 
 
@@ -103,6 +104,13 @@ class ResultArray(BaseModel):
     result: dict | None = None  # Теперь это словарь, а не строка
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("result", mode="before")
+    @classmethod
+    def normalize_result(cls, value: Any) -> dict | None:
+        if value is None or isinstance(value, dict):
+            return value
+        return {"value": value}
 
 
 class TaskResponseResult(TaskResponseStatus):

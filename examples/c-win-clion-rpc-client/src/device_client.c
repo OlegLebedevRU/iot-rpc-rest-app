@@ -40,7 +40,6 @@ static char         g_sn[MAX_SN_LEN];   /* серийный номер устр�
 static char g_topic_req[MAX_TOPIC_LEN];
 static char g_topic_res[MAX_TOPIC_LEN];
 static char g_topic_evt[MAX_TOPIC_LEN];
-static char g_topic_ack[MAX_TOPIC_LEN];
 
 /* Обработчик входящих сообщений */
 static MessageHandlerCtx g_msg_handler;
@@ -705,7 +704,6 @@ int device_client_run(void)
     snprintf(g_topic_req, sizeof(g_topic_req), "dev/%s/req", g_sn);
     snprintf(g_topic_res, sizeof(g_topic_res), "dev/%s/res", g_sn);
     snprintf(g_topic_evt, sizeof(g_topic_evt), "dev/%s/evt", g_sn);
-    snprintf(g_topic_ack, sizeof(g_topic_ack), "dev/%s/ack", g_sn);
 
     printf("[TOPICS] REQ: %s, RES: %s, EVT: %s\n",
            g_topic_req, g_topic_res, g_topic_evt);
