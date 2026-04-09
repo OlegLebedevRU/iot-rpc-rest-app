@@ -19,6 +19,7 @@ from core.schemas.device_tasks import (
     TaskHeader,
     ResultArray,
     TaskResponse,
+    TaskResponsePayload,
 )
 from core.services.device_task_processing import send_tsk, send_rsp, send_cmt
 
@@ -118,17 +119,55 @@ class DeviceTasksService:
                 self.session, corr_id, TaskStatus.PENDING
             )
 
-    async def select(self, sn, corr_id: UUID4, msg):
+    @staticmethod
+    def _get_method_limit(msg) -> int:
         ws_count = 0
         if hasattr(msg, "headers"):
             msg_headers = msg.headers
             if "slave_ws" in msg_headers:
                 ws_count = int(msg_headers["slave_ws"])
-        if ws_count > 0:
-            method_le = 3999
+        return 3999 if ws_count > 0 else 2999
+
+    @staticmethod
+    def _build_task_response(task_data: dict) -> TaskResponsePayload:
+        return TaskResponsePayload(
+            header=TaskHeader.model_validate(task_data),
+            id=task_data["id"],
+            status=task_data["status"],
+            created_at=task_data["created_at"],
+            pending_at=task_data["pending_at"],
+            locked_at=task_data["locked_at"],
+            payload=task_data["payload"],
+        )
+
+    async def _select_polling_task(
+        self, sn: str, method_le: int
+    ) -> TaskResponsePayload | None:
+        task_data = await TasksRepository.select_next_task_by_sn(
+            self.session, sn, method_le
+        )
+        if task_data is None:
+            return None
+        return self._build_task_response(task_data)
+
+    async def _select_task(
+        self, sn: str, corr_id: UUID4 | None, method_le: int
+    ) -> TaskResponsePayload | None:
+        if corr_id is None or corr_id == settings.task_proc_cfg.zero_corr_id:
+            return await self._select_polling_task(sn, method_le)
         else:
-            method_le = 2999
-        task = await TasksRepository.select_task(self.session, corr_id, sn, method_le)
+            task_data = await TasksRepository.select_task_by_id(
+                self.session, corr_id, method_le
+            )
+
+        if task_data is None:
+            return None
+
+        return self._build_task_response(task_data)
+
+    async def select(self, sn, corr_id: UUID4, msg):
+        method_le = self._get_method_limit(msg)
+        task = await self._select_task(sn, corr_id, method_le)
         if task is not None:
             t_resp = task.model_dump(mode="json")
             log.info("from DB select task = %s", t_resp)
