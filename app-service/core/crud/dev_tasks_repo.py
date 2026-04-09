@@ -41,6 +41,19 @@ log = setup_module_logger(__name__, "repo_dev_tasks.log")
 
 class TasksRepository:
     @staticmethod
+    def _normalize_result_for_storage(result: Any) -> dict[str, Any]:
+        if isinstance(result, str):
+            try:
+                result = json.loads(result)
+            except (json.JSONDecodeError, TypeError):
+                return {"value": result}
+
+        if isinstance(result, dict):
+            return result
+
+        return {"value": result}
+
+    @staticmethod
     def _apply_org_filter(query: Any, org_id: int | None) -> Any:
         """
         Применяет фильтр по организации с безопасным JOIN.
@@ -389,7 +402,7 @@ class TasksRepository:
         task_id: UUID4,
         ext_id: int,
         status_code: int,
-        result: dict | str,  # Поддержка обоих типов
+        result: Any,
     ) -> int | None:
         if task_id == settings.task_proc_cfg.zero_corr_id:
             log.debug("Skip task result save for polling corr_id=%s", task_id)
@@ -406,14 +419,7 @@ class TasksRepository:
             )
             return None
 
-        # Если result — строка, попробуем распарсить как JSON, иначе обернём
-        if isinstance(result, str):
-            try:
-                parsed_result = json.loads(result)
-            except (json.JSONDecodeError, TypeError):
-                parsed_result = {"result": result}
-        else:
-            parsed_result = result
+        parsed_result = cls._normalize_result_for_storage(result)
 
         tsk_q = (
             insert(DevTaskResult)

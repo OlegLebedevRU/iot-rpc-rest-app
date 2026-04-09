@@ -35,3 +35,22 @@ dependencies = [
     "uvicorn>=0.41.0",
     "yarl>=1.22.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["app-service/tests"]
+markers = [
+    "asyncio: compatibility alias for async tests executed via anyio",
+    "anyio: mark a test as anyio-based",
+]
+norecursedirs = [
+    ".git",
+    ".idea",
+    ".venv",
+    "build",
+    "dist",
+    "node_modules",
+    "examples/**/build",
+    "examples/**/cmake-build-*",
+    "examples/**/_deps",
+]
+

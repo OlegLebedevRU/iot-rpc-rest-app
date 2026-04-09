@@ -1,7 +1,3 @@
-import logging
-import logging.handlers
-import os
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
@@ -9,20 +5,6 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-os.environ.setdefault(
-    "APP_CONFIG__FASTSTREAM__URL", "amqp://user:pass@localhost:5672//"
-)
-os.environ.setdefault(
-    "APP_CONFIG__DB__URL", "postgresql+asyncpg://user:pass@localhost:5432/postgres"
-)
-os.environ.setdefault("APP_CONFIG__AUTH__API_KEYS", "test:1")
-os.environ.setdefault("APP_CONFIG__LEO4__URL", "http://localhost")
-os.environ.setdefault("APP_CONFIG__LEO4__API_KEY", "x")
-os.environ.setdefault("APP_CONFIG__LEO4__ADMIN_URL", "http://localhost")
-os.environ.setdefault("APP_CONFIG__LEO4__CERT_URL", "http://localhost")
-
-logging.handlers.RotatingFileHandler = lambda *args, **kwargs: logging.NullHandler()
-Path.mkdir = lambda self, mode=0o777, parents=False, exist_ok=False: None
 
 from core.models.common import TaskStatus
 from core.crud.dev_tasks_repo import TasksRepository
@@ -427,6 +409,20 @@ async def test_repository_save_task_result_returns_none_for_missing_task():
     session.execute.assert_awaited_once()
     session.commit.assert_not_called()
     session.rollback.assert_not_called()
+
+
+def test_repository_normalize_result_for_storage_wraps_non_dict_values():
+    assert TasksRepository._normalize_result_for_storage(
+        [{"k": "send_options", "t": "i32", "v": 1}]
+    ) == {"value": [{"k": "send_options", "t": "i32", "v": 1}]}
+    assert TasksRepository._normalize_result_for_storage("plain text") == {
+        "value": "plain text"
+    }
+    assert TasksRepository._normalize_result_for_storage("123") == {"value": 123}
+    assert TasksRepository._normalize_result_for_storage(None) == {"value": None}
+    assert TasksRepository._normalize_result_for_storage({"status": "OK"}) == {
+        "status": "OK"
+    }
 
 
 @pytest.mark.asyncio
