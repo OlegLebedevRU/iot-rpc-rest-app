@@ -15,6 +15,9 @@ __all__ = (
     "Cell",
     "DeviceOrgBind",
     "DeviceGauge",
+    "BillingCoefficient",
+    "BillingCounter",
+    "BillingActiveDevice",
 )
 
 
@@ -32,3 +35,4 @@ from .devices import (
 )
 from .postamat import Postamat
 from .cell import Cell
+from .billing import BillingCoefficient, BillingCounter, BillingActiveDevice

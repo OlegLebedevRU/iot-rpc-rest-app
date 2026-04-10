@@ -44,6 +44,32 @@ async def add_one_event(
     # log.info("Subscribe event queue")
     await DeviceEventsCollect(session, sn, 0).add(msg, corr_id=corr_id)
 
+    # Billing: record EVT activity (excluding event_type 0 and gauge types)
+    from core import settings
+    from core.crud.device_repo import DeviceRepo
+    from core.services.billing_publish import publish_billing_event
+
+    try:
+        msg_headers = getattr(msg, "headers", {})
+        event_type_code = int(msg_headers.get("event_type_code", 0))
+        is_gauge = event_type_code in settings.webhook.gauge_event_types
+        if event_type_code != 0 and not is_gauge:
+            dev_id = await DeviceRepo.get_device_id(session=session, sn=sn)
+            if dev_id is not None:
+                org_id = await DeviceRepo.get_org_id_by_device_id(session, device_id=dev_id)
+                if org_id is not None:
+                    await publish_billing_event(
+                        org_id=org_id, device_id=dev_id, counter_type="evt"
+                    )
+        elif dev_id := await DeviceRepo.get_device_id(session=session, sn=sn):
+            org_id = await DeviceRepo.get_org_id_by_device_id(session, device_id=dev_id)
+            if org_id is not None:
+                await publish_billing_event(
+                    org_id=org_id, device_id=dev_id, counter_type="activity"
+                )
+    except Exception as e:
+        log.debug("Billing EVT publish error (non-critical): %s", e)
+
 
 @fs_router.subscriber(q_ack)
 async def ack(
@@ -54,6 +80,21 @@ async def ack(
     # log.info("Subscribe ack queue")
     log_rpc_debug(sn, "rpc.ack.received", corr_id=corr_id)
     await DeviceTasksService(session, 0).pending(corr_id, sn)
+
+    # Billing: record ACK activity
+    from core.crud.device_repo import DeviceRepo
+    from core.services.billing_publish import publish_billing_event
+
+    try:
+        dev_id = await DeviceRepo.get_device_id(session=session, sn=sn)
+        if dev_id is not None:
+            org_id = await DeviceRepo.get_org_id_by_device_id(session, device_id=dev_id)
+            if org_id is not None:
+                await publish_billing_event(
+                    org_id=org_id, device_id=dev_id, counter_type="activity"
+                )
+    except Exception as e:
+        log.debug("Billing ACK publish error (non-critical): %s", e)
 
 
 @fs_router.subscriber(q_req)
@@ -73,6 +114,21 @@ async def req(
     )
     await DeviceTasksService(session, 0).select(sn, corr_id, msg)
 
+    # Billing: record REQ activity
+    from core.crud.device_repo import DeviceRepo
+    from core.services.billing_publish import publish_billing_event
+
+    try:
+        dev_id = await DeviceRepo.get_device_id(session=session, sn=sn)
+        if dev_id is not None:
+            org_id = await DeviceRepo.get_org_id_by_device_id(session, device_id=dev_id)
+            if org_id is not None:
+                await publish_billing_event(
+                    org_id=org_id, device_id=dev_id, counter_type="activity"
+                )
+    except Exception as e:
+        log.debug("Billing REQ publish error (non-critical): %s", e)
+
 
 @fs_router.subscriber(q_result)
 async def result(
@@ -91,6 +147,25 @@ async def result(
         status_code=headers.get("status_code"),
     )
     await DeviceTasksService(session, 0).save(msg, sn, corr_id)
+
+    # Billing: record RES activity + message counter
+    from core.crud.device_repo import DeviceRepo
+    from core.services.billing_publish import publish_billing_event
+
+    try:
+        dev_id = await DeviceRepo.get_device_id(session=session, sn=sn)
+        if dev_id is not None:
+            org_id = await DeviceRepo.get_org_id_by_device_id(session, device_id=dev_id)
+            if org_id is not None:
+                payload_bytes = len(msg.body) if msg.body else 0
+                await publish_billing_event(
+                    org_id=org_id,
+                    device_id=dev_id,
+                    counter_type="res",
+                    payload_bytes=payload_bytes,
+                )
+    except Exception as e:
+        log.debug("Billing RES publish error (non-critical): %s", e)
 
 
 # Логируем количество подписчиков

@@ -58,6 +58,11 @@ webhook_action = RabbitQueue(
     durable=False,
     arguments=settings.webhook.def_queue_args,
 )
+billing_action = RabbitQueue(
+    name=settings.billing.billing_queue,
+    durable=True,
+    arguments=settings.billing.def_queue_args,
+)
 
 # Список биндингов: (queue, routing_key, exchange)
 BINDINGS: List[Tuple[RabbitQueue, str, RabbitExchange]] = [
@@ -68,6 +73,7 @@ BINDINGS: List[Tuple[RabbitQueue, str, RabbitExchange]] = [
     (q_jobs, settings.ttl_job.queue_name, direct_exchange),
     (rmq_api_client_action, topology.api_clients_queue, direct_exchange),
     (webhook_action, settings.webhook.webhooks_queue, direct_exchange),
+    (billing_action, settings.billing.billing_queue, direct_exchange),
 ]
 
 

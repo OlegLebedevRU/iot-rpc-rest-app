@@ -21,6 +21,7 @@ from core.fs_broker import fs_router
 from core.logging_config import setup_module_logger
 from core.models import db_helper
 from core.services.device_task_processing import act_ttl
+from core.services.billing import BillingService
 from core.topologys.declare import declare_x_q
 import core.topologys.fs_queues
 import core.topologys.internal_bus
@@ -65,6 +66,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             id=settings.ttl_job.id_name,
             replace_existing=True,
         )
+        # Billing: monthly calculation job — runs daily at 00:15,
+        # but only performs calculation on the 1st of each month.
+        from apscheduler.triggers.cron import CronTrigger
+
+        scheduler.add_job(
+            _billing_monthly_job,
+            coalesce=True,
+            trigger=CronTrigger(day=1, hour=0, minute=15),
+            id="billing_monthly_calc",
+            replace_existing=True,
+        )
         scheduler.start()
     except Exception as e:
         log.info(f"Исключение scheduler: {str(e)}")
@@ -74,6 +86,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await db_helper.dispose()
     scheduler.shutdown()
     await fs_router.broker.close()
+
+
+async def _billing_monthly_job() -> None:
+    """APScheduler job: calculate billing for the previous month on the 1st."""
+    async for session in db_helper.session_getter():
+        try:
+            count = await BillingService.calculate_previous_month(session)
+            log.info("Billing monthly job completed: %d orgs processed", count)
+        except Exception as e:
+            log.error("Billing monthly job failed: %s", e)
+        break
 
 
 def register_static_docs_routes(app: FastAPI) -> None:
@@ -115,6 +138,12 @@ def create_app(create_custom_static_urls: bool = False) -> FastAPI:
     add_pagination(app)
     app.include_router(api_router)
     app.include_router(fs_router, include_in_schema=False)
+
+    # Billing API request counter middleware
+    from core.middleware.billing_counter import BillingApiCounterMiddleware
+
+    app.add_middleware(BillingApiCounterMiddleware)
+
     if create_custom_static_urls:
         register_static_docs_routes(app)
 
