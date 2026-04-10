@@ -233,7 +233,14 @@ class DeviceTasksService:
 
         await send_rsp(sn, t_resp, correlation_id, expiration, method_code)
 
-    async def save(self, msg, sn, corr_id: UUID4):
+    async def save(self, msg, sn, corr_id: UUID4) -> bool:
+        """Process and save an incoming RES message.
+
+        Returns ``True`` when the result was actually persisted to the DB,
+        ``False`` when the message was skipped (zero/missing corr_id, orphan
+        task, etc.).  The caller can use this to decide whether to count the
+        message for billing.
+        """
         ext_id = int(msg.headers.get("ext_id", 0))
         status_code = int(msg.headers.get("status_code", 501))
 
@@ -251,7 +258,7 @@ class DeviceTasksService:
                 ext_id=ext_id,
                 status_code=status_code,
             )
-            return
+            return False
 
         if self._is_zero_corr_id(corr_id):
             log.info(
@@ -269,7 +276,7 @@ class DeviceTasksService:
                 ext_id=ext_id,
                 status_code=status_code,
             )
-            return
+            return False
 
         # Декодируем тело
         raw_body = msg.body.decode() if msg.body else "{}"
@@ -316,7 +323,7 @@ class DeviceTasksService:
                 ext_id=ext_id,
                 status_code=status_code,
             )
-            return
+            return False
 
         rmsg = "committed"
         try:
@@ -349,6 +356,7 @@ class DeviceTasksService:
             ext_id,
             status_code,
         )
+        return True
 
     async def ttl(self, decrement: int = 1):
         await TasksRepository.update_ttl(self.session, decrement)

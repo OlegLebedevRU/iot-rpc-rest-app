@@ -169,12 +169,13 @@ async def test_save_skips_result_processing_for_zero_uuid(monkeypatch):
     monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
     monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
 
-    await service.save(
+    result = await service.save(
         msg,
         "SN_TEST",
         device_tasks_module.settings.task_proc_cfg.zero_corr_id,
     )
 
+    assert result is False
     save_task_result.assert_not_called()
     task_status_update.assert_not_called()
     get_device_id.assert_not_called()
@@ -205,8 +206,9 @@ async def test_save_skips_finalization_for_missing_task(monkeypatch):
     monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
     monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
 
-    await service.save(msg, "SN_TEST", corr_id)
+    result = await service.save(msg, "SN_TEST", corr_id)
 
+    assert result is False
     save_task_result.assert_awaited_once_with(
         session,
         corr_id,
@@ -243,8 +245,9 @@ async def test_save_finalizes_existing_task(monkeypatch):
     monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
     monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
 
-    await service.save(msg, "SN_TEST", corr_id)
+    result = await service.save(msg, "SN_TEST", corr_id)
 
+    assert result is True
     save_task_result.assert_awaited_once_with(
         session,
         corr_id,
@@ -294,8 +297,9 @@ async def test_save_strips_transport_corr_wrapper_from_result(monkeypatch):
     monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
     monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
 
-    await service.save(msg, "SN_TEST", corr_id)
+    result = await service.save(msg, "SN_TEST", corr_id)
 
+    assert result is True
     save_task_result.assert_awaited_once_with(
         session,
         corr_id,

@@ -141,10 +141,9 @@ async def result(
         status_code=headers.get("status_code"),
     )
     payload_bytes = len(msg.body) if msg.body else 0
-    await publish_then_process(
-        lambda: _publish_billing_for_sn(session, sn, "res", payload_bytes=payload_bytes),
-        lambda: DeviceTasksService(session, 0).save(msg, sn, corr_id),
-    )
+    saved = await DeviceTasksService(session, 0).save(msg, sn, corr_id)
+    if saved:
+        await _publish_billing_for_sn(session, sn, "res", payload_bytes=payload_bytes)
 
 
 # Логируем количество подписчиков
