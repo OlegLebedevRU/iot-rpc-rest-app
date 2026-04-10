@@ -39,9 +39,10 @@ async def add_one_event(
     msg: RabbitMessage,
     session: Session_dep,
     sn: Sn_dep,
+    corr_id: Corr_id_dep,
 ):
     # log.info("Subscribe event queue")
-    await DeviceEventsCollect(session, sn, 0).add(msg)
+    await DeviceEventsCollect(session, sn, 0).add(msg, corr_id=corr_id)
 
 
 @fs_router.subscriber(q_ack)

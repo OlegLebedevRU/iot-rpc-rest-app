@@ -17,6 +17,48 @@ log = setup_module_logger(__name__, "srv_dev_task_processing.log")
 logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 topology = settings.rmq
 
+EVA_EXPIRATION_MS = 180_000  # 180 seconds
+
+
+async def send_eva(
+    sn: str,
+    event_type_code: int,
+    dev_event_id: int,
+    corr_id: UUID | str | None,
+    status: str,
+):
+    """
+    Publish EVA (Event Acknowledgment) to srv.<SN>.eva.
+    Replicates correlation, event_type_code, dev_event_id from the original EVT.
+    """
+    routing_key: str = str(
+        RoutingKey(prefix=topology.prefix_srv, sn=sn, suffix=topology.suffix_event_ack)
+    )
+    payload = {"status": status}
+    headers = {
+        "event_type_code": str(event_type_code),
+        "dev_event_id": str(dev_event_id),
+    }
+    if corr_id is not None:
+        headers["correlationData"] = str(corr_id)
+
+    log_rpc_debug(
+        sn,
+        "rpc.eva.publish",
+        corr_id=corr_id,
+        routing_key=routing_key,
+        event_type_code=event_type_code,
+        dev_event_id=dev_event_id,
+        status=status,
+    )
+    await topic_publisher.publish(
+        routing_key=routing_key,
+        message=payload,
+        correlation_id=corr_id,
+        expiration=EVA_EXPIRATION_MS,
+        headers=headers,
+    )
+
 
 async def send_tsk(sn: str, task: TaskCreate, stask: TaskResponse):
 

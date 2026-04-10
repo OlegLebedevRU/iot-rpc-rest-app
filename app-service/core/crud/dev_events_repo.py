@@ -4,6 +4,7 @@ from typing import Optional, List
 from fastapi_pagination import Page
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy import text, and_, or_, select, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi_pagination.ext.sqlalchemy import apaginate
 from core.models import DevEvent, DeviceOrgBind
@@ -15,7 +16,12 @@ log = setup_module_logger(__name__, "repo_dev_events.log")
 
 class EventRepository:
     @classmethod
-    async def add_event(cls, session: AsyncSession, event: DevEventBody) -> None:
+    async def add_event(cls, session: AsyncSession, event: DevEventBody) -> bool:
+        """
+        Сохраняет событие. Возвращает True если событие новое,
+        False если дубликат по (device_id, dev_event_id) — идемпотентная обработка.
+        Raises на прочие ошибки.
+        """
         evt_q = DevEvent(
             **event.model_dump(exclude={"dev_timestamp"}),
             dev_timestamp=func.to_timestamp(event.dev_timestamp),
@@ -23,6 +29,18 @@ class EventRepository:
         session.add(evt_q)
         try:
             await session.commit()
+            return True
+        except IntegrityError as e:
+            await session.rollback()
+            if "uq_dev_event_idempotent" in str(e.orig):
+                log.info(
+                    "Idempotent duplicate: device_id=%d dev_event_id=%d — skipped",
+                    event.device_id,
+                    event.dev_event_id,
+                )
+                return False
+            log.error(f"Ошибка при сохранении события: {e}")
+            raise
         except Exception as e:
             await session.rollback()
             log.error(f"Ошибка при сохранении события: {e}")

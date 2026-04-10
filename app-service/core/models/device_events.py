@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Dict, Any
 
-from sqlalchemy import Integer, func, ForeignKey, UniqueConstraint
+from sqlalchemy import Integer, func, ForeignKey, Index, UniqueConstraint
 from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -10,6 +10,17 @@ from core.models import Base
 
 class DevEvent(Base):
     # __tablename__ = "tb_dev_events"
+    __table_args__ = (
+        Index(
+            "uq_dev_event_idempotent",
+            "device_id",
+            "dev_event_id",
+            "dev_timestamp",
+            unique=True,
+            postgresql_where="dev_event_id != 0",
+        ),
+    )
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     device_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     event_type_code: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
