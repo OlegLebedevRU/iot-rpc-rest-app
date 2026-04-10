@@ -1,9 +1,11 @@
 import logging
 import sys
 from faststream.rabbit.fastapi import RabbitMessage
+from core.crud.device_repo import DeviceRepo
 from core.fs_broker import fs_router
 from core.logging_config import setup_module_logger, log_rpc_debug
 from core.services.device_events_collect import DeviceEventsCollect
+from core.services.billing_publish import publish_billing_event
 from core.services.billing_utils import evt_billing_counter_type, publish_then_process
 from core.topologys.declare import q_ack, q_req, q_evt, q_result
 from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
@@ -35,9 +37,6 @@ async def _publish_billing_for_sn(
     counter_type: str,
     payload_bytes: int = 0,
 ):
-    from core.crud.device_repo import DeviceRepo
-    from core.services.billing_publish import publish_billing_event
-
     try:
         dev_id = await DeviceRepo.get_device_id(session=session, sn=sn)
         if dev_id is None:

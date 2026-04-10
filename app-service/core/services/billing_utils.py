@@ -35,7 +35,9 @@ def evt_billing_counter_type(
     gauge_event_types: Iterable[int],
 ) -> str:
     """Resolve EVT billing counter type according to billing rules."""
-    return "evt" if event_type_code != 0 and event_type_code not in gauge_event_types else "activity"
+    if event_type_code != 0 and event_type_code not in gauge_event_types:
+        return "evt"
+    return "activity"
 
 
 async def publish_then_process(
