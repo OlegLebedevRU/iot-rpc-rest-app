@@ -3,10 +3,10 @@
 -- Only one row per effective_from date is allowed.
 CREATE TABLE IF NOT EXISTS tb_billing_coefficients (
     id              SERIAL PRIMARY KEY,
-    k1              NUMERIC(10, 6) NOT NULL DEFAULT 10000,
-    k2              NUMERIC(10, 6) NOT NULL DEFAULT 1,
-    k3              NUMERIC(10, 6) NOT NULL DEFAULT 1,
-    k4              NUMERIC(10, 6) NOT NULL DEFAULT 1,
+    k1              NUMERIC(12, 6) NOT NULL DEFAULT 10000,
+    k2              NUMERIC(12, 6) NOT NULL DEFAULT 1,
+    k3              NUMERIC(12, 6) NOT NULL DEFAULT 1,
+    k4              NUMERIC(12, 6) NOT NULL DEFAULT 1,
     effective_from  DATE NOT NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT uq_billing_coefficients_effective_from UNIQUE (effective_from)
