@@ -109,26 +109,41 @@ class BillingService:
     ) -> None:
         """Process a single billing event from the RMQ queue."""
         try:
+            has_changes = False
             # Always record device activity
             if device_id > 0:
-                await BillingRepo.record_device_activity(session, org_id, device_id)
+                await BillingRepo.record_device_activity(
+                    session, org_id, device_id, commit=False
+                )
+                has_changes = True
 
             if counter_type == "evt":
-                await BillingRepo.increment_evt_messages(session, org_id, value)
+                await BillingRepo.increment_evt_messages(
+                    session, org_id, value, commit=False
+                )
+                has_changes = True
             elif counter_type == "res":
                 await BillingRepo.increment_res_messages(
                     session,
                     org_id,
                     payload_bytes=payload_bytes,
                     block_size=settings.billing.block_size,
+                    commit=False,
                 )
+                has_changes = True
             elif counter_type == "api":
-                await BillingRepo.increment_api_requests(session, org_id, value)
+                await BillingRepo.increment_api_requests(
+                    session, org_id, value, commit=False
+                )
+                has_changes = True
             elif counter_type == "activity":
                 pass  # device activity already recorded above
             else:
                 log.warning("Unknown billing counter_type: %s", counter_type)
+            if has_changes:
+                await session.commit()
         except Exception as e:
+            await session.rollback()
             log.error(
                 "Billing event processing error: org_id=%d device_id=%d type=%s error=%s",
                 org_id, device_id, counter_type, e,

@@ -35,7 +35,11 @@ class BillingRepo:
 
     @classmethod
     async def increment_api_requests(
-        cls, session: AsyncSession, org_id: int, value: int = 1
+        cls,
+        session: AsyncSession,
+        org_id: int,
+        value: int = 1,
+        commit: bool = True,
     ) -> None:
         ps, pe = _current_period()
         stmt = (
@@ -52,11 +56,16 @@ class BillingRepo:
             )
         )
         await session.execute(stmt)
-        await session.commit()
+        if commit:
+            await session.commit()
 
     @classmethod
     async def increment_evt_messages(
-        cls, session: AsyncSession, org_id: int, value: int = 1
+        cls,
+        session: AsyncSession,
+        org_id: int,
+        value: int = 1,
+        commit: bool = True,
     ) -> None:
         ps, pe = _current_period()
         stmt = (
@@ -73,7 +82,8 @@ class BillingRepo:
             )
         )
         await session.execute(stmt)
-        await session.commit()
+        if commit:
+            await session.commit()
 
     @classmethod
     async def increment_res_messages(
@@ -82,6 +92,7 @@ class BillingRepo:
         org_id: int,
         payload_bytes: int = 0,
         block_size: int = 2048,
+        commit: bool = True,
     ) -> None:
         ps, pe = _current_period()
         blocks = max(1, math.ceil(payload_bytes / block_size))
@@ -103,11 +114,16 @@ class BillingRepo:
             )
         )
         await session.execute(stmt)
-        await session.commit()
+        if commit:
+            await session.commit()
 
     @classmethod
     async def record_device_activity(
-        cls, session: AsyncSession, org_id: int, device_id: int
+        cls,
+        session: AsyncSession,
+        org_id: int,
+        device_id: int,
+        commit: bool = True,
     ) -> None:
         ps, _ = _current_period()
         stmt = (
@@ -116,7 +132,8 @@ class BillingRepo:
             .on_conflict_do_nothing(constraint="uq_billing_active_device")
         )
         await session.execute(stmt)
-        await session.commit()
+        if commit:
+            await session.commit()
 
     # ──────────────────────────────── coefficients ────────────────────────────
 

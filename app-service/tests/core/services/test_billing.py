@@ -16,6 +16,12 @@ from core.schemas.billing import (
 )
 from core.crud.billing_repo import _current_period, BillingRepo
 from core.services.billing import BillingService, _period_for, _previous_period
+from core.services.billing_utils import (
+    coefficient_change_affects_period,
+    evt_billing_counter_type,
+    publish_then_process,
+    require_billing_admin,
+)
 
 
 # ──────────────── Schema tests ────────────────
@@ -195,8 +201,10 @@ class TestBillingService:
             await BillingService.handle_billing_event(
                 session, org_id=1, device_id=100, counter_type="evt"
             )
-            mock_activity.assert_called_once_with(session, 1, 100)
-            mock_evt.assert_called_once_with(session, 1, 1)
+            mock_activity.assert_called_once_with(session, 1, 100, commit=False)
+            mock_evt.assert_called_once_with(session, 1, 1, commit=False)
+            session.commit.assert_awaited_once()
+            session.rollback.assert_not_called()
 
     @pytest.mark.anyio
     async def test_handle_billing_event_res(self):
@@ -214,6 +222,7 @@ class TestBillingService:
                 session, org_id=1, device_id=100, counter_type="res", payload_bytes=3000
             )
             mock_res.assert_called_once()
+            session.commit.assert_awaited_once()
 
     @pytest.mark.anyio
     async def test_handle_billing_event_api(self):
@@ -230,7 +239,8 @@ class TestBillingService:
             await BillingService.handle_billing_event(
                 session, org_id=1, device_id=0, counter_type="api"
             )
-            mock_api.assert_called_once_with(session, 1, 1)
+            mock_api.assert_called_once_with(session, 1, 1, commit=False)
+            session.commit.assert_awaited_once()
 
     @pytest.mark.anyio
     async def test_handle_billing_event_activity_only(self):
@@ -244,7 +254,8 @@ class TestBillingService:
             await BillingService.handle_billing_event(
                 session, org_id=1, device_id=100, counter_type="activity"
             )
-            mock_activity.assert_called_once_with(session, 1, 100)
+            mock_activity.assert_called_once_with(session, 1, 100, commit=False)
+            session.commit.assert_awaited_once()
 
     @pytest.mark.anyio
     async def test_handle_billing_event_no_device_activity_for_zero(self):
@@ -264,24 +275,42 @@ class TestBillingService:
             )
             mock_activity.assert_not_called()
 
+    @pytest.mark.anyio
+    async def test_handle_billing_event_rolls_back_on_error(self):
+        session = AsyncMock()
+
+        with (
+            patch.object(
+                BillingRepo, "record_device_activity", new_callable=AsyncMock
+            ),
+            patch.object(
+                BillingRepo,
+                "increment_evt_messages",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("boom"),
+            ),
+        ):
+            await BillingService.handle_billing_event(
+                session, org_id=1, device_id=100, counter_type="evt"
+            )
+            session.commit.assert_not_called()
+            session.rollback.assert_awaited_once()
+
 
 # ──────────────── Billing admin endpoint access control ────────────────
 
 
 class TestBillingAdminAccess:
     def test_require_admin_raises_for_non_zero(self):
-        from api.api_v1.billing import _require_admin
         from fastapi import HTTPException
 
         with pytest.raises(HTTPException) as exc_info:
-            _require_admin(1)
+            require_billing_admin(1)
         assert exc_info.value.status_code == 403
 
     def test_require_admin_passes_for_zero(self):
-        from api.api_v1.billing import _require_admin
-
         # Should not raise
-        _require_admin(0)
+        require_billing_admin(0)
 
     def test_coefficient_cannot_set_current_month(self):
         """effective_from within the current month should be rejected by the endpoint logic."""
@@ -299,3 +328,49 @@ class TestBillingAdminAccess:
         assert current_month_start <= current_month_start < next_month_start
         # Future month dates should be allowed
         assert not (current_month_start <= next_month_start < next_month_start)
+
+    @pytest.mark.anyio
+    async def test_would_affect_current_month_blocks_current_effective_record(self):
+        today = date.today()
+        current_month_start = today.replace(day=1)
+        current_effective_from = current_month_start - timedelta(days=31)
+        assert coefficient_change_affects_period(
+            effective_from=current_effective_from,
+            period_start=current_month_start,
+            current_effective_from=current_effective_from,
+        )
+
+    @pytest.mark.anyio
+    async def test_would_affect_current_month_allows_older_historical_record(self):
+        today = date.today()
+        current_month_start = today.replace(day=1)
+        current_effective_from = current_month_start - timedelta(days=31)
+        older_date = current_effective_from - timedelta(days=31)
+        assert not coefficient_change_affects_period(
+            effective_from=older_date,
+            period_start=current_month_start,
+            current_effective_from=current_effective_from,
+        )
+
+
+class TestBillingQueueHandlers:
+    @pytest.mark.anyio
+    async def test_ack_publishes_activity_before_pending(self):
+        events = []
+
+        async def fake_publish():
+            events.append("publish")
+
+        async def fake_process():
+            events.append("pending")
+
+        await publish_then_process(fake_publish, fake_process)
+
+        assert events == ["publish", "pending"]
+
+    def test_evt_counter_type_uses_evt_for_non_zero_non_gauge(self):
+        assert evt_billing_counter_type(5, [44]) == "evt"
+
+    def test_evt_counter_type_uses_activity_for_zero_and_gauge(self):
+        assert evt_billing_counter_type(0, [44]) == "activity"
+        assert evt_billing_counter_type(44, [44]) == "activity"

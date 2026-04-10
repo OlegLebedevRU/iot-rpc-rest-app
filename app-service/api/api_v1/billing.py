@@ -17,6 +17,10 @@ from core.schemas.billing import (
     BillingRecalculateRequest,
 )
 from core.services.billing import BillingService
+from core.services.billing_utils import (
+    coefficient_change_affects_period,
+    require_billing_admin,
+)
 
 log = setup_module_logger(__name__, "api_billing.log")
 
@@ -28,12 +32,31 @@ router = APIRouter(
 
 
 def _require_admin(org_id: int) -> None:
-    """Raise 403 if org_id is not 0 (admin)."""
-    if org_id != 0:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Billing admin endpoints are only accessible for org_id=0",
-        )
+    require_billing_admin(org_id)
+
+
+async def _would_affect_current_month(
+    session: Session_dep,
+    effective_from: date,
+) -> bool:
+    """Return True if changing coefficients for this date would affect the current month."""
+    today = date.today()
+    current_month_start = today.replace(day=1)
+    current_effective = await BillingRepo.get_effective_coefficients(
+        session, current_month_start
+    )
+
+    if effective_from > current_month_start:
+        return False
+
+    if current_effective is None:
+        return True
+
+    return coefficient_change_affects_period(
+        effective_from=effective_from,
+        period_start=current_month_start,
+        current_effective_from=current_effective.effective_from,
+    )
 
 
 # ──────────────── Coefficients ────────────────
@@ -79,6 +102,15 @@ async def set_coefficients(
                 f"Cannot set coefficients effective within the current month "
                 f"({current_month_start} — {next_month_start}). "
                 f"Use a date before {current_month_start} for past corrections "
+                f"or on/after {next_month_start} for future periods."
+            ),
+        )
+    if await _would_affect_current_month(session, body.effective_from):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Cannot change coefficients that would affect the current billing month. "
+                f"Use a date earlier than the currently effective record for {current_month_start} "
                 f"or on/after {next_month_start} for future periods."
             ),
         )
