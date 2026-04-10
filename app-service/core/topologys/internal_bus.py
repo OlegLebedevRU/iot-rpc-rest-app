@@ -48,7 +48,7 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
 
     try:
         device_id = int(device_id_str)
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         log.warning("Invalid device_id in headers: %s", device_id_str)
         return
 
