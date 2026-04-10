@@ -106,7 +106,7 @@ async def set_coefficients(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "Cannot change coefficients that would affect the current billing month. "
-                f"Use a date earlier than the currently effective record for {current_month_start} "
+                "Use a date earlier than the effective_from currently applied to this month "
                 f"or on/after {next_month_start} for future periods."
             ),
         )

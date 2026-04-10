@@ -75,6 +75,11 @@ async def add_one_event(
     try:
         event_type_code = int(msg_headers.get("event_type_code", 0))
     except (TypeError, ValueError):
+        log.debug(
+            "Invalid EVT event_type_code header for billing: sn=%s raw_value=%s",
+            sn,
+            msg_headers.get("event_type_code"),
+        )
         event_type_code = 0
     billing_counter_type = evt_billing_counter_type(
         event_type_code, settings.webhook.gauge_event_types
