@@ -53,20 +53,18 @@ async def add_one_event(
         msg_headers = getattr(msg, "headers", {})
         event_type_code = int(msg_headers.get("event_type_code", 0))
         is_gauge = event_type_code in settings.webhook.gauge_event_types
-        if event_type_code != 0 and not is_gauge:
-            dev_id = await DeviceRepo.get_device_id(session=session, sn=sn)
-            if dev_id is not None:
-                org_id = await DeviceRepo.get_org_id_by_device_id(session, device_id=dev_id)
-                if org_id is not None:
+        dev_id = await DeviceRepo.get_device_id(session=session, sn=sn)
+        if dev_id is not None:
+            org_id = await DeviceRepo.get_org_id_by_device_id(session, device_id=dev_id)
+            if org_id is not None:
+                if event_type_code != 0 and not is_gauge:
                     await publish_billing_event(
                         org_id=org_id, device_id=dev_id, counter_type="evt"
                     )
-        elif dev_id := await DeviceRepo.get_device_id(session=session, sn=sn):
-            org_id = await DeviceRepo.get_org_id_by_device_id(session, device_id=dev_id)
-            if org_id is not None:
-                await publish_billing_event(
-                    org_id=org_id, device_id=dev_id, counter_type="activity"
-                )
+                else:
+                    await publish_billing_event(
+                        org_id=org_id, device_id=dev_id, counter_type="activity"
+                    )
     except Exception as e:
         log.debug("Billing EVT publish error (non-critical): %s", e)
 

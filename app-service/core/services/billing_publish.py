@@ -40,6 +40,6 @@ async def publish_billing_event(
         )
     except Exception as e:
         log.error(
-            "Failed to publish billing event: org_id=%d device_id=%d type=%s error=%s",
-            org_id, device_id, counter_type, e,
+            "Failed to publish billing event: type=%s error=%s",
+            counter_type, e,
         )

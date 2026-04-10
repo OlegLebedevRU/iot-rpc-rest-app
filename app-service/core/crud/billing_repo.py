@@ -84,7 +84,7 @@ class BillingRepo:
         block_size: int = 2048,
     ) -> None:
         ps, pe = _current_period()
-        blocks = max(1, math.ceil(payload_bytes / block_size)) if payload_bytes > 0 else 1
+        blocks = max(1, math.ceil(payload_bytes / block_size))
         stmt = (
             insert(BillingCounter)
             .values(

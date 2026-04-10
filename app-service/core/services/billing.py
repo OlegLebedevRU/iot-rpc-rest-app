@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +24,7 @@ def _previous_period() -> tuple[date, date]:
     """Return (period_start, period_end) for the previous calendar month."""
     today = date.today()
     first_of_current = today.replace(day=1)
-    last_of_prev = first_of_current.replace(day=1) - __import__("datetime").timedelta(days=1)
+    last_of_prev = first_of_current - timedelta(days=1)
     return _period_for(last_of_prev)
 
 
