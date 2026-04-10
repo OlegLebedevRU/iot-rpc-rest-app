@@ -221,6 +221,16 @@ class WebhookConfigModel(BaseModel):
     ]  # Список event_type_code, которые считаются гаузами
 
 
+class BillingConfig(BaseModel):
+    billing_queue: str = "billing_counter_action"
+    def_queue_args: dict = {"x-message-ttl": 600000}
+    default_k1: float = 10000.0
+    default_k2: float = 1.0
+    default_k3: float = 1.0
+    default_k4: float = 1.0
+    block_size: int = 2048
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(".env.template", ".env"),
@@ -243,6 +253,7 @@ class Settings(BaseSettings):
     # Сырая строка с API-ключами
     auth: AuthConfig
     webhook: WebhookConfigModel = WebhookConfigModel()
+    billing: BillingConfig = BillingConfig()
 
     @property
     def api_keys(self) -> Dict[str, int]:

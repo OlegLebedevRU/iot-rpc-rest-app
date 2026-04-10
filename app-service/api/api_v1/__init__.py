@@ -12,6 +12,7 @@ from .accounts import router as accounts_router
 from .postamat import router as postamat_router
 from .webhook import router as webhooks_router
 from .gauges import router as gauges_router
+from .billing import router as billing_router
 
 router = APIRouter(
     prefix=settings.api.v1.prefix,
@@ -26,3 +27,4 @@ router.include_router(accounts_router)
 router.include_router(postamat_router)
 router.include_router(webhooks_router)
 router.include_router(gauges_router)
+router.include_router(billing_router, include_in_schema=False)

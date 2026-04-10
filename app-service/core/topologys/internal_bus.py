@@ -10,7 +10,7 @@ from core.schemas.rmq_admin import RmqClientsAction
 from core.services.devices import DeviceService
 from core.services.rmq_admin import RmqAdmin
 from core.topologys.fs_depends import Session_dep
-from core.topologys.declare import q_jobs, rmq_api_client_action, webhook_action
+from core.topologys.declare import q_jobs, rmq_api_client_action, webhook_action, billing_action
 
 # Отключаем лишние логи от FastStream
 logging.getLogger("logger_proxy").setLevel(logging.WARNING)
@@ -98,4 +98,35 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
 
     log.info(
         "Webhook sent to org_id=%d, url=%s, type=%s", org_id, webhook_obj.url, msg_type
+    )
+
+
+@fs_router.subscriber(billing_action)
+async def billing_counter(session: Session_dep, msg: RabbitMessage):
+    """Process billing counter increment events from RMQ."""
+    from core.services.billing import BillingService
+
+    try:
+        payload = json.loads(msg.body.decode())
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        log.error("Failed to decode billing message body: %s", str(e))
+        return
+
+    org_id = payload.get("org_id")
+    device_id = payload.get("device_id", 0)
+    counter_type = payload.get("counter_type")
+    value = payload.get("value", 1)
+    payload_bytes = payload.get("payload_bytes", 0)
+
+    if org_id is None or counter_type is None:
+        log.warning("Invalid billing message, missing org_id or counter_type: %s", payload)
+        return
+
+    await BillingService.handle_billing_event(
+        session,
+        org_id=org_id,
+        device_id=device_id,
+        counter_type=counter_type,
+        value=value,
+        payload_bytes=payload_bytes,
     )
