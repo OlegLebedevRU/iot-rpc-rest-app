@@ -22,7 +22,7 @@ class BillingApiCounterMiddleware(BaseHTTPMiddleware):
             and request.url.path.startswith("/api/")
         ):
             org_id = getattr(request.state, "billing_org_id", None)
-            if org_id is not None and org_id > 0:
+            if org_id is not None and org_id >= 0:
                 try:
                     from core.services.billing_publish import publish_billing_event
 
@@ -32,6 +32,6 @@ class BillingApiCounterMiddleware(BaseHTTPMiddleware):
                         counter_type="api",
                     )
                 except Exception as e:
-                    log.debug("Billing API counter error (non-critical): %s", e)
+                    log.warning("Billing API counter error (non-critical): %s", e)
 
         return response
