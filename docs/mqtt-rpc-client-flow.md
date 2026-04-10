@@ -1,9 +1,9 @@
 # MQTT RPC Client Flow — Mermaid Diagrams
 
 > **File:** `docs/mqtt-rpc-client-flow.md`
-> **Version:** 1.0
+> **Version:** 1.1
 > **Date:** 2026
-> **See also:** [`mqtt-rpc-protocol.md`](mqtt-rpc-protocol.md)
+> **See also:** [`mqtt-rpc-protocol.md`](mqtt-rpc-protocol.md), [`correlation-data-guide.md`](correlation-data-guide.md)
 
 ---
 
@@ -192,6 +192,13 @@ sequenceDiagram
 ## 5. Async Event Flow — Device-to-Server (Sequence)
 
 Events are independent of RPC. The device emits them at any time (timer-driven or internally triggered).
+
+**Server-side processing:**
+- Events are deduplicated by `(device_id, dev_event_id, dev_timestamp)` where `dev_event_id != 0`
+- `dev_timestamp` accepts both **Unix epoch** (int/str) and **ISO 8601** strings
+- EVA (acknowledgment) is sent for both new events and idempotent duplicates
+- EVA payload: `{"status": "success"}` or `{"status": "error"}`
+- EVA is sent only when `event_type_code != 0`, `dev_event_id != 0`, and event is not a gauge type
 
 ```mermaid
 sequenceDiagram

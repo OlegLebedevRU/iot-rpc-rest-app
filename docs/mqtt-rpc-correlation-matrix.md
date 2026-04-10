@@ -38,8 +38,22 @@
 
 | Сообщение | Направление | Correlation по протоколу | Реализация | Комментарий |
 |---|---|---|---|---|
-| `evt` | `dev/<SN>/evt` | Да, отдельный новый UUID на каждое событие | Клиент публикует новый UUID как `CorrelationData` и user properties событий | Не связано с RPC lifecycle |
-| `eva` | `srv/<SN>/eva` | Да, тот же UUID, что у `evt` | В протоколе предусмотрено, но в текущем анализе основной фокус был не на этом канале | Опциональное подтверждение события |
+| `evt` | `dev/<SN>/evt` | Да, отдельный новый UUID на каждое событие | Клиент публикует новый UUID как `CorrelationData` и user properties событий (`event_type_code`, `dev_event_id`, `dev_timestamp`) | Не связано с RPC lifecycle |
+| `eva` | `srv/<SN>/eva` | Да, тот же UUID, что у `evt` | `correlation_id` → MQTT `CorrelationData`; headers: `event_type_code`, `dev_event_id`, `correlationData`; payload: `{"status": "success"\|"error"}` | Подтверждение обработки события; отправляется и для новых, и для идемпотентных дубликатов; TTL = 180 сек |
+
+### Идемпотентность событий
+
+Дубликаты `evt` определяются по уникальному индексу `(device_id, dev_event_id, dev_timestamp)` при `dev_event_id != 0`:
+
+- **Новое событие** → сохраняется, публикуется вебхук, отправляется EVA `"success"`
+- **Дубликат** → не сохраняется повторно, вебхук не публикуется, но EVA `"success"` всё равно отправляется
+
+### Условия отправки EVA
+
+EVA отправляется при выполнении всех условий:
+- `event_type_code` задан и ≠ 0
+- `event_type_code` не является gauge-типом
+- `dev_event_id` задан и ≠ 0
 
 ---
 
@@ -133,3 +147,10 @@
 - body fallback в `ack/req/res`
 - косвенно — `RSP.payload.id`, но это реализационный дубль, а не часть обязательного протокола.
 
+---
+
+## Связанные документы
+
+- [`docs/correlation-data-guide.md`](./correlation-data-guide.md) — Подробное руководство по Correlation Data: форматы, fallback, рекомендации для клиентов
+- [`docs/mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md) — Полная спецификация RPC-протокола
+- [`docs/event-protocol-mqtt.md`](./event-protocol-mqtt.md) — Протокол событий EVT/EVA
