@@ -57,20 +57,30 @@ async def set_coefficients(
 ) -> BillingCoefficientOut:
     _require_admin(org_id)
 
-    # Cannot change coefficients for the current month
+    # Cannot set or change coefficients that affect the current billing month.
+    # Coefficients are resolved as "latest with effective_from <= period_start",
+    # so effective_from in [current_month_start, next_month_start) would affect
+    # the current month.  Only past or future-month dates are allowed.
     today = date.today()
     current_month_start = today.replace(day=1)
-    if body.effective_from >= current_month_start:
-        next_month_start = (
-            current_month_start.replace(month=current_month_start.month + 1)
-            if current_month_start.month < 12
-            else current_month_start.replace(year=current_month_start.year + 1, month=1)
+    if current_month_start.month == 12:
+        next_month_start = current_month_start.replace(
+            year=current_month_start.year + 1, month=1
         )
+    else:
+        next_month_start = current_month_start.replace(
+            month=current_month_start.month + 1
+        )
+
+    if current_month_start <= body.effective_from < next_month_start:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot set coefficients for current or future month starting from {current_month_start}. "
-            f"Earliest allowed effective_from is a past date before {current_month_start}. "
-            f"For next billing period, use effective_from on or after the first of a future month.",
+            detail=(
+                f"Cannot set coefficients effective within the current month "
+                f"({current_month_start} — {next_month_start}). "
+                f"Use a date before {current_month_start} for past corrections "
+                f"or on/after {next_month_start} for future periods."
+            ),
         )
 
     row = await BillingRepo.set_coefficients(
