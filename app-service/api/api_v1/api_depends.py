@@ -47,7 +47,7 @@ async def get_org_id_dependency(
             org_id = int(org_id_str)
             log.info("Successfully parsed orgId header as int: %s", org_id)
             return org_id
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             log.error("Invalid orgId format in header: %s (not a number)", org_id_str)
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

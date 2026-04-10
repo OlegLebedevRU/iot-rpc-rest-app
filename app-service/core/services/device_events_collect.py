@@ -46,7 +46,7 @@ class DeviceEventsCollect:
 
         try:
             payload_dict = json.loads(msg.body.decode()) if msg.body else {}
-        except ValueError, TypeError:
+        except (ValueError, TypeError):
             payload_dict = {}
 
         if not is_gauge_event:
