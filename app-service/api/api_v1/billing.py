@@ -31,10 +31,6 @@ router = APIRouter(
 )
 
 
-def _require_admin(org_id: int) -> None:
-    require_billing_admin(org_id)
-
-
 async def _would_affect_current_month(
     session: Session_dep,
     effective_from: date,
@@ -67,7 +63,7 @@ async def list_coefficients(
     session: Session_dep,
     org_id: Org_dep,
 ) -> list[BillingCoefficientOut]:
-    _require_admin(org_id)
+    require_billing_admin(org_id)
     rows = await BillingRepo.list_coefficients(session)
     return [BillingCoefficientOut.model_validate(r, from_attributes=True) for r in rows]
 
@@ -78,7 +74,7 @@ async def set_coefficients(
     org_id: Org_dep,
     body: BillingCoefficientCreate,
 ) -> BillingCoefficientOut:
-    _require_admin(org_id)
+    require_billing_admin(org_id)
 
     # Cannot set or change coefficients that affect the current billing month.
     # Coefficients are resolved as "latest with effective_from <= period_start",
@@ -138,7 +134,7 @@ async def get_consumption(
         date, Query(description="First day of the month (e.g. 2026-03-01)")
     ],
 ) -> BillingCounterOut | None:
-    _require_admin(org_id)
+    require_billing_admin(org_id)
     counter = await BillingRepo.get_counter(session, target_org_id, period)
     if counter is None:
         return None
@@ -151,7 +147,7 @@ async def get_consumption_history(
     org_id: Org_dep,
     target_org_id: Annotated[int, Query(description="Org to query billing for")],
 ) -> list[BillingCounterOut]:
-    _require_admin(org_id)
+    require_billing_admin(org_id)
     rows = await BillingRepo.list_counters(session, target_org_id)
     return [BillingCounterOut.model_validate(r, from_attributes=True) for r in rows]
 
@@ -165,7 +161,7 @@ async def recalculate(
     org_id: Org_dep,
     body: BillingRecalculateRequest,
 ) -> dict:
-    _require_admin(org_id)
+    require_billing_admin(org_id)
 
     period_start = body.period.replace(day=1)
     if period_start.month == 12:
