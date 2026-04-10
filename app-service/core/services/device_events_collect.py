@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,6 +18,28 @@ from core.topologys.declare import topic_publisher, direct_exchange
 log = setup_module_logger(__name__, "srv_dev_evnt_collect.log")
 
 logging.getLogger("logger_proxy").setLevel(logging.WARNING)
+
+
+def _parse_dev_timestamp(raw) -> int:
+    """Parse dev_timestamp from header: Unix epoch (int/str) or ISO 8601 string."""
+    if raw is None:
+        return int(time.time())
+    if isinstance(raw, (int, float)):
+        return int(raw)
+    s = str(raw).strip()
+    # Try as numeric epoch first
+    try:
+        return int(s)
+    except ValueError:
+        pass
+    # Try as ISO 8601
+    try:
+        dt = datetime.fromisoformat(s)
+        return int(dt.timestamp())
+    except (ValueError, TypeError):
+        pass
+    log.warning("Unparseable dev_timestamp=%r, using current time", raw)
+    return int(time.time())
 
 
 class DeviceEventsCollect:
@@ -55,7 +78,7 @@ class DeviceEventsCollect:
         msg_headers = getattr(msg, "headers", {})
         event_type_code = int(msg_headers.get("event_type_code", 0))
         dev_event_id = int(msg_headers.get("dev_event_id", 0))
-        dev_timestamp = int(msg_headers.get("dev_timestamp", time.time()))
+        dev_timestamp = _parse_dev_timestamp(msg_headers.get("dev_timestamp"))
 
         # Проверяем, является ли событие "gauge"-типом
         is_gauge_event = event_type_code in settings.webhook.gauge_event_types
@@ -112,6 +135,17 @@ class DeviceEventsCollect:
                         status="error",
                     )
                 return
+
+            log.info(
+                "EVT result: <dev.%s.evt> is_new=%s, dev_id=%d, "
+                "event_type_code=%d, dev_event_id=%d, dev_timestamp=%d",
+                self.sn,
+                is_new,
+                dev_id,
+                event_type_code,
+                dev_event_id,
+                dev_timestamp,
+            )
 
             # Публикуем вебхук только для новых событий
             if is_new:
