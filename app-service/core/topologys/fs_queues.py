@@ -51,7 +51,7 @@ async def _publish_billing_for_sn(
             payload_bytes=payload_bytes,
         )
     except Exception as e:
-        log.debug("Billing %s publish error (non-critical): %s", counter_type, e)
+        log.debug("Billing %s publish error (non-critical): %r", counter_type, e)
 
 
 if not _ensure_single_registration():
@@ -75,7 +75,7 @@ async def add_one_event(
         event_type_code = int(msg_headers.get("event_type_code", 0))
     except (TypeError, ValueError):
         log.debug(
-            "Invalid EVT event_type_code header for billing: sn=%s raw_value=%s",
+            "Invalid EVT event_type_code header for billing (expected int): sn=%s raw_value=%s",
             sn,
             msg_headers.get("event_type_code"),
         )

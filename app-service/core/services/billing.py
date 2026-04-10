@@ -137,7 +137,7 @@ class BillingService:
                 )
                 has_changes = True
             elif counter_type == "activity":
-                pass  # no extra counter update; device activity was handled already when applicable
+                pass  # Device activity already recorded above if device_id > 0
             else:
                 log.warning("Unknown billing counter_type: %s", counter_type)
             if has_changes:
