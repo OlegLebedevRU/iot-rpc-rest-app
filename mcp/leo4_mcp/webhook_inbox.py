@@ -8,7 +8,7 @@ Stores incoming webhooks in an in-memory queue accessible via /inbox endpoints.
 from __future__ import annotations
 import asyncio
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 try:
@@ -25,7 +25,7 @@ try:
         """Receive msg-task-result webhook from LEO4."""
         body = await request.json()
         _task_results.appendleft(
-            {"received_at": datetime.utcnow().isoformat(), "payload": body}
+            {"received_at": datetime.now(timezone.utc).isoformat(), "payload": body}
         )
         return JSONResponse({"ok": True})
 
@@ -34,7 +34,7 @@ try:
         """Receive msg-event webhook from LEO4."""
         body = await request.json()
         _events.appendleft(
-            {"received_at": datetime.utcnow().isoformat(), "payload": body}
+            {"received_at": datetime.now(timezone.utc).isoformat(), "payload": body}
         )
         return JSONResponse({"ok": True})
 
