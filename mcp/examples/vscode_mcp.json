@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "leo4": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["-m", "leo4_mcp"],
+      "cwd": "${workspaceFolder}/mcp",
+      "env": {
+        "LEO4_API_KEY": "ApiKey YOUR_KEY_HERE",
+        "LEO4_API_URL": "https://dev.leo4.ru/api/v1"
+      }
+    }
+  }
+}

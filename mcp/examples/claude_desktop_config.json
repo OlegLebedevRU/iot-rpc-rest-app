@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "leo4": {
+      "command": "python",
+      "args": ["-m", "leo4_mcp"],
+      "cwd": "/path/to/iot-rpc-rest-app/mcp",
+      "env": {
+        "LEO4_API_KEY": "ApiKey YOUR_KEY_HERE",
+        "LEO4_API_URL": "https://dev.leo4.ru/api/v1",
+        "LEO4_DRY_RUN": "0"
+      }
+    }
+  }
+}
