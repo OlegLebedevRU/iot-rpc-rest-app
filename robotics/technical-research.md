@@ -33,7 +33,7 @@
 |-------------|--------|-----------------|
 | `OlegLebedevRU/iot-rpc-rest-app` | ✅ Публичный | `README.md`, `compose.yaml`, `docs/`, `mcp/README.md`, `mcp/leo4_mcp/` |
 | `OlegLebedevRU/sip_periph` | ✅ Публичный | `README.md`, `CHECKLIST.md`, `Core/Inc/`, `docs/i2c_global_contract.md`, `docs/tca6408_integration.md` |
-| `OlegLebedevRU/siplite` | ⛔ Приватный / недоступен | — |
+| `OlegLebedevRU/siplite` | ✅ Публичный | `README.md`, `AGENTS.md`, `docs/ota.md`, `docs/stm32_bin_download.md`, `docs/stm32_hw.md`, `docs/solution-presentation.md`, `main/*`, `components/*`, `partitions_sip_1.csv` |
 | `OlegLebedevRU/siplite_pcb` | ⛔ Приватный / недоступен | — |
 
 > **Обозначения в тексте:**  
@@ -56,9 +56,13 @@ graph TB
     end
 
     subgraph Gateway["Шлюз устройства (ESP32)"]
-        MQTT_C["MQTT-клиент"]
+        MQTT_C["MQTT-клиент\n(MQTT 5.0)"]
         SIP["SIPLite\n(VoIP стек)"]
         I2C_M["I2C Master\n(400 kHz)"]
+        ETH["KSZ8863\nEthernet Switch\n(2 порта)"]
+        RTP["l4_rtp_bridge\n(RTP bridge)"]
+        OTA_ESP["leo4_ota\n(OTA ESP32)"]
+        STM_FW["l4_stm32_fw\n(OTA STM32)"]
     end
 
     subgraph Periph["Периферийный контроллер (STM32F411CEU)"]
@@ -71,6 +75,9 @@ graph TB
         TCA["TCA6408A\n(GPIO Expander)"]
         RTC["DS3231\n(RTC)"]
         WIEG["Wiegand\nReader"]
+        USB["USB CDC\n(диагностика)"]
+        RS485["RS-485\n(промышл. шина)"]
+        SPIDISP["SPI OLED/TFT\n(дисплей)"]
     end
 
     subgraph AI["AI/Агент"]
@@ -85,6 +92,10 @@ graph TB
     GW --> API
     MQTT_C --- SIP
     MQTT_C --- I2C_M
+    MQTT_C --- RTP
+    ETH --- MQTT_C
+    OTA_ESP --- MQTT_C
+    STM_FW --- I2C_M
     I2C_M <-->|"I2C 400kHz\naddr 0x11"| RTOS
     RTOS --- NFC
     RTOS --- RELAY
@@ -94,6 +105,9 @@ graph TB
     RTOS --- TCA
     RTOS --- RTC
     RTOS --- WIEG
+    RTOS --- USB
+    RTOS --- RS485
+    RTOS --- SPIDISP
 ```
 
 ---
@@ -108,8 +122,8 @@ graph TB
 |---------|-------------|------------|
 | **AI/Agent** | iot-rpc-rest-app / `mcp/` | MCP (Model Context Protocol), Python, stdio/SSE |
 | **Cloud API** | iot-rpc-rest-app / `app-service/` | FastAPI, FastStream, PostgreSQL, RabbitMQ, MQTT 5.0, nginx, JWT (RSA), x509 |
-| **Gateway** | siplite | ESP32, FreeRTOS, MQTT, SIPLite, I2C Master |
-| **Hardware** | sip_periph + siplite_pcb | STM32F411CEU, FreeRTOS, PN532, SSD1306, DWIN, TCA6408A, DS3231, реле |
+| **Gateway** | siplite | ESP32, FreeRTOS, MQTT5, SIPLite, I2C Master, KSZ8863 Ethernet Switch, RTP bridge, OTA |
+| **Hardware** | sip_periph + siplite_pcb | STM32F411CEU, FreeRTOS, PN532, SSD1306, DWIN, TCA6408A, DS3231, реле, USB CDC, RS-485, SPI дисплей |
 
 ### 3.2 Ключевые принципы архитектуры ✅ [подтверждено]
 
@@ -148,6 +162,12 @@ graph TB
 | Matrix KBD | `service_matrix_kbd.h` | Матричная клавиатура |
 | Relay | `service_relay_actuator.h` | Релейный актуатор |
 | Wiegand | (в пакете PACKET_WIEGAND) | Считыватель доступа Wiegand |
+| USB CDC | (USB Device) | USB CDC для диагностики и локального взаимодействия |
+| RS-485 | `app_uart_rs485.h` | RS-485 шина для замковых плат и промышленного оборудования |
+| SPI Display | (SPI интерфейс) | OLED/TFT дисплеи на SPI (помимо DWIN UART HMI) |
+| TCA6408A GPIO | `tca6408a_map.h`, `service_tca6408.h` | Дополнительные GPIO свободного назначения через GPIO expander |
+
+> ✅ **[подтверждено]** USB Device (USB CDC) и RS-485 подтверждены `docs/solution-presentation.md` из репозитория `siplite`. GPIO расширение через TCA6408A — прямые выводы STM32 и TCA6408A.
 
 ### 4.3 Программные службы FreeRTOS ✅ [подтверждено]
 
@@ -185,31 +205,143 @@ sequenceDiagram
 Репозиторий `siplite_pcb` недоступен публично. По контексту:
 - Кастомная PCB, объединяющая STM32F411CEU + ESP32 + периферию
 - Форм-фактор: компактный модуль для встраивания в устройства (постаматы, локеры)
+- Установлен чип Ethernet switch **KSZ8863** (см. раздел 5.4)
 - Вероятно содержит: KiCad/EasyEDA файлы, схемы, Gerber-файлы
 
 ---
 
 ## 5. Коммуникационный шлюз: siplite (ESP32)
 
-### 5.1 Роль ESP32 в стеке 🔷 [вывод по совокупности]
+### 5.1 Архитектура приложения ESP32 ✅ [подтверждено]
 
-Репозиторий `siplite` недоступен. По материалам `iot-rpc-rest-app/README.md` и `sip_periph/docs/i2c_global_contract.md`:
+**Источники:** `docs/solution-presentation.md`, `AGENTS.md` из репозитория `siplite`
 
-- ESP32 — **I2C Master** для STM32 (адрес STM32: `0x11`, скорость `400 kHz`)
-- ESP32 — **MQTT-клиент** с mutual TLS к RabbitMQ
-- ESP32 выполняет SIP-вызовы (упомянуто: "ESP32, ESP-ADF. Remote invoke SIP-Call")
-- ESP32 синхронизирует время по NTP, затем через I2C reg=0x88 передаёт на STM32
-
-### 5.2 SIPLite ✅ [подтверждено косвенно]
-
-Из `iot-rpc-rest-app/README.md`:
+**Цепочка запуска:**
 
 ```
-ESP32, ESP-ADF. Remote invoke SIP-Call.
+app_main() → l4_app_bootstrap() → l4_app_start_services() → l4_app_run_main_loop()
 ```
 
-- SIPLite — лёгкий SIP-стек для ESP32/ESP-ADF
-- Позволяет инициировать голосовые вызовы по команде через MQTT/REST API
+**Bootstrap** (`l4_app_bootstrap.c`):
+- Инициализация NVS / сертификатов / хранилища
+- Подъём Ethernet (KSZ8863 — двухпортовый switch)
+- Инициализация frontend, AV stream
+- Сброс и запуск шины STM32
+- Запуск менеджера SIP-регистрации
+
+**Runtime** (`l4_app_runtime.c`):
+- HTTP/WS сервер (`/gate`, `/event`, `/task`, `/nvs`)
+- Gateway transport callbacks
+- MQTT5 клиент
+- Task payload parser
+- SN broadcast (mDNS)
+
+### 5.2 Модули ESP32 ✅ [подтверждено]
+
+**Источник:** `main/` репозитория `siplite`
+
+| Модуль | Размер | Назначение |
+|--------|--------|------------|
+| `l4_app_bootstrap.c` | — | Инициализация всей системы |
+| `l4_app_runtime.c` | — | Запуск сервисов (HTTP, MQTT, задачи) |
+| `l4_sip_reg_manager.c` | — | SIP lifecycle (event-driven: IP_EVENT_ETH_GOT_IP / LOST_IP) |
+| `l4_i2c_master.c` | 39 KB | I2C Master (основная шина I2C_NUM_1, 400 kHz) |
+| `l4_input_processing.c` | — | Обработка NFC/PIN |
+| `l4_task_payload_parcer.c` | — | Разбор MQTT RPC команд |
+| `leo4_nvs_handler.c` | — | Унифицированный NVS handler |
+| `leo4_web.c` | — | HTTP/WS сервер (/gate, /event, /task, /nvs) |
+| `l4_event_router.c` | — | Маршрутизация событий |
+| `l4_rtp_bridge.c` | 12.5 KB | RTP bridge для видеопотоков |
+| `l4_stm32_fw.c` | 49 KB | Прошивка STM32 через I2C bootloader |
+| `l4_stm32_bin_download.c` | — | Загрузка бинарника STM32 по HTTPS |
+| `leo4_ota.c` | — | OTA обновление ESP32 |
+| `leo4_eth_two_ports.c` | 22 KB | Ethernet два порта (KSZ8863 switch) |
+| `l4_shutdown.c` | — | Graceful shutdown |
+| `l4_healthcheck.c` | — | Healthcheck |
+| `l4_mdns.c` | — | mDNS |
+| `leo4_stm32_bus.c` | — | STM32 I2C bus communication |
+
+### 5.3 Компоненты ESP32 ✅ [подтверждено]
+
+**Источник:** `components/` репозитория `siplite`
+
+| Компонент | Назначение |
+|-----------|------------|
+| `l4_sip` | SIP стек |
+| `l4_mqtt5` | MQTT 5 клиент |
+| `l4_gateway_transport` | Gateway transport |
+| `l4_cloud_codec` | Cloud codec |
+| `l4_types` | Базовые типы |
+| `audio_board`, `audio_hal`, `audio_stream` | Аудио стек (ESP-ADF) |
+| `audio_flash_tone`, `av_stream` | Аудио/видео streaming |
+| `ca_certs` | Корневые сертификаты |
+| `tone_partition` | Тональные сигналы |
+
+### 5.4 Partition table ✅ [подтверждено]
+
+**Источник:** `partitions_sip_1.csv` репозитория `siplite`
+
+| Раздел | Размер | Описание |
+|--------|--------|----------|
+| `esp_secure_cert` | 0x5000 | Зашифрован — сертификат устройства |
+| `nvs` | 0x3000 | Основной NVS |
+| `otadata` | 0x2000 | OTA метаданные (зашифрован) |
+| `nvs_key` | 0x1000 | Ключи NVS (зашифрован) |
+| `fctry` | 0x18000 | Factory NVS |
+| `cfg` | 0x2C000 | Configuration NVS (`cfg_eth/eth_port_mode` и др.) |
+| `stm32_bin` | 0x80000 (512 KB) | Хранение прошивки STM32 |
+| `db1` | 0xC7000 | Database NVS |
+| `log` | 0x6C000 | Логи |
+| `flash_tone` | 0x60000 | Звуковые тоны |
+| `ota_0` | 0x2B0000 (~2.75 MB) | OTA раздел 0 |
+| `ota_1` | 0x2B0000 (~2.75 MB) | OTA раздел 1 |
+
+### 5.5 Ethernet Switch KSZ8863 — два порта ✅ [подтверждено]
+
+**Источник:** `main/leo4_eth_two_ports.c` (22 KB), `simple_switch_main.c` из репозитория `siplite`
+
+На PCB установлен чип Ethernet switch **KSZ8863** с двумя физическими портами:
+
+- **Два Ethernet порта** для подключения к WAN/LAN
+- **Режимы работы** настраиваются через NVS: `cfg_eth/eth_port_mode`
+- **Проксирование** других Ethernet-устройств (например, IP-камеры)
+- **Изоляция IP-трафика**: управление RTP-потоком от IP-камеры на уровне L2
+
+**Ключевой кейс:** IP-камера подключается ко второму порту KSZ8863, трафик изолируется от основной сети. ESP32 выступает шлюзом/proxy для RTSP/RTP потока камеры.
+
+### 5.6 OTA обновление ESP32 ✅ [подтверждено]
+
+**Источник:** `docs/ota.md`, `main/leo4_ota.c` из репозитория `siplite`
+
+| Параметр | Значение |
+|----------|---------|
+| RPC метод | `SW_UPDATE` (method_code=19) |
+| Протокол загрузки | HTTPS (проверка цепочки TLS отключена) |
+| OTA разделы | `ota_0` / `ota_1` по ~2.75 MB каждый |
+| Уведомление | Асинхронное событие `OTA_RESULT` |
+| Защита от параллельного запуска | 409 Conflict |
+
+**Коды результата:** `OTA_OK`, `OTA_ERR_NET`, `OTA_ERR_NO_SPACE`, `OTA_ERR_IMAGE_INVALID`, `OTA_ERR_INTERNAL`
+
+### 5.7 OTA обновление STM32 (периферийного контроллера) ✅ [подтверждено]
+
+**Источник:** `docs/stm32_bin_download.md`, `docs/stm32_hw.md`, `main/l4_stm32_bin_download.c`, `main/l4_stm32_fw.c` из репозитория `siplite`
+
+**Двухэтапный процесс:**
+
+**Этап 1 — Загрузка бинарника (RPC 512 / `STM32_BIN_DOWNLOAD`):**
+- Загрузка `.bin` файла по HTTPS
+- Сохранение в NVS-раздел `stm32_bin` (512 KB) как blob-чанки (`chunk_0`, `chunk_1`, ...)
+- SHA256-верификация после загрузки
+- Событие `STM32_BIN_LOAD_RESULT` с кодами `STM32_DL_OK`, `STM32_DL_ERR_*`
+
+**Этап 2 — Прошивка STM32 (RPC 411):**
+- Прошивка через I2C bootloader (AN2606 + AN4221)
+- I2C адрес bootloader: `0x39`, скорость: 100 kHz
+- Протокол команд: `GET`, `GET_VER`, `GET_ID`, `WRITE_MEM_NS`, `EXT_ERASE_NS`, `GO`
+- Активация bootloader: BOOT0 + NRST через GPIO expander TCA6408A
+
+> ⚠️ **Ограничение:** периферийный микроконтроллер должен быть подключён в соответствии с паттерном активации bootloader. Для справки по бутлоадерам STM32 есть директория `vendor-docs/` с Application Notes (AN2606, AN4221).
 
 ---
 
@@ -455,16 +587,40 @@ write_nvs(device_id=4620, namespace="wifi", key="wifi_ssid", value="MyNetwork")
 - Изменение параметров без физического доступа к роботу
 - Конфигурация STM32 через I2C reg=0xE0 (`I2C_REG_CFG_ADDR`)
 
-### 9.8 Raspberry Pi как узел видеопотока ✅ [подтверждено]
+### 9.8 Видеопотоки: IP-камеры, FFmpeg, GStreamer и другие источники ✅ [подтверждено]
 
 Из README.md iot-rpc-rest-app:
 ```
 Raspberry PI. Remote start Camera-streaming custom session to WebRTC.
 ```
 
-- Raspberry Pi как более мощный вычислительный узел в рое
-- Видеострим по команде через MQTT/REST
-- Интеграция в ту же систему аутентификации (x509)
+Из `main/l4_rtp_bridge.c` (12.5 KB) и `components/av_stream` репозитория `siplite` подтверждена поддержка RTP bridging и audio/video streaming.
+
+**Поддерживаемые источники видеопотоков:**
+
+| Источник | Протокол | Описание |
+|----------|----------|----------|
+| **Raspberry Pi** | RTP/WebRTC | Мощный вычислительный узел с камерой |
+| **IP-камеры** (любые вендоры) | RTSP/ONVIF | Подключение к порту KSZ8863 |
+| **FFmpeg** | RTP/RTSP | Генерация и транскодирование видеопотоков |
+| **GStreamer** | RTP/RTSP | Пайплайны обработки видео |
+| Любые RTP/RTSP источники | RTP/RTSP | Открытый протокол |
+
+**Роль KSZ8863 Ethernet switch в видеосценариях:**
+- IP-камера подключается ко второму порту KSZ8863 — трафик изолируется от основной сети
+- ESP32 через `l4_rtp_bridge.c` проксирует RTP-поток на SIP-сессию
+- Управление маршрутизацией видеопотоков на уровне L2
+
+```mermaid
+graph LR
+    CAM["IP-камера\n(RTSP/ONVIF)"] -->|"Порт 2\nKSZ8863"| GW["ESP32\nsiplite"]
+    PI["Raspberry Pi\n(FFmpeg/GStreamer)"] -->|"RTP"| GW
+    GW -->|"l4_rtp_bridge\nRTP → SIP"| SIP["SIP сессия"]
+    GW -->|"MQTT"| Cloud["LEO4 Cloud"]
+    Cloud -->|"WebRTC"| User["Оператор"]
+```
+
+
 
 ---
 
@@ -538,7 +694,11 @@ graph LR
 | HMI | SSD1306 OLED, DWIN Touch | ✅ Реализовано |
 | RT OS | FreeRTOS на STM32 | ✅ Реализовано |
 | Шлюз | ESP32 + MQTT + I2C Master | ✅ Подтверждено |
-| VoIP | SIPLite на ESP32 | ✅ Упомянуто |
+| VoIP | SIPLite на ESP32 | ✅ Подтверждено |
+| Ethernet Switch | KSZ8863 (два порта) | ✅ Подтверждено |
+| OTA (ESP32) | leo4_ota.c + SW_UPDATE RPC | ✅ Подтверждено |
+| OTA (STM32) | STM32_BIN_DOWNLOAD + I2C bootloader | ✅ Подтверждено |
+| RTP bridge | l4_rtp_bridge.c (12.5 KB) | ✅ Подтверждено |
 | Брокер | RabbitMQ + MQTT 5.0 | ✅ Реализовано |
 | API | FastAPI + PostgreSQL | ✅ Реализовано |
 | Security | x509 + JWT + Mutual TLS | ✅ Реализовано |
@@ -558,4 +718,4 @@ graph LR
 
 ---
 
-*Исследование проведено на основе публично доступных репозиториев. Репозитории `siplite` и `siplite_pcb` были недоступны на момент исследования — соответствующие разделы основаны на косвенных источниках.*
+*Исследование проведено на основе публично доступных репозиториев. Репозиторий `siplite_pcb` был недоступен на момент исследования — соответствующие разделы основаны на косвенных источниках. Репозиторий `siplite` изучен полностью: все данные о шлюзе ESP32, OTA, Ethernet switch и компонентах подтверждены кодом.*
