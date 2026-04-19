@@ -51,7 +51,7 @@ CERT_WAIT_TIMEOUT = float(os.environ.get("CERT_WAIT_TIMEOUT", "0"))  # 0 = forev
 HEALTHCHECK_INTERVAL = float(os.environ.get("HEALTHCHECK_INTERVAL", "60"))
 TEST_EVENT_INTERVAL = float(os.environ.get("TEST_EVENT_INTERVAL", "60"))
 
-CELL_OPEN_DELAY = float(os.environ.get("CELL_OPEN_DELAY", "1.0"))
+CELL_OPEN_DELAY_SECONDS = float(os.environ.get("CELL_OPEN_DELAY", "1.0"))
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
@@ -201,8 +201,7 @@ class DeviceEmulator:
     # ------------------------------------------------------------------ MQTT
     def _on_connect(self, client, userdata, flags, reason_code, properties=None):
         if reason_code == 0 or getattr(reason_code, "is_failure", False) is False:
-            log.info("Connected to MQTT broker %s:%s as %s",
-                     MQTT_HOST, MQTT_PORT, self.sn)
+            log.info("Connected to MQTT broker %s:%s as %s", MQTT_HOST, MQTT_PORT, self.sn)
         else:
             log.error("Failed to connect: %s", reason_code)
             return
@@ -237,8 +236,7 @@ class DeviceEmulator:
             elif msg.topic == self.topic_rsp:
                 self._handle_rsp(corr, user_props, msg.payload)
             elif msg.topic == self.topic_cmt:
-                log.info("CMT received for corr=%s, result_id=%s",
-                         corr, user_props.get("result_id"))
+                log.info("CMT received for corr=%s, result_id=%s", corr, user_props.get("result_id"))
             elif msg.topic == self.topic_eva:
                 log.debug("EVA received: %s", user_props)
         except Exception:
@@ -294,14 +292,13 @@ class DeviceEmulator:
         # Parse payload (expected: {"dt":[{"cl": <cell>}]})
         cell_number = self._parse_cell_number(payload)
         log.info(
-            "Method 51 (open cell) requested, cell=%s — emulating physical "
-            "open in %.1fs",
+            "Method 51 (open cell) requested, cell=%s — emulating physical open in %.1fs",
             cell_number,
-            CELL_OPEN_DELAY,
+            CELL_OPEN_DELAY_SECONDS,
         )
 
         # Emulate the real physical action of opening the cell
-        if self.stop_event.wait(CELL_OPEN_DELAY):
+        if self.stop_event.wait(CELL_OPEN_DELAY_SECONDS):
             log.info("Shutdown requested before cell open finished — aborting")
             return
 
