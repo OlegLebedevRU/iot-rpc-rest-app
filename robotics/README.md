@@ -6,7 +6,7 @@
 
 | Файл | Описание |
 |------|----------|
-| [technical-research.md](./technical-research.md) | Техническое исследование: точные ссылки на репозитории, пути, модули, код и документацию |
+| [technical-research.md](./technical-research.md) | Техническое исследование: точные ссылки на репозитории, пути, модули, код и документацию. Включает: архитектуру siplite, OTA обновление ESP32 и STM32, Ethernet switch KSZ8863, RTP bridge, видеопотоки от IP-камер/FFmpeg/GStreamer |
 | [marketing-overview.md](./marketing-overview.md) | Маркетинговый обзор: платформа LEO4 как робототехническое решение, без ссылок на файлы и код |
 
 ## Область исследования
@@ -14,8 +14,8 @@
 Исследованы четыре репозитория как единый технологический стек:
 
 - **`OlegLebedevRU/iot-rpc-rest-app`** — облачный API, брокер сообщений, MCP-сервер для AI-агентов
-- **`OlegLebedevRU/sip_periph`** — firmware STM32F411CEU: периферийный контроллер с NFC, OLED, реле, RTC
-- **`OlegLebedevRU/siplite`** — легковесный SIP-стек для ESP32 (репозиторий приватный)
+- **`OlegLebedevRU/sip_periph`** — firmware STM32F411CEU: периферийный контроллер с NFC, OLED, реле, RTC, USB CDC, RS-485
+- **`OlegLebedevRU/siplite`** — ESP32 приложение: SIP-шлюз, MQTT5, KSZ8863 Ethernet switch, RTP bridge, OTA обновление ESP32 и STM32
 - **`OlegLebedevRU/siplite_pcb`** — PCB-дизайн для аппаратного узла (репозиторий приватный)
 
 ## Различия между документами
