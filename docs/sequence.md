@@ -31,7 +31,7 @@ sequenceDiagram
     alt Valid request
         API->>+Core: Create task
         Core-->>-API: task_id (UUID4), status = READY
-        API-->>ClientApp: 200 OK { id, created_at }
+        API-->>-ClientApp: 200 OK { id, created_at }
 
         par Persist for polling
             Core->>Queue: Enqueue task (priority, ttl, created_at)
@@ -45,11 +45,11 @@ sequenceDiagram
                     Core->>Core: status = PENDING
                 end
             else Device is offline
-                Note over Core,Broker: Push не доставлен; задача остаётся в очереди и будет выдана при следующем polling запросе устройства
+                Note over Core,Broker: Push не доставлен — задача остаётся в очереди и будет выдана при следующем polling запросе устройства
             end
         end
     else Invalid request
-        API-->>-ClientApp: 4xx Error (validation / auth)
+        API-->>ClientApp: 4xx Error (validation / auth)
     end
 ```
 
@@ -79,31 +79,28 @@ sequenceDiagram
         Broker->>Device: DELIVER tsk
         Device->>Broker: PUBLISH dev/<SN>/req [correlationData = task_id]
     else Polling (device-initiated)
-        loop req_poll_timer
-            Device->>Broker: PUBLISH dev/<SN>/req [correlationData = UUID(0)]
-            Broker->>Core: DELIVER req
-            Core->>Queue: Select next task (priority/ttl/created_at)
-            alt No eligible task
-                Note over Core: Тихо игнорируется; устройство ждёт следующего тика
-            else Task selected
-                Note over Core,Device: Дальнейшие шаги — общая ветка ниже
-            end
-        end
+        Note over Device: Периодический тик req_poll_timer — пустые ответы тихо игнорируются
+        Device->>Broker: PUBLISH dev/<SN>/req [correlationData = UUID(0)]
     end
 
     Broker->>Core: DELIVER req
-    Core->>Core: status = LOCK (locked_at)
-    Core->>Broker: PUBLISH srv/<SN>/rsp [method_code, payload.dt]
-    Broker->>Device: DELIVER rsp
+    Core->>Queue: Select next task (priority/ttl/created_at)
+    alt No eligible task
+        Note over Core: Тихо игнорируется — устройство ждёт следующего тика
+    else Task selected
+        Core->>Core: status = LOCK (locked_at)
+        Core->>Broker: PUBLISH srv/<SN>/rsp [method_code, payload.dt]
+        Broker->>Device: DELIVER rsp
 
-    Note over Device: Worker выполняет задачу
+        Note over Device: Worker выполняет задачу
 
-    Device->>Broker: PUBLISH dev/<SN>/res [status_code = 200/4xx/500, ext_id]
-    Broker->>Core: DELIVER res
-    Core->>Core: Save result, status = DONE / FAILED
-    Core->>Broker: PUBLISH srv/<SN>/cmt [result_id]
-    Broker->>Device: DELIVER cmt
-    Note over Core,Device: RPC lifecycle complete
+        Device->>Broker: PUBLISH dev/<SN>/res [status_code = 200/4xx/500, ext_id]
+        Broker->>Core: DELIVER res
+        Core->>Core: Save result, status = DONE / FAILED
+        Core->>Broker: PUBLISH srv/<SN>/cmt [result_id]
+        Broker->>Device: DELIVER cmt
+        Note over Core,Device: RPC lifecycle complete
+    end
 ```
 
 > Истечение TTL обрабатывается отдельно: задача с истёкшим сроком переводится в `EXPIRED` и больше не выдаётся устройству. Подробнее — [`TTL.md`](./TTL.md), [`task_states.md`](./task_states.md).
