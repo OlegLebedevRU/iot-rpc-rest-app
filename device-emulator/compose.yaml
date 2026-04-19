@@ -1,0 +1,41 @@
+services:
+  device-emulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: iot-device-emulator:latest
+    container_name: device-emulator
+    restart: unless-stopped
+    environment:
+      MQTT_HOST: ${MQTT_HOST:-dev.leo4.ru}
+      MQTT_PORT: ${MQTT_PORT:-8883}
+      MQTT_CA_FILE: /certs/${CA_FILE_NAME:-ca.crt}
+      MQTT_CERT_FILE: /certs/${CERT_FILE_NAME:-cert.pem}
+      MQTT_KEY_FILE: /certs/${KEY_FILE_NAME:-key.pem}
+      CERT_WAIT_INTERVAL: ${CERT_WAIT_INTERVAL:-5}
+      CERT_WAIT_TIMEOUT: ${CERT_WAIT_TIMEOUT:-0}
+      HEALTHCHECK_INTERVAL: ${HEALTHCHECK_INTERVAL:-60}
+      TEST_EVENT_INTERVAL: ${TEST_EVENT_INTERVAL:-60}
+      CELL_OPEN_DELAY: ${CELL_OPEN_DELAY:-1.0}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    # Certificate files are provided from the host at runtime.
+    # The host directory containing the certificates is bind-mounted into the
+    # container at /certs.  Individual file names are configurable, so the
+    # files themselves may appear *after* the container has started — at
+    # startup the emulator polls the paths until all three files are present
+    # and parse correctly as PEM.
+    #
+    # Example invocation (paths supplied on the docker compose command line):
+    #
+    #   CERTS_DIR=/host/path/to/certs \
+    #   CA_FILE_NAME=iot_leo4_ca.crt \
+    #   CERT_FILE_NAME=cert_0000000.pem \
+    #   KEY_FILE_NAME=key_0000000.pem \
+    #   docker compose up
+    volumes:
+      - type: bind
+        source: ${CERTS_DIR:?CERTS_DIR is required (host directory with certificates)}
+        target: /certs
+        read_only: true
+        bind:
+          create_host_path: false
