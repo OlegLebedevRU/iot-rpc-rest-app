@@ -2,11 +2,17 @@
 Device emulator for the IoT RPC/REST stack.
 
 Implements:
-  * Mock handler for RPC method_code = 51 (open cell):
-      - waits 1 second after receiving the rsp payload (to emulate the real
-        physical action of opening the cell)
-      - replies with a `res` containing status_code=200 and the requested cell
-        number echoed back.
+  * Mock handler for RPC method_code = 51 (open cell) — emulates the real
+    3-phase flow described in ``docs/ai-agent-integration-guide.md``:
+      1. Immediately replies with a ``res`` (``status_code=200``) — this only
+         confirms that the command was successfully received by the device,
+         **not** that the cell has been opened physically.
+      2. After ``CELL_OPEN_DELAY`` seconds (emulating the physical action),
+         publishes ``event_type_code = 13`` (``CellOpenEvent``) carrying the
+         cell number in tag ``304``.
+      3. ``CELL_CLOSE_DELAY`` seconds after event 13, publishes
+         ``event_type_code = 14`` (cell closed) with the same format and the
+         same cell number — emulating the physical closing of the cell.
   * Periodic healthcheck event (event_type_code = 44), once per minute.
   * Periodic test event (event_type_code = 90), once per minute.
 
@@ -52,6 +58,7 @@ HEALTHCHECK_INTERVAL = float(os.environ.get("HEALTHCHECK_INTERVAL", "60"))
 TEST_EVENT_INTERVAL = float(os.environ.get("TEST_EVENT_INTERVAL", "60"))
 
 CELL_OPEN_DELAY_SECONDS = float(os.environ.get("CELL_OPEN_DELAY", "1.0"))
+CELL_CLOSE_DELAY_SECONDS = float(os.environ.get("CELL_CLOSE_DELAY", "30.0"))
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
 
@@ -67,6 +74,8 @@ METHOD_OPEN_CELL = 51
 # Event codes
 EVENT_HEALTHCHECK = 44
 EVENT_TEST = 90
+EVENT_CELL_OPEN = 13
+EVENT_CELL_CLOSE = 14
 
 
 # --------------------------------------------------------------------------- #
@@ -292,25 +301,84 @@ class DeviceEmulator:
         # Parse payload (expected: {"dt":[{"cl": <cell>}]})
         cell_number = self._parse_cell_number(payload)
         log.info(
-            "Method 51 (open cell) requested, cell=%s — emulating physical open in %.1fs",
+            "Method 51 (open cell) requested, cell=%s — acknowledging command "
+            "immediately; physical open in %.1fs, close %.1fs after that",
             cell_number,
             CELL_OPEN_DELAY_SECONDS,
+            CELL_CLOSE_DELAY_SECONDS,
         )
 
-        # Emulate the real physical action of opening the cell
-        if self.stop_event.wait(CELL_OPEN_DELAY_SECONDS):
-            log.info("Shutdown requested before cell open finished — aborting")
-            return
-
-        result = {
+        # Phase 1: immediately confirm that the command was *received* by the
+        # device.  Per the 3-phase flow described in the AI-agent integration
+        # guide, this `res` only signals successful receipt of the command —
+        # the physical open/close are reported afterwards via events 13/14.
+        ack_result = {
             "result": "ok",
             "method_code": METHOD_OPEN_CELL,
             "cl": cell_number,
-            "opened": True,
+            "accepted": True,
             "ts": datetime.now(timezone.utc).isoformat(),
         }
-        log.info("Cell %s opened (mock); sending RES", cell_number)
-        self._publish_res(corr, result, status_code="200")
+        self._publish_res(corr, ack_result, status_code="200")
+        log.info("Cell %s command accepted (mock); RES sent", cell_number)
+
+        # Phases 2 & 3 happen asynchronously so we don't block the MQTT
+        # callback thread and so that we can handle further commands in the
+        # meantime.
+        thread = threading.Thread(
+            target=self._emulate_physical_cell_cycle,
+            args=(cell_number,),
+            name=f"cell-cycle-{cell_number}",
+            daemon=True,
+        )
+        thread.start()
+
+    def _emulate_physical_cell_cycle(self, cell_number: Optional[int]) -> None:
+        """Emulate the physical open (event 13) and close (event 14) phases."""
+        # Phase 2: wait for the physical "open", then publish event 13.
+        if self.stop_event.wait(CELL_OPEN_DELAY_SECONDS):
+            log.info(
+                "Shutdown requested before cell %s physical open — aborting cycle",
+                cell_number,
+            )
+            return
+        try:
+            self._publish_event(
+                EVENT_CELL_OPEN,
+                self._cell_event_payload("CellOpenEvent", cell_number),
+            )
+        except Exception:
+            log.exception("Failed to publish CellOpenEvent (13) for cell %s",
+                          cell_number)
+
+        # Phase 3: wait CELL_CLOSE_DELAY_SECONDS and publish event 14.
+        if self.stop_event.wait(CELL_CLOSE_DELAY_SECONDS):
+            log.info(
+                "Shutdown requested before cell %s physical close — skipping event 14",
+                cell_number,
+            )
+            return
+        try:
+            self._publish_event(
+                EVENT_CELL_CLOSE,
+                self._cell_event_payload("CellCloseEvent", cell_number),
+            )
+        except Exception:
+            log.exception("Failed to publish CellCloseEvent (14) for cell %s",
+                          cell_number)
+
+    @staticmethod
+    def _cell_event_payload(description: str,
+                            cell_number: Optional[int]) -> dict:
+        """Build the payload for cell open/close events.
+
+        The cell number is carried in tag ``304`` as required by the
+        AI-agent integration guide (``CellOpenEvent {304: <cell>}``).
+        """
+        payload: dict = {"description": description}
+        if cell_number is not None:
+            payload["304"] = cell_number
+        return payload
 
     @staticmethod
     def _parse_cell_number(payload: bytes) -> Optional[int]:
