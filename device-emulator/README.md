@@ -10,13 +10,21 @@ and [`docs/event-protocol-mqtt.md`](../docs/event-protocol-mqtt.md)).
 * Connects to the configured MQTT broker over TLS using a client certificate.
 * Subscribes to `srv/<SN>/tsk`, `srv/<SN>/rsp`, `srv/<SN>/cmt`, `srv/<SN>/eva`
   where `<SN>` is the `CN` field of the supplied client certificate.
-* Implements a **mock handler for `method_code = 51` (open cell)**:
+* Implements a **mock handler for `method_code = 51` (open cell)** that
+  emulates the real **3-phase physical flow** described in
+  [`docs/ai-agent-integration-guide.md`](../docs/ai-agent-integration-guide.md):
   * On `tsk` for the device — sends an `ack` and a `req` with the same
     `correlationData`.
-  * On `rsp` with `method_code=51` and payload like `{"dt":[{"cl": 5}]}`,
-    waits **1 second** to emulate the real physical action of opening the
-    cell, then publishes a `res` to `dev/<SN>/res` with
-    `status_code=200` and a JSON payload echoing the cell number.
+  * On `rsp` with `method_code=51` and payload like `{"dt":[{"cl": 5}]}`:
+    1. **Immediately** publishes a `res` to `dev/<SN>/res` with
+       `status_code=200`. This only confirms that the command was received
+       by the device — **not** that the cell has been opened physically.
+    2. After `CELL_OPEN_DELAY` seconds (default 1 s) publishes
+       `event_type_code=13` (`CellOpenEvent`) carrying the cell number in
+       tag `304` — this is the physical "cell opened" confirmation.
+    3. `CELL_CLOSE_DELAY` seconds after event 13 (default 30 s), publishes
+       `event_type_code=14` with the same format and the same cell number
+       in tag `304` — emulating the physical closing of the cell.
 * Once per minute publishes a **healthcheck event** (`event_type_code=44`).
 * Once per minute publishes a **test event** (`event_type_code=90`).
 
@@ -56,7 +64,8 @@ number of seconds to give up after a deadline (default `0` = wait forever).
 | `CERT_WAIT_TIMEOUT` | `0` | Seconds to wait for certificates (0 = forever) |
 | `HEALTHCHECK_INTERVAL` | `60` | Seconds between healthcheck (`code=44`) events |
 | `TEST_EVENT_INTERVAL` | `60` | Seconds between test (`code=90`) events |
-| `CELL_OPEN_DELAY` | `1.0` | Seconds to wait before replying to method 51 |
+| `CELL_OPEN_DELAY` | `1.0` | Seconds to wait after `res` before publishing `CellOpenEvent` (event 13) |
+| `CELL_CLOSE_DELAY` | `30.0` | Seconds to wait after event 13 before publishing the cell-close event (event 14) |
 | `LOG_LEVEL` | `INFO` | Python `logging` level |
 
 ## Running
