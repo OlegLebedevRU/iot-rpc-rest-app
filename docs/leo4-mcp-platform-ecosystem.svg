@@ -1,0 +1,130 @@
+<svg width="1400" height="900" viewBox="0 0 1400 900" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bgGlow" x1="700" y1="0" x2="700" y2="900" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F6F8FC"/>
+      <stop offset="1" stop-color="#EDF2FB"/>
+    </linearGradient>
+    <linearGradient id="platformBody" x1="700" y1="120" x2="700" y2="600" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#112D5C"/>
+      <stop offset="1" stop-color="#173A73"/>
+    </linearGradient>
+    <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="18" stdDeviation="20" flood-color="#173A73" flood-opacity="0.14"/>
+    </filter>
+  </defs>
+
+  <rect width="1400" height="900" fill="white"/>
+  <rect x="0" y="0" width="1400" height="900" fill="url(#bgGlow)"/>
+
+  <path d="M140 660C190 620 254 618 320 648C382 676 432 678 492 644C551 612 606 612 660 644C716 677 768 678 828 642C889 605 942 606 1000 640C1059 675 1112 674 1180 648C1244 624 1294 625 1340 652V900H140V660Z" fill="#F4F6FB"/>
+  <path d="M220 688C266 648 327 646 381 674C441 705 495 706 550 674C605 643 658 644 708 674C760 705 811 706 867 673C923 640 975 640 1030 671C1085 701 1140 702 1200 676C1254 652 1298 654 1340 678V900H220V688Z" fill="#EEF2F8"/>
+
+  <g filter="url(#shadow)">
+    <path d="M52 64H414L398 81H104L52 64Z" fill="#173A73"/>
+    <rect x="88" y="48" width="294" height="22" rx="11" fill="#173A73"/>
+    <text x="235" y="62" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">Devices</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <path d="M986 64H1348L1296 81H1002L986 64Z" fill="#173A73"/>
+    <rect x="1018" y="48" width="294" height="22" rx="11" fill="#173A73"/>
+    <text x="1165" y="62" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="700">Business Apps</text>
+  </g>
+
+  <g opacity="0.98">
+    <rect x="110" y="140" width="250" height="136" rx="28" fill="white" stroke="#D9E3F3" stroke-width="2"/>
+    <circle cx="174" cy="196" r="28" fill="#EAF2FF" stroke="#1E5AA7" stroke-width="4"/>
+    <path d="M158 209C166 189 182 189 190 209" stroke="#1E5AA7" stroke-width="4" stroke-linecap="round"/>
+    <path d="M156 190C161 182 168 178 174 178C180 178 187 182 192 190" stroke="#1E5AA7" stroke-width="4" stroke-linecap="round"/>
+    <path d="M147 186L139 178M201 186L209 178" stroke="#1E5AA7" stroke-width="4" stroke-linecap="round"/>
+    <text x="238" y="192" fill="#14345F" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700">SIP</text>
+    <text x="238" y="223" fill="#3E5C86" font-family="Arial, Helvetica, sans-serif" font-size="22">voice endpoints</text>
+
+    <rect x="110" y="298" width="250" height="136" rx="28" fill="white" stroke="#D9E3F3" stroke-width="2"/>
+    <rect x="148" y="342" width="54" height="54" rx="10" fill="#EAF2FF" stroke="#1E5AA7" stroke-width="4"/>
+    <path d="M175 342V396M148 369H202" stroke="#1E5AA7" stroke-width="4"/>
+    <rect x="164" y="355" width="54" height="54" rx="10" fill="white" stroke="#1E5AA7" stroke-width="4"/>
+    <text x="238" y="350" fill="#14345F" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700">Lockers</text>
+    <text x="238" y="381" fill="#3E5C86" font-family="Arial, Helvetica, sans-serif" font-size="22">cells &amp; access</text>
+
+    <rect x="110" y="456" width="250" height="136" rx="28" fill="white" stroke="#D9E3F3" stroke-width="2"/>
+    <circle cx="174" cy="524" r="30" fill="#EAF2FF" stroke="#1E5AA7" stroke-width="4"/>
+    <circle cx="174" cy="524" r="7" fill="#1E5AA7"/>
+    <path d="M174 494V470M174 578V554M144 524H120M228 524H204M153 503L136 486M212 562L195 545M195 503L212 486M136 562L153 545" stroke="#1E5AA7" stroke-width="4" stroke-linecap="round"/>
+    <text x="238" y="520" fill="#14345F" font-family="Arial, Helvetica, sans-serif" font-size="36" font-weight="700">IoT</text>
+    <text x="238" y="551" fill="#3E5C86" font-family="Arial, Helvetica, sans-serif" font-size="22">devices &amp; sensors</text>
+  </g>
+
+  <g opacity="0.98">
+    <rect x="1040" y="158" width="230" height="120" rx="28" fill="white" stroke="#D9E3F3" stroke-width="2"/>
+    <rect x="1082" y="194" width="46" height="46" rx="8" fill="#EAF2FF" stroke="#1E5AA7" stroke-width="4"/>
+    <path d="M1138 214H1222M1138 230H1214" stroke="#1E5AA7" stroke-width="4" stroke-linecap="round"/>
+    <text x="1140" y="187" fill="#14345F" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">CRM</text>
+
+    <rect x="1040" y="300" width="230" height="120" rx="28" fill="white" stroke="#D9E3F3" stroke-width="2"/>
+    <rect x="1084" y="334" width="42" height="54" rx="6" fill="#EAF2FF" stroke="#1E5AA7" stroke-width="4"/>
+    <path d="M1140 346H1222M1140 362H1210M1140 378H1218" stroke="#1E5AA7" stroke-width="4" stroke-linecap="round"/>
+    <text x="1142" y="342" fill="#14345F" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="700">ERP</text>
+
+    <rect x="1040" y="442" width="230" height="120" rx="28" fill="white" stroke="#D9E3F3" stroke-width="2"/>
+    <circle cx="1106" cy="502" r="22" fill="#EAF2FF" stroke="#1E5AA7" stroke-width="4"/>
+    <path d="M1090 502H1122M1106 486V518" stroke="#1E5AA7" stroke-width="4" stroke-linecap="round"/>
+    <text x="1144" y="495" fill="#14345F" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700">+ More App</text>
+    <text x="1144" y="525" fill="#3E5C86" font-family="Arial, Helvetica, sans-serif" font-size="20">custom integrations</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <path d="M594 126H806C824 126 838 140 838 158V536C838 554 824 568 806 568H594C576 568 562 554 562 536V158C562 140 576 126 594 126Z" fill="url(#platformBody)"/>
+    <path d="M562 210H520L500 250L520 290H562V210Z" fill="#5FAA14"/>
+    <path d="M838 210H880L900 250L880 290H838V210Z" fill="#3FA7F5"/>
+    <path d="M645 470L615 490V548L675 590L735 548V490L705 470V430H645V470Z" fill="#F36B2D"/>
+    <path d="M562 126H624V214C624 231 610 244 593 244H562V126Z" fill="#6A6A6A"/>
+    <path d="M838 126H776V214C776 231 790 244 807 244H838V126Z" fill="#6A6A6A"/>
+    <path d="M734 458H838V526H774L734 494V458Z" fill="#6A6A6A"/>
+
+    <g transform="translate(639 247)">
+      <rect x="0" y="0" width="12" height="40" rx="6" fill="white"/>
+      <rect x="22" y="-16" width="12" height="72" rx="6" fill="white"/>
+      <rect x="44" y="-32" width="12" height="104" rx="6" fill="white"/>
+      <rect x="66" y="-8" width="12" height="56" rx="6" fill="#74B8FF"/>
+      <rect x="88" y="-22" width="12" height="84" rx="6" fill="white"/>
+    </g>
+    <text x="700" y="365" text-anchor="middle" fill="#7BC2FF" font-family="Arial, Helvetica, sans-serif" font-size="50" font-weight="700">MCP Server</text>
+    <text x="700" y="415" text-anchor="middle" fill="white" font-family="Arial, Helvetica, sans-serif" font-size="40" font-weight="700">Leo4 IoT Platform</text>
+    <text x="700" y="452" text-anchor="middle" fill="#C6D8F7" font-family="Arial, Helvetica, sans-serif" font-size="24">Unified secure transport &amp; orchestration layer</text>
+  </g>
+
+  <g>
+    <path d="M360 357H550" stroke="#1E5AA7" stroke-width="8" stroke-linecap="round"/>
+    <path d="M840 357H1034" stroke="#1E5AA7" stroke-width="8" stroke-linecap="round"/>
+    <circle cx="550" cy="357" r="7" fill="#1E5AA7"/>
+    <circle cx="840" cy="357" r="7" fill="#1E5AA7"/>
+    <rect x="418" y="320" width="564" height="52" rx="26" fill="white" stroke="#BFD1EA" stroke-width="2"/>
+    <text x="700" y="354" text-anchor="middle" fill="#14345F" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">VoIP / MQTT Protocol</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="218" y="610" width="964" height="200" rx="48" fill="#F8FAFE"/>
+    <path d="M448 610C476 635 501 652 540 662C583 672 603 646 642 631C669 621 695 624 726 639C759 656 784 673 826 667C872 661 903 627 946 617H448Z" fill="#EFF3FA"/>
+
+    <rect x="298" y="660" width="244" height="118" rx="32" fill="white"/>
+    <text x="420" y="703" text-anchor="middle" fill="#14345F" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700">AI Voice Agent</text>
+    <path d="M380 741C380 723 395 709 412 709C429 709 444 723 444 741V753C444 771 429 785 412 785C395 785 380 771 380 753V741Z" fill="#EAF2FF" stroke="#1E5AA7" stroke-width="4"/>
+    <path d="M456 739C462 746 466 756 466 767C466 778 462 788 456 795" stroke="#1E5AA7" stroke-width="4" stroke-linecap="round"/>
+    <path d="M468 729C478 741 484 754 484 767C484 780 478 793 468 805" stroke="#1E5AA7" stroke-width="4" stroke-linecap="round"/>
+
+    <rect x="578" y="660" width="244" height="118" rx="32" fill="white"/>
+    <text x="700" y="703" text-anchor="middle" fill="#14345F" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700">AI Ops Agent</text>
+    <circle cx="664" cy="748" r="24" fill="#EAF2FF" stroke="#1E5AA7" stroke-width="4"/>
+    <path d="M664 724V708M664 788V772M688 748H704M624 748H640M681 731L692 720M681 765L692 776M647 731L636 720M647 765L636 776" stroke="#1E5AA7" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="664" cy="748" r="8" fill="#1E5AA7"/>
+
+    <rect x="858" y="660" width="244" height="118" rx="32" fill="white"/>
+    <text x="980" y="703" text-anchor="middle" fill="#14345F" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700">AI Workflow</text>
+    <text x="980" y="736" text-anchor="middle" fill="#14345F" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="700">Agent</text>
+    <rect x="934" y="721" width="34" height="48" rx="8" fill="#EAF2FF" stroke="#1E5AA7" stroke-width="4"/>
+    <path d="M980 731H1032M980 747H1018M980 763H1024" stroke="#1E5AA7" stroke-width="4" stroke-linecap="round"/>
+
+    <text x="700" y="645" text-anchor="middle" fill="#14345F" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700">AI Agents</text>
+  </g>
+</svg>
