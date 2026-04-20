@@ -345,7 +345,7 @@ class DeviceEmulator:
         try:
             self._publish_event(
                 EVENT_CELL_OPEN,
-                self._cell_event_payload("CellOpenEvent", cell_number),
+                self._cell_event_payload(cell_number),
             )
         except Exception:
             log.exception("Failed to publish CellOpenEvent (13) for cell %s",
@@ -361,17 +361,15 @@ class DeviceEmulator:
         try:
             self._publish_event(
                 EVENT_CELL_CLOSE,
-                self._cell_event_payload("CellCloseEvent", cell_number),
+                self._cell_event_payload(cell_number),
             )
         except Exception:
             log.exception("Failed to publish CellCloseEvent (14) for cell %s",
                           cell_number)
 
     @staticmethod
-    def _cell_event_payload(description: str,
-                            cell_number: Optional[int]) -> dict:
+    def _cell_event_payload(cell_number: Optional[int]) -> dict:
         """Build the strict protocol payload for cell open/close events."""
-        del description
         return {"300": [{"304": int(cell_number) if cell_number is not None else 0}]}
 
     @staticmethod

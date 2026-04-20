@@ -16,7 +16,7 @@ def test_cell_event_payload_matches_strict_protocol_shape():
     payload = device_emulator.DeviceEmulator._build_event_message(
         13,
         20338,
-        device_emulator.DeviceEmulator._cell_event_payload("CellOpenEvent", 12),
+        device_emulator.DeviceEmulator._cell_event_payload(12),
         now=now,
     )
 
@@ -34,7 +34,7 @@ def test_cell_close_event_payload_matches_strict_protocol_shape():
     payload = device_emulator.DeviceEmulator._build_event_message(
         14,
         20339,
-        device_emulator.DeviceEmulator._cell_event_payload("CellCloseEvent", 12),
+        device_emulator.DeviceEmulator._cell_event_payload(12),
         now=now,
     )
 
