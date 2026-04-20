@@ -33,7 +33,7 @@ import sys
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import paho.mqtt.client as mqtt
@@ -385,20 +385,38 @@ class DeviceEmulator:
     @staticmethod
     def _parse_cell_number(data: dict[str, Any]) -> Optional[int]:
         items = data.get("dt")
-        if isinstance(items, list) and items:
-            first = items[0]
-            if isinstance(first, dict) and "cl" in first:
+        if isinstance(items, list):
+            for item in items:
+                if not isinstance(item, dict) or "cl" not in item:
+                    continue
                 try:
-                    return int(first["cl"])
+                    return int(item["cl"])
                 except (TypeError, ValueError):
-                    return None
+                    continue
         # Fallback — top-level "cl"
         if "cl" in data:
             try:
                 return int(data["cl"])
             except (TypeError, ValueError):
                 return None
+        nested_payload = data.get("payload")
+        if isinstance(nested_payload, dict):
+            return DeviceEmulator._parse_cell_number(nested_payload)
         return None
+
+    @staticmethod
+    def _format_timestamp(value: datetime) -> str:
+        base_value = value.replace(microsecond=0)
+        centiseconds = (value.microsecond + 5_000) // 10_000
+        if centiseconds == 100:
+            base_value += timedelta(seconds=1)
+            centiseconds = 0
+        base = base_value.isoformat(timespec="seconds")
+        if centiseconds == 0:
+            return base
+        if len(base) >= 6 and base[-6] in "+-":
+            return f"{base[:-6]}.{centiseconds:02d}{base[-6:]}"
+        return f"{base}.{centiseconds:02d}"
 
     @staticmethod
     def _build_event_message(
@@ -411,7 +429,9 @@ class DeviceEmulator:
         for key, value in payload.items():
             if key not in {"101", "102", "200"}:
                 full_payload[key] = value
-        full_payload["102"] = (now or datetime.now(timezone.utc)).isoformat()
+        full_payload["102"] = DeviceEmulator._format_timestamp(
+            now or datetime.now(timezone.utc)
+        )
         full_payload["200"] = event_type_code
         return full_payload
 
