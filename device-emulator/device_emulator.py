@@ -406,12 +406,17 @@ class DeviceEmulator:
 
     @staticmethod
     def _format_timestamp(value: datetime) -> str:
-        rounded = value + timedelta(microseconds=5_000)
-        base = rounded.isoformat(timespec="seconds")
-        centiseconds = rounded.microsecond // 10_000
+        base_value = value.replace(microsecond=0)
+        centiseconds = (value.microsecond + 5_000) // 10_000
+        if centiseconds == 100:
+            base_value += timedelta(seconds=1)
+            centiseconds = 0
+        base = base_value.isoformat(timespec="seconds")
         if centiseconds == 0:
             return base
-        return f"{base[:-6]}.{centiseconds:02d}{base[-6:]}"
+        if len(base) >= 6 and base[-6] in "+-":
+            return f"{base[:-6]}.{centiseconds:02d}{base[-6:]}"
+        return f"{base}.{centiseconds:02d}"
 
     @staticmethod
     def _build_event_message(
