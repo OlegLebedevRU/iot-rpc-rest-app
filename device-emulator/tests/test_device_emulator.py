@@ -81,3 +81,25 @@ def test_event_timestamp_uses_centiseconds_when_fractional():
         "102": "2026-04-20T12:40:46.32+00:00",
         "200": 13,
     }
+
+
+def test_event_timestamp_rounds_to_nearest_centisecond():
+    now = datetime(
+        2026,
+        4,
+        20,
+        12,
+        40,
+        46,
+        326000,
+        tzinfo=timezone.utc,
+    )
+
+    payload = device_emulator.DeviceEmulator._build_event_message(
+        13,
+        10004,
+        device_emulator.DeviceEmulator._cell_event_payload(88),
+        now=now,
+    )
+
+    assert payload["102"] == "2026-04-20T12:40:46.33+00:00"

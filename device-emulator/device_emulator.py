@@ -33,7 +33,7 @@ import sys
 import threading
 import time
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import paho.mqtt.client as mqtt
@@ -406,10 +406,11 @@ class DeviceEmulator:
 
     @staticmethod
     def _format_timestamp(value: datetime) -> str:
-        base = value.isoformat(timespec="seconds")
-        if value.microsecond == 0:
+        rounded = value + timedelta(microseconds=5_000)
+        base = rounded.isoformat(timespec="seconds")
+        centiseconds = rounded.microsecond // 10_000
+        if centiseconds == 0:
             return base
-        centiseconds = value.microsecond // 10_000
         return f"{base[:-6]}.{centiseconds:02d}{base[-6:]}"
 
     @staticmethod
