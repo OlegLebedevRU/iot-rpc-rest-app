@@ -34,7 +34,7 @@ import threading
 import time
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import paho.mqtt.client as mqtt
 from OpenSSL import crypto
@@ -298,8 +298,8 @@ class DeviceEmulator:
             )
             return
 
-        # Parse payload (expected: {"dt":[{"cl": <cell>}]})
-        cell_number = self._parse_cell_number(payload)
+        rsp_payload = self._parse_json_payload(payload)
+        cell_number = self._parse_cell_number(rsp_payload)
         log.info(
             "Method 51 (open cell) requested, cell=%s — acknowledging command "
             "immediately; physical open in %.1fs, close %.1fs after that",
@@ -345,7 +345,7 @@ class DeviceEmulator:
         try:
             self._publish_event(
                 EVENT_CELL_OPEN,
-                self._cell_event_payload("CellOpenEvent", cell_number),
+                self._cell_event_payload(cell_number),
             )
         except Exception:
             log.exception("Failed to publish CellOpenEvent (13) for cell %s",
@@ -361,33 +361,29 @@ class DeviceEmulator:
         try:
             self._publish_event(
                 EVENT_CELL_CLOSE,
-                self._cell_event_payload("CellCloseEvent", cell_number),
+                self._cell_event_payload(cell_number),
             )
         except Exception:
             log.exception("Failed to publish CellCloseEvent (14) for cell %s",
                           cell_number)
 
     @staticmethod
-    def _cell_event_payload(description: str,
-                            cell_number: Optional[int]) -> dict:
-        """Build the payload for cell open/close events.
-
-        The cell number is carried in tag ``304`` as required by the
-        AI-agent integration guide (``CellOpenEvent {304: <cell>}``).
-        """
-        payload: dict = {"description": description}
-        if cell_number is not None:
-            payload["304"] = cell_number
-        return payload
+    def _cell_event_payload(cell_number: Optional[int]) -> dict:
+        """Build the strict protocol payload for cell open/close events."""
+        return {"300": [{"304": int(cell_number) if cell_number is not None else 0}]}
 
     @staticmethod
-    def _parse_cell_number(payload: bytes) -> Optional[int]:
+    def _parse_json_payload(payload: bytes) -> dict[str, Any]:
         try:
             data = json.loads(payload.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
-            return None
+            return {}
         if not isinstance(data, dict):
-            return None
+            return {}
+        return data
+
+    @staticmethod
+    def _parse_cell_number(data: dict[str, Any]) -> Optional[int]:
         items = data.get("dt")
         if isinstance(items, list) and items:
             first = items[0]
@@ -404,12 +400,33 @@ class DeviceEmulator:
                 return None
         return None
 
-    def _publish_res(self, corr: bytes, result: dict, status_code: str) -> None:
+    @staticmethod
+    def _build_event_message(
+        event_type_code: int,
+        dev_event_id: int,
+        payload: dict,
+        now: Optional[datetime] = None,
+    ) -> dict:
+        full_payload = {"101": dev_event_id}
+        for key, value in payload.items():
+            if key not in {"101", "102", "200"}:
+                full_payload[key] = value
+        full_payload["102"] = (now or datetime.now(timezone.utc)).isoformat()
+        full_payload["200"] = event_type_code
+        return full_payload
+
+    def _publish_res(
+        self,
+        corr: bytes,
+        result: dict,
+        status_code: str,
+        ext_id: str = "0",
+    ) -> None:
         props = mqtt.Properties(PacketTypes.PUBLISH)
         props.CorrelationData = corr
         props.UserProperty = [
             ("status_code", status_code),
-            ("ext_id", "mock"),
+            ("ext_id", ext_id),
         ]
         self.client.publish(
             self.topic_res,
@@ -433,11 +450,7 @@ class DeviceEmulator:
             ("dev_event_id", str(dev_event_id)),
             ("dev_timestamp", str(int(time.time()))),
         ]
-        # Make sure the payload also carries identifiers per docs
-        full_payload = dict(payload)
-        full_payload.setdefault("101", dev_event_id)
-        full_payload.setdefault("200", event_type_code)
-        full_payload.setdefault("102", datetime.now(timezone.utc).isoformat())
+        full_payload = self._build_event_message(event_type_code, dev_event_id, payload)
 
         self.client.publish(
             self.topic_evt,

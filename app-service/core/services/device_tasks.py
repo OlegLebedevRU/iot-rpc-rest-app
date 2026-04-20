@@ -170,6 +170,15 @@ class DeviceTasksService:
 
         return normalized
 
+    @staticmethod
+    def _parse_int_header(headers: dict, key: str, default: int) -> int:
+        raw_value = headers.get(key, default)
+        try:
+            return int(raw_value)
+        except (TypeError, ValueError):
+            log.warning("Invalid RES header %s=%r, using default=%d", key, raw_value, default)
+            return default
+
     async def _select_polling_task(
         self, sn: str, method_le: int
     ) -> TaskResponsePayload | None:
@@ -241,8 +250,8 @@ class DeviceTasksService:
         task, etc.).  The caller can use this to decide whether to count the
         message for billing.
         """
-        ext_id = int(msg.headers.get("ext_id", 0))
-        status_code = int(msg.headers.get("status_code", 501))
+        ext_id = self._parse_int_header(msg.headers, "ext_id", 0)
+        status_code = self._parse_int_header(msg.headers, "status_code", 501)
 
         if corr_id is None:
             log.info(

@@ -270,6 +270,52 @@ async def test_save_finalizes_existing_task(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_save_tolerates_non_numeric_ext_id_header(monkeypatch):
+    session = object()
+    service = DeviceTasksService(session, 0)
+    corr_id = uuid4()
+    msg = SimpleNamespace(
+        headers={"ext_id": "mock", "status_code": "200"},
+        body=b'{"description": "from device final result"}',
+    )
+
+    save_task_result = AsyncMock(return_value=77)
+    task_status_update = AsyncMock(return_value=True)
+    get_device_id = AsyncMock(return_value=501)
+    send_cmt = AsyncMock()
+
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "save_task_result", save_task_result
+    )
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "task_status_update", task_status_update
+    )
+    monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
+    monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
+
+    result = await service.save(msg, "SN_TEST", corr_id)
+
+    assert result is True
+    save_task_result.assert_awaited_once_with(
+        session,
+        corr_id,
+        0,
+        200,
+        {"description": "from device final result"},
+    )
+    send_cmt.assert_awaited_once_with(
+        "SN_TEST",
+        {"message": "committed"},
+        '{"description": "from device final result"}',
+        corr_id,
+        501,
+        77,
+        0,
+        200,
+    )
+
+
+@pytest.mark.asyncio
 async def test_save_strips_transport_corr_wrapper_from_result(monkeypatch):
     session = object()
     service = DeviceTasksService(session, 0)
