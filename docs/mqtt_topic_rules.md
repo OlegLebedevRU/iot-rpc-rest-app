@@ -1,18 +1,29 @@
-# MQTT topic rules
-## Breaking
+# 📡 MQTT Topic Rules
 
-The rules are important. RabbitMQ definitions create restrictions on device access to topics based on device serial numbers. The serial numbers of the devices are embedded in the x509 certificate.
+> **Файл:** `docs/mqtt_topic_rules.md`
 
-### Topic name template
+---
 
-Example topic name:
+## ⚠️ Важно
 
-Mqtt received topic= <dev/a3b0000000c10221d290825/req>
+Правила именования топиков являются обязательными. Определения RabbitMQ накладывают ограничения на доступ устройств к топикам на основе серийных номеров устройств. Серийный номер встроен в сертификат x509 (поле `CN`).
 
-_to RabbitMQ routing-key translate = "dev.a3b0000000c10221d290825.req"_
-### Format
+---
 
-````mermaid
+## 🏗️ Шаблон имени топика
+
+### Пример
+
+```
+MQTT topic:         dev/a3b0000000c10221d290825/req
+RabbitMQ routing-key: dev.a3b0000000c10221d290825.req
+```
+
+> Символы `/` в MQTT-топике транслируются в `.` при передаче в RabbitMQ routing-key.
+
+### Структура
+
+```mermaid
 ---
 title: "Topic name template"
 ---
@@ -22,21 +33,52 @@ packet
 +23: "Device Serial number"
 +1: "/"
 +3: "Action type suffix"
+```
 
+| Поле | Длина | Описание |
+|------|:-----:|---------|
+| `Direction prefix` | 3 | Направление сообщения: `srv` или `dev` |
+| `/` | 1 | Разделитель |
+| `Device Serial Number` | 23 | Уникальный серийный номер устройства из CN сертификата |
+| `/` | 1 | Разделитель |
+| `Action type suffix` | 3 | Тип сообщения/действия |
 
-````
-`Direction prefix = ["srv", "dev"]`
-* srv - from SERVER to DEVICE
-* dev - from DEVICE to SERVER
+---
 
-`Action suffix_1 = ["evt", "ack", "req", "res"]`
+## 🔼 Префиксы направления
 
-* evt - EVENT message from Device (not in RPC workflow)
-* ack - acknowledge message for task init message
-* req - from device request for get queued task
-* res - send result after task complete
+| Префикс | Направление | Описание |
+|---------|:-----------:|---------|
+| `dev` | Device → Server | Сообщения от **устройства** к серверу |
+| `srv` | Server → Device | Сообщения от **сервера** к устройству |
 
-`Action suffix_2 = ["tsk", "rsp", "eva"]`
-* tsk - immediate notify (without payload) message to device after task created
-* rsp - from server response with task parameters (payload)
-* eva - optional acknowledge to device after EVENT message received on server
+---
+
+## 📨 Суффиксы действий
+
+### Device → Server (`dev/<SN>/...`)
+
+| Суффикс | Топик | Описание |
+|---------|-------|---------|
+| `evt` | `dev/<SN>/evt` | 📢 Событие от устройства (вне RPC-цикла) |
+| `ack` | `dev/<SN>/ack` | ✅ Подтверждение получения команды от устройства (опционально) |
+| `req` | `dev/<SN>/req` | 🔍 Запрос устройства на получение задачи из очереди |
+| `res` | `dev/<SN>/res` | 📤 Отправка результата после выполнения задачи |
+
+### Server → Device (`srv/<SN>/...`)
+
+| Суффикс | Топик | Описание |
+|---------|-------|---------|
+| `tsk` | `srv/<SN>/tsk` | 🔔 Мгновенное уведомление устройства о новой задаче (без payload) |
+| `rsp` | `srv/<SN>/rsp` | 📥 Ответ сервера с параметрами задачи (payload) |
+| `eva` | `srv/<SN>/eva` | 🔁 Опциональное подтверждение сервером получения события (`evt`) |
+
+---
+
+## 📚 Связанные документы
+
+| Файл | Назначение |
+| :-- | :-- |
+| [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md) | Полная спецификация RPC-протокола на базе MQTT v5 |
+| [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) | 📊 Mermaid-диаграммы: Polling, Trigger, Fail-fast |
+| [`event-protocol-mqtt.md`](./event-protocol-mqtt.md) | Протокол асинхронных событий: топики `evt`/`eva` |

@@ -107,6 +107,7 @@ flowchart LR
 - [`c-win-clion-rpc-client/`](./examples/c-win-clion-rpc-client/) — RPC-клиент для ESP32 / STM32
 
 ### 🎮 Сценарии устройств
+## Diagrams
 
 | Платформа | Сценарий |
 |---|---|
