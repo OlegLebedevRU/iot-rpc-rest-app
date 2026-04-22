@@ -114,7 +114,6 @@ flowchart LR
 - Siplite — RPC-клиент + SIP + WebRTC для ESP32/STM32 (по запросу)
 
 ### 🎮 Сценарии устройств
-## Diagrams
 
 | Платформа | Сценарий |
 |---|---|
@@ -122,6 +121,57 @@ flowchart LR
 | 🐍 Python Agent | Удалённый запуск fullscreen-формы (tkinter), выполнение произвольного кода, WebRTC-стриминг с Raspberry Pi |
 | 📟 ESP32 (ESP-IDF) | PWM-управление LED, RS-485, SIP-звонок (ESP-ADF), управление постаматом |
 | 🔬 STM32 | Удалённый запуск измерений с кастомными параметрами, передача массива данных |
+
+---
+
+## 📊 Diagrams
+
+### 🔬 STM32 | Cloud Bootloader
+
+> Обновление прошивки STM32 через облако: ESP32 выступает хостом и передаёт прошивку на STM32 по шине I2C / UART / SPI.
+
+```mermaid
+sequenceDiagram
+    participant Cloud as ☁️ Leo4 Cloud
+    participant ESP32 as 📟 ESP32 Host
+    participant STM32 as 🔬 STM32
+
+    Cloud->>ESP32: RPC: flash_firmware(fw_chunk[]) via MQTTS
+    activate ESP32
+    ESP32->>ESP32: Validate & buffer firmware
+    loop I2C / UART / SPI transfer
+        ESP32->>STM32: Bootloader protocol: send chunk
+        STM32-->>ESP32: ACK / NACK
+    end
+    ESP32->>STM32: Boot command (reset to app)
+    STM32-->>ESP32: Boot OK
+    deactivate ESP32
+    ESP32->>Cloud: RPC result: flash_ok / flash_error
+```
+
+---
+
+### 🔊 TTS Voice-Terminal | Chat → Cloud AI → TTS.MP3 → Player
+
+> Голосовой терминал: текстовый чат отправляется в облачный AI, ответ синтезируется в MP3 и воспроизводится на устройстве через Leo4 RPC-сигнализацию.
+
+```mermaid
+sequenceDiagram
+    participant User  as 💬 Chat / App
+    participant Leo4  as ☁️ Leo4 API
+    participant AI    as 🤖 Cloud AI (LLM)
+    participant TTS   as 🔉 TTS Service
+    participant Dev   as 🔊 Player Device
+
+    User->>Leo4: POST /task  { method: tts_speak, text: "..." }
+    Leo4->>AI: Chat completion request
+    AI-->>Leo4: AI response text
+    Leo4->>TTS: Synthesize speech → MP3
+    TTS-->>Leo4: audio.mp3 (URL / bytes)
+    Leo4->>Dev: RPC via MQTT: play_audio(url)
+    Dev-->>Leo4: RPC result: playback_done
+    Leo4-->>User: Webhook / poll result
+```
 
 ---
 
