@@ -55,7 +55,7 @@
 | `48` | `CMD_SEND_RAW` | Отправка raw-байтов в порт | — |
 | `49` | `CMD_SET_NVS_RECORD` | Запись значений конфигурации в NVS-хранилище | `api.md`, `frontend_ops_cheatsheet.md`, `mqtt-rpc-protocol.md`, `thingsboard-comparison.md` |
 | `50` | `CMD_GET_NVS_RECORD` | Чтение значений конфигурации из NVS, возвращает массив | `api.md`, `mqtt-rpc-protocol.md`, `thingsboard-comparison.md` |
-| `51` | `CMD_OPERATE_CELL` *(используется в проекте)* | Управление ячейкой / замком | `mqtt-rpc-protocol.md` |
+| `51` | `CMD_OPERATE_CELL` *(используется в проекте)* | Управление ячейкой / замком / актуатором (однократный адресный сигнал в стек аппаратного контроллера) | `mqtt-rpc-protocol.md` |
 | `411` | `CMD_STM32_MCU_UPDATE` | Обновление прошивки сопроцессора STM32 | `stm32_hw.md`, `thingsboard-comparison.md` |
 | `512` | `CMD_STM32_BIN_DOWNLOAD` | Скачивание бинарного образа для STM32 с запуском задачи | `stm32_bin_download.md`, `thingsboard-comparison.md` |
 | `3000..3999` | *(интерактивные коды)* | Роутинг для локальных шлюзов / WS-клиентов | `mqtt-rpc-client-flow.md`, `thingsboard-comparison.md`, `ws-formats.md` |
@@ -206,7 +206,7 @@
 ```
 
 ### 🔹 `51` — `CMD_OPERATE_CELL`
-- **Назначение:** управление ячейкой / замком.
+- **Назначение:** управление ячейкой / замком / актуатором (однократный адресный сигнал в стек аппаратного контроллера, который осуществляет физическое исполнение команды).
 - **Запрос от сервера:** должен включать параметр `cl` в массиве `dt`.
 
 ```json
