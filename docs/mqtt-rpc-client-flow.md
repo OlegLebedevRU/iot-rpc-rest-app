@@ -3,7 +3,7 @@
 > **File:** `docs/mqtt-rpc-client-flow.md`
 > **Version:** 1.1
 > **Date:** 2026
-> **See also:** [`mqtt-rpc-protocol.md`](mqtt-rpc-protocol.md), [`correlation-data-guide.md`](correlation-data-guide.md)
+> **See also:** [`mqtt-rpc-protocol.md`](mqtt-rpc-protocol.md), [`correlation-data-guide.md`](correlation-data-guide.md), [`event-property-tags.md`](event-property-tags.md)
 
 ---
 
