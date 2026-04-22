@@ -229,4 +229,10 @@ sequenceDiagram
 
 ---
 
+## 🎛️ Контроллеры
+
+`STM32` · `ESP32` · `C` · `FreeRTOS` · `ESP-IDF` · `ESP-ADF`
+
+---
+
 > 📧 info@platerra.ru · 🌐 https://platerra.ru · © 2026 Leo4
