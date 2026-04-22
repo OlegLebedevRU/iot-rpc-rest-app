@@ -124,7 +124,7 @@ flowchart LR
 
 ---
 
-## 📊 Diagrams (two usage examples)
+## 📊 Diagrams (three usage examples)
 
 ### 🔬 STM32 | Cloud Bootloader
 
@@ -171,6 +171,44 @@ sequenceDiagram
     Leo4->>Dev: RPC via MQTT: play_audio(url)
     Dev-->>Leo4: RPC result: playback_done
     Leo4-->>User: Webhook / poll result
+```
+
+---
+
+### 🤖 AI | Bulk Telemetry → Decision → Escalation → Group Task / OTA
+
+> AI массово принимает через Leo4 IoT Platform временные ряды данных и онлайн-показатели от периферии, обрабатывает их, принимает решение и эскалирует важное на ответственного, затем формирует групповое задание (включая новую прошивку MCU) и отправляет его на сегменты устройств.
+
+```mermaid
+sequenceDiagram
+    participant Devs  as 📡 IoT Devices<br/>(periphery segment)
+    participant Leo4  as ☁️ Leo4 IoT Platform
+    participant AI    as 🤖 AI Agent
+    participant Resp  as 👤 Responsible<br/>(operator / manager)
+
+    Note over Devs,Leo4: Continuous telemetry stream
+    loop Time-series & online metrics
+        Devs->>Leo4: MQTT event: sensor_data {ts, values[]}
+        Leo4-->>AI: Webhook / poll: telemetry batch
+    end
+
+    Note over AI: Analyse time-series,<br/>detect anomalies / thresholds
+    AI->>AI: Process & decide
+
+    alt Critical anomaly detected
+        AI->>Resp: Escalation alert<br/>(email / push / messenger)
+        Resp-->>AI: Acknowledge / approve action
+    end
+
+    Note over AI,Leo4: Form group task for device segment
+    AI->>Leo4: POST /task {method: group_command OR flash_firmware,<br/>targets: [segment_id], payload: {fw_chunk[] / params}}
+    Leo4->>Devs: RPC via MQTTS: execute task<br/>(group_command / flash_firmware)
+    activate Devs
+    Devs->>Devs: Execute command or apply OTA firmware
+    Devs-->>Leo4: RPC result: ok / error
+    deactivate Devs
+    Leo4-->>AI: Webhook: task results summary
+    AI->>Resp: Final report (success / failures)
 ```
 
 ---
