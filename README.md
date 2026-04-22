@@ -99,6 +99,9 @@ flowchart LR
 - [`mini-native-paho-mqttv5-corrdata-client.py`](./examples/mini-native-paho-mqttv5-corrdata-client.py) — минимальный пример с correlation data
 - [`rpc-client-example.py`](./examples/rpc-client-example.py) — базовый пример клиента
 
+### 🐍 Device emulator (python)
+- [`device-emulator/`](./device-emulator/) — Device emulator (mock RPC method 51 + healthcheck/test events)
+
 ### 🔷 C# / .NET
 - [`rpc-client-example.cs`](./examples/rpc-client-example.cs) — RPC-клиент на .NET
 - [`rpc-client-native-correlation-example.cs`](./examples/rpc-client-native-correlation-example.cs) — native correlation data
