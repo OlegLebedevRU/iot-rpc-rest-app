@@ -103,8 +103,11 @@ flowchart LR
 - [`rpc-client-native-correlation-example.cs`](./examples/rpc-client-native-correlation-example.cs) — native correlation data
 - [`rpc-client-extract-SN-from-cert-example.cs`](./examples/rpc-client-extract-SN-from-cert-example.cs) — извлечение SN из сертификата
 
+### ⚙️ C / Windows
+- [`c-win-clion-rpc-client/`](./examples/c-win-clion-rpc-client/) — RPC-клиент для Windows
+
 ### ⚙️ C / FreeRTOS
-- [`c-win-clion-rpc-client/`](./examples/c-win-clion-rpc-client/) — RPC-клиент для ESP32 / STM32
+- Siplite — RPC-клиент + SIP + WebRTC для ESP32/STM32 (по запросу)
 
 ### 🎮 Сценарии устройств
 ## Diagrams
