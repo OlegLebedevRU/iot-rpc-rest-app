@@ -124,7 +124,7 @@ flowchart LR
 
 ---
 
-## 📊 Diagrams
+## 📊 Diagrams (two usage examples)
 
 ### 🔬 STM32 | Cloud Bootloader
 
@@ -181,7 +181,7 @@ sequenceDiagram
 - **PKI (x509)** — CA на базе openssl / pyca/cryptography
 - **JWT (RSA)** — авторизация API-клиентов
 - **RabbitMQ ACL** — строгие политики маршрутизации на уровне брокера
-- **nginx** — TLS-терминация, rate limiting
+- **nginx** — TLS-терминация, JWT-терминация, rate limiting
 
 ---
 
