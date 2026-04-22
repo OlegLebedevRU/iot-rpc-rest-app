@@ -51,9 +51,6 @@ flowchart LR
 - app-services
 - Swagger Api docs
 
-## App stack [here](./docs/app_stack.md)
-
-
 ## Diagrams
 
 - Task states [here](./docs/task_states.md)
