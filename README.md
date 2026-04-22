@@ -219,7 +219,7 @@ sequenceDiagram
 - **PKI (x509)** — CA на базе openssl / pyca/cryptography
 - **JWT (RSA)** — авторизация API-клиентов
 - **RabbitMQ ACL** — строгие политики маршрутизации на уровне брокера
-- **nginx** — TLS-терминация, JWT-терминация, rate limiting
+- **nginx** — TLS-терминация, JWT-терминация, rate limiting, ip filter
 
 ---
 
