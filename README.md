@@ -76,6 +76,7 @@ flowchart LR
 |---|---|
 | 🤖 [**AI-агент: руководство**](./docs/ai-agent-integration-guide.md) | Подключение LLM, MCP-сервера или чат-бота к Leo4 API |
 | 🖥️ [**Серверная интеграция**](./docs/server-integration-guide.md) | Руководство по интеграции серверной стороны с IoT RPC |
+| 🟠 [**Серверная интеграция: Kotlin + Spring Boot**](./docs/server-integration-guide-kotlin-spring.md) | Пример интеграции на Kotlin + Spring Boot |
 | 🏗️ [**App Stack**](./docs/app_stack.md) | Стек технологий: FastAPI, RabbitMQ, PostgreSQL, nginx, PKI |
 
 ### Обзор платформы
