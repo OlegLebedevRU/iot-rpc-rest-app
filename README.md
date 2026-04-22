@@ -48,6 +48,7 @@ flowchart LR
 | 🔄 **Push + Pull** | Двойная стратегия доставки для нестабильных сетей |
 | 🛡️ **Security** | mutual TLS, JWT (RSA), API-ключи, ACL брокера |
 | 🤖 **AI-ready** | REST + Webhooks совместимы с Function Calling / MCP |
+| 🦾 **Robotics-ready** | Полный стек для роботов: OTA (ESP32 + STM32), NFC / HMI / реле, SIP-голос, RTP-видео, AI-native MCP, физическое подтверждение действий |
 
 ---
 
