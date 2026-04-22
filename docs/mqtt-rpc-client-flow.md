@@ -5,6 +5,8 @@
 > **Date:** 2026
 > **See also:** [`mqtt-rpc-protocol.md`](mqtt-rpc-protocol.md), [`correlation-data-guide.md`](correlation-data-guide.md), [`event-property-tags.md`](event-property-tags.md)
 
+> ⚠️ **Статус документа:** этот файл является **графической репликой** основного протокола [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md). Все диаграммы должны актуализироваться при изменении протокола. Текстовые описания правил и алгоритмов намеренно вынесены в профильные документы — в данном файле приведены только ссылки.
+
 ---
 
 ## 1. Device-Side Client Logic (Flowchart)
@@ -104,13 +106,7 @@ sequenceDiagram
 
 The device polls for pending tasks using a zero-UUID `req`. The server assigns a real UUID when it has work.
 
-Polling selection order on the server side:
-
-1. only tasks with `status < DONE` are eligible
-2. tasks with `ttl = 0` are excluded
-3. the server picks the highest `priority`
-4. ties are resolved by the smallest positive `ttl`
-5. a final tie is resolved by the earliest `created_at`
+> 📖 Polling selection rules (priority / TTL / created_at order): see [`mqtt-rpc-protocol.md §Polling`](./mqtt-rpc-protocol.md) and [`TTL.md`](./TTL.md).
 
 ```mermaid
 sequenceDiagram
