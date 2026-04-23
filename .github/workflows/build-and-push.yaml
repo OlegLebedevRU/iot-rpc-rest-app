@@ -1,0 +1,84 @@
+name: Build and push images to GHCR
+
+# Раздел 6 «Build only» документа docs/deploy-plan.md.
+# Цель: собирать три собственных образа в GitHub Actions с кэшированием
+# слоёв (type=gha) и публиковать их в GitHub Packages (ghcr.io).
+# На прод-VM источник образов меняется с `docker compose build` на
+# `docker compose pull`. Деплой остаётся ручным, по сервисам.
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+# Имя GHCR-репозитория формируется из owner/repo владельца этого репо
+# (см. поле `image:` в compose.yaml — оно ссылается на ghcr.io/<owner>/<repo>/<svc>).
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: build ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: app-service
+            dockerfile: docker-files/app-service/Dockerfile
+            context: .
+          - service: nginx-jwt
+            dockerfile: docker-files/nginx-jwt/Dockerfile
+            context: .
+          - service: nginx-mutual
+            dockerfile: docker-files/nginx-mutual/Dockerfile
+            context: .
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Логин в GHCR не нужен на pull_request (push: false), поэтому
+      # шаг включается только для push/tag/workflow_dispatch.
+      - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.service }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
