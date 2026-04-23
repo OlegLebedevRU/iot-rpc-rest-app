@@ -15,7 +15,7 @@
 >- Нагруженные проекты могут быть интегрированы прямым подключением к RabbitMQ.
 
 ## 📝 Под капотом сервиса
->- PKI для устройств с использованием сертификатов, DI-изолированные пользователи и группы (организации), системная шина и очереди с приоритезацией, а также механизмы TTL
+>- PKI для устройств с использованием сертификатов, DI-изолированные пользователи и группы (организации), системная шина и очереди с приоритезацией
 >- Для обмена на нижнем уровне (с устройствами) используется асинхронный RPC-протокол поверх защищенного (mutual TLS) MQTT v5
 >- Шина устройств использует сильный ACL на базе сертификатов и определения инфраструктурно-строгих политик маршрутизации сообщений
 >- Внутренний сигнальный MQTT-протокол для надежного двунаправленного обмена
@@ -27,9 +27,8 @@
 >- Поллинг статуса через `GET /{id}`
 >- Опциональное оповещение через [**вебхуки**]
 >- Поддержка JSON-полезной нагрузки напрямую в/от устройств
->- TTL устанавливает срок жизни команды, позволяя удерживать в очереди задачи загрузки важных конфигураций/данных; также и противоположно — автоматически отменять в очереди задачи для неактивных устройств
->- Задачи с `ttl = 0` **не участвуют в поллинговой выборке** — они не будут отданы устройству по запросу `req(UUID(0))`. Подробнее см. [`TTL.md`](./TTL.md)
 >- Приоритезация (priority) дает возможность обойти загруженную очередь и поставить в топ срочную команду.
+>- Правила TTL и особенности выборки задач при polling вынесены в отдельный документ: [`TTL.md`](./TTL.md)
 
 ---
 
@@ -59,7 +58,7 @@
 POST /api/v1/device-tasks/ Content-Type: application/json
 ````
 ````json 
-{ "ext_task_id": "task-001", "device_id": 4619, "method_code": 20, "priority": 1, "ttl": 5, "payload": { "dt": [ { "mt": 0 } ] } }
+{ "ext_task_id": "open-cell-5", "device_id": 4619, "method_code": 51, "priority": 1, "ttl": 5, "payload": { "dt": [ { "cl": 5 } ] } }
 ````
 
 **Ответ (200 OK):**
@@ -67,7 +66,7 @@ POST /api/v1/device-tasks/ Content-Type: application/json
 { "id": "a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8", "created_at": 1712345678 }
 ````
 
-> 💡 После вызова `touch_task` устройство получит задачу при следующем поллинге или триггере.
+> 💡 Для `method_code=51` это означает постановку команды на открытие ячейки / замка. Устройство получит задачу при следующем поллинге или триггере.
 
 ---
 
@@ -86,31 +85,33 @@ GET /api/v1/device-tasks/a1b2c3d4-e5f6-7890-g1h2-i3j4k5l6m7n8
     "id": "5c75b4ed-2488-4769-b23a-2afae64ea22d",
     "created_at": 1773089559,
     "header": {
-        "ext_task_id": "wwhdtkuwgzihwlvi2ule",
+        "ext_task_id": "open-cell-5",
         "device_id": 4619,
-        "method_code": 20,
-        "priority": 0,
-        "ttl": 1
+        "method_code": 51,
+        "priority": 1,
+        "ttl": 5
     },
     "status": 3,
     "pending_at": 1773089560,
     "locked_at": 1773089560,
     "results": [
        {
-            "id": 291,
-            "ext_id": 77,
-            "status_code": 206,
-            "result": {"data": "IoT data from device"}
-        } ,
-      {
-            "id": 292,
+            "id": 304,
             "ext_id": 77,
             "status_code": 200,
-            "result": {"status": "OK"}
+            "result": {
+                "cl": 5,
+                "ts": "2026-04-20T13:17:30.798282+00:00",
+                "result": "ok",
+                "accepted": true,
+                "method_code": 51
+            }
         }
     ]
 }
 ````
+
+> ⚠️ Для кейса `method_code=51` статус `3` и ответ `msg-task-result` подтверждают завершение RPC-цикла. Если нужно подтвердить именно физическое открытие ячейки, дополнительно отслеживайте событие `CellOpenEvent` (`event_type_code=13`, tag `304`) — см. также [`ai-agent-integration-guide.md`](./ai-agent-integration-guide.md).
 
 **Ответ (200 OK, в процессе):**
 ````json 
@@ -130,7 +131,7 @@ GET /api/v1/device-tasks/?device_id=4619&page=1&size=10
 
 **Ответ:**
 ````json 
-{ "items": [ { "id": "a1b2c3d4-e5f6-...", "ext_task_id": "task-001", "device_id": 4619, "method_code": 20, "priority": 1, "ttl": 5, "status": 4, "created_at": "2025-02-05T12:34:56", "pending_at": "2025-02-05T12:35:00", "locked_at": "2025-02-05T12:35:02", "org_id": 101 } ], "page": 1, "size": 10, "total": 1, "pages": 1 }
+{ "items": [ { "id": "a1b2c3d4-e5f6-...", "ext_task_id": "open-cell-5", "device_id": 4619, "method_code": 51, "priority": 1, "ttl": 5, "status": 3, "created_at": "2025-02-05T12:34:56", "pending_at": "2025-02-05T12:35:00", "locked_at": "2025-02-05T12:35:02", "org_id": 101 } ], "page": 1, "size": 10, "total": 1, "pages": 1 }
 ````
 
 ---
@@ -180,7 +181,7 @@ POST https://your-webhook-url.com/hooks/task-result/fddf6675-42d3-478a-b81c-3abf
     Content-Type: application/json
     X-Msg-Type: msg-task-result
     X-Device-Id: 4619
-    X-Ext-Id: 12345
+    X-Ext-Id: open-cell-5
     X-Result-Id: 304
     X-Status-Code: 200
     X-Signature: sha256=... (пример кастомного header - опционально, если установлен при регистрации вебхука)
@@ -190,7 +191,11 @@ POST https://your-webhook-url.com/hooks/task-result/fddf6675-42d3-478a-b81c-3abf
 { 
 
     "result": {
-        "data": "IoT data from device"
+        "cl": 5,
+        "ts": "2026-04-20T13:17:30.798282+00:00",
+        "result": "ok",
+        "accepted": true,
+        "method_code": 51
     }
 }
 ````
@@ -207,11 +212,33 @@ POST https://your-webhook-url.com/hooks/task-result/fddf6675-42d3-478a-b81c-3abf
 
 Формат полезной нагрузки (`payload.dt`).
 
-### Примеры запросов
+### Основной пример: `method_code=51` — управление ячейкой
+
+`method_code=51` (`CMD_OPERATE_CELL`) используется для адресной команды на открытие ячейки / замка / актуатора.
+
+#### Запрос на открытие ячейки 5
+````json
+{ "ext_task_id": "open-cell-5", "device_id": 4619, "method_code": 51, "payload": { "dt": [ { "cl": 5 } ] } }
+````
+
+#### Ожидаемый результат `res`
+````json
+{
+  "cl": 5,
+  "ts": "2026-04-20T13:17:30.798282+00:00",
+  "result": "ok",
+  "accepted": true,
+  "method_code": 51
+}
+````
+
+> 📖 Низкоуровневый MQTT RPC flow для этого сценария показан в [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md), а полный реестр кодов и форматов — в [`method-codes-reference.md`](./method-codes-reference.md).
+
+### Дополнительные примеры запросов
 
 #### Запрос HELLO-пакета
 ````json
- { "ext_task_id": "cells-list", "device_id": 4619, "method_code": 20, "payload": { "dt": [ { "mt": 0 } ] } }
+ { "ext_task_id": "hello-4619", "device_id": 4619, "method_code": 20, "payload": { "dt": [ { "mt": 0 } ] } }
 ````
 
 #### Получение списка ячеек
@@ -243,7 +270,7 @@ POST https://your-webhook-url.com/hooks/task-result/fddf6675-42d3-478a-b81c-3abf
 | `0` | ready (new) | Задача создана               |
 | `1` | pending     | Устройство запросило задачу  |
 | `2` | locked      | Устройство начало выполнение |
-| `3` | completed   | Успешно выполнена            |
+| `3` | completed   | RPC завершен, результат сохранен |
 | `4` | expired     | Просрочена (истек TTL)       |
 | `5` | deleted     | Удалена АПИ-клиентом         |
 | `6` | failed      | Ошибка выполнения            |
@@ -262,16 +289,12 @@ API на внутренней шине интегрировано с MQTT v5 и 
 
 ### Стратегия выбора задачи при поллинге
 
-При запросе `req` с нулевым UUID (`00000000-...`) сервер выбирает задачу по следующей стратегии:
+При запросе `req` с нулевым UUID (`00000000-...`) сервер выбирает задачу устройства и возвращает ее в `rsp`, сохраняя единый `correlation_data` на всём протяжении RPC-цикла.
 
-1. Участвуют только задачи устройства со `status < DONE`
-2. Задачи с `ttl = 0` **исключаются** из выборки
-3. Сортировка: `priority DESC` → `ttl ASC` → `created_at ASC`
-4. В `rsp` отправляется первая задача из этого порядка
-
-> 📖 Подробнее о TTL: [`TTL.md`](./TTL.md)  
+> 📖 Правила TTL и выборки задач при polling: [`TTL.md`](./TTL.md)  
 > 📖 Детали поддержки Correlation Data: [`correlation-data-guide.md`](./correlation-data-guide.md)  
-> 📖 Полная спецификация RPC: [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md)
+> 📖 Полная спецификация RPC: [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md)  
+> 📖 Sequence-диаграммы для `method_code=51`: [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md)
 
 ---
 
@@ -282,10 +305,10 @@ API на внутренней шине интегрировано с MQTT v5 и 
 curl -X POST https://dev.leo4.ru/api/v1/device-tasks
 -H "x-api-key: xxx"
 -H "Content-Type: application/json"
--d '{ "ext_task_id": "hello-001", "device_id": 4619, "method_code": 20, "payload": {"dt": [{"mt": 0}]} }'
+-d '{ "ext_task_id": "open-cell-5", "device_id": 4619, "method_code": 51, "payload": {"dt": [{"cl": 5}]} }'
 ````
 
-### Шаг 2: Ожидание результата (вариант 1 — polling)
+### Шаг 2: Дождаться завершения RPC (вариант 1 — polling)
 ````python 
 import time 
 import requests
@@ -294,17 +317,30 @@ while True:
     resp = requests.get(f"https://dev.leo4.ru/api/v1/device-tasks/{task_id}") 
     data = resp.json() 
     if data["status"] in [3, 4, 5, 6, 7]: 
-        print("Result:", data["results"]) 
+        print("Task result:", data["results"]) 
         break 
     time.sleep(2)
 ````
 
-### Шаг 2: Ожидание результата (вариант 2 — webhook)
+### Шаг 2: Дождаться завершения RPC (вариант 2 — webhook)
 ````python
 #Установите вебхук один раз
 requests.put( "https://dev.leo4.ru/api/v1/webhooks/msg-task-result", json={"url": "your.app/hook"} )
 #Ваш сервер получит результат автоматически
 ````
+
+### Шаг 3: Подтвердить физическое открытие ячейки
+````python
+import requests
+
+resp = requests.get(
+    "https://dev.leo4.ru/api/v1/device-events/fields/",
+    params={"event_type_code": 13, "tag": 304, "device_id": 4619},
+)
+print(resp.json())
+````
+
+> Для `method_code=51` именно событие `CellOpenEvent` с тегом `304=5` подтверждает, что ячейка действительно открылась.
 
 ---
 
