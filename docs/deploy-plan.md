@@ -261,7 +261,189 @@ GHCR_OWNER=<org>
 
 ---
 
-## 6. Варианты максимальной автоматизации деплоя
+## 6. Промежуточный вариант «Build only» (без изменения инфраструктуры)
+
+Цель — получить **первое реальное преимущество от CI** (быстрая,
+воспроизводимая сборка образов в Actions с кэшированием и публикацией в
+GitHub Packages), **не трогая** при этом текущую инфраструктуру:
+
+- Managed PostgreSQL **не создаётся**, `pg` остаётся контейнером в
+  `compose.yaml` как сейчас.
+- Новые сервисы в cloud.ru **не заводятся**, VM/сети/сертификаты — те же.
+- На VM подъём контейнеров остаётся **ручным, по одному сервису**, как и
+  сейчас, — меняется только источник образа: вместо `docker compose build`
+  делаем `docker compose pull` из GHCR.
+- Никакого авто-CD, SSH-ключей в Actions, self-hosted runner’ов,
+  Watchtower и т. п. — это всё откладывается до Вариантов A–D раздела 7.
+
+Этот шаг — безопасный «прокси» к целевой архитектуре: он валидирует
+сборочный pipeline и GHCR на боевых образах, не меняя поведение
+прод-машины.
+
+### 6.1. Что меняется в репозитории
+
+1. **`.github/workflows/build-and-push.yaml`** — единственный новый
+   workflow. Триггеры:
+   - `push` в `main` (для основного потока);
+   - `workflow_dispatch` (ручной перезапуск под выбранную ветку/SHA);
+   - опционально `pull_request` — только `build` без `push`, чтобы
+     ловить поломку сборки на ревью.
+
+   Содержание job’ов (matrix по 3 образам — `app-service`, `nginx-jwt`,
+   `nginx-mutual`):
+   - `actions/checkout@v4`;
+   - `docker/setup-buildx-action@v3` — buildx с поддержкой gha-кэша;
+   - `docker/login-action@v3` к `ghcr.io` (`GITHUB_TOKEN`, permissions
+     `packages: write`, `contents: read`);
+   - `docker/metadata-action@v5` — теги `sha-<short>`, `latest` (только
+     для `main`), `vX.Y.Z` (на git-tag);
+   - `docker/build-push-action@v6`:
+     - `context` и `file` для каждого Dockerfile,
+     - `push: true` (для `pull_request` — `false`),
+     - `cache-from: type=gha,scope=<svc>`,
+     - `cache-to: type=gha,mode=max,scope=<svc>` —
+       это и есть «Cashes», которые упомянуты в задаче: слои nginx-модуля,
+       `apt-get`, `uv sync` будут кэшироваться между прогонами Actions.
+
+2. **`compose.yaml`** — минимально-инвазивная правка для трёх собственных
+   сервисов (`app1`, `nginx`, `nginx-mutual`): к существующей секции
+   `build:` **добавляется** `image:` с тегом GHCR, например:
+   ```
+   app1:
+     image: ghcr.io/<org>/iot-rpc-rest-app/app-service:${IMAGE_TAG:-latest}
+     build:
+       context: .
+       dockerfile: docker-files/app-service/Dockerfile
+     ...
+   ```
+   Поведение Docker Compose:
+   - `docker compose build app1` — соберёт локально (старый ручной
+     сценарий не ломается);
+   - `docker compose pull app1` — скачает из GHCR (новый сценарий);
+   - `docker compose up -d app1` без предварительного `pull/build` —
+     возьмёт уже имеющийся локально образ с этим тегом.
+
+   Сервисы без собственной сборки (`rabbitmq`, `pg`, `pgadmin`,
+   `certbot`, `avahi`) **не трогаются**.
+
+3. **`.env` на VM** (или `export` в shell) — добавляется одна переменная:
+   ```
+   IMAGE_TAG=sha-abcdef0
+   ```
+   По умолчанию (если не задана) compose возьмёт `:latest`. Для
+   воспроизводимости в проде рекомендуется явно фиксировать SHA-тег.
+
+4. **`docs/deploy-plan.md`** — этот раздел.
+
+Чего **не** меняем на этом шаге:
+- секции `pg`, `pgdata`, `pg_network` остаются как есть;
+- `definitions.json`, пароли в `compose.yaml`, `./crt/*` — без изменений
+  (вынос в секреты — следующий шаг);
+- структура каталогов (`deploy/compose.prod.yaml` пока **не** создаётся);
+- `docker-files/rmq/compose.yaml` не синхронизируется и не удаляется.
+
+### 6.2. Конфигурация GitHub Packages
+
+- Видимость пакетов на старте — **public** (проще: `docker pull` с VM
+  работает без логина) **или** **private** + один PAT с `read:packages`
+  на VM (`docker login ghcr.io -u <bot> --password-stdin`).
+  Рекомендуется сразу **private** + PAT, чтобы потом не «разворачивать»
+  обратно.
+- Retention: оставлять последние ~20 untagged + все тегированные
+  (настраивается в Settings → Packages → конкретный package).
+- Никаких GitHub Environments, reviewers, secrets кроме `GITHUB_TOKEN`
+  и (опционально) `GHCR_READ_PAT` для VM — пока не нужно.
+
+### 6.3. Ручной деплой на VM (новый флоу, по сервисам)
+
+Подключение по SSH к существующей VM, в каталоге репозитория
+(`/opt/iot-rpc-rest-app` или где он лежит сейчас):
+
+```bash
+# 1. Подтянуть актуальные compose.yaml / конфиги / миграции
+git pull
+
+# 2. (один раз) залогиниться в GHCR, если пакеты private
+echo "$GHCR_READ_PAT" | docker login ghcr.io -u <bot-user> --password-stdin
+
+# 3. Зафиксировать тег образов на этот деплой (короткий git SHA из main)
+export IMAGE_TAG=sha-abcdef0
+
+# 4. По одному сервису — pull + up (как сейчас делается build + up)
+docker compose pull app1
+docker compose up -d app1
+
+docker compose pull nginx
+docker compose up -d nginx
+
+docker compose pull nginx-mutual
+docker compose up -d nginx-mutual
+
+# 5. Проверки и чистка
+docker compose ps
+docker image prune -f
+```
+
+Для сторонних сервисов (`rabbitmq`, `pg`, `pgadmin`, `certbot`,
+`avahi`) — всё как сейчас: `docker compose up -d <svc>` по необходимости,
+без `build`.
+
+### 6.4. Сравнение со старым ручным флоу
+
+| Шаг                                  | Сейчас (ручная сборка)                | Build only (этот раздел)             |
+|--------------------------------------|---------------------------------------|--------------------------------------|
+| Получение кода/конфигов на VM        | `git pull`                            | `git pull` (без изменений)           |
+| Сборка образа                        | `docker compose build <svc>` на VM    | в Actions, кэш `type=gha`            |
+| Получение образа на VM               | — (собирается локально)               | `docker compose pull <svc>`          |
+| Подъём контейнера                    | `docker compose up -d <svc>`          | `docker compose up -d <svc>`         |
+| Кто инициирует деплой                | человек на VM                         | человек на VM (CI только собирает)   |
+| Откат                                | `git checkout` + ребилд               | `IMAGE_TAG=sha-<prev>` + `pull/up`   |
+| Время на VM                          | минуты (apt/uv/модули nginx)          | секунды (тонкие слои pull)           |
+| Поведение `docker compose build`     | работает                              | **продолжает работать** (поле `build:` сохранено) |
+
+### 6.5. Выгоды и ограничения промежуточного варианта
+
+**Что мы получаем:**
+
+- сборка перестаёт грузить прод-VM (CPU/диск/сеть);
+- образы становятся immutable-артефактами с привязкой к git-SHA →
+  предсказуемый откат;
+- появляется кэш слоёв (`type=gha`) — повторные сборки в Actions
+  становятся быстрыми;
+- проверена интеграция с GHCR на боевых образах перед более
+  серьёзными шагами (Managed PG, авто-CD).
+
+**Что осознанно остаётся «как сейчас»:**
+
+- `pg` всё ещё в Docker, бэкап/HA не улучшаются;
+- секреты по-прежнему в `compose.yaml` / `definitions.json`;
+- деплой по-прежнему ручной и пошаговый — это **намеренно**: исключаем
+  риск «сломать прод одним зелёным workflow»;
+- сторонние образы (`rabbitmq`, `postgres`, `pgadmin4`, `certbot`,
+  `ydkn/avahi`) тянутся с Docker Hub как раньше — никакого зеркалирования
+  в GHCR на этом шаге.
+
+### 6.6. Чеклист «Build only сделано»
+
+- [ ] `.github/workflows/build-and-push.yaml` собирает 3 образа и пушит
+      в GHCR с тегами `sha-<sha>` и `latest` (для `main`).
+- [ ] В `compose.yaml` у `app1`, `nginx`, `nginx-mutual` добавлено поле
+      `image: ghcr.io/.../<svc>:${IMAGE_TAG:-latest}` рядом с `build:`.
+- [ ] На VM выполнен разовый `docker login ghcr.io` (если private).
+- [ ] Прогнан ручной флоу `git pull` → `docker compose pull <svc>` →
+      `docker compose up -d <svc>` по каждому из трёх сервисов.
+- [ ] Проверено, что старый сценарий (`docker compose build <svc>` +
+      `up -d <svc>`) по-прежнему работает на случай fallback.
+- [ ] Документирован в `docs/deploy-plan.md` (этот раздел) и при
+      необходимости — короткой памяткой в `README` репозитория.
+
+После того как этот шаг отработан и стабилизирован, можно переходить к
+разделу 7 (полная автоматизация деплоя) и к выносу PG в managed-сервис
+(раздел 3).
+
+---
+
+## 7. Варианты максимальной автоматизации деплоя
 
 Ниже — три варианта от самого простого к самому «взрослому». Можно
 комбинировать (например, начать с (A), переехать на (B) при росте парка
@@ -364,7 +546,7 @@ docker compose -f compose.prod.yaml up -d
 
 ---
 
-## 7. Пошаговый план миграции
+## 8. Пошаговый план миграции
 
 1. **CI-фундамент** (PR в этот репозиторий):
    - добавить `.github/workflows/ci.yaml` (uv sync, pytest, black);
@@ -407,7 +589,7 @@ docker compose -f compose.prod.yaml up -d
 
 ---
 
-## 8. Чеклист «сделано»
+## 9. Чеклист «сделано»
 
 - [ ] Managed PostgreSQL в cloud.ru поднят, доступен из VPC, TLS-only.
 - [ ] Compute-VM в cloud.ru, Docker установлен, входящий — только 80/443/4443.
