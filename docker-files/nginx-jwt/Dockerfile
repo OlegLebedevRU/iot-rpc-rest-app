@@ -13,30 +13,10 @@ RUN <<`
     openssl
 `
 
-# В Debian bookworm пакет `openssl-provider-legacy` отсутствует в стандартных репозиториях.
-# Вместо этого, установим `libfipsprovider-dev` (если доступен) или соберём legacy.so вручную.
-# Но на практике — в bookworm `legacy.so` уже входит в `libssl3`, но не активирован по умолчанию.
-
-# Обновляем индекс пакетов и проверяем наличие пакета
-RUN <<`
-  set -e
-  apt-get update
-  # Проверим, есть ли legacy.so в системе
-  find /usr/lib -name "legacy.so" || echo "legacy.so not found"
-`
-
-# Создаём директорию engines-3 и пробуем создать симлинк, если legacy.so найден
-RUN mkdir -p /usr/lib/ssl/engines-3 && \
-    find /usr/lib -name "legacy.so" -exec ln -sf {} /usr/lib/ssl/engines-3/legacy.so \; || true
-
-# Если legacy.so не найден — попробуем установить его через backports или вручную
-# Но в большинстве случаев он уже есть в: /usr/lib/x86_64-linux-gnu/ossl-modules/legacy.so
-
-# Копируем конфигурацию OpenSSL — даже если legacy.so не активирован, попробуем использовать SECLEVEL=1
-COPY crt/openssl.cnf /etc/ssl/openssl.cnf
-
-# Экспорт переменной окружения
-ENV OPENSSL_CONF=/etc/ssl/openssl.cnf
+# nginx-jwt работает с современными сертификатами и стандартным OpenSSL
+# из debian:bookworm-slim. Никакой настройки legacy provider / SECLEVEL=0
+# здесь не требуется — оставляем дефолтную конфигурацию /etc/ssl/openssl.cnf.
+# Контур для legacy-сертификатов вынесен в отдельный образ nginx-mutual.
 
 # Добавляем ключ Nginx
 RUN <<`
