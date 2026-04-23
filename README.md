@@ -1,3 +1,4 @@
+[![Build and push images to GHCR](https://github.com/OlegLebedevRU/iot-rpc-rest-app/actions/workflows/build-and-push.yaml/badge.svg)](https://github.com/OlegLebedevRU/iot-rpc-rest-app/actions/workflows/build-and-push.yaml)
 # 🌐 Leo4 IoT Platform
 
 > Транспортный фреймворк для создания защищённых систем управления и телеметрии распределённой сети кроссплатформенных IoT-устройств.
