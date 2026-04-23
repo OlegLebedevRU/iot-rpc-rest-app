@@ -1,8 +1,14 @@
 services:
   app1:
+    image: ghcr.io/oleglebedevru/iot-rpc-rest-app/app-service:${IMAGE_TAG:-latest}
     build:
       dockerfile: ./docker-files/app-service/Dockerfile
       context: ./
+    # См. docs/deploy-plan.md §6.2: при `docker compose pull` (Build only)
+    # внутри образа из GHCR нет /app/.env, поэтому пробрасываем переменные
+    # окружения из ./app-service/.env (файл не коммитится в git).
+    env_file:
+      - ./app-service/.env
  #   environment:
    #   APP_CONFIG__DB__URL: postgresql+asyncpg://user:password@pg:5432/postgres
    #   APP_CONFIG__DB__ECHO: 0
@@ -119,6 +125,7 @@ services:
       - pg_network
 
   nginx-mutual:
+    image: ghcr.io/oleglebedevru/iot-rpc-rest-app/nginx-mutual:${IMAGE_TAG:-latest}
     build:
       dockerfile: ./docker-files/nginx-mutual/Dockerfile
       context: ./
@@ -133,6 +140,7 @@ services:
       - app1
 
   nginx:
+    image: ghcr.io/oleglebedevru/iot-rpc-rest-app/nginx-jwt:${IMAGE_TAG:-latest}
     build:
       dockerfile: ./docker-files/nginx-jwt/Dockerfile
       context: ./

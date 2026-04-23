@@ -517,11 +517,11 @@ docker image prune -f
 
 ### 6.7. Чеклист «Build only сделано»
 
-- [ ] `.github/workflows/build-and-push.yaml` собирает 3 образа и пушит
+- [x] `.github/workflows/build-and-push.yaml` собирает 3 образа и пушит
       в GHCR с тегами `sha-<sha>` и `latest` (для `main`).
-- [ ] В `compose.yaml` у `app1`, `nginx`, `nginx-mutual` добавлено поле
+- [x] В `compose.yaml` у `app1`, `nginx`, `nginx-mutual` добавлено поле
       `image: ghcr.io/.../<svc>:${IMAGE_TAG:-latest}` рядом с `build:`.
-- [ ] У `app1` в `compose.yaml` добавлен `env_file: ./app-service/.env`
+- [x] У `app1` в `compose.yaml` добавлен `env_file: ./app-service/.env`
       (см. §6.2); файл `app-service/.env` присутствует на VM и не
       закоммичен в git.
 - [ ] На VM выполнен разовый `docker login ghcr.io` (если private).
@@ -529,7 +529,7 @@ docker image prune -f
       `docker compose up -d <svc>` по каждому из трёх сервисов.
 - [ ] Проверено, что старый сценарий (`docker compose build <svc>` +
       `up -d <svc>`) по-прежнему работает на случай fallback.
-- [ ] Документирован в `docs/deploy-plan.md` (этот раздел) и при
+- [x] Документирован в `docs/deploy-plan.md` (этот раздел) и при
       необходимости — короткой памяткой в `README` репозитория.
 
 После того как этот шаг отработан и стабилизирован, можно переходить к
