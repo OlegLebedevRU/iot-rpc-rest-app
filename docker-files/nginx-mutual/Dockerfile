@@ -11,7 +11,10 @@ RUN mkdir -p /crt /usr/lib/ssl
 # Копируем файлы
 COPY crt/legacy_cert_dev_leo4_ru.crt /crt/legacy_cert_dev_leo4_ru.crt
 COPY crt/key_0000.pem /crt/server_key.pem
-COPY crt/ca_legacy.crt /crt/ca_legacy.crt
+# ca_legacy.crt не является секретом и хранится прямо в репозитории
+# рядом с Dockerfile, поэтому копируется из своего фактического пути,
+# а не из bind-mount-каталога ./crt/, который есть только на прод-VM.
+COPY docker-files/nginx-mutual/ca_legacy.crt /crt/ca_legacy.crt
 
 # Конфигурация OpenSSL встроена в образ (без файла в build-context):
 # включаем legacy provider и опускаем SECLEVEL до 0 — это основная задача
