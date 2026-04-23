@@ -127,7 +127,7 @@ flowchart LR
 
 ---
 
-## 📊 Diagrams (three usage examples)
+## 📊 Diagrams (some use cases)
 
 ### 🔬 STM32 | Cloud Bootloader
 
