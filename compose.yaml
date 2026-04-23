@@ -132,6 +132,12 @@ services:
     ports:
       - "4443:4443"
     restart: always
+    # Секретные сертификаты в образ НЕ запекаются (их нет в репозитории и в
+    # build-context CI). Пробрасываем их bind-mount’ом из ./crt/ на VM —
+    # по аналогии с сервисом `nginx`. См. docs/deploy-plan.md §6.
+    volumes:
+      - ./crt/legacy_cert_dev_leo4_ru.crt:/crt/legacy_cert_dev_leo4_ru.crt:ro
+      - ./crt/key_0000.pem:/crt/server_key.pem:ro
 
     networks:
       - rabbitmq_network
