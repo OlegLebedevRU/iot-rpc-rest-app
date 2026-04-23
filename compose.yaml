@@ -9,11 +9,6 @@ services:
     # окружения из ./app-service/.env (файл не коммитится в git).
     env_file:
       - ./app-service/.env
- #   environment:
-   #   APP_CONFIG__DB__URL: postgresql+asyncpg://user:password@pg:5432/postgres
-   #   APP_CONFIG__DB__ECHO: 0
-    #  APP_CONFIG__GUNICORN__WORKERS: 1
-    #  APP_CONFIG__FASTSTREAM__URL: amqp://user:root@rabbitmq:5672//
     develop:
       # Create a `watch` configuration to update the app
       # https://docs.docker.com/compose/file-watch/#compose-watch-versus-bind-mounts
@@ -44,10 +39,8 @@ services:
     container_name: rabbitmq
     restart: unless-stopped
     ports:
-      #- "15672:15672" # RabbitMQ Management UI
-      #- "1883:1883"
       - "8883:8883"
-      - "5672:5672" # RabbitMQ AMQP
+      - "5672:5672" # RabbitMQ AMQP export port alfa stage only, todo intranet only
     environment:
       RABBITMQ_HOST: '%'
       RABBITMQ_DEFAULT_USER: user
@@ -78,10 +71,6 @@ services:
         source: ./crt/key_0000.pem
         target: /crt/server_key.pem
         read_only: true
-#ssl_options.cacertfile = /crt/ca_certificate.pem
-#ssl_options.certfile   = /crt/server_certificate.pem
-#ssl_options.keyfile    = /crt/server_key.pem
-      #- ./rmq/rabbitmq-data:/var/lib/rabbitmq
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
       - rabbitmq_network
@@ -108,19 +97,12 @@ services:
       retries: 3
     networks:
       - pg_network
-  # adminer:
-    # image: adminer
-    # ports:
-      # - "8080:8080"
-
   pgadmin:
     image: dpage/pgadmin4
     environment:
       PGADMIN_DEFAULT_EMAIL: info@platerra.ru
       PGADMIN_DEFAULT_PASSWORD: admin
       PGADMIN_CONFIG_SERVER_MODE: 'False'
-    #ports:
-    #  - "5050:80"
     networks:
       - pg_network
 
@@ -153,7 +135,6 @@ services:
     ports:
         - "80:80"
         - "443:443"
-        #- "4443:4443"
     restart: always
     volumes:
       - ./nginx-configs/dev_leo4_ru/default.conf:/etc/nginx/conf.d/default.conf:ro
@@ -180,14 +161,14 @@ services:
 # docker compose run --rm certbot renew
 
 
-  avahi:
-    image: ydkn/avahi
-    hostname: '%'
+  #avahi:
+  #  image: ydkn/avahi
+  #  hostname: '%'
     #$HOSTNAME
-    network_mode: host
-    volumes:
-      - ./avahi-services:/etc/avahi/services:ro
-    restart: always
+  #  network_mode: host
+  #  volumes:
+  #    - ./avahi-services:/etc/avahi/services:ro
+  #  restart: always
 configs:
   plugins:
     content: "[rabbitmq_management, rabbitmq_mqtt]."
