@@ -428,6 +428,55 @@ app1:
 - не трогает `nginx`, `nginx-mutual` и сторонние сервисы — у них своих
   `.env` нет.
 
+### 6.2.1. Сертификаты `nginx-mutual` через bind mount (обязательное условие)
+
+`nginx-jwt` исторически тянет секретные сертификаты в контейнер
+bind-mount’ом из `./crt/` (см. секцию `nginx` в `compose.yaml`), поэтому
+его образ собирается в Actions без проблем — в build-context сертификаты
+не нужны.
+
+`nginx-mutual` же раньше копировал секретные файлы прямо в образ:
+
+```
+COPY crt/legacy_cert_dev_leo4_ru.crt /crt/legacy_cert_dev_leo4_ru.crt
+COPY crt/key_0000.pem /crt/server_key.pem
+```
+
+В ручном сценарии «build на VM» это работало, потому что каталог
+`./crt/` существует на прод-VM. В CI (Actions, чистый checkout) каталога
+`crt/` в репозитории нет → `docker buildx build` падает с
+
+```
+ERROR: failed to compute cache key: "/crt/key_0000.pem": not found
+```
+
+Чтобы «Build only» вообще заработал, `nginx-mutual` приводится к той же
+схеме, что и `nginx-jwt` — bind mount сертификатов в рантайме:
+
+1. **`docker-files/nginx-mutual/Dockerfile`**:
+   - убраны `COPY crt/legacy_cert_dev_leo4_ru.crt …` и
+     `COPY crt/key_0000.pem …`;
+   - оставлен `RUN mkdir -p /crt /usr/lib/ssl` (точка монтирования);
+   - оставлен `COPY docker-files/nginx-mutual/ca_legacy.crt …` —
+     этот файл лежит в репозитории и секретом не является;
+   - убран `RUN nginx -t` на этапе сборки: `ssl_certificate` /
+     `ssl_certificate_key` указывают на файлы из bind-mount’а, которых
+     при build’е в Actions нет. Валидация конфига всё равно произойдёт
+     при старте контейнера на VM, где сертификаты уже примонтированы.
+2. **`compose.yaml`**, секция `nginx-mutual` — добавлены `volumes:`
+   ровно с теми путями, которые ждёт `internal_ssl.conf`:
+   ```
+   volumes:
+     - ./crt/legacy_cert_dev_leo4_ru.crt:/crt/legacy_cert_dev_leo4_ru.crt:ro
+     - ./crt/key_0000.pem:/crt/server_key.pem:ro
+   ```
+
+Файлы на VM лежат там же, где сейчас (`./crt/legacy_cert_dev_leo4_ru.crt`,
+`./crt/key_0000.pem`), в git они по-прежнему не коммитятся. После этой
+правки CI workflow `build-and-push` собирает все три образа без обращения
+к `./crt/`, а на VM поведение `nginx-mutual` остаётся идентичным —
+сертификаты просто доставляются другим каналом (mount вместо COPY).
+
 ### 6.3. Конфигурация GitHub Packages
 
 - Видимость пакетов на старте — **public** (проще: `docker pull` с VM
@@ -524,6 +573,9 @@ docker image prune -f
 - [x] У `app1` в `compose.yaml` добавлен `env_file: ./app-service/.env`
       (см. §6.2); файл `app-service/.env` присутствует на VM и не
       закоммичен в git.
+- [x] У `nginx-mutual` секретные сертификаты вынесены из Dockerfile в
+      bind-mount `./crt/...:/crt/...:ro` (см. §6.2.1) — без этого
+      workflow `build-and-push` падает на сборке `nginx-mutual`.
 - [ ] На VM выполнен разовый `docker login ghcr.io` (если private).
 - [ ] Прогнан ручной флоу `git pull` → `docker compose pull <svc>` →
       `docker compose up -d <svc>` по каждому из трёх сервисов.

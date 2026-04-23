@@ -5,12 +5,14 @@ RUN apt-get update && \
     apt-get install -y nginx openssl && \
     rm -rf /var/lib/apt/lists/*
 
-# Создаём директории
+# Создаём директории (в /crt в рантайме монтируются bind-mount’ы из ./crt/
+# на прод-VM — см. compose.yaml и docs/deploy-plan.md §6).
 RUN mkdir -p /crt /usr/lib/ssl
 
-# Копируем файлы
-COPY crt/legacy_cert_dev_leo4_ru.crt /crt/legacy_cert_dev_leo4_ru.crt
-COPY crt/key_0000.pem /crt/server_key.pem
+# Секретные сертификаты (legacy_cert_dev_leo4_ru.crt, key_0000.pem)
+# в образ НЕ копируются: их нет в репозитории и они есть только на VM.
+# Они пробрасываются bind-mount’ом в /crt при старте контейнера.
+#
 # ca_legacy.crt не является секретом и хранится прямо в репозитории
 # рядом с Dockerfile, поэтому копируется из своего фактического пути,
 # а не из bind-mount-каталога ./crt/, который есть только на прод-VM.
@@ -47,8 +49,10 @@ ENV OPENSSL_CONF=/etc/ssl/openssl.cnf
 # Копируем конфиг Nginx
 COPY nginx-configs/dev_leo4_ru/internal_ssl.conf /etc/nginx/conf.d/internal_ssl.conf
 
-# Проверка
-RUN nginx -t
+# `nginx -t` на этапе build не запускаем: ssl_certificate / ssl_certificate_key
+# указывают на файлы из bind-mount /crt, которых при сборке в Actions нет.
+# Валидация конфига произойдёт при старте контейнера на VM, где сертификаты
+# уже примонтированы.
 
 EXPOSE 4443
 
