@@ -1,0 +1,8 @@
+* text=auto eol=lf
+*.png binary
+*.pdf binary
+*.docx binary
+*.doc binary
+*.svg binary
+uv.lock linguist-generated=true
+examples/** linguist-vendored=true
