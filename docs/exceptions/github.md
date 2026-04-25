@@ -5,6 +5,12 @@
 Link your local project to the GitHub repository you just created by running the following command from your project root:
 
 ```bash
+git remote add origin https://github.com/{your-username}/{your-repository-name}.git
+```
+
+If `origin` already exists, use:
+
+```bash
 git remote set-url origin https://github.com/{your-username}/{your-repository-name}.git
 ```
 
@@ -45,13 +51,13 @@ git commit -m "Initial commit"
 
 > Creates a commit that snapshots the staged changes with a descriptive message.
 
-### ☁️ Push the code to the main branch
+### ☁️ Push the code to the master branch
 
 ```bash
-git push -u origin main
+git push -u origin master
 ```
 
-> Pushes your local commits to the `main` branch of the remote GitHub repository and sets the upstream tracking branch.
+> Pushes your local commits to the `master` branch of the remote GitHub repository and sets the upstream tracking branch.
 
 Once completed, your code will be available on GitHub, and any GitHub Actions workflow you've configured will run automatically. 🎉
 
@@ -77,7 +83,7 @@ flowchart LR
 
 **Navigate to:** `Your GitHub repo` → ⚙️ `Settings` → `Branches` → `Add rule`
 
-Set **Branch name pattern** to `main` and enable the following options:
+Set **Branch name pattern** to `master` and enable the following options:
 
 | Option | Purpose |
 |---|---|
@@ -86,7 +92,7 @@ Set **Branch name pattern** to `main` and enable the following options:
 | ✅ Require branches to be up to date before merging | Prevents stale merges |
 | ✅ Include administrators | Applies rules to everyone uniformly |
 
-> 🔒 This ensures that only tested and reviewed code is merged into the `main` branch.
+> 🔒 This ensures that only tested and reviewed code is merged into the `master` branch.
 
 ---
 

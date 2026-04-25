@@ -133,3 +133,7 @@ PR, открытые AI‑агентами (GitHub Copilot coding agent, Codex, 
 - [`docs/correlation-data-guide.md`](docs/correlation-data-guide.md)
 
 Подробнее — в [`AGENTS.md`](AGENTS.md) и [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
+
+## Файлы-исключения
+
+Архивные/служебные документы-исключения (например, migration/refactor) не должны лежать в корне репозитория. Размещайте их только в папке [`docs/exceptions/`](docs/exceptions/).
