@@ -1,0 +1,46 @@
+name: "Feature Request"
+description: "Предложить новую функциональность для Leo4 IoT Platform"
+title: "[feat] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Проблема / мотивация"
+      description: "Какую проблему решает предложенная функциональность?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: "Предлагаемое решение"
+      description: "Описание желаемого поведения."
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Альтернативы"
+      description: "Рассматривались ли другие решения?"
+
+  - type: checkboxes
+    id: subprojects
+    attributes:
+      label: "Затронутые подпроекты"
+      options:
+        - label: "`app-service`"
+        - label: "`device-emulator`"
+        - label: "`mcp`"
+        - label: "`docs`"
+        - label: "`infra`"
+        - label: "`examples`"
+        - label: "`robotics`"
+
+  - type: checkboxes
+    id: breaking
+    attributes:
+      label: "Влияние на обратную совместимость"
+      options:
+        - label: "Изменяет публичный контракт (REST / MQTT topics / method_code / event_type_code)"

@@ -1,0 +1,51 @@
+name: "Bug Report"
+description: "Сообщить об ошибке в платформе Leo4 IoT"
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: "Описание ошибки"
+      description: "Чёткое описание того, что происходит."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Шаги воспроизведения"
+      placeholder: |
+        1. ...
+        2. ...
+        3. Наблюдаемое поведение: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Ожидаемое поведение"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Окружение"
+      placeholder: |
+        - OS:
+        - Python version:
+        - Docker Compose version:
+        - Branch/commit:
+
+  - type: checkboxes
+    id: subprojects
+    attributes:
+      label: "Затронутые подпроекты"
+      options:
+        - label: "`app-service`"
+        - label: "`device-emulator`"
+        - label: "`mcp`"
+        - label: "`infra`"
+        - label: "`examples`"

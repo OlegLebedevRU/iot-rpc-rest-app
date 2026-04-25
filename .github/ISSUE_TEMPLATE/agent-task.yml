@@ -1,0 +1,63 @@
+name: "Agent Task"
+description: "Задача для AI‑агента (GitHub Copilot coding agent, Codex, Claude Code, Cursor и т.п.)"
+title: "[agent] "
+labels: ["agent"]
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: "Контекст"
+      description: |
+        Опишите контекст задачи. Укажите ссылки на релевантные документы из `docs/`:
+        - `docs/mqtt-rpc-protocol.md` — протокол RPC
+        - `docs/1-task-workflow-doc.md` — REST workflow
+        - `docs/task_states.md` — машина состояний
+        - `docs/mqtt_topic_rules.md` — правила топиков
+        - `docs/correlation-data-guide.md` — correlation data
+        - `docs/method-codes-reference.md` — коды методов
+        - `docs/event-protocol-mqtt.md` — протокол событий
+        - `docs/TTL.md` — правила TTL
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: "Acceptance criteria"
+      description: "Чёткие критерии приёмки: что должно работать после выполнения задачи."
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: subprojects
+    attributes:
+      label: "Затронутые подпроекты"
+      options:
+        - label: "`app-service`"
+        - label: "`device-emulator`"
+        - label: "`mcp`"
+        - label: "`docs`"
+        - label: "`infra` (docker-files / nginx / rmq / compose.yaml)"
+        - label: "`examples`"
+        - label: "`robotics`"
+
+  - type: textarea
+    id: commands
+    attributes:
+      label: "Команды для проверки"
+      description: "Команды, которые агент должен выполнить для проверки результата."
+      value: |
+        uv sync && uv run pytest && uv run ruff check .
+
+  - type: checkboxes
+    id: breaking
+    attributes:
+      label: "Изменяет публичный контракт"
+      description: |
+        Если изменяется REST API, топики MQTT, method_code или event_type_code —
+        необходимо обновить соответствующие документы в `docs/`.
+      options:
+        - label: "Изменяет публичный контракт (REST / MQTT topics / method_code / event_type_code) — требуется обновление `docs/`"
