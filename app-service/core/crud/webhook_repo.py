@@ -91,6 +91,7 @@ class WebhookRepo:
                 .where(OrgWebhook.id == webhook.id)
                 .values(url=url, headers=headers, is_active=is_active)
             )
+            await self.session.flush()
             await self.session.refresh(webhook)
             return webhook
         else:
