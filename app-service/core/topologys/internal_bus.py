@@ -10,7 +10,12 @@ from core.schemas.rmq_admin import RmqClientsAction
 from core.services.devices import DeviceService
 from core.services.rmq_admin import RmqAdmin
 from core.topologys.fs_depends import Session_dep
-from core.topologys.declare import q_jobs, rmq_api_client_action, webhook_action, billing_action
+from core.topologys.declare import (
+    q_jobs,
+    rmq_api_client_action,
+    webhook_action,
+    billing_action,
+)
 
 # Отключаем лишние логи от FastStream
 logging.getLogger("logger_proxy").setLevel(logging.WARNING)
@@ -36,6 +41,10 @@ async def rmq_api_client(session: Session_dep, api_action: RmqClientsAction):
         log.info("Subscribed job = Updated device connection status")
 
 
+# Device ID used for targeted diagnostic logging in production logs.
+DIAGNOSTIC_DEVICE_ID = 9993
+
+
 @fs_router.subscriber(webhook_action)
 async def webhooks(session: Session_dep, msg: RabbitMessage):
     if "x-msg-type" not in msg.raw_message.headers:
@@ -48,12 +57,23 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
 
     try:
         device_id = int(device_id_str)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         log.warning("Invalid device_id in headers: %s", device_id_str)
         return
 
+    log.debug("Webhook dispatch: device_id=%d, msg_type=%s", device_id, msg_type)
+
     # Получаем org_id
     org_id = await DeviceRepo.get_org_id_by_device_id(session, device_id=device_id)
+
+    if device_id == DIAGNOSTIC_DEVICE_ID:
+        log.info(
+            "[diag device_id=%d] msg_type=%s resolved org_id=%s",
+            device_id,
+            msg_type,
+            org_id,
+        )
+
     if org_id is None:
         log.info("No org_id found for device_id=%d", device_id)
         return
@@ -61,6 +81,28 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
     # Получаем вебхук
     webhook_repo = WebhookRepo(session)
     webhook_obj = await webhook_repo.get_by_org_and_type(org_id, msg_type)
+
+    if device_id == DIAGNOSTIC_DEVICE_ID:
+        if webhook_obj is None:
+            log.info(
+                "[diag device_id=%d] no webhook row found for org_id=%d, event_type=%s",
+                device_id,
+                org_id,
+                msg_type,
+            )
+        else:
+            log.info(
+                "[diag device_id=%d] webhook found: id=%s org_id=%d event_type=%s "
+                "url=%s is_active=%s headers_present=%s",
+                device_id,
+                webhook_obj.id,
+                webhook_obj.org_id,
+                webhook_obj.event_type,
+                webhook_obj.url,
+                webhook_obj.is_active,
+                bool(webhook_obj.headers is not None),
+            )
+
     if not webhook_obj or not webhook_obj.is_active:
         log.info("No active webhook for org_id=%d, event_type=%s", org_id, msg_type)
         return
@@ -72,8 +114,8 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
         log.error("Failed to decode message body: %s", str(e))
         payload = {}
 
-    # Формируем заголовки
-    headers = dict(webhook_obj.headers or {})
+    # Формируем заголовки; headers={} (пустой объект) равнозначен null — оба дают пустой dict
+    headers = dict(webhook_obj.headers) if webhook_obj.headers else {}
     headers["x-msg-type"] = msg_type
     headers["x-device-id"] = str(device_id)
 
@@ -89,12 +131,31 @@ async def webhooks(session: Session_dep, msg: RabbitMessage):
     path_suffix = (
         f"/{device_id}" if msg_type == "msg-event" else f"/{msg.correlation_id}"
     )
-    async with Webhook(
-        url=str(webhook_obj.url),
-        path_suffix=path_suffix,
-        headers=headers,
-    ) as wh:
-        await wh.send(payload)
+
+    if device_id == DIAGNOSTIC_DEVICE_ID:
+        log.info(
+            "[diag device_id=%d] sending webhook to url=%s path_suffix=%s",
+            device_id,
+            webhook_obj.url,
+            path_suffix,
+        )
+
+    try:
+        async with Webhook(
+            url=str(webhook_obj.url),
+            path_suffix=path_suffix,
+            headers=headers,
+        ) as wh:
+            await wh.send(payload)
+    except Exception as exc:
+        log.error(
+            "Webhook send failed for org_id=%d, url=%s, type=%s: %s",
+            org_id,
+            webhook_obj.url,
+            msg_type,
+            exc,
+        )
+        return
 
     log.info(
         "Webhook sent to org_id=%d, url=%s, type=%s", org_id, webhook_obj.url, msg_type
@@ -119,7 +180,9 @@ async def billing_counter(session: Session_dep, msg: RabbitMessage):
     payload_bytes = payload.get("payload_bytes", 0)
 
     if org_id is None or counter_type is None:
-        log.warning("Invalid billing message, missing org_id or counter_type: %s", payload)
+        log.warning(
+            "Invalid billing message, missing org_id or counter_type: %s", payload
+        )
         return
 
     await BillingService.handle_billing_event(
