@@ -1,4 +1,9 @@
-[![Build and push images to GHCR](https://github.com/OlegLebedevRU/iot-rpc-rest-app/actions/workflows/build-and-push.yaml/badge.svg)](https://github.com/OlegLebedevRU/iot-rpc-rest-app/actions/workflows/build-and-push.yaml)
+[![Build and push images to GHCR](https://github.com/OlegLebedevRU/iot-rpc-rest-app/actions/workflows/build-and-push.yaml/badge.svg?branch=master)](https://github.com/OlegLebedevRU/iot-rpc-rest-app/actions/workflows/build-and-push.yaml)
+![Python](https://img.shields.io/badge/python-3.14-blue.svg?logo=python&logoColor=white)
+![MQTT 5](https://img.shields.io/badge/MQTT-5-purple)
+![Security](https://img.shields.io/badge/security-mTLS-success)
+![deps](https://img.shields.io/badge/deps-uv-orange)
+![Last commit](https://img.shields.io/github/last-commit/OlegLebedevRU/iot-rpc-rest-app)
 # 🌐 Leo4 IoT Platform
 
 > Транспортный фреймворк для создания защищённых систем управления и телеметрии распределённой сети кроссплатформенных IoT-устройств.
