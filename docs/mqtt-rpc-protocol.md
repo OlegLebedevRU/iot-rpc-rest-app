@@ -6,6 +6,7 @@
 > **Версия:** 1.2  
 > **Дата:** 2026  
 > **Автор:** Oleg_
+> **См. также:** [`method-codes-reference.md`](./method-codes-reference.md), [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md), [`correlation-data-guide.md`](./correlation-data-guide.md)
 
 ---
 
@@ -19,6 +20,9 @@
 - TTL
 - Приоритезацию
 - Поллинг и триггерные механизмы инициации запросов
+
+> 🧩 **Совместимость `method_code` и форматы `payload.dt`** вынесены в [`method-codes-reference.md`](./method-codes-reference.md).
+> Кратко: `Platerra` — только `51`, `Siplite` — все документированные коды, `l4-hmi` — `17`, `21`, `23`.
 
 ---
 
@@ -237,6 +241,19 @@
 ```
 
 Порядок выбора задачи для шага `req(UUID(0)) -> rsp`: см. [`TTL.md`](./TTL.md) — единый источник правил поллинга.
+
+### Пример 3: `method_code=17` — кейс `UI-Catalog` для `l4-hmi`
+
+```text
+Сервер → Устройство (rsp):
+   topic: srv/a3b1234567c10221d290825/rsp
+   correlationData: a1b2c3d4-...
+   userProperty: method_code=17
+   payload: {"dt":[{"scope":"catalog","url":"https://example.com/ui/catalog.json"}]}
+```
+
+> 📌 Этот payload использует тот же транспортный RPC-flow, что и остальные вызовы.
+> 🆕 Для `l4-hmi` детализированный итог обновления UI-каталога может прийти отдельным событием `event_type_code = 70` с тегами `401`–`410` — см. [`event-types-reference.md`](./event-types-reference.md) и [`event-property-tags.md`](./event-property-tags.md).
 
 ---
 
