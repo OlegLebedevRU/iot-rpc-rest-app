@@ -62,6 +62,7 @@ flowchart LR
 | Документ | Описание |
 |---|---|
 | 📡 [**RPC-протокол (MQTT v5)**](./docs/mqtt-rpc-protocol.md) | Асинхронный RPC поверх MQTT 5: топики, correlation data, Polling & Trigger |
+| 🔢 [**Справочник method_code**](./docs/method-codes-reference.md) | Единый источник истины по `method_code`, совместимости `Platerra` / `Siplite` / `l4-hmi`, форматам `payload.dt` и ответам `res` |
 | 📋 [**REST API: задачи (task workflow)**](./docs/1-task-workflow-doc.md) | HTTP-интерфейс управления задачами: touch_task, статусы, вебхуки |
 | 📨 [**API событий устройств (events)**](./docs/2-events-api-format-description.md) | Получение асинхронных событий и телеметрии через REST |
 | 🔔 [**Webhooks**](./docs/3-webhooks.md) | Push-уведомления о результатах задач и событиях |
@@ -73,6 +74,7 @@ flowchart LR
 | 🔀 [**Sequence диаграммы**](./docs/sequence.md) | End-to-end сценарии: touch_task → MQTT RPC → result |
 | 🗂️ [**Состояния задачи**](./docs/task_states.md) | State machine задачи: READY → PENDING → LOCK → DONE/FAILED |
 | 📊 [**Граф клиентского потока RPC**](./docs/mqtt-rpc-client-flow.md) | Mermaid-диаграммы: Polling, Trigger, Fail-fast |
+| 🧬 [**Матрица correlation data**](./docs/mqtt-rpc-correlation-matrix.md) | Где и как передаётся `correlationData` в `tsk` / `req` / `rsp` / `res` / `cmt` |
 
 ### Интеграция
 
@@ -89,8 +91,11 @@ flowchart LR
 |---|---|
 | 🎯 [**Презентация решения**](./docs/solution-presentation.md) | Полный обзор платформы: концепция, архитектура, сценарии |
 | ⏱️ [**TTL**](./docs/TTL.md) | Правила декремента TTL, поллинг и поведение при TTL=0 |
-| 🔢 [**Справочник method_code**](./docs/method-codes-reference.md) | Реестр команд: диапазоны, форматы payload, ответы |
+| 🏷️ [**Типы событий**](./docs/event-types-reference.md) | Реестр `event_type_code`, включая `L4HmiEvent` для результата обновления UI-каталога |
 | 🏷️ [**Теги событий**](./docs/event-property-tags.md) | Справочник числовых тегов payload событий устройств |
+
+> ℹ️ Для RPC-интеграций начните со связки: [`mqtt-rpc-protocol.md`](./docs/mqtt-rpc-protocol.md) → [`method-codes-reference.md`](./docs/method-codes-reference.md) → [`mqtt-rpc-client-flow.md`](./docs/mqtt-rpc-client-flow.md).
+> 🆕 Для кейса `l4-hmi` + `method_code=17` (`UI-Catalog`) смотрите также [`event-types-reference.md`](./docs/event-types-reference.md) и [`event-property-tags.md`](./docs/event-property-tags.md).
 
 ---
 
