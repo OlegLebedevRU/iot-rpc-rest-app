@@ -3,9 +3,11 @@
 > **File:** `docs/mqtt-rpc-client-flow.md`
 > **Version:** 1.1
 > **Date:** 2026
-> **See also:** [`mqtt-rpc-protocol.md`](mqtt-rpc-protocol.md), [`correlation-data-guide.md`](correlation-data-guide.md), [`event-property-tags.md`](event-property-tags.md)
+> **See also:** [`mqtt-rpc-protocol.md`](mqtt-rpc-protocol.md), [`method-codes-reference.md`](./method-codes-reference.md), [`correlation-data-guide.md`](correlation-data-guide.md), [`event-property-tags.md`](event-property-tags.md)
 
 > ⚠️ **Статус документа:** этот файл является **графической репликой** основного протокола [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md). Все диаграммы должны актуализироваться при изменении протокола. Текстовые описания правил и алгоритмов намеренно вынесены в профильные документы — в данном файле приведены только ссылки.
+> ℹ️ **Проверяйте совместимость `method_code` до отправки команды:** матрица по `Platerra`, `Siplite`, `l4-hmi` и примеры `payload.dt` вынесены в [`method-codes-reference.md`](./method-codes-reference.md).
+> 🆕 Кейс `method_code = 17` (`UI-Catalog` для `l4-hmi`) использует тот же transport flow, что и остальные RPC-вызовы.
 
 ---
 

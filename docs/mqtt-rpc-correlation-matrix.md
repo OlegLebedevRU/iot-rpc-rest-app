@@ -2,6 +2,9 @@
 
 Краткая сводка по тому, где и как передаётся `correlationData` / `correlation_id` в протоколе и в текущей реализации.
 
+> 🧩 Правила корреляции являются транспортно-общими и одинаково применяются ко всем документированным вариантам совместимости устройств: `Platerra`, `Siplite`, `l4-hmi`.
+> 📘 Матрица совместимости `method_code` и форматы `payload.dt` вынесены в [`method-codes-reference.md`](./method-codes-reference.md).
+
 Основа:
 - протокол: `docs/mqtt-rpc-protocol.md`
 - серверная реализация: `app-service/core/services/device_task_processing.py`, `app-service/core/topologys/fs_depends.py`, `app-service/core/topologys/fs_queues.py`
