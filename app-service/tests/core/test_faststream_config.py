@@ -34,10 +34,13 @@ class TestMaskAmqpUrl:
         assert "alice" in masked
 
     def test_host_and_port_preserved(self):
+        from urllib.parse import urlparse
+
         url = "amqp://user:pw@dev.example.com:5672/myvhost"
         masked = mask_amqp_url(url)
-        assert "dev.example.com" in masked
-        assert "5672" in masked
+        parsed = urlparse(masked)
+        assert parsed.hostname == "dev.example.com"
+        assert parsed.port == 5672
 
     def test_vhost_preserved(self):
         url = "amqp://user:pw@host:5672/myvhost"

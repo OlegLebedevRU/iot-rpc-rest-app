@@ -65,7 +65,7 @@ try:
     _RETRYABLE_EXCEPTIONS = _RETRYABLE_EXCEPTIONS + (
         aio_pika.exceptions.AMQPConnectionError,
     )
-except ImportError, AttributeError:
+except (ImportError, AttributeError):
     pass
 try:
     import aiormq.exceptions  # type: ignore[import]
@@ -73,7 +73,7 @@ try:
     _RETRYABLE_EXCEPTIONS = _RETRYABLE_EXCEPTIONS + (
         aiormq.exceptions.AMQPConnectionError,
     )
-except ImportError, AttributeError:
+except (ImportError, AttributeError):
     pass
 
 
