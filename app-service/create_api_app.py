@@ -169,7 +169,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Wrap close() so a broker that is already gone doesn't raise on shutdown.
     try:
         await fs_router.broker.close()
-    except Exception as exc:  # noqa: BLE001
+    except (OSError, ConnectionError, RuntimeError) as exc:
         log.warning("Ignoring error while closing broker: %s", exc)
 
 

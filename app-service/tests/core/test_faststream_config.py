@@ -283,7 +283,7 @@ async def test_delay_grows_with_backoff():
         await _start_broker_with_retry()
 
     # With jitter=0 the delays should be exactly 0.5, 1.0, 2.0
-    assert sleep_calls == pytest.approx([0.5, 1.0, 2.0])
+    assert sleep_calls == [0.5, 1.0, 2.0]
 
 
 @pytest.mark.anyio
