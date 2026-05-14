@@ -1,4 +1,6 @@
+import asyncio
 import logging
+import random
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -17,14 +19,13 @@ from fastapi_pagination import add_pagination
 # Импортируем маршруты и конфигурацию
 from api import router as api_router
 from core import settings
+from core.config import mask_amqp_url
 from core.fs_broker import fs_router
 from core.logging_config import setup_module_logger
 from core.models import db_helper
 from core.services.device_task_processing import act_ttl
 from core.services.billing import BillingService
 from core.topologys.declare import declare_x_q
-import core.topologys.fs_queues
-import core.topologys.internal_bus
 
 # Импортируем теги и константы из нового файла
 from config.tags import TAGS_METADATA
@@ -51,9 +52,89 @@ SUMMARY = """
 """
 
 
+# Connection exceptions that are worth retrying (network / broker not ready).
+# We try to import aio_pika-specific errors; fall back gracefully if absent.
+_RETRYABLE_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    asyncio.TimeoutError,
+    OSError,
+    ConnectionError,
+)
+try:
+    import aio_pika.exceptions  # type: ignore[import]
+
+    _RETRYABLE_EXCEPTIONS = _RETRYABLE_EXCEPTIONS + (
+        aio_pika.exceptions.AMQPConnectionError,
+    )
+except (ImportError, AttributeError):
+    pass
+try:
+    import aiormq.exceptions  # type: ignore[import]
+
+    _RETRYABLE_EXCEPTIONS = _RETRYABLE_EXCEPTIONS + (
+        aiormq.exceptions.AMQPConnectionError,
+    )
+except (ImportError, AttributeError):
+    pass
+
+
+async def _start_broker_with_retry() -> None:
+    """Start the FastStream broker with exponential backoff + jitter.
+
+    Retry policy is read from ``settings.faststream``.  Each attempt is wrapped
+    in ``asyncio.wait_for`` so a single hung TCP connect does not block forever.
+
+    aio-pika's robust connection (used internally by FastStream) will handle
+    *runtime* reconnects after a successful startup.  This function only covers
+    the "broker not yet reachable at boot" scenario.
+    """
+    cfg = settings.faststream
+    masked_url = mask_amqp_url(str(cfg.url))
+    max_retries = cfg.connect_max_retries  # -1 → infinite
+    attempt = 0
+    delay = cfg.connect_initial_delay
+
+    while True:
+        try:
+            if cfg.connect_timeout > 0:
+                await asyncio.wait_for(
+                    fs_router.broker.start(), timeout=cfg.connect_timeout
+                )
+            else:
+                await fs_router.broker.start()
+            log.info(
+                "Broker connected successfully on attempt %d: %s",
+                attempt + 1,
+                masked_url,
+            )
+            return
+        except _RETRYABLE_EXCEPTIONS as exc:
+            attempt += 1
+            exhausted = (max_retries >= 0) and (attempt >= max_retries)
+            if exhausted:
+                log.error(
+                    "Broker connection failed after %d attempt(s): %s — giving up. URL: %s",
+                    attempt,
+                    exc,
+                    masked_url,
+                )
+                raise
+            # Add jitter to avoid thundering-herd on mass restarts.
+            jitter = random.uniform(0, cfg.connect_jitter * delay)
+            actual_delay = delay + jitter
+            log.warning(
+                "Broker connection attempt %d failed (%s). Retrying in %.1fs… URL: %s",
+                attempt,
+                exc,
+                actual_delay,
+                masked_url,
+            )
+            await asyncio.sleep(actual_delay)
+            delay = min(delay * cfg.connect_backoff_factor, cfg.connect_max_delay)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    await fs_router.broker.start()
+    await _start_broker_with_retry()
     await declare_x_q()
     scheduler = AsyncIOScheduler()
     scheduler.configure(jobstores={"default": MemoryJobStore()})
@@ -85,7 +166,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     await db_helper.dispose()
     scheduler.shutdown()
-    await fs_router.broker.close()
+    # Wrap close() so a broker that is already gone doesn't raise on shutdown.
+    try:
+        await fs_router.broker.close()
+    except (OSError, ConnectionError, RuntimeError) as exc:
+        log.warning("Ignoring error while closing broker: %s", exc)
 
 
 async def _billing_monthly_job() -> None:

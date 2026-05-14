@@ -1,8 +1,12 @@
+from __future__ import annotations
+
 import logging
 import os
 import uuid
 from typing import Literal, Dict
-from pydantic import AmqpDsn, UUID4, HttpUrl, Field
+from urllib.parse import urlparse, urlunparse
+
+from pydantic import AmqpDsn, UUID4, HttpUrl, Field, model_validator
 from pydantic import BaseModel
 from pydantic import PostgresDsn
 from pydantic_settings import (
@@ -77,10 +81,99 @@ class ApiPrefix(BaseModel):
     v1: ApiV1Prefix = ApiV1Prefix()
 
 
+# Hosts that are already local / compose-internal — no rewrite needed.
+_COMPOSE_LOCAL_HOSTS: frozenset[str] = frozenset(
+    {"rabbitmq", "localhost", "127.0.0.1", "host.docker.internal"}
+)
+
+_log = logging.getLogger(__name__)
+
+
+def mask_amqp_url(url: str) -> str:
+    """Return the AMQP URL with the password replaced by '***'.
+
+    Keeps the username visible (useful for diagnostics) but never exposes the
+    password in log output.  Works for any scheme (amqp, amqps, …).
+    """
+    parsed = urlparse(url)
+    if parsed.password:
+        userinfo = f"{parsed.username}:***"
+        # Rebuild netloc without password
+        host_part = parsed.hostname or ""
+        if parsed.port:
+            host_part = f"{host_part}:{parsed.port}"
+        netloc = f"{userinfo}@{host_part}"
+        return urlunparse(parsed._replace(netloc=netloc))
+    return url
+
+
+def _rewrite_amqp_host(url: str, target_host: str, target_port: int) -> str:
+    """Replace the host (and port) in *url* while preserving everything else."""
+    parsed = urlparse(url)
+    userinfo = ""
+    if parsed.username:
+        userinfo = parsed.username
+        if parsed.password:
+            userinfo = f"{userinfo}:{parsed.password}"
+    netloc = (
+        f"{userinfo}@{target_host}:{target_port}"
+        if userinfo
+        else f"{target_host}:{target_port}"
+    )
+    return urlunparse(parsed._replace(netloc=netloc))
+
+
 class FastStreamConfig(BaseModel):
     url: AmqpDsn
     max_consumers: int = 5
-    # log_format: str = WORKER_LOG_DEFAULT_FORMAT
+
+    # ── Host-rewrite settings ──────────────────────────────────────────────
+    # When True (default) and the URL host is NOT in the compose-local
+    # allowlist, the host and port are automatically replaced with
+    # compose_host:compose_port.  This prevents accidentally pointing at an
+    # external broker (e.g. dev.leo4.ru) when running inside docker compose.
+    rewrite_external_host_to_compose: bool = True
+    compose_host: str = "rabbitmq"
+    compose_port: int = 5672
+
+    # ── Startup retry / backoff settings ──────────────────────────────────
+    # broker.start() is retried up to connect_max_retries times (−1 = infinite)
+    # with exponential backoff:  delay = min(initial * factor^attempt, max_delay)
+    # plus uniform jitter in [0, connect_jitter * delay].
+    connect_max_retries: int = 30
+    connect_initial_delay: float = 0.5  # seconds
+    connect_max_delay: float = 10.0  # seconds
+    connect_backoff_factor: float = 2.0
+    connect_jitter: float = 0.2
+    # Per-attempt wall-clock timeout wrapping broker.start(); 0 = no timeout.
+    connect_timeout: float = 5.0
+
+    @model_validator(mode="after")
+    def _maybe_rewrite_host(self) -> "FastStreamConfig":
+        """Rewrite broker URL host when it looks like an external address."""
+        if not self.rewrite_external_host_to_compose:
+            return self
+        parsed = urlparse(str(self.url))
+        host = parsed.hostname or ""
+        if host in _COMPOSE_LOCAL_HOSTS:
+            return self
+        # External host detected — rewrite.
+        original_masked = mask_amqp_url(str(self.url))
+        new_url_str = _rewrite_amqp_host(
+            str(self.url), self.compose_host, self.compose_port
+        )
+        _log.info(
+            "FastStream broker URL host '%s' is not a compose-local host. "
+            "Rewriting %s → %s:%d  (original: %s)",
+            host,
+            host,
+            self.compose_host,
+            self.compose_port,
+            original_masked,
+        )
+        # Re-validate through AmqpDsn
+        self.url = AmqpDsn(new_url_str)
+        return self
 
 
 class DatabaseConfig(BaseModel):

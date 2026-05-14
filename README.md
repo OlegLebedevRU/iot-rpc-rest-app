@@ -104,6 +104,43 @@ flowchart LR
 
 ---
 
+## ⚙️ Конфигурация FastStream / RabbitMQ
+
+### Автозамена хоста брокера (host-rewrite)
+
+При запуске `app1` внутри docker compose, если в `APP_CONFIG__FASTSTREAM__URL` указан
+**внешний** хост (не `rabbitmq`, `localhost`, `127.0.0.1`, `host.docker.internal`),
+сервис автоматически заменяет хост и порт на адрес compose-сервиса.
+Учётные данные, vhost и query-параметры **сохраняются**.
+Пароль **никогда не попадает в логи** (маскируется как `***`).
+
+| Переменная | По умолчанию | Описание |
+|---|---|---|
+| `APP_CONFIG__FASTSTREAM__URL` | — | AMQP URL брокера; пароль задаётся только через env/`.env` |
+| `APP_CONFIG__FASTSTREAM__REWRITE_EXTERNAL_HOST_TO_COMPOSE` | `true` | Включить автозамену внешнего хоста |
+| `APP_CONFIG__FASTSTREAM__COMPOSE_HOST` | `rabbitmq` | Целевой хост после замены |
+| `APP_CONFIG__FASTSTREAM__COMPOSE_PORT` | `5672` | Целевой порт после замены |
+
+### Retry / backoff при подключении к брокеру
+
+`broker.start()` на старте сервиса выполняется в цикле с экспоненциальным
+откатом + jitter, чтобы кратковременная недоступность RabbitMQ не приводила
+к краху воркера gunicorn.
+
+| Переменная | По умолчанию | Описание |
+|---|---|---|
+| `APP_CONFIG__FASTSTREAM__CONNECT_MAX_RETRIES` | `30` | Макс. попыток (`-1` = бесконечно) |
+| `APP_CONFIG__FASTSTREAM__CONNECT_INITIAL_DELAY` | `0.5` | Начальная задержка, с |
+| `APP_CONFIG__FASTSTREAM__CONNECT_MAX_DELAY` | `10.0` | Максимальная задержка, с |
+| `APP_CONFIG__FASTSTREAM__CONNECT_BACKOFF_FACTOR` | `2.0` | Множитель экспоненты |
+| `APP_CONFIG__FASTSTREAM__CONNECT_JITTER` | `0.2` | Коэффициент случайного разброса |
+| `APP_CONFIG__FASTSTREAM__CONNECT_TIMEOUT` | `5.0` | Тайм-аут одной попытки, с (`0` = без тайм-аута) |
+
+> **Учётные данные** (`RABBITMQ_USER`, `RABBITMQ_PASSWORD`) передаются только через
+> переменные окружения или локальный файл `.env` (не коммитится в git).
+
+---
+
 ## 💻 Примеры и симуляторы
 
 > Все примеры используют двустороннюю SSL-аутентификацию (mutual TLS)
