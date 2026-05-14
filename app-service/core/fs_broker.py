@@ -2,26 +2,23 @@
 import logging
 
 from faststream.rabbit.fastapi import RabbitRouter
-from core.config import settings
+from core.config import settings, mask_amqp_url
 from core.logging_config import setup_module_logger
 
 log = setup_module_logger(__name__, "broker_core.log")
 logging.getLogger("logger_proxy").setLevel(logging.WARNING)
-# Логируем первый запуск
-print(f"🔧 Creating RabbitRouter for {settings.faststream.url}")
-log.info(f"Initializing RabbitRouter with URL: {settings.faststream.url}")
+# Log the (possibly rewritten) URL — password is masked for safety.
+_masked_url = mask_amqp_url(str(settings.faststream.url))
+print(f"🔧 Creating RabbitRouter for {_masked_url}")
+log.info("Initializing RabbitRouter with URL: %s", _masked_url)
 
-# Передаём параметры напрямую — они поддерживаются в FastStream >=0.5.0
-
-
-# Передаём брокер в роутер
+# FastStream's RabbitRouter uses aio-pika's robust connection internally,
+# which will automatically reconnect if the broker disappears at runtime.
+# Startup retry/backoff is handled in create_api_app.py lifespan.
 fs_router = RabbitRouter(
     url=str(settings.faststream.url),
     logger=log,
     log_level=logging.DEBUG,
-    # max_retries=None,#
-    # max_retries=3,
-    # retry_delay=2,
     timeout=10.0,
     include_in_schema=False,
 )
