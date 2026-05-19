@@ -116,7 +116,7 @@ Content-Type: application/json
 | `message` | ❌ | Optional string. If omitted or empty, backend uses the default message body |
 | `file_base64` | ✅ | Base64-encoded attachment content |
 
-**Maximum body size:** 25 MB (total HTTP request body size, enforced by nginx `client_max_body_size 25m`). Since base64 increases payload size by ~33%, the practical maximum decoded attachment size is approximately 18.75 MB (`25 MB / 1.33`), minus small JSON overhead. The backend decodes `file_base64` from the JSON payload.
+**Maximum body size:** 25 MB (total HTTP request body size, enforced by nginx `client_max_body_size 25m`). Since base64 increases payload size by ~33%, use ~18 MB as a safe practical maximum decoded attachment size. The backend decodes `file_base64` from the JSON payload.
 
 ### Headers Set by nginx (forwarded to backend)
 
@@ -200,19 +200,7 @@ openssl s_client -connect dev.leo4.ru:1444 ^
     -servername dev.leo4.ru ^
     -cert cert.pem -key key.pem -CAfile ca.crt
 
-:: Or with curl for Windows (use port 1444 for Schannel compatibility):
-:: 1) Create request.json with base64 payload (PowerShell):
-:: $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("device.log"))
-:: @"
-:: {
-::   "file_name": "device.log",
-::   "recipients": ["user1@example.com","user2@example.com"],
-::   "subject": "Лог устройства",
-::   "message": "Добрый день. Во вложении лог устройства.",
-::   "file_base64": "$b64"
-:: }
-:: "@ | Set-Content -Encoding UTF8 request.json
-
+:: Then send request.json with curl (port 1444 for Schannel compatibility):
 curl -X POST ^
   "https://dev.leo4.ru:1444/terem-api/v1/send-email" ^
   --cert cert.pem ^
@@ -220,6 +208,19 @@ curl -X POST ^
   --cacert ca.crt ^
   -H "Content-Type: application/json" ^
   --data-binary @request.json
+```
+
+```powershell
+$b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("device.log"))
+@"
+{
+  "file_name": "device.log",
+  "recipients": ["user1@example.com","user2@example.com"],
+  "subject": "Лог устройства",
+  "message": "Добрый день. Во вложении лог устройства.",
+  "file_base64": "$b64"
+}
+"@ | Set-Content -Encoding UTF8 request.json
 ```
 
 ### Python (httpx)
