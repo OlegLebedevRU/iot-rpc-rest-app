@@ -45,7 +45,7 @@ sequenceDiagram
     participant N  as nginx (dev.leo4.ru)
     participant GW as API Gateway
 
-    D  ->> N  : POST :1443/:1444 /terem-api/v1/send-email<br/>Content-Type: application/json<br/>Body: {"file_name","recipients[]","subject?","message?","file_base64"}
+    D  ->> N  : POST :1443/:1444 /terem-api/v1/send-email<br/>Content-Type: application/json<br/>Body: {"file_name":"...","recipients":["..."],"subject":"...","message":"...","file_base64":"..."}
     Note over N: Verify client cert against platform CA<br/>Extract OU → device_id<br/>Reject with 403 if OU is absent
     N  ->> GW : POST /backend-api/v1/send-email/{device_id}<br/>[JSON body forwarded unchanged]
     GW -->> N : HTTP response
@@ -232,18 +232,19 @@ with httpx.Client(
     verify="ca.crt",
 ) as client:
     with open("device.log", "rb") as f:
-        payload = {
-            "file_name": "device.log",
-            "recipients": ["user1@example.com", "user2@example.com"],
-            "subject": "Лог устройства",
-            "message": "Добрый день. Во вложении лог устройства.",
-            "file_base64": base64.b64encode(f.read()).decode("ascii"),
-        }
-        response = client.post(
-            "https://dev.leo4.ru:1443/terem-api/v1/send-email",
-            headers={"Content-Type": "application/json"},
-            json=payload,
-        )
+        file_base64 = base64.b64encode(f.read()).decode("ascii")
+    payload = {
+        "file_name": "device.log",
+        "recipients": ["user1@example.com", "user2@example.com"],
+        "subject": "Лог устройства",
+        "message": "Добрый день. Во вложении лог устройства.",
+        "file_base64": file_base64,
+    }
+    response = client.post(
+        "https://dev.leo4.ru:1443/terem-api/v1/send-email",
+        headers={"Content-Type": "application/json"},
+        json=payload,
+    )
     print(response.status_code, response.text)
 ```
 
