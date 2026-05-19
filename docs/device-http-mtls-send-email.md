@@ -274,13 +274,15 @@ HINTERNET hRequest = WinHttpOpenRequest(hConnect,
 WinHttpSetOption(hRequest, WINHTTP_OPTION_CLIENT_CERT_CONTEXT,
     (LPVOID)pCert, sizeof(CERT_CONTEXT));
 
-// Build JSON request body with base64 file payload (precomputed here as fileBase64)
+// Read file bytes and convert to base64 before JSON serialization.
+// Example helper: char* fileBase64 = Base64Encode(fileBuffer, fileSize);
+// (WinAPI option: CryptBinaryToStringA with CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF)
 const char* jsonBody =
     "{"
     "\"file_name\":\"device.log\","
     "\"recipients\":[\"user1@example.com\",\"user2@example.com\"],"
-    "\"subject\":\"\\u041b\\u043e\\u0433 \\u0443\\u0441\\u0442\\u0440\\u043e\\u0439\\u0441\\u0442\\u0432\\u0430\","
-    "\"message\":\"\\u0414\\u043e\\u0431\\u0440\\u044b\\u0439 \\u0434\\u0435\\u043d\\u044c. \\u0412\\u043e \\u0432\\u043b\\u043e\\u0436\\u0435\\u043d\\u0438\\u0438 \\u043b\\u043e\\u0433 \\u0443\\u0441\\u0442\\u0440\\u043e\\u0439\\u0441\\u0442\\u0432\\u0430.\","
+    "\"subject\":\"Device log\","
+    "\"message\":\"Attached device log file.\","
     "\"file_base64\":\"<BASE64_ENCODED_FILE_CONTENT>\""
     "}";
 
