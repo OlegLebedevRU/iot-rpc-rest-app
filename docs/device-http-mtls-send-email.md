@@ -110,13 +110,13 @@ Content-Type: application/json
 
 | Field | Required | Rules / Description |
 |-----------|----------|-------------|
-| `file_name` | ✅ | String, length `1..255` |
+| `file_name` | ✅ | String, length `1..255` (use a plain file name without path separators) |
 | `recipients` | ✅ | Non-empty array of email addresses. The backend sends the email to all recipients in the array |
 | `subject` | ❌ | Optional string. If omitted or empty, backend uses `Файл от устройства {device_id}: {file_name}` |
 | `message` | ❌ | Optional string. If omitted or empty, backend uses the default message body |
 | `file_base64` | ✅ | Base64-encoded attachment content |
 
-**Maximum body size:** 25 MB (HTTP request body limit enforced by nginx `client_max_body_size 25m`). The backend decodes `file_base64` from the JSON payload.
+**Maximum body size:** 25 MB (total HTTP request body size, enforced by nginx `client_max_body_size 25m`). Since base64 increases payload size by ~33%, the practical maximum decoded attachment size is lower than 25 MB. The backend decodes `file_base64` from the JSON payload.
 
 ### Headers Set by nginx (forwarded to backend)
 
@@ -175,6 +175,7 @@ Typical successful backend payload:
 
 ```bash
 FILE_B64="$(base64 </path/to/device.log | tr -d '\n')"
+# Keep base64 in a single line for valid JSON string content.
 
 curl -X POST \
   "https://dev.leo4.ru:1443/terem-api/v1/send-email" \
@@ -274,17 +275,33 @@ HINTERNET hRequest = WinHttpOpenRequest(hConnect,
 WinHttpSetOption(hRequest, WINHTTP_OPTION_CLIENT_CERT_CONTEXT,
     (LPVOID)pCert, sizeof(CERT_CONTEXT));
 
-// Read file bytes and convert to base64 before JSON serialization.
-// Example helper: char* fileBase64 = Base64Encode(fileBuffer, fileSize);
-// (WinAPI option: CryptBinaryToStringA with CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF)
-const char* jsonBody =
-    "{"
-    "\"file_name\":\"device.log\","
+// Minimal WinAPI base64 helper (caller frees returned buffer).
+char* Base64Encode(const BYTE* data, DWORD size) {
+    DWORD outLen = 0;
+    CryptBinaryToStringA(data, size, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, NULL, &outLen);
+    char* out = (char*)malloc(outLen);
+    if (!out) return NULL;
+    if (!CryptBinaryToStringA(data, size, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, out, &outLen)) {
+        free(out);
+        return NULL;
+    }
+    return out;
+}
+
+char* fileBase64 = Base64Encode(fileBuffer, fileSize);
+if (!fileBase64) { /* handle error */ }
+
+// Build JSON request body with base64 file payload
+char jsonBody[32768];
+_snprintf_s(
+    jsonBody, sizeof(jsonBody), _TRUNCATE,
+    "{\"file_name\":\"device.log\","
     "\"recipients\":[\"user1@example.com\",\"user2@example.com\"],"
     "\"subject\":\"Device log\","
     "\"message\":\"Attached device log file.\","
-    "\"file_base64\":\"<BASE64_ENCODED_FILE_CONTENT>\""
-    "}";
+    "\"file_base64\":\"%s\"}",
+    fileBase64
+);
 
 LPCWSTR headers = L"Content-Type: application/json\r\n";
 
@@ -292,6 +309,7 @@ BOOL ok = WinHttpSendRequest(hRequest,
     headers, (DWORD)-1L,
     (LPVOID)jsonBody, (DWORD)strlen(jsonBody), (DWORD)strlen(jsonBody), 0);
 WinHttpReceiveResponse(hRequest, NULL);
+free(fileBase64);
 
 // ... read response, cleanup handles ...
 ```
