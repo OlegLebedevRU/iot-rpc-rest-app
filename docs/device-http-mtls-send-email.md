@@ -116,7 +116,7 @@ Content-Type: application/json
 | `message` | ❌ | Optional string. If omitted or empty, backend uses the default message body |
 | `file_base64` | ✅ | Base64-encoded attachment content |
 
-**Maximum body size:** 25 MB (total HTTP request body size, enforced by nginx `client_max_body_size 25m`). Since base64 increases payload size by ~33%, the practical maximum decoded attachment size is lower than 25 MB. The backend decodes `file_base64` from the JSON payload.
+**Maximum body size:** 25 MB (total HTTP request body size, enforced by nginx `client_max_body_size 25m`). Since base64 increases payload size by ~33%, the practical maximum decoded attachment size is approximately 18.75 MB (`25 MB / 1.33`), minus small JSON overhead. The backend decodes `file_base64` from the JSON payload.
 
 ### Headers Set by nginx (forwarded to backend)
 
@@ -175,7 +175,7 @@ Typical successful backend payload:
 
 ```bash
 FILE_B64="$(base64 </path/to/device.log | tr -d '\n')"
-# Keep base64 in a single line for valid JSON string content.
+# Remove newlines from base64 output to avoid breaking JSON string formatting.
 
 curl -X POST \
   "https://dev.leo4.ru:1443/terem-api/v1/send-email" \
@@ -282,6 +282,7 @@ char* Base64Encode(const BYTE* data, DWORD size) {
     char* out = (char*)malloc(outLen);
     if (!out) return NULL;
     if (!CryptBinaryToStringA(data, size, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, out, &outLen)) {
+        // On failure, inspect GetLastError() for diagnostics.
         free(out);
         return NULL;
     }
@@ -291,17 +292,17 @@ char* Base64Encode(const BYTE* data, DWORD size) {
 char* fileBase64 = Base64Encode(fileBuffer, fileSize);
 if (!fileBase64) { /* handle error */ }
 
-// Build JSON request body with base64 file payload
-char jsonBody[32768];
-_snprintf_s(
-    jsonBody, sizeof(jsonBody), _TRUNCATE,
+// Build JSON request body with base64 file payload (dynamic allocation for large payloads)
+const char* jsonTemplate =
     "{\"file_name\":\"device.log\","
     "\"recipients\":[\"user1@example.com\",\"user2@example.com\"],"
     "\"subject\":\"Device log\","
     "\"message\":\"Attached device log file.\","
-    "\"file_base64\":\"%s\"}",
-    fileBase64
-);
+    "\"file_base64\":\"%s\"}";
+int jsonLen = _scprintf(jsonTemplate, fileBase64);
+char* jsonBody = (char*)malloc((size_t)jsonLen + 1);
+if (!jsonBody) { free(fileBase64); /* handle error */ }
+_snprintf_s(jsonBody, (size_t)jsonLen + 1, _TRUNCATE, jsonTemplate, fileBase64);
 
 LPCWSTR headers = L"Content-Type: application/json\r\n";
 
@@ -309,6 +310,7 @@ BOOL ok = WinHttpSendRequest(hRequest,
     headers, (DWORD)-1L,
     (LPVOID)jsonBody, (DWORD)strlen(jsonBody), (DWORD)strlen(jsonBody), 0);
 WinHttpReceiveResponse(hRequest, NULL);
+free(jsonBody);
 free(fileBase64);
 
 // ... read response, cleanup handles ...
