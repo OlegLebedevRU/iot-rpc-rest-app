@@ -18,6 +18,12 @@
 | [`1-task-workflow-doc.md`](./1-task-workflow-doc.md) | REST workflow задач |
 | [`TTL.md`](./TTL.md) | TTL и правила выборки задач при polling |
 
+### Device-facing HTTP (mTLS)
+
+| Документ | Назначение |
+|---|---|
+| [`device-http-mtls-send-email.md`](./device-http-mtls-send-email.md) | **Эталонный пример** device-facing HTTP endpoint с mTLS: `send-email` API, порты 1443/1444, идентификация по сертификату `OU` |
+
 ### Events и совместимость
 
 | Документ | Назначение |
@@ -67,4 +73,5 @@
 - Ищете **контракт RPC** → начните с [`method-codes-reference.md`](./method-codes-reference.md)
 - Ищете **транспортные детали MQTT RPC** → откройте [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md)
 - Ищете **совместимость событий / тегов** → откройте [`event-types-reference.md`](./event-types-reference.md) и [`event-property-tags.md`](./event-property-tags.md)
+- Ищете **device-facing HTTP API с mTLS** → откройте [`device-http-mtls-send-email.md`](./device-http-mtls-send-email.md)
 - Ищете **внешнюю библиотечную или инфраструктурную спецификацию** → используйте соответствующий раздел выше
