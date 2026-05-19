@@ -228,7 +228,7 @@ var fileName = "device.log";
 var email = "user@example.com";
 
 var uri =
-    $"https://dev.leo4.ru:1444/terem-api/v1/send-email" +
+    $"https://<device-mtls-host>:1444/terem-api/v1/send-email" +
     $"?file_name={Uri.EscapeDataString(fileName)}" +
     $"&email_address={Uri.EscapeDataString(email)}";
 
@@ -239,7 +239,7 @@ using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
 store.Open(OpenFlags.ReadOnly);
 var byThumbprint = store.Certificates.Find(
     X509FindType.FindByThumbprint,
-    "<CERT_THUMBPRINT_WITHOUT_SPACES>",
+    "<40_HEX_CHARS_NO_SPACES>",
     validOnly: false
 );
 if (byThumbprint.Count > 0)
@@ -266,7 +266,7 @@ Console.WriteLine($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
 Console.WriteLine(responseText);
 ```
 
-> **C# note (Windows):** Use port **1444** for Schannel compatibility. Import the platform CA into **Trusted Root Certification Authorities**, and use placeholders for certificate thumbprints, PFX path, and password.
+> **C# note (Windows):** Use port **1444** for Schannel compatibility. Replace `<device-mtls-host>` with your ingress host, import the platform CA into **Trusted Root Certification Authorities**, and use placeholders for certificate thumbprints, PFX path, and password.
 
 ---
 
