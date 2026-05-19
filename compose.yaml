@@ -138,11 +138,13 @@ services:
         - "80:80"
         - "443:443"
         - "1443:1443"
+        - "1444:1444"
     restart: always
     volumes:
       - ./nginx-configs/dev_leo4_ru/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./nginx-configs/dev_leo4_ru/ssl.conf:/etc/nginx/conf.d/ssl.conf:ro
       - ./nginx-configs/dev_leo4_ru/terem_email_mtls.conf:/etc/nginx/conf.d/terem_email_mtls.conf:ro
+      - ./nginx-configs/dev_leo4_ru/snippets/terem_email_proxy.inc:/etc/nginx/conf.d/terem_email_proxy.inc:ro
       - ./certbot/www:/var/www/certbot/:ro
       - ./certbot/conf/:/etc/nginx/ssl/:ro
       - ./crt/iot_leo4_ca.crt:/crt/ca_certificate.pem:ro
