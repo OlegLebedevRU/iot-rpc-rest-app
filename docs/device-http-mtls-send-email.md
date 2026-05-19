@@ -10,7 +10,7 @@
 
 ## Overview
 
-The `send-email` endpoint is a **device-facing HTTP API** that allows an IoT device to upload a binary file (e.g. a log file or a report) and request the platform to deliver it to a given email address.
+The `send-email` endpoint is a **device-facing HTTP API** that accepts a JSON envelope with file metadata, recipient list, optional email subject, optional email message body, and a base64-encoded file attachment.
 
 Authentication is performed exclusively via **mutual TLS (mTLS)**: no API key or bearer token is required. The device's identity is derived directly from its client certificate, so the `device_id` is never passed in the request body or as a URL parameter — it is extracted from the certificate automatically by the nginx ingress.
 
@@ -22,8 +22,9 @@ Authentication is performed exclusively via **mutual TLS (mTLS)**: no API key or
 
 ```
 Device
-  │  POST /terem-api/v1/send-email?file_name=…&email_address=…
-  │  Body: <binary file>
+  │  POST /terem-api/v1/send-email
+  │  Content-Type: application/json
+  │  Body: {"file_name":"...","recipients":[...],"subject":"...","message":"...","file_base64":"..."}
   │  Client cert: signed by platform CA, OU = device_id
   ▼
 nginx (dev.leo4.ru:1443 or :1444)
@@ -33,8 +34,8 @@ nginx (dev.leo4.ru:1443 or :1444)
   ▼
 API Gateway / backend upstream
   https://<api-gateway-host>
-  POST /backend-api/v1/send-email/{device_id}?file_name=…&email_address=…
-  Body: binary file (forwarded as-is, unbuffered)
+  POST /backend-api/v1/send-email/{device_id}
+  Body: JSON (forwarded unchanged)
 ```
 
 ```mermaid
@@ -44,9 +45,9 @@ sequenceDiagram
     participant N  as nginx (dev.leo4.ru)
     participant GW as API Gateway
 
-    D  ->> N  : POST :1443/:1444 /terem-api/v1/send-email<br/>?file_name=…&email_address=…<br/>[mTLS client cert, body=file]
+    D  ->> N  : POST :1443/:1444 /terem-api/v1/send-email<br/>Content-Type: application/json<br/>Body: {"file_name","recipients[]","subject?","message?","file_base64"}
     Note over N: Verify client cert against platform CA<br/>Extract OU → device_id<br/>Reject with 403 if OU is absent
-    N  ->> GW : POST /backend-api/v1/send-email/{device_id}<br/>?file_name=…&email_address=…<br/>[body forwarded unbuffered]
+    N  ->> GW : POST /backend-api/v1/send-email/{device_id}<br/>[JSON body forwarded unchanged]
     GW -->> N : HTTP response
     N  -->> D : HTTP response (forwarded)
 ```
@@ -89,20 +90,33 @@ Port 1445 is reserved for a future embedded/mbedTLS profile and is currently dis
 
 ```
 POST https://dev.leo4.ru:<port>/terem-api/v1/send-email
+Content-Type: application/json
 ```
 
-### Query Parameters
+### JSON Request Body
 
-| Parameter | Required | Description |
+```json
+{
+  "file_name": "device.log",
+  "recipients": [
+    "user1@example.com",
+    "user2@example.com"
+  ],
+  "subject": "Optional subject",
+  "message": "Optional message body",
+  "file_base64": "BASE64_ENCODED_FILE_CONTENT"
+}
+```
+
+| Field | Required | Rules / Description |
 |-----------|----------|-------------|
-| `file_name` | ✅ | Name of the file to attach in the email (e.g. `PlaterraTerminal.log`) |
-| `email_address` | ✅ | Recipient email address (e.g. `user@example.com`) |
+| `file_name` | ✅ | String, length `1..255` |
+| `recipients` | ✅ | Non-empty array of email addresses. The backend sends the email to all recipients in the array |
+| `subject` | ❌ | Optional string. If omitted or empty, backend uses `Файл от устройства {device_id}: {file_name}` |
+| `message` | ❌ | Optional string. If omitted or empty, backend uses the default message body |
+| `file_base64` | ✅ | Base64-encoded attachment content |
 
-### Request Body
-
-Raw binary file content. No `Content-Type` restriction is imposed by nginx; the backend may enforce its own limits.
-
-**Maximum body size:** 25 MB (enforced by nginx `client_max_body_size 25m`).
+**Maximum body size:** 25 MB (HTTP request body limit enforced by nginx `client_max_body_size 25m`). The backend decodes `file_base64` from the JSON payload.
 
 ### Headers Set by nginx (forwarded to backend)
 
@@ -112,6 +126,15 @@ Raw binary file content. No `Content-Type` restriction is imposed by nginx; the 
 | `X-SSL-Client-Verify` | `SUCCESS` / `FAILED` / `NONE` | Result of client cert verification |
 | `X-SSL-Client-Subject` | Full subject DN of client cert | E.g. `CN=a3b0000000c99999d250813,OU=4619,O=Leo4,...` |
 | `X-Forwarded-For` | Device IP | Standard proxy header |
+
+### nginx Compatibility Note (JSON Contract)
+
+No nginx configuration changes are required for this JSON-only contract:
+- `location = /terem-api/v1/send-email` remains the same.
+- Proxy rewrite still targets `POST /backend-api/v1/send-email/{device_id}`.
+- Request body is forwarded unchanged.
+- Requests are still rejected with `403` if `$terem_device_id` is empty.
+- mTLS remains the only authentication mechanism on these ports.
 
 ---
 
@@ -124,8 +147,25 @@ Nginx forwards the backend response unchanged. Typical status codes:
 | `200 OK` | Backend | File received and email queued |
 | `403 Forbidden` | **nginx** | Client certificate is missing the `OU` field |
 | `413 Request Entity Too Large` | **nginx** | Body exceeds 25 MB |
-| `4xx` | Backend | Invalid parameters or backend-side validation error |
+| `4xx` | Backend | Invalid JSON/body fields or backend-side validation error |
 | `5xx` | Backend / Gateway | Backend or upstream gateway error |
+
+Typical successful backend payload:
+
+```json
+{
+  "status": "sent",
+  "device_id": "4619",
+  "file_name": "device.log",
+  "recipients": [
+    "user1@example.com",
+    "user2@example.com"
+  ],
+  "subject": "Optional subject",
+  "storage_path": "/function/storage/terem-files/4619/device.log",
+  "postbox_message_id": "..."
+}
+```
 
 ---
 
@@ -134,12 +174,21 @@ Nginx forwards the backend response unchanged. Typical status codes:
 ### curl — Linux / macOS
 
 ```bash
+FILE_B64="$(base64 </path/to/device.log | tr -d '\n')"
+
 curl -X POST \
-  "https://dev.leo4.ru:1443/terem-api/v1/send-email?file_name=device.log&email_address=user@example.com" \
+  "https://dev.leo4.ru:1443/terem-api/v1/send-email" \
   --cert cert.pem \
   --key  key.pem \
   --cacert ca.crt \
-  --data-binary @/path/to/device.log \
+  -H "Content-Type: application/json" \
+  --data-raw "{
+    \"file_name\":\"device.log\",
+    \"recipients\":[\"user1@example.com\",\"user2@example.com\"],
+    \"subject\":\"Лог устройства\",
+    \"message\":\"Добрый день. Во вложении лог устройства.\",
+    \"file_base64\":\"${FILE_B64}\"
+  }" \
   -v
 ```
 
@@ -151,17 +200,31 @@ openssl s_client -connect dev.leo4.ru:1444 ^
     -cert cert.pem -key key.pem -CAfile ca.crt
 
 :: Or with curl for Windows (use port 1444 for Schannel compatibility):
+:: 1) Create request.json with base64 payload (PowerShell):
+:: $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("device.log"))
+:: @"
+:: {
+::   "file_name": "device.log",
+::   "recipients": ["user1@example.com","user2@example.com"],
+::   "subject": "Лог устройства",
+::   "message": "Добрый день. Во вложении лог устройства.",
+::   "file_base64": "$b64"
+:: }
+:: "@ | Set-Content -Encoding UTF8 request.json
+
 curl -X POST ^
-  "https://dev.leo4.ru:1444/terem-api/v1/send-email?file_name=device.log&email_address=user@example.com" ^
+  "https://dev.leo4.ru:1444/terem-api/v1/send-email" ^
   --cert cert.pem ^
   --key  key.pem ^
   --cacert ca.crt ^
-  --data-binary @device.log
+  -H "Content-Type: application/json" ^
+  --data-binary @request.json
 ```
 
 ### Python (httpx)
 
 ```python
+import base64
 import httpx
 
 with httpx.Client(
@@ -169,13 +232,17 @@ with httpx.Client(
     verify="ca.crt",
 ) as client:
     with open("device.log", "rb") as f:
+        payload = {
+            "file_name": "device.log",
+            "recipients": ["user1@example.com", "user2@example.com"],
+            "subject": "Лог устройства",
+            "message": "Добрый день. Во вложении лог устройства.",
+            "file_base64": base64.b64encode(f.read()).decode("ascii"),
+        }
         response = client.post(
             "https://dev.leo4.ru:1443/terem-api/v1/send-email",
-            params={
-                "file_name": "device.log",
-                "email_address": "user@example.com",
-            },
-            content=f.read(),
+            headers={"Content-Type": "application/json"},
+            json=payload,
         )
     print(response.status_code, response.text)
 ```
@@ -198,7 +265,7 @@ HINTERNET hConnect = WinHttpConnect(hSession,
 
 HINTERNET hRequest = WinHttpOpenRequest(hConnect,
     L"POST",
-    L"/terem-api/v1/send-email?file_name=device.log&email_address=user@example.com",
+    L"/terem-api/v1/send-email",
     NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
     WINHTTP_FLAG_SECURE);
 
@@ -206,10 +273,21 @@ HINTERNET hRequest = WinHttpOpenRequest(hConnect,
 WinHttpSetOption(hRequest, WINHTTP_OPTION_CLIENT_CERT_CONTEXT,
     (LPVOID)pCert, sizeof(CERT_CONTEXT));
 
-// Send request with binary body
+// Build JSON request body with base64 file payload (precomputed here as fileBase64)
+const char* jsonBody =
+    "{"
+    "\"file_name\":\"device.log\","
+    "\"recipients\":[\"user1@example.com\",\"user2@example.com\"],"
+    "\"subject\":\"\\u041b\\u043e\\u0433 \\u0443\\u0441\\u0442\\u0440\\u043e\\u0439\\u0441\\u0442\\u0432\\u0430\","
+    "\"message\":\"\\u0414\\u043e\\u0431\\u0440\\u044b\\u0439 \\u0434\\u0435\\u043d\\u044c. \\u0412\\u043e \\u0432\\u043b\\u043e\\u0436\\u0435\\u043d\\u0438\\u0438 \\u043b\\u043e\\u0433 \\u0443\\u0441\\u0442\\u0440\\u043e\\u0439\\u0441\\u0442\\u0432\\u0430.\","
+    "\"file_base64\":\"<BASE64_ENCODED_FILE_CONTENT>\""
+    "}";
+
+LPCWSTR headers = L"Content-Type: application/json\r\n";
+
 BOOL ok = WinHttpSendRequest(hRequest,
-    WINHTTP_NO_ADDITIONAL_HEADERS, 0,
-    fileBuffer, fileSize, fileSize, 0);
+    headers, (DWORD)-1L,
+    (LPVOID)jsonBody, (DWORD)strlen(jsonBody), (DWORD)strlen(jsonBody), 0);
 WinHttpReceiveResponse(hRequest, NULL);
 
 // ... read response, cleanup handles ...
@@ -224,13 +302,7 @@ using System.Net.Http;
 using System.Security.Cryptography.X509Certificates;
 
 var filePath = @"C:\path\to\device.log";
-var fileName = "device.log";
-var email = "user@example.com";
-
-var uri =
-    $"https://<device-mtls-host>:1444/terem-api/v1/send-email" +
-    $"?file_name={Uri.EscapeDataString(fileName)}" +
-    $"&email_address={Uri.EscapeDataString(email)}";
+var uri = "https://dev.leo4.ru:1444/terem-api/v1/send-email";
 
 var handler = new HttpClientHandler();
 
@@ -256,8 +328,20 @@ if (byThumbprint.Count > 0)
 // handler.ClientCertificates.Add(pfxCert);
 
 using var http = new HttpClient(handler);
-await using var stream = File.OpenRead(filePath);
-using var body = new StreamContent(stream);
+var payload = new
+{
+    file_name = Path.GetFileName(filePath),
+    recipients = new[] { "user1@example.com", "user2@example.com" },
+    subject = "Лог устройства",
+    message = "Добрый день. Во вложении лог устройства.",
+    file_base64 = Convert.ToBase64String(await File.ReadAllBytesAsync(filePath))
+};
+
+using var body = new StringContent(
+    System.Text.Json.JsonSerializer.Serialize(payload),
+    System.Text.Encoding.UTF8,
+    "application/json"
+);
 
 using var response = await http.PostAsync(uri, body);
 var responseText = await response.Content.ReadAsStringAsync();
@@ -266,7 +350,7 @@ Console.WriteLine($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
 Console.WriteLine(responseText);
 ```
 
-> **C# note (Windows):** Use port **1444** for Schannel compatibility. Replace `<device-mtls-host>` with your ingress host, import the platform CA into **Trusted Root Certification Authorities**, and use placeholders for certificate thumbprints, PFX path, and password.
+> **C# note (Windows):** Use port **1444** for Schannel compatibility, import the platform CA into **Trusted Root Certification Authorities**, and use placeholders for certificate thumbprints, PFX path, and password.
 
 ---
 
@@ -304,8 +388,12 @@ A successful handshake prints `Verification: OK` and `SSL handshake has read …
 | `403 Forbidden: client certificate OU is required` | `OU` field absent in client cert | Re-issue the certificate with `OU=<device_id>` |
 | `SSL handshake failure` on port 1443 (Windows) | Schannel rejects modern cipher suite or curve | Switch to port **1444** |
 | `SSL handshake failure` — server cert not trusted | Platform CA not in trust store | Pass `--cacert ca.crt` (curl) or add CA to OS trust store |
-| `413 Request Entity Too Large` | File > 25 MB | Compress or split the file before sending |
+| `413 Request Entity Too Large` | HTTP body > 25 MB | Reduce JSON payload size (including `file_base64`) |
 | `curl: (60) SSL certificate problem` | Wrong CA file | Verify `ca.crt` is the platform CA that signed the server cert |
+| `VALIDATION_ERROR: Field 'recipients' must contain at least one email address` | Missing or empty recipients array | Add at least one valid recipient to `recipients` |
+| `VALIDATION_ERROR: Field 'file_base64' is required for JSON requests` | Missing attachment payload in JSON body | Add `file_base64` with base64-encoded file content |
+| `VALIDATION_ERROR: Field 'file_base64' must be valid base64` | Invalid base64 data | Re-encode the file and send valid base64 text |
+| `VALIDATION_ERROR` mentioning JSON parse/body format | Invalid JSON request body | Ensure body is valid JSON and `Content-Type: application/json` is set |
 
 ---
 
