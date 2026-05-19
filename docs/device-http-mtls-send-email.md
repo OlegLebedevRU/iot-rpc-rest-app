@@ -31,8 +31,8 @@ nginx (dev.leo4.ru:1443 or :1444)
   │  Extract OU from client cert subject DN → $terem_device_id
   │  Return 403 if OU is empty
   ▼
-Yandex API Gateway
-  https://d5dbnvm0kd5ames2tb0o.apigw.yandexcloud.net
+API Gateway / backend upstream
+  https://<api-gateway-host>
   POST /backend-api/v1/send-email/{device_id}?file_name=…&email_address=…
   Body: binary file (forwarded as-is, unbuffered)
 ```
@@ -216,6 +216,57 @@ WinHttpReceiveResponse(hRequest, NULL);
 ```
 
 > **Windows certificate store:** The client certificate and its private key must be imported into the user or machine certificate store (e.g. via `certutil -importpfx`). The platform CA must be added to **Trusted Root Certification Authorities** so that Schannel can verify the server certificate.
+
+### C# — .NET HttpClient (Windows, Schannel)
+
+```csharp
+using System.Net.Http;
+using System.Security.Cryptography.X509Certificates;
+
+var filePath = @"C:\path\to\device.log";
+var fileName = "device.log";
+var email = "user@example.com";
+
+var uri =
+    $"https://<device-mtls-host>:1444/terem-api/v1/send-email" +
+    $"?file_name={Uri.EscapeDataString(fileName)}" +
+    $"&email_address={Uri.EscapeDataString(email)}";
+
+var handler = new HttpClientHandler();
+
+// Option A: load client certificate from Windows certificate store (CurrentUser\My)
+using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
+store.Open(OpenFlags.ReadOnly);
+var byThumbprint = store.Certificates.Find(
+    X509FindType.FindByThumbprint,
+    "<40_HEX_CHARS_NO_SPACES>",
+    validOnly: false
+);
+if (byThumbprint.Count > 0)
+{
+    handler.ClientCertificates.Add(byThumbprint[0]);
+}
+
+// Option B: load client certificate from PFX (placeholder path/password)
+// var pfxCert = new X509Certificate2(
+//     @"C:\path\to\client-cert.pfx",
+//     "<PFX_PASSWORD>",
+//     X509KeyStorageFlags.MachineKeySet | X509KeyStorageFlags.EphemeralKeySet
+// );
+// handler.ClientCertificates.Add(pfxCert);
+
+using var http = new HttpClient(handler);
+await using var stream = File.OpenRead(filePath);
+using var body = new StreamContent(stream);
+
+using var response = await http.PostAsync(uri, body);
+var responseText = await response.Content.ReadAsStringAsync();
+
+Console.WriteLine($"HTTP {(int)response.StatusCode} {response.ReasonPhrase}");
+Console.WriteLine(responseText);
+```
+
+> **C# note (Windows):** Use port **1444** for Schannel compatibility. Replace `<device-mtls-host>` with your ingress host, import the platform CA into **Trusted Root Certification Authorities**, and use placeholders for certificate thumbprints, PFX path, and password.
 
 ---
 
