@@ -140,17 +140,34 @@ No nginx configuration changes are required for this JSON-only contract:
 
 ## Response
 
-Nginx forwards the backend response unchanged. Typical status codes:
+Nginx forwards the backend response unchanged.
 
-| HTTP Status | Source | Meaning |
-|-------------|--------|---------|
-| `200 OK` | Backend | File received and email queued |
-| `403 Forbidden` | **nginx** | Client certificate is missing the `OU` field |
-| `413 Request Entity Too Large` | **nginx** | Body exceeds 25 MB |
-| `4xx` | Backend | Invalid JSON/body fields or backend-side validation error |
-| `5xx` | Backend / Gateway | Backend or upstream gateway error |
+### Status codes
 
-Typical successful backend payload:
+| HTTP Status | Source | Contract meaning |
+|-------------|--------|------------------|
+| `200 OK` | Backend | File saved and email sent |
+| `400 Bad Request` | Backend | Validation error (`ErrorResponse`) |
+| `405 Method Not Allowed` | Backend | Method not allowed (`ErrorResponse`) |
+| `503 Service Unavailable` | Backend | File storage or email sending failed (`ErrorResponse`) |
+| `403 Forbidden` | **nginx** | Client certificate is missing/empty `OU` (`$terem_device_id`) |
+| `413 Request Entity Too Large` | **nginx** | HTTP body exceeds nginx `client_max_body_size` |
+
+### Successful response (`200`, `SendEmailResponse`)
+
+Backend returns `application/json` and may include `Access-Control-Allow-Origin` header.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `status` | string | ✅ | Always `sent` |
+| `device_id` | string | ✅ | Device identifier from client certificate `OU` |
+| `file_name` | string | ✅ | Uploaded file name |
+| `recipients` | string[] | ✅ | Final list of recipients |
+| `subject` | string | ✅ | Final subject (provided or defaulted by backend) |
+| `storage_path` | string | ❌ | Saved file path in function storage |
+| `postbox_message_id` | string \| null | ❌ | Postbox message id when available |
+
+Example:
 
 ```json
 {
@@ -164,6 +181,42 @@ Typical successful backend payload:
   "subject": "Optional subject",
   "storage_path": "/function/storage/terem-files/4619/device.log",
   "postbox_message_id": "..."
+}
+```
+
+### Error response (`400` / `405` / `503`, `ErrorResponse`)
+
+For backend error responses, body format is:
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `error_code` | string | ✅ | Machine-readable error code |
+| `message` | string | ✅ | Human-readable description |
+
+Example `400`:
+
+```json
+{
+  "error_code": "VALIDATION_ERROR",
+  "message": "Field 'recipients' must contain at least one email address."
+}
+```
+
+Example `405`:
+
+```json
+{
+  "error_code": "METHOD_NOT_ALLOWED",
+  "message": "Only POST method is allowed."
+}
+```
+
+Example `503`:
+
+```json
+{
+  "error_code": "SEND_EMAIL_FAILED",
+  "message": "File storage or email sending failed."
 }
 ```
 
