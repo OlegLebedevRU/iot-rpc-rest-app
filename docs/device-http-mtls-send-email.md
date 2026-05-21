@@ -128,7 +128,9 @@ Request with attachment:
 | `subject` | ❌ | Optional string. If omitted or empty, backend uses default subject. With attachment: `Файл от устройства {device_id}: {file_name}`. Without attachment: `Сообщение от устройства {device_id}` |
 | `message` | ❌ | Optional string. If omitted or empty, backend uses the default message body |
 | `file_base64` | ❌ | Optional base64-encoded attachment content. If omitted, `null`, empty, or blank, email is sent without attachment |
-| `file_name` | ❌ | Optional attachment file name, string length `1..255`, plain file name without path separators (validated by backend). Used only when `file_base64` is present. If `file_base64` is present but `file_name` is omitted or blank, backend generates `file-<device_id>-<epoch timestamp>.txt` |
+| `file_name` | ❌ | Optional attachment file name, string length `1..255`, plain file name without path separators (validated by backend). Used only when `file_base64` is present |
+
+If `file_base64` is present but `file_name` is omitted or blank, backend generates `file-<device_id>-<epoch timestamp>.txt`.
 
 If `file_base64` is present and non-empty, backend validates that it is a string, valid base64, decodes to a non-empty file, and stays within backend decoded-size limits (otherwise `Uploaded file exceeds max size ... bytes`).
 
@@ -177,10 +179,10 @@ Backend returns `application/json` and may include `Access-Control-Allow-Origin`
 |---|---|---|---|
 | `status` | string | ✅ | Always `sent` |
 | `device_id` | string | ✅ | Device identifier from client certificate `OU` |
-| `file_name` | string | ❌ | Attachment file name when a file was provided |
+| `file_name` | string | ❌ | Present only when attachment was provided; actual file name used (provided or auto-generated) |
 | `recipients` | string[] | ✅ | Final list of recipients |
 | `subject` | string | ✅ | Final subject (provided or defaulted by backend) |
-| `storage_path` | string | ❌ | Saved file path when attachment was provided |
+| `storage_path` | string | ❌ | Present only when attachment was provided; saved file path in function storage |
 | `postbox_message_id` | string \| null | ✅ | Postbox message id (`null` when upstream message id is unavailable) |
 
 Without attachment:
