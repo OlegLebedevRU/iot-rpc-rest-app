@@ -10,7 +10,7 @@
 
 ## Overview
 
-The `send-email` endpoint is a **device-facing HTTP API** that accepts a JSON envelope with file metadata, recipient list, optional email subject, optional email message body, and a base64-encoded file attachment.
+The `send-email` endpoint is a **device-facing HTTP API** that accepts a JSON envelope with a required recipient list and optional `subject`, `message`, `file_base64`, `file_name` fields. Attachment is optional.
 
 Authentication is performed exclusively via **mutual TLS (mTLS)**: no API key or bearer token is required. The device's identity is derived directly from its client certificate, so the `device_id` is never passed in the request body or as a URL parameter — it is extracted from the certificate automatically by the nginx ingress.
 
@@ -24,7 +24,8 @@ Authentication is performed exclusively via **mutual TLS (mTLS)**: no API key or
 Device
   │  POST /terem-api/v1/send-email
   │  Content-Type: application/json
-  │  Body: {"file_name":"...","recipients":[...],"subject":"...","message":"...","file_base64":"..."}
+  │  Body: {"recipients":[...]}
+  │  or   {"recipients":[...],"subject":"...","message":"...","file_base64":"...","file_name":"..."}
   │  Client cert: signed by platform CA, OU = device_id
   ▼
 nginx (dev.leo4.ru:1443 or :1444)
@@ -45,7 +46,7 @@ sequenceDiagram
     participant N  as nginx (dev.leo4.ru)
     participant GW as API Gateway
 
-    D  ->> N  : POST :1443/:1444 /terem-api/v1/send-email<br/>Content-Type: application/json<br/>Body: {"file_name":"...","recipients":["..."],"subject":"...","message":"...","file_base64":"..."}
+    D  ->> N  : POST :1443/:1444 /terem-api/v1/send-email<br/>Content-Type: application/json<br/>Body: {"recipients":["..."]}<br/>or {"recipients":["..."],"subject":"...","message":"...","file_base64":"...","file_name":"..."}
     Note over N: Verify client cert against platform CA<br/>Extract OU → device_id<br/>Reject with 403 if OU is absent
     N  ->> GW : POST /backend-api/v1/send-email/{device_id}<br/>[JSON body forwarded unchanged]
     GW -->> N : HTTP response
@@ -95,6 +96,19 @@ Content-Type: application/json
 
 ### JSON Request Body
 
+Minimal request — email without attachment:
+
+```json
+{
+  "recipients": [
+    "user1@example.com",
+    "user2@example.com"
+  ]
+}
+```
+
+Request with attachment:
+
 ```json
 {
   "file_name": "device.log",
@@ -110,13 +124,21 @@ Content-Type: application/json
 
 | Field | Required | Rules / Description |
 |-----------|----------|-------------|
-| `file_name` | ✅ | String, length `1..255` (use a plain file name without path separators) |
-| `recipients` | ✅ | Non-empty array of email addresses. The backend sends the email to all recipients in the array |
-| `subject` | ❌ | Optional string. If omitted or empty, backend uses `Файл от устройства {device_id}: {file_name}` |
+| `recipients` | ✅ | Non-empty array of valid email addresses (validated by backend). Backend sends the email to all recipients in the array |
+| `subject` | ❌ | Optional string. If omitted or empty, backend uses default subject. With attachment: `Файл от устройства {device_id}: {file_name}`. Without attachment: `Сообщение от устройства {device_id}` |
 | `message` | ❌ | Optional string. If omitted or empty, backend uses the default message body |
-| `file_base64` | ✅ | Base64-encoded attachment content |
+| `file_base64` | ❌ | Optional base64-encoded attachment content. If omitted, `null`, empty, or blank, email is sent without attachment |
+| `file_name` | ❌ | Optional attachment file name, string length `1..255`, plain file name without path separators (validated by backend). Used only when `file_base64` is present |
 
-**Maximum body size:** 25 MB (total HTTP request body size, enforced by nginx `client_max_body_size 25m`). Since base64 increases payload size by ~33%, use ~18 MB as a safe practical maximum decoded attachment size. The backend decodes `file_base64` from the JSON payload.
+If `file_base64` is present but `file_name` is omitted or blank, backend generates `file-<device_id>-<epoch timestamp>.txt`.
+
+If `file_base64` is present and non-empty, backend validates:
+- it must be a string;
+- it must be valid base64;
+- decoded file content must be non-empty;
+- decoded size must stay within backend limits (otherwise `Uploaded file exceeds max size ... bytes`).
+
+**Maximum body size:** 25 MB (total HTTP request body size, enforced by nginx `client_max_body_size 25m`). This limit applies to the whole HTTP body. Practical decoded attachment limit matters only when `file_base64` is provided. Requests without attachment are not affected by base64 overhead.
 
 ### Headers Set by nginx (forwarded to backend)
 
@@ -146,10 +168,10 @@ Nginx forwards the backend response unchanged.
 
 | HTTP Status | Source | Contract meaning |
 |-------------|--------|------------------|
-| `200 OK` | Backend | File saved and email sent |
+| `200 OK` | Backend | Email sent; attachment saved only when provided |
 | `400 Bad Request` | Backend | Validation error (`ErrorResponse`) |
 | `405 Method Not Allowed` | Backend | Method not allowed (`ErrorResponse`) |
-| `503 Service Unavailable` | Backend | File storage or email sending failed (`ErrorResponse`) |
+| `503 Service Unavailable` | Backend | Optional file storage or email sending failed (`ErrorResponse`; file storage step applies only when attachment is provided) |
 | `403 Forbidden` | **nginx** | Client certificate is missing/empty `OU` (`$terem_device_id`) |
 | `413 Request Entity Too Large` | **nginx** | HTTP body exceeds nginx `client_max_body_size` |
 
@@ -161,13 +183,28 @@ Backend returns `application/json` and may include `Access-Control-Allow-Origin`
 |---|---|---|---|
 | `status` | string | ✅ | Always `sent` |
 | `device_id` | string | ✅ | Device identifier from client certificate `OU` |
-| `file_name` | string | ✅ | Uploaded file name |
+| `file_name` | string | ❌ | Present only when attachment was provided; actual file name used (provided or auto-generated) |
 | `recipients` | string[] | ✅ | Final list of recipients |
 | `subject` | string | ✅ | Final subject (provided or defaulted by backend) |
-| `storage_path` | string | ❌ | Saved file path in function storage |
-| `postbox_message_id` | string \| null | ❌ | Postbox message id when available |
+| `storage_path` | string | ❌ | Present only when attachment was provided; saved file path in function storage |
+| `postbox_message_id` | string \| null | ✅ | Postbox message ID (`null` when upstream message ID is unavailable) |
 
-Example:
+Without attachment:
+
+```json
+{
+  "status": "sent",
+  "device_id": "4619",
+  "recipients": [
+    "user1@example.com",
+    "user2@example.com"
+  ],
+  "subject": "Сообщение от устройства 4619",
+  "postbox_message_id": "..."
+}
+```
+
+With attachment:
 
 ```json
 {
@@ -180,6 +217,22 @@ Example:
   ],
   "subject": "Optional subject",
   "storage_path": "/function/storage/terem-files/4619/device.log",
+  "postbox_message_id": "..."
+}
+```
+
+With autogenerated file name:
+
+```json
+{
+  "status": "sent",
+  "device_id": "4619",
+  "file_name": "file-4619-1700000000.txt",
+  "recipients": [
+    "user1@example.com"
+  ],
+  "subject": "Файл от устройства 4619: file-4619-1700000000.txt",
+  "storage_path": "/function/storage/terem-files/4619/file-4619-1700000000.txt",
   "postbox_message_id": "..."
 }
 ```
@@ -216,15 +269,34 @@ Example `503`:
 ```json
 {
   "error_code": "SEND_EMAIL_FAILED",
-  "message": "File storage or email sending failed."
+  "message": "Optional file storage or email sending failed."
 }
 ```
+
+Here, file storage failure is relevant only for requests that include attachment payload.
 
 ---
 
 ## Code Examples
 
 ### curl — Linux / macOS
+
+Minimal request (without attachment):
+
+```bash
+curl -X POST \
+  "https://dev.leo4.ru:1443/terem-api/v1/send-email" \
+  --cert cert.pem \
+  --key  key.pem \
+  --cacert ca.crt \
+  -H "Content-Type: application/json" \
+  --data-raw '{
+    "recipients":["user1@example.com","user2@example.com"]
+  }' \
+  -v
+```
+
+Request with attachment:
 
 ```bash
 FILE_B64="$(base64 </path/to/device.log | tr -d '\n')"
@@ -246,6 +318,8 @@ curl -X POST \
   -v
 ```
 
+> `file_name` can be omitted when `file_base64` is provided. Backend then generates `file-<device_id>-<epoch timestamp>.txt`.
+
 ### curl — Windows (with OpenSSL CLI)
 
 ```bat
@@ -264,6 +338,14 @@ curl -X POST ^
 ```
 
 ```powershell
+# Minimal request without attachment:
+@"
+{
+  "recipients": ["user1@example.com","user2@example.com"]
+}
+"@ | Set-Content -Encoding UTF8 request.minimal.json
+
+# Attachment request ($b64 and attachment fields are needed only when attachment is sent):
 $b64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes("device.log"))
 @"
 {
@@ -286,6 +368,16 @@ with httpx.Client(
     cert=("cert.pem", "key.pem"),
     verify="ca.crt",
 ) as client:
+    payload = {
+        "recipients": ["user1@example.com", "user2@example.com"],
+    }
+    response = client.post(
+        "https://dev.leo4.ru:1443/terem-api/v1/send-email",
+        headers={"Content-Type": "application/json"},
+        json=payload,
+    )
+    print(response.status_code, response.text)
+
     with open("device.log", "rb") as f:
         file_base64 = base64.b64encode(f.read()).decode("ascii")
     payload = {
@@ -302,6 +394,8 @@ with httpx.Client(
     )
     print(response.status_code, response.text)
 ```
+
+`file_base64` / `file_name` are optional. If `file_base64` is sent without `file_name`, backend auto-generates `file-<device_id>-<epoch timestamp>.txt`.
 
 > **Note:** Use `verify="ca.crt"` (path to the platform CA) rather than the system trust store, since the platform CA is a private CA not included in OS roots.
 
@@ -346,6 +440,9 @@ char* Base64Encode(const BYTE* data, DWORD size) {
 char* fileBase64 = Base64Encode(fileBuffer, fileSize);
 if (!fileBase64) { /* handle error */ }
 
+// Attachment fields are optional.
+// Without attachment, send JSON with recipients and optionally subject/message.
+// If file_base64 is sent without file_name, backend generates file-<device_id>-<epoch timestamp>.txt.
 // Build JSON request body with base64 file payload (dynamic allocation for large payloads)
 const char* jsonTemplate =
     "{\"file_name\":\"device.log\","
@@ -405,6 +502,9 @@ if (byThumbprint.Count > 0)
 // handler.ClientCertificates.Add(pfxCert);
 
 using var http = new HttpClient(handler);
+// Attachment fields are optional.
+// Without attachment, send recipients and optionally subject/message.
+// If file_base64 is sent without file_name, backend generates file-<device_id>-<epoch timestamp>.txt.
 var payload = new
 {
     file_name = Path.GetFileName(filePath),
@@ -468,8 +568,10 @@ A successful handshake prints `Verification: OK` and `SSL handshake has read …
 | `413 Request Entity Too Large` | HTTP body > 25 MB | Reduce JSON payload size (including `file_base64`) |
 | `curl: (60) SSL certificate problem` | Wrong CA file | Verify `ca.crt` is the platform CA that signed the server cert |
 | `VALIDATION_ERROR: Field 'recipients' must contain at least one email address` | Missing or empty recipients array | Add at least one valid recipient to `recipients` |
-| `VALIDATION_ERROR: Field 'file_base64' is required for JSON requests` | Missing attachment payload in JSON body | Add `file_base64` with base64-encoded file content |
+| `VALIDATION_ERROR: Field 'file_base64' must be a string` | `file_base64` provided as non-string type | Send `file_base64` as a JSON string |
 | `VALIDATION_ERROR: Field 'file_base64' must be valid base64` | Invalid base64 data | Re-encode the file and send valid base64 text |
+| `Uploaded file is empty` | `file_base64` decodes to empty file | Send non-empty file data |
+| `Uploaded file exceeds max size ... bytes` | Decoded attachment size exceeds backend limit | Reduce attachment size before base64 encoding |
 | `VALIDATION_ERROR` mentioning JSON parse/body format | Invalid JSON request body | Ensure body is valid JSON and `Content-Type: application/json` is set |
 
 ---
