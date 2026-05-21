@@ -130,9 +130,13 @@ Request with attachment:
 | `file_base64` | ❌ | Optional base64-encoded attachment content. If omitted, `null`, empty, or blank, email is sent without attachment |
 | `file_name` | ❌ | Optional attachment file name, string length `1..255`, plain file name without path separators (validated by backend). Used only when `file_base64` is present |
 
-If `file_base64` is present but `file_name` is omitted or blank, backend generates `file-<device_id>-<unix epoch timestamp seconds>.txt`.
+If `file_base64` is present but `file_name` is omitted or blank, backend generates `file-<device_id>-<epoch timestamp>.txt`.
 
-If `file_base64` is present and non-empty, backend validates that it is a string, valid base64, decodes to a non-empty file, and stays within backend decoded-size limits (otherwise `Uploaded file exceeds max size ... bytes`).
+If `file_base64` is present and non-empty, backend validates:
+- it must be a string;
+- it must be valid base64;
+- decoded file content must be non-empty;
+- decoded size must stay within backend limits (otherwise `Uploaded file exceeds max size ... bytes`).
 
 **Maximum body size:** 25 MB (total HTTP request body size, enforced by nginx `client_max_body_size 25m`). This limit applies to the whole HTTP body. Practical decoded attachment limit matters only when `file_base64` is provided. Requests without attachment are not affected by base64 overhead.
 
