@@ -124,13 +124,13 @@ Request with attachment:
 
 | Field | Required | Rules / Description |
 |-----------|----------|-------------|
-| `recipients` | ✅ | Non-empty array of valid email addresses. Backend sends the email to all recipients in the array |
+| `recipients` | ✅ | Non-empty array of valid email addresses (validated by backend). Backend sends the email to all recipients in the array |
 | `subject` | ❌ | Optional string. If omitted or empty, backend uses default subject. With attachment: `Файл от устройства {device_id}: {file_name}`. Without attachment: `Сообщение от устройства {device_id}` |
 | `message` | ❌ | Optional string. If omitted or empty, backend uses the default message body |
 | `file_base64` | ❌ | Optional base64-encoded attachment content. If omitted, `null`, empty, or blank, email is sent without attachment |
-| `file_name` | ❌ | Optional attachment file name, string length `1..255`, plain file name without path separators. Used only when `file_base64` is present. If `file_base64` is present but `file_name` is omitted or blank, backend generates `file-<device_id>-<epoch timestamp>.txt` |
+| `file_name` | ❌ | Optional attachment file name, string length `1..255`, plain file name without path separators (validated by backend). Used only when `file_base64` is present. If `file_base64` is present but `file_name` is omitted or blank, backend generates `file-<device_id>-<epoch timestamp>.txt` |
 
-If `file_base64` is present and non-empty, backend validates that it is a string, valid base64, and decodes to a non-empty file. Maximum decoded size limit is unchanged.
+If `file_base64` is present and non-empty, backend validates that it is a string, valid base64, decodes to a non-empty file, and stays within backend decoded-size limits (otherwise `Uploaded file exceeds max size ... bytes`).
 
 **Maximum body size:** 25 MB (total HTTP request body size, enforced by nginx `client_max_body_size 25m`). This limit applies to the whole HTTP body. Practical decoded attachment limit matters only when `file_base64` is provided. Requests without attachment are not affected by base64 overhead.
 
@@ -181,7 +181,7 @@ Backend returns `application/json` and may include `Access-Control-Allow-Origin`
 | `recipients` | string[] | ✅ | Final list of recipients |
 | `subject` | string | ✅ | Final subject (provided or defaulted by backend) |
 | `storage_path` | string | ❌ | Saved file path when attachment was provided |
-| `postbox_message_id` | string \| null | ✅ | Postbox message id (can be `null`) |
+| `postbox_message_id` | string \| null | ✅ | Postbox message id (`null` when upstream message id is unavailable) |
 
 Without attachment:
 
