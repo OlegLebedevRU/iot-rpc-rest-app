@@ -130,7 +130,7 @@ Request with attachment:
 | `file_base64` | ❌ | Optional base64-encoded attachment content. If omitted, `null`, empty, or blank, email is sent without attachment |
 | `file_name` | ❌ | Optional attachment file name, string length `1..255`, plain file name without path separators (validated by backend). Used only when `file_base64` is present |
 
-If `file_base64` is present but `file_name` is omitted or blank, backend generates `file-<device_id>-<epoch timestamp>.txt`.
+If `file_base64` is present but `file_name` is omitted or blank, backend generates `file-<device_id>-<unix epoch timestamp seconds>.txt`.
 
 If `file_base64` is present and non-empty, backend validates that it is a string, valid base64, decodes to a non-empty file, and stays within backend decoded-size limits (otherwise `Uploaded file exceeds max size ... bytes`).
 
@@ -167,7 +167,7 @@ Nginx forwards the backend response unchanged.
 | `200 OK` | Backend | Email sent; attachment saved only when provided |
 | `400 Bad Request` | Backend | Validation error (`ErrorResponse`) |
 | `405 Method Not Allowed` | Backend | Method not allowed (`ErrorResponse`) |
-| `503 Service Unavailable` | Backend | Optional file storage or email sending failed (`ErrorResponse`) |
+| `503 Service Unavailable` | Backend | Optional file storage or email sending failed (`ErrorResponse`; file storage step applies only when attachment is provided) |
 | `403 Forbidden` | **nginx** | Client certificate is missing/empty `OU` (`$terem_device_id`) |
 | `413 Request Entity Too Large` | **nginx** | HTTP body exceeds nginx `client_max_body_size` |
 
@@ -183,7 +183,7 @@ Backend returns `application/json` and may include `Access-Control-Allow-Origin`
 | `recipients` | string[] | ✅ | Final list of recipients |
 | `subject` | string | ✅ | Final subject (provided or defaulted by backend) |
 | `storage_path` | string | ❌ | Present only when attachment was provided; saved file path in function storage |
-| `postbox_message_id` | string \| null | ✅ | Postbox message id (`null` when upstream message id is unavailable) |
+| `postbox_message_id` | string \| null | ✅ | Postbox message ID (`null` when upstream message ID is unavailable) |
 
 Without attachment:
 
@@ -268,6 +268,8 @@ Example `503`:
   "message": "Optional file storage or email sending failed."
 }
 ```
+
+Here, file storage failure is relevant only for requests that include attachment payload.
 
 ---
 
