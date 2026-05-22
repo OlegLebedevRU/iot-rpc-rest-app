@@ -24,6 +24,7 @@ MERMAID_CACHE: Final[Path] = ROOT / "_mermaid_cache"
 IMG_CACHE: Final[Path] = ROOT / "_img_cache"
 DOWNLOAD_TIMEOUT: Final[int] = 45
 MERMAID_TIMEOUT: Final[int] = 60
+# Existing placeholder images were under 10 KB; real/local-rendered assets are much larger.
 PLACEHOLDER_SIZE_LIMIT: Final[int] = 20_000
 
 HMI_IMAGES: Final[dict[str, str]] = {
@@ -75,8 +76,7 @@ def download_binary(url: str, target: Path) -> None:
 def validate_png(path: Path) -> None:
     try:
         with Image.open(path) as img:
-            img.verify()
-        with Image.open(path) as img:
+            img.load()
             width, height = img.size
     except (OSError, ValueError, UnidentifiedImageError) as exc:  # pragma: no cover
         raise RuntimeError(f"Invalid PNG generated at {path}: {exc}") from exc
@@ -362,7 +362,8 @@ def render_mermaid_local(source: str, target: Path) -> None:
 
 
 def render_mermaid_to_png(source: str) -> MermaidImage:
-    # 20 hex chars (80 bits) keep cache filenames compact while keeping collision risk negligible for this document scale.
+    # 20 hex chars (80 bits) keep filenames compact; this document has only a handful of diagrams,
+    # far below the scale where birthday-bound collision risk is relevant.
     digest = hashlib.sha256(source.encode("utf-8")).hexdigest()[:20]
     out_file = MERMAID_CACHE / f"{digest}.png"
     if out_file.exists() and out_file.stat().st_size > PLACEHOLDER_SIZE_LIMIT:
@@ -599,6 +600,7 @@ def build_html(content_html: str) -> str:
 <head>
   <meta charset=\"utf-8\" />
   <style>
+    /* CSS braces are doubled because this stylesheet is embedded in a Python f-string. */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
     @page {{
