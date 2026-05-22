@@ -24,8 +24,11 @@ MERMAID_CACHE: Final[Path] = ROOT / "_mermaid_cache"
 IMG_CACHE: Final[Path] = ROOT / "_img_cache"
 DOWNLOAD_TIMEOUT: Final[int] = 45
 MERMAID_TIMEOUT: Final[int] = 60
-# Existing placeholder images were under 10 KB; real/local-rendered assets are much larger.
+# Existing placeholder images from the earlier broken build were under 10 KB;
+# real downloaded or local-rendered assets in this document are 40 KB+.
 PLACEHOLDER_SIZE_LIMIT: Final[int] = 20_000
+MERMAID_IMAGE_WIDTH: Final[int] = 900
+MERMAID_BACKGROUND: Final[str] = "ffffff"
 
 HMI_IMAGES: Final[dict[str, str]] = {
     "l4-hmi-1-640.jpg": "https://raw.githubusercontent.com/OlegLebedevRU/l4-hmi/main/docs/l4-hmi-1-640.jpg",
@@ -78,7 +81,7 @@ def validate_png(path: Path) -> None:
         with Image.open(path) as img:
             img.load()
             width, height = img.size
-    except (OSError, ValueError, UnidentifiedImageError) as exc:  # pragma: no cover
+    except (OSError, ValueError, UnidentifiedImageError) as exc:
         raise RuntimeError(f"Invalid PNG generated at {path}: {exc}") from exc
 
     if width < 50 or height < 50:
@@ -94,14 +97,19 @@ def image_path(path: str) -> str:
 def load_font(
     size: int, *, bold: bool = False
 ) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    candidates = [
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf" if bold else "",
-        "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
-    ]
+    candidates = (
+        [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Bold.ttf",
+        ]
+        if bold
+        else [
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation2/LiberationSans-Regular.ttf",
+        ]
+    )
     for candidate in candidates:
-        if candidate and Path(candidate).exists():
+        if Path(candidate).exists():
             return ImageFont.truetype(candidate, size=size)
     return ImageFont.load_default()
 
@@ -362,20 +370,23 @@ def render_mermaid_local(source: str, target: Path) -> None:
 
 
 def render_mermaid_to_png(source: str) -> MermaidImage:
-    # 20 hex chars (80 bits) keep filenames compact; this document has only a handful of diagrams,
-    # far below the scale where birthday-bound collision risk is relevant.
-    digest = hashlib.sha256(source.encode("utf-8")).hexdigest()[:20]
+    digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
     out_file = MERMAID_CACHE / f"{digest}.png"
-    if out_file.exists() and out_file.stat().st_size > PLACEHOLDER_SIZE_LIMIT:
+    if out_file.exists():
         validate_png(out_file)
-        return MermaidImage(
-            hash_id=digest, relative_path=image_path(f"_mermaid_cache/{out_file.name}")
-        )
+        if out_file.stat().st_size > PLACEHOLDER_SIZE_LIMIT:
+            return MermaidImage(
+                hash_id=digest,
+                relative_path=image_path(f"_mermaid_cache/{out_file.name}"),
+            )
 
     encoded = (
         base64.urlsafe_b64encode(source.encode("utf-8")).decode("ascii").rstrip("=")
     )
-    url = f"https://mermaid.ink/img/{encoded}?type=png&bgColor=ffffff&width=900"
+    url = (
+        f"https://mermaid.ink/img/{encoded}"
+        f"?type=png&bgColor={MERMAID_BACKGROUND}&width={MERMAID_IMAGE_WIDTH}"
+    )
     try:
         response = requests.get(url, timeout=MERMAID_TIMEOUT)
     except requests.RequestException as exc:
@@ -585,6 +596,10 @@ def markdown_to_html(md_text: str) -> str:
 
 
 def build_html(content_html: str) -> str:
+    """Build final HTML.
+
+    The CSS block is embedded in a Python f-string, so literal CSS braces are escaped as {{ and }}.
+    """
     today = date.today().isoformat()
     cover = f"""
 <section class=\"cover\">
