@@ -2,7 +2,7 @@
 
 ## Executive summary
 
-LEO4 может использоваться как **vendor execution layer** для управления контроллерами, замками и событиями, при этом бизнес-логика (пользователи, заказы, оплаты, тарифы, поддержка) остаётся в системе клиента.
+LEO4 может использоваться как **vendor execution layer** для управления контроллерами, замками и событиями, при этом бизнес-логика (пользователи, заказы, оплаты, тарифы, подтверждения) остаётся в системе клиента.
 
 Для пресейла фиксируются **ровно три допустимых архитектурных режима**:
 
@@ -10,6 +10,7 @@ LEO4 может использоваться как **vendor execution layer** �
 2. **Cloud-orchestrated mode** — контроллер подключён только через Leo4 IoT Platform, оркестрация идёт через облачный контур.
 3. **Hybrid mode** — часть команд идёт через облако, часть локально; граница определяется проектной policy.
 
+Критически важно: `status=3 (DONE)` подтверждает завершение RPC/task цикла, но **не** подтверждает физическое действие. Физическое открытие/закрытие подтверждается только событиями (`event_type_code` 13/14 и связанными event-потоками).
 
 > [!IMPORTANT]
 > Подтверждено текущими docs: RPC/REST task-flow, event-flow, MQTT topic model, correlation data, webhooks, TTL, идемпотентность и подтверждение физики через события.
@@ -36,10 +37,11 @@ LEO4 может использоваться как **vendor execution layer** �
 
 ## Позиционирование решения
 
-- **LEO4 Controller Layer (локально):** hardware execution (команды замкам, чтение датчиков, статусы каналов).
+- **LEO4 Controller Layer (локально):** hardware execution — команды замкам, чтение датчиков, статусы каналов.
 - **Local `device-agent` (опционально):** локальный orchestration/enforcement слой клиента.
 - **Customer Business Cloud:** master-система бизнес-правил, авторизации и аудита клиента.
 - **Leo4 IoT Platform (опционально, зависит от режима):** REST + MQTT RPC + Events API + Webhooks + история событий.
+- **L4-HMI (опционально):** флагманский thin frontend/HMI слой для self-service устройств, если клиенту нужен современный экранный интерфейс на устройстве.
 
 Ключевая мысль для клиента: LEO4 остаётся техническим execution/event слоем, а бизнес-решения и policy ownership могут оставаться у клиента во всех трёх режимах.
 
@@ -50,10 +52,12 @@ LEO4 может использоваться как **vendor execution layer** �
 1. **Orchestration/policy layer** — customer cloud и/или local device-agent.
 2. **Transport/control layer** — Leo4 IoT Platform (в cloud- и hybrid-режиме) и/или локальный REST контроллера (в local/hybrid).
 3. **Execution layer** — LEO4 controller + Т-16 + locks/sensors.
+4. **Presentation layer (optional)** — L4-HMI или клиентский kiosk UI поверх локального adapter/runtime.
 
 ```mermaid
 flowchart TD
-    A[Orchestration and Policy Layer] --> B[Transport and Control Layer]
+    UI[L4-HMI or Customer Kiosk UI] --> A[Orchestration and Policy Layer]
+    A --> B[Transport and Control Layer]
     B --> C[Execution Layer]
 
     A1[Customer Business Cloud]
@@ -90,26 +94,29 @@ flowchart TD
 
 **Интеграция:** `Local device-agent` ↔ `LEO4 Controller` через локальный REST API (endpoint'ы подняты на контроллере).
 
-**Ориентир по локальному web-flow:** `OlegLebedevRU/siplite` (смежный референсный ESP32-проект из той же инженерной экосистемы, не являющийся нормативной частью текущего контракта) показывает практическую локальную модель в `main/leo4_web.c`:
+**Ориентир по локальному web-flow:** `OlegLebedevRU/siplite` (смежный референсный ESP32-проект из той же инженерной экосистемы) показывает практическую локальную модель:
 - `esp_start_webserver()` регистрирует `/gate` (WebSocket), `/event`, `/task`, `/nvs`;
 - поток `leo4_web.c -> /task -> /event -> /nvs` описан в `docs/event_web_architecture_analysis.md`;
 - `/task` и `/event` несут task/result/event семантику, `/gate` работает как gateway/live-channel.
 
-Следствие для пресейла: если в локальном REST не хватает отдельных RPC-режимов, они могут быть добавлены локально как новые REST endpoints/handlers по аналогии с этим web-flow (объём работ, ответственность сторон и сроки фиксируются отдельной технической оценкой/SoW), **без обязательного подключения Leo4 IoT Platform**.
+Следствие для пресейла: если в локальном REST не хватает отдельных RPC-режимов, они могут быть добавлены локально как новые REST endpoints/handlers по аналогии с этим web-flow, **без обязательного подключения Leo4 IoT Platform**.
 
 ```mermaid
 sequenceDiagram
     participant BC as Customer Business Cloud
+    participant UI as L4-HMI or Local UI
     participant AG as Local device-agent
     participant CT as LEO4 Controller Local REST
     participant HW as T-16 Locks Sensors
 
     BC->>AG: authorize operation
+    UI->>AG: user flow / selection / PIN
     AG->>CT: POST local REST task method_code=51 or 16 or 35
     CT->>HW: execute command on lock controller
     HW-->>CT: sensor feedback
     CT-->>AG: local task result status=3 DONE
     CT-->>AG: local events 13 or 14 or 3 or 63 or 44
+    AG-->>UI: show operation result by events
     AG-->>BC: audit and business result
 ```
 
@@ -125,12 +132,14 @@ Cloud здесь является обязательным control-plane/data-pl
 ```mermaid
 sequenceDiagram
     participant BC as Customer Business Cloud
+    participant UI as L4-HMI or Customer UI
     participant AG as Local device-agent orchestrator
     participant LP as Leo4 IoT Platform
     participant CT as LEO4 Controller
     participant HW as T-16 Locks Sensors
 
     BC->>AG: business authorization
+    UI->>AG: user flow / selection / PIN
     AG->>LP: REST task create method_code=51 or 16 or 35
     LP->>CT: MQTT RPC task request
     CT->>HW: execute physical command
@@ -138,6 +147,7 @@ sequenceDiagram
     CT-->>LP: task response status=3 DONE
     CT-->>LP: events 13 or 14 or 3 or 63 or 44
     LP-->>AG: task status and events stream
+    AG-->>UI: show physical confirmation by events only
     AG-->>BC: physical confirmation by events only
 ```
 
@@ -146,6 +156,7 @@ sequenceDiagram
 **Что это:** часть оркестрации выполняется у клиента через cloud + Leo4 IoT Platform, часть — локально через `Local device-agent` и REST API контроллера LEO4.
 
 **Обязательная граница:** классы команд, идущие через cloud и локально, фиксируются проектным контрактом/policy.
+
 **Жёсткое правило Hybrid:** в рамках одного deployment-проекта и конкретного device profile каждый method code назначается только в один маршрут (cloud-path **или** local-path), без двойной трактовки.
 
 Типовой пример разделения **именно для Hybrid mode** (иллюстративно, финализируется контрактом):
@@ -160,7 +171,8 @@ Hybrid требует:
 
 ```mermaid
 flowchart LR
-    BC[Customer Business Cloud] --> AG[Local device-agent]
+    UI[L4-HMI or Customer Kiosk UI] --> AG[Local device-agent]
+    BC[Customer Business Cloud] --> AG
     BC --> LP[Leo4 IoT Platform]
     AG --> CT[LEO4 Controller Local REST]
     LP --> CT2[LEO4 Controller MQTT RPC]
@@ -180,7 +192,7 @@ flowchart LR
 | Режим | Где исполняется orchestration | Используется ли Leo4 IoT Platform | Command path | Где живёт security boundary | Как доставляются/собираются events | Offline-возможности | Основной риск/условие |
 |---|---|---|---|---|---|---|---|
 | **Local-only** | У клиента в `Local device-agent` (локальный микробэкенд) | Нет | `Customer Cloud (optional) or Local UI -> Local device-agent -> Local REST Controller -> T-16/locks` | Локально: agent + controller ACL | Локальные event endpoints/каналы + клиентский сбор/аудит | Максимальные для pre-authorized и локальных сценариев | Требуется явная поддержка необходимых RPC-режимов в локальном REST API |
-| **Cloud-orchestrated** | В customer cloud orchestration + Leo4 IoT Platform control plane | Да, обязательно | `Customer Cloud or Local orchestrator -> Leo4 Platform -> MQTT RPC -> Controller -> T-16/locks` | Cloud routing + ACL/policy + onboarding endpoint rules | Events API, webhooks, MQTT `evt/eva`, history в platform | Только заранее согласованные pre-authorized сценарии с последующим reconcile (см. раздел «Offline-сценарий») | Риск зависимости от cloud connectivity и требований к cloud governance |
+| **Cloud-orchestrated** | В customer cloud orchestration + Leo4 IoT Platform control plane | Да, обязательно | `Customer Cloud or Local orchestrator -> Leo4 Platform -> MQTT RPC -> Controller -> T-16/locks` | Cloud routing + ACL/policy + onboarding endpoint rules | Events API, webhooks, MQTT `evt/eva`, history в platform | Только заранее согласованные pre-authorized сценарии с последующим reconcile | Риск зависимости от cloud connectivity и требования к cloud governance |
 | **Hybrid** | Разделено между cloud и local по policy | Да, частично (для cloud-класса команд) | `cloud-path` и `local-path` по контракту | `policy-router` + ACL на каждом пути | Единый event/audit/reconcile для cloud и local источников | Высокие для локально разрешённых классов команд | Риск рассинхронизации и bypass; нужен строгий policy-контракт |
 
 ## Контроль method codes по policy
@@ -192,7 +204,7 @@ flowchart LR
 - **Raw/control-sensitive:** `18`, `42`, `48`.
 - **NVS/config:** `49`, `50`.
 
-Практическое правило для пресейла: даже если команда не открывает ячейку напрямую, она должна классифицироваться как unlock-capable, если может изменить доступы, ввод, поведение портов или конфигурацию.
+Практическое правило для пресейла: даже если команда не открывает ячейку напрямую, она должна классифицироваться как unlock-capable, если может изменить доступ, ввод, поведение портов или конфигурацию.
 
 ## События, статусы и подтверждение физического результата
 
@@ -228,11 +240,50 @@ flowchart LR
 > Конкретные offline buffer limits и conflict-resolution policy фиксируются отдельным техконтрактом.
 > Обычно отдельно подтверждаются: максимальный размер буфера, срок хранения backlog, окно retry/replay, таймаут reconcile и политика обработки конфликтов.
 
-## Kiosk UI
+## Kiosk UI и флагманский HMI-слой L4-HMI
 
-- Клиент может использовать **собственный kiosk UI**.
-- LEO4 может работать в headless-модели как технический execution/event слой.
-- LEO4 HMI (`И-4` / `И-7`) — опционально.
+Клиент может использовать **собственный kiosk UI**, но для проектов, где требуется готовый современный экранный слой, LEO4-экосистема может дополняться флагманским решением **L4-HMI**.
+
+**L4-HMI** — это тонкий frontend-слой для self-service устройств, который отделяет пользовательский интерфейс от конкретной механики, контроллеров и backend-систем. Он подходит для вендинга, постаматов/locker-систем, терминалов, киосков самообслуживания и специализированных выдачных устройств.
+
+Ключевое позиционирование L4-HMI:
+
+- **Тонкий UI-слой:** интерфейс не становится тяжёлой учётной системой или монолитом управления всем аппаратом.
+- **Единая витрина:** один подход к экранам, каталогам, статусам, ошибкам и сервисным сценариям для разных аппаратных форм-факторов.
+- **Отделение от механики:** физика устройства скрыта за local runtime / adapter / transport слоями.
+- **Интеграционная гибкость:** L4-HMI может работать с локальным микробэкендом, Leo4 IoT Platform или customer backend в зависимости от выбранного режима.
+- **Headless-compatible LEO4:** LEO4 может оставаться execution/event слоем, а L4-HMI — presentation layer поверх локального или гибридного контура.
+- **Embedded UI:** целевая аппаратная конфигурация ориентирована на 10,1" HMI-панель 1280×800 на ESP32-P4 с LVGL, JD9365/MIPI-DSI и touch-контуром.
+
+В архитектуре vendor execution layer L4-HMI не меняет ownership бизнес-логики: авторизация, policy, платежи и аудит остаются у клиента или в согласованном orchestration layer. L4-HMI отображает сценарий, принимает пользовательский выбор/PIN/действие и передаёт его в local device-agent, микробэкенд или cloud orchestration по выбранной схеме.
+
+```mermaid
+flowchart LR
+    U[User] --> HMI[L4-HMI thin frontend]
+    HMI --> AG[Local device-agent or Microbackend]
+    AG --> P[Policy and Authorization]
+    AG --> CT[LEO4 Controller / Local REST]
+    AG --> LP[Leo4 IoT Platform optional]
+    CT --> HW[T-16 / Locks / Sensors]
+    LP --> CT
+    CT --> EV[Events 13/14/3/63/44]
+    EV --> AG
+    AG --> HMI
+```
+
+### Иллюстрации L4-HMI
+
+![L4-HMI interface example 1](https://github.com/OlegLebedevRU/l4-hmi/blob/main/docs/l4-hmi-1-640.jpg)
+
+![L4-HMI interface example 2](https://github.com/OlegLebedevRU/l4-hmi/blob/main/docs/l4-hmi-2-640.jpg)
+
+### Что это значит для пресейла
+
+- Если клиент хочет **собственный экран**, LEO4 остаётся headless execution/event слоем, а клиентский UI подключается через local/cloud adapter.
+- Если клиент хочет **готовый флагманский UI**, предлагается L4-HMI как presentation layer поверх тех же трёх режимов: Local-only, Cloud-orchestrated, Hybrid.
+- Для постаматов/locker-flow L4-HMI покрывает выбор ячейки или заказа, авторизацию, отображение открытия/закрытия, ошибки и сервисные экраны.
+- Для вендинга L4-HMI покрывает каталог, выбор товара, статус выдачи, ошибки, сервисные экраны и связку с inventory/runtime.
+- Физический успех операции всё равно подтверждается events, а не UI-фактом нажатия кнопки и не `DONE` статусом.
 
 ## Минимальный тестовый стенд
 
@@ -244,6 +295,7 @@ flowchart LR
 - API-доступ (REST/MQTT по договорённости).
 - `device_id` / `SN` / сертификатная идентичность.
 - Опционально mini-PC с `Local device-agent`.
+- Опционально L4-HMI панель или клиентский kiosk UI для проверки экранного сценария.
 
 ## Тест-план (по трём режимам)
 
@@ -256,6 +308,7 @@ flowchart LR
 7. Offline/reconnect для разрешённых операций.
 8. Проверка, что запрещённый путь (bypass) блокируется ACL/policy.
 9. Для Hybrid — проверка reconcile и отсутствия рассинхронизации между cloud/local event sources.
+10. Если используется L4-HMI — проверка, что экранный результат строится по event-confirmation, а не только по `DONE`/нажатию пользователя.
 
 ## Матрица соответствия требованиям клиента
 
@@ -266,10 +319,10 @@ flowchart LR
 | 3 | События и статусы | Поддерживаются события открытия/закрытия/input/full state/health + API/webhooks |
 | 4 | Offline только для разрешённых операций | Реализуемо через pre-authorized доступы и policy-контур |
 | 5 | Deployment-варианты | Формально фиксированы Local-only, Cloud-orchestrated, Hybrid |
-| 6 | Собственный kiosk UI | Да, возможна headless-модель LEO4 + клиентский UI |
+| 6 | Собственный kiosk UI | Да, возможна headless-модель LEO4 + клиентский UI; также доступен флагманский L4-HMI |
 | 7 | API и документация | Есть REST/MQTT/event/webhook документы; credentials и стенд — по согласованной процедуре |
-| 8 | Минимальный стенд | У-1 + Т-16 + lock + sensor + power + API доступ + опциональный local agent |
-| 9 | Что проверить на тесте | Сформирован тест-план под три режима и policy/bypass проверки |
+| 8 | Минимальный стенд | У-1 + Т-16 + lock + sensor + power + API доступ + опциональный local agent/L4-HMI |
+| 9 | Что проверить на тесте | Сформирован тест-план под три режима, policy/bypass и UI event-confirmation проверки |
 | 10 | Коммерческая модель | SLA/licensing/support финализируются на пресейл/контрактном этапе |
 | 11 | Критичные условия безопасности | Контролируемые method codes + `DONE != physical execution` + event-based confirmation |
 | 12 | Желаемый результат | Есть ясная архитектурная карта из трёх режимов и список решений для техзвонка |
@@ -285,6 +338,8 @@ flowchart LR
 7. SLA/licensing/support модель.
 8. Выдача тестовых credentials/device-профиля.
 9. Единый критерий «команда доставлена» vs «физическое действие подтверждено» (`DONE` vs events).
+10. UI-стратегия: собственный kiosk UI клиента или L4-HMI как флагманский frontend-слой.
+11. Если выбран L4-HMI: контракты между HMI, local device-agent/microbackend, Leo4 IoT Platform и customer backend.
 
 ## Рекомендованная формулировка ответа клиенту
 
@@ -293,6 +348,7 @@ flowchart LR
 > В Local-only режиме Leo4 IoT Platform не требуется: локальный `Local device-agent` работает как микробэкенд и взаимодействует с контроллером через локальный REST API.  
 > В Cloud-orchestrated режиме команды и события идут через Leo4 IoT Platform как обязательный control-plane/data-plane.  
 > В Hybrid режиме маршрутизация команд делится между cloud и local по заранее согласованной policy, с обязательными ACL и единым event/audit/reconcile контуром.  
+> В качестве экранного слоя можно использовать ваш собственный kiosk UI либо флагманское решение **L4-HMI** — тонкий frontend для self-service устройств, который работает поверх local/cloud adapter слоя и не забирает бизнес-логику у вашей системы.  
 > Во всех режимах `status=3 (DONE)` трактуется как завершение task/RPC цикла, а физическое выполнение подтверждается только событиями (`event_type_code=13/14`, плюс `3/63/44` для контекста).
 
 ## Контроллерный контур Leo4/T-16 (смежные материалы)
@@ -325,6 +381,14 @@ flowchart LR
 - [`../mqtt_topic_rules.md`](../mqtt_topic_rules.md)
 - [`../TTL.md`](../TTL.md)
 - [`../server-integration-guide.md`](../server-integration-guide.md)
+
+### Смежные материалы по L4-HMI
+
+- [`OlegLebedevRU/l4-hmi/docs/L4-HMI-SELF-SERVICE-FRONTEND.md`](https://github.com/OlegLebedevRU/l4-hmi/blob/main/docs/L4-HMI-SELF-SERVICE-FRONTEND.md)
+- [`OlegLebedevRU/l4-hmi/docs/l4-hmi-1-640.jpg`](https://github.com/OlegLebedevRU/l4-hmi/blob/main/docs/l4-hmi-1-640.jpg)
+- [`OlegLebedevRU/l4-hmi/docs/l4-hmi-2-640.jpg`](https://github.com/OlegLebedevRU/l4-hmi/blob/main/docs/l4-hmi-2-640.jpg)
+- [`OlegLebedevRU/l4-hmi/docs/L4-HMI-VENDING-INVENTORY-ONBOARDING.md`](https://github.com/OlegLebedevRU/l4-hmi/blob/main/docs/L4-HMI-VENDING-INVENTORY-ONBOARDING.md)
+- [`OlegLebedevRU/l4-hmi/docs/L4-HMI-VENDING-LOCAL-FLOW.md`](https://github.com/OlegLebedevRU/l4-hmi/blob/main/docs/L4-HMI-VENDING-LOCAL-FLOW.md)
 
 ### Смежные материалы по локальному web-flow (siplite)
 
