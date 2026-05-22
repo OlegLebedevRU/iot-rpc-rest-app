@@ -45,7 +45,8 @@ LEO4 можно использовать как **vendor execution layer** дл�
 1. **Customer business cloud** — авторизация, оркестрация, бизнес-решения.
 2. **Local `device-agent` / `adapter_violanta_leo4`** — доверенный локальный enforcement-слой.
 3. **LEO4 controller + Т-16 + locks/sensors** — физическое исполнение.
-4. **Leo4 IoT Platform (optional)** — облачная телеметрия/история/интеграции.
+
+Опционально над уровнями добавляется **Leo4 IoT Platform (cloud telemetry/control layer)** для истории событий, webhooks, API и интеграций.
 
 ### Архитектура (GitHub-safe Mermaid)
 
@@ -273,7 +274,7 @@ sequenceDiagram
 
 ## Контроллерный контур Leo4/T-16 (смежные материалы)
 
-С учётом `docs_mirror/controllers`:
+С учётом материалов из внешнего репозитория `docs_mirror/controllers`:
 
 - Leo4 ПАК включает У-1, Т-16, И-4/И-7 и опциональные ридеры/QR/замки/БП.
 - Т-16: 16 каналов управления замками с датчиками.
