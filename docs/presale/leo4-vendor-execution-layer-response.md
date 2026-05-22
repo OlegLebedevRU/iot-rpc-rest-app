@@ -4,6 +4,8 @@
 
 LEO4 можно использовать как **vendor execution layer** для управления контроллерами, замками и событиями, при этом бизнес-логика (пользователи, заказы, оплаты, тарифы, поддержка) остаётся в системе клиента.
 
+Критически важно: `status=3 (DONE)` подтверждает завершение RPC/task цикла, а физическое открытие подтверждается только событиями (`event_type_code=13/14`).
+
 > [!IMPORTANT]
 > **Подтверждено текущими docs:** RPC/REST task-flow, event-flow, MQTT topic model, correlation data, webhooks, TTL, idempotency и подтверждение физического открытия через события.
 >
@@ -81,6 +83,7 @@ flowchart TD
   - `18`/`42`/`48` (raw RS-485/UART/port команды),
   - `49`/`50` (запись/чтение NVS-конфигурации).
   См. реестр: [`../method-codes-reference.md`](../method-codes-reference.md).
+  Это снижает риск policy bypass через «непрямые» команды, которые меняют доступы, ввод или поведение устройства.
 
 > [!WARNING]
 > Для строгой модели запрета обхода device-agent security boundary фиксируется **архитектурой маршрутизации + ACL/policy + onboarding-правилами endpoint-адресации**.
@@ -272,6 +275,7 @@ sequenceDiagram
 6. Conflict resolution policy после reconnect.
 7. SLA/licensing/support модель.
 8. Выдача тестовых credentials/device-профиля.
+9. Единый критерий «команда доставлена» vs «физическое действие подтверждено» (`DONE` vs `event_type_code=13/14`).
 
 ## Рекомендованная формулировка ответа клиенту
 
