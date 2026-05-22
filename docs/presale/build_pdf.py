@@ -24,11 +24,13 @@ MERMAID_CACHE: Final[Path] = ROOT / "_mermaid_cache"
 IMG_CACHE: Final[Path] = ROOT / "_img_cache"
 DOWNLOAD_TIMEOUT: Final[int] = 45
 MERMAID_TIMEOUT: Final[int] = 60
+REQUEST_RETRIES: Final[int] = 2
 # Existing placeholder images from the earlier broken build were under 10 KB;
-# real downloaded or local-rendered assets in this document are 40 KB+.
+# real downloaded or local-rendered assets in this document are 40 KB+, so 20 KB is a safe midpoint.
 PLACEHOLDER_SIZE_LIMIT: Final[int] = 20_000
 MERMAID_IMAGE_WIDTH: Final[int] = 900
 MERMAID_BACKGROUND: Final[str] = "ffffff"
+DOCUMENT_VERSION: Final[str] = "Version 1.0"
 
 HMI_IMAGES: Final[dict[str, str]] = {
     "l4-hmi-1-640.jpg": "https://raw.githubusercontent.com/OlegLebedevRU/l4-hmi/main/docs/l4-hmi-1-640.jpg",
@@ -69,24 +71,39 @@ def ensure_dirs() -> None:
     IMG_CACHE.mkdir(parents=True, exist_ok=True)
 
 
+def get_url(url: str, *, timeout: int) -> requests.Response:
+    last_error: requests.RequestException | None = None
+    for _ in range(REQUEST_RETRIES):
+        try:
+            return requests.get(url, timeout=timeout)
+        except requests.RequestException as exc:
+            last_error = exc
+    assert last_error is not None
+    raise last_error
+
+
 def download_binary(url: str, target: Path) -> None:
-    response = requests.get(url, timeout=DOWNLOAD_TIMEOUT)
+    response = get_url(url, timeout=DOWNLOAD_TIMEOUT)
     if response.status_code != 200:
         raise RuntimeError(f"Failed to download {url}: HTTP {response.status_code}")
     target.write_bytes(response.content)
 
 
 def validate_png(path: Path) -> None:
+    validate_raster(path, "PNG")
+
+
+def validate_raster(path: Path, image_type: str = "image") -> None:
     try:
         with Image.open(path) as img:
             img.load()
             width, height = img.size
     except (OSError, ValueError, UnidentifiedImageError) as exc:
-        raise RuntimeError(f"Invalid PNG generated at {path}: {exc}") from exc
+        raise RuntimeError(f"Invalid {image_type} generated at {path}: {exc}") from exc
 
     if width < 50 or height < 50:
         raise RuntimeError(
-            f"Mermaid PNG at {path} looks like an error image ({width}x{height})."
+            f"{image_type} at {path} looks like an error image ({width}x{height})."
         )
 
 
@@ -97,6 +114,8 @@ def image_path(path: str) -> str:
 def load_font(
     size: int, *, bold: bool = False
 ) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    # WeasyPrint/Linux CI environments usually provide DejaVu or Liberation fonts;
+    # ImageFont.load_default() keeps local fallback rendering portable when they do not.
     candidates = (
         [
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -373,12 +392,19 @@ def render_mermaid_to_png(source: str) -> MermaidImage:
     digest = hashlib.sha256(source.encode("utf-8")).hexdigest()
     out_file = MERMAID_CACHE / f"{digest}.png"
     if out_file.exists():
-        validate_png(out_file)
-        if out_file.stat().st_size > PLACEHOLDER_SIZE_LIMIT:
-            return MermaidImage(
-                hash_id=digest,
-                relative_path=image_path(f"_mermaid_cache/{out_file.name}"),
+        try:
+            validate_png(out_file)
+            if out_file.stat().st_size > PLACEHOLDER_SIZE_LIMIT:
+                return MermaidImage(
+                    hash_id=digest,
+                    relative_path=image_path(f"_mermaid_cache/{out_file.name}"),
+                )
+        except RuntimeError as exc:
+            print(
+                f"Warning: invalid cached Mermaid PNG {out_file.name}; regenerating ({exc})",
+                file=sys.stderr,
             )
+        out_file.unlink(missing_ok=True)
 
     encoded = (
         base64.urlsafe_b64encode(source.encode("utf-8")).decode("ascii").rstrip("=")
@@ -388,7 +414,7 @@ def render_mermaid_to_png(source: str) -> MermaidImage:
         f"?type=png&bgColor={MERMAID_BACKGROUND}&width={MERMAID_IMAGE_WIDTH}"
     )
     try:
-        response = requests.get(url, timeout=MERMAID_TIMEOUT)
+        response = get_url(url, timeout=MERMAID_TIMEOUT)
     except requests.RequestException as exc:
         print(
             f"Warning: mermaid.ink unavailable for diagram {digest}; using local renderer ({exc})",
@@ -518,6 +544,11 @@ def cache_hmi_images() -> dict[str, str]:
         if not target.exists() or target.stat().st_size <= PLACEHOLDER_SIZE_LIMIT:
             try:
                 download_binary(url, target)
+                validate_raster(target, "HMI image")
+                if target.stat().st_size <= PLACEHOLDER_SIZE_LIMIT:
+                    raise RuntimeError(
+                        f"HMI image is unexpectedly small: {target.stat().st_size} bytes"
+                    )
             except (RuntimeError, requests.RequestException, OSError) as exc:
                 print(
                     f"Warning: failed to download {url}, using placeholder image ({exc})",
@@ -606,7 +637,7 @@ def build_html(content_html: str) -> str:
   <h1>LEO4 как vendor execution layer</h1>
   <h2>Три архитектурных режима — Presale Document</h2>
   <div class=\"cover-date\">{today}</div>
-  <div class=\"cover-watermark\">Version 1.0</div>
+  <div class=\"cover-watermark\">{DOCUMENT_VERSION}</div>
 </section>
 """
 
