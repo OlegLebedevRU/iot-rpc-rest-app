@@ -91,7 +91,7 @@ flowchart TD
 
 **Интеграция:** `Local device-agent` ↔ `LEO4 Controller` через локальный REST API (endpoint'ы подняты на контроллере).
 
-**Ориентир по локальному web-flow:** `OlegLebedevRU/siplite` используется как референс более развитого контроллерного стека Leo4-класса для локального режима. В `main/leo4_web.c` показана практическая модель:
+**Ориентир по локальному web-flow:** `OlegLebedevRU/siplite` (смежный ESP32-проект, используемый как референс более развитого контроллерного стека Leo4-класса) показывает практическую локальную модель в `main/leo4_web.c`:
 - `esp_start_webserver()` регистрирует `/gate` (WebSocket), `/event`, `/task`, `/nvs`;
 - поток `leo4_web.c -> /task -> /event -> /nvs` описан в `docs/event_web_architecture_analysis.md`;
 - `/task` и `/event` несут task/result/event семантику, `/gate` работает как gateway/live-channel.
@@ -179,7 +179,7 @@ flowchart LR
 
 | Режим | Где исполняется orchestration | Используется ли Leo4 IoT Platform | Command path | Где живёт security boundary | Как доставляются/собираются events | Offline-возможности | Основной риск/условие |
 |---|---|---|---|---|---|---|---|
-| **Local-only** | У клиента в `Local device-agent` (локальный микробэкенд) | Нет | `Customer Cloud -> Local device-agent -> Local REST Controller -> T-16/locks` | Локально: agent + controller ACL | Локальные event endpoints/каналы + клиентский сбор/аудит | Максимальные для pre-authorized и локальных сценариев | Нужно явно поддерживать нужные RPC-режимы в локальном REST API |
+| **Local-only** | У клиента в `Local device-agent` (локальный микробэкенд) | Нет | `Customer Cloud -> Local device-agent -> Local REST Controller -> T-16/locks` | Локально: agent + controller ACL | Локальные event endpoints/каналы + клиентский сбор/аудит | Максимальные для pre-authorized и локальных сценариев | Требуется явная поддержка необходимых RPC-режимов в локальном REST API |
 | **Cloud-orchestrated** | В customer cloud orchestration + Leo4 IoT Platform control plane | Да, обязательно | `Customer Cloud or Local orchestrator -> Leo4 Platform -> MQTT RPC -> Controller -> T-16/locks` | Cloud routing + ACL/policy + onboarding endpoint rules | Events API, webhooks, MQTT `evt/eva`, history в platform | Ограничены архитектурой cloud-пути; offline только по согласованной модели | Риск зависимости от cloud connectivity и требований к cloud governance |
 | **Hybrid** | Разделено между cloud и local по policy | Да, частично (для cloud-класса команд) | `cloud-path` и `local-path` по контракту | `policy-router` + ACL на каждом пути | Единый event/audit/reconcile для cloud и local источников | Высокие для локально разрешённых классов команд | Риск рассинхронизации и bypass; нужен строгий policy-контракт |
 
@@ -326,9 +326,6 @@ flowchart LR
 - [`../server-integration-guide.md`](../server-integration-guide.md)
 
 ### Смежные материалы по локальному web-flow (siplite)
-
-> [!NOTE]
-> Для стабильной трассировки ссылок на проекте рекомендуется зафиксировать конкретный tag/commit `siplite`; ссылки ниже указывают на текущую ветку `master` на момент подготовки документа.
 
 - [`OlegLebedevRU/siplite/main/leo4_web.c`](https://github.com/OlegLebedevRU/siplite/blob/master/main/leo4_web.c)
 - [`OlegLebedevRU/siplite/docs/event_web_architecture_analysis.md`](https://github.com/OlegLebedevRU/siplite/blob/master/docs/event_web_architecture_analysis.md)
