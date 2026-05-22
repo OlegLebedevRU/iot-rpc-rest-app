@@ -10,7 +10,7 @@ LEO4 может использоваться как **vendor execution layer** �
 2. **Cloud-orchestrated mode** — контроллер подключён только через Leo4 IoT Platform, оркестрация идёт через облачный контур.
 3. **Hybrid mode** — часть команд идёт через облако, часть локально; граница определяется проектной policy.
 
-Критически важно: `status=3 (DONE)` подтверждает завершение RPC/task-цикла, но **не** подтверждает физическое действие. Физический результат подтверждается только событиями (`event_type_code=13/14`, а также контекстно `3/63/44`).
+Критически важно: `status=3 (DONE)` подтверждает завершение RPC/task цикла, но **не** подтверждает физическое действие. Физический результат подтверждается только событиями (`event_type_code=13/14`, а также контекстно `3/63/44`).
 
 > [!IMPORTANT]
 > Подтверждено текущими docs: RPC/REST task-flow, event-flow, MQTT topic model, correlation data, webhooks, TTL, идемпотентность и подтверждение физики через события.
@@ -91,12 +91,12 @@ flowchart TD
 
 **Интеграция:** `Local device-agent` ↔ `LEO4 Controller` через локальный REST API (endpoint'ы подняты на контроллере).
 
-**Ориентир по локальному web-flow:** `OlegLebedevRU/siplite` (смежный ESP32-проект, рассматриваемый как более развитый аналог контроллера LEO4) показывает практическую локальную модель в `main/leo4_web.c`:
+**Ориентир по локальному web-flow:** `OlegLebedevRU/siplite` (смежный референсный ESP32-проект из той же инженерной экосистемы, не являющийся нормативной частью текущего контракта) показывает практическую локальную модель в `main/leo4_web.c`:
 - `esp_start_webserver()` регистрирует `/gate` (WebSocket), `/event`, `/task`, `/nvs`;
 - поток `leo4_web.c -> /task -> /event -> /nvs` описан в `docs/event_web_architecture_analysis.md`;
 - `/task` и `/event` несут task/result/event семантику, `/gate` работает как gateway/live-channel.
 
-Следствие для пресейла: если в локальном REST не хватает отдельных RPC-режимов, они могут быть добавлены локально как новые REST endpoints/handlers по аналогии с этим web-flow (сроки определяются технической оценкой), **без обязательного подключения Leo4 IoT Platform**.
+Следствие для пресейла: если в локальном REST не хватает отдельных RPC-режимов, они могут быть добавлены локально как новые REST endpoints/handlers по аналогии с этим web-flow (объём работ, ответственность сторон и сроки фиксируются отдельной технической оценкой/SoW), **без обязательного подключения Leo4 IoT Platform**.
 
 ```mermaid
 sequenceDiagram
@@ -147,12 +147,12 @@ sequenceDiagram
 **Что это:** часть оркестрации выполняется у клиента через cloud + Leo4 IoT Platform, часть — локально через `Local device-agent` и REST API контроллера LEO4.
 
 **Обязательная граница:** классы команд, идущие через cloud и локально, фиксируются проектным контрактом/policy.
+**Жёсткое правило Hybrid:** в рамках одного deployment-проекта и конкретного device profile каждый method code назначается только в один маршрут (cloud-path **или** local-path), без двойной трактовки.
 
 Типовой пример разделения **именно для Hybrid mode** (иллюстративно, финализируется контрактом):
 - **Cloud path:** удалённые операции, межсайтовая оркестрация, централизованный аудит, массовые обновления (`16`, `47/26`, а также `49/50` для централизованной конфигурации и rollout-изменений).
 - **Local path:** latency-sensitive операции на точке, pre-authorized offline-процедуры, локальные fallback-сценарии (`51`, `35`, а также `18/42/48` только для заранее разрешённых low-level операций по локальному ACL).
-- В **Local-only mode** необходимые method codes (включая `16`/`35`) обслуживаются локальным REST-контуром по локальной policy.
-- Критерий маршрутизации фиксируется явно: **в рамках одного deployment-проекта и конкретного device profile каждый method code назначается либо в cloud-path, либо в local-path**, без двойной трактовки.
+- В **Local-only mode** необходимые method codes (включая `16`/`35`) обслуживаются локальным REST-контуром по локальной policy; это отдельный режим и не конфликтует с hybrid-разделением выше.
 
 Hybrid требует:
 - строгой маршрутизации команд (no-ambiguity routing);
@@ -180,7 +180,7 @@ flowchart LR
 
 | Режим | Где исполняется orchestration | Используется ли Leo4 IoT Platform | Command path | Где живёт security boundary | Как доставляются/собираются events | Offline-возможности | Основной риск/условие |
 |---|---|---|---|---|---|---|---|
-| **Local-only** | У клиента в `Local device-agent` (локальный микробэкенд) | Нет | `Customer Cloud -> Local device-agent -> Local REST Controller -> T-16/locks` | Локально: agent + controller ACL | Локальные event endpoints/каналы + клиентский сбор/аудит | Максимальные для pre-authorized и локальных сценариев | Требуется явная поддержка необходимых RPC-режимов в локальном REST API |
+| **Local-only** | У клиента в `Local device-agent` (локальный микробэкенд) | Нет | `Customer Cloud (optional) or Local UI -> Local device-agent -> Local REST Controller -> T-16/locks` | Локально: agent + controller ACL | Локальные event endpoints/каналы + клиентский сбор/аудит | Максимальные для pre-authorized и локальных сценариев | Требуется явная поддержка необходимых RPC-режимов в локальном REST API |
 | **Cloud-orchestrated** | В customer cloud orchestration + Leo4 IoT Platform control plane | Да, обязательно | `Customer Cloud or Local orchestrator -> Leo4 Platform -> MQTT RPC -> Controller -> T-16/locks` | Cloud routing + ACL/policy + onboarding endpoint rules | Events API, webhooks, MQTT `evt/eva`, history в platform | Только заранее согласованные pre-authorized сценарии с последующим reconcile (см. раздел «Offline-сценарий») | Риск зависимости от cloud connectivity и требований к cloud governance |
 | **Hybrid** | Разделено между cloud и local по policy | Да, частично (для cloud-класса команд) | `cloud-path` и `local-path` по контракту | `policy-router` + ACL на каждом пути | Единый event/audit/reconcile для cloud и local источников | Высокие для локально разрешённых классов команд | Риск рассинхронизации и bypass; нужен строгий policy-контракт |
 
@@ -205,7 +205,7 @@ flowchart LR
 - Keep-alive/status: `event_type_code=44`.
 
 > [!WARNING]
-> Для бизнес-процесса «успех операции» подтверждение должно опираться на события, а не только на DONE-статус.
+> Для бизнес-процесса «успех операции» подтверждение должно опираться на события, а не только на DONE-статус: открытие — `13`, закрытие — `14`, ввод/идентификация — `3`.
 
 ## Надёжность доставки, идемпотентность и replay
 
