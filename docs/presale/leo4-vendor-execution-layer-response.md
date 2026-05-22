@@ -75,7 +75,12 @@ flowchart TD
 
 - Физические контроллеры **не адресуются напрямую** из cloud как unlock endpoints.
 - Команды идут только в trusted local `device-agent`/adapter, который сам решает, что отправлять в LEO4/controller.
-- Нужно контролировать не только `method_code=51`, но также unlock-capable и behavior-changing команды: `16`, `35`, `47`, `26`, а также `18`, `42`, `48`, `49`, `50`.
+- Нужно контролировать не только `method_code=51` (прямое управление ячейкой), но также команды, которые могут косвенно дать путь к открытию или изменению поведения:
+  - `16` (загрузка доступов/PIN), `35` (удалённый ввод PIN/API-code),
+  - `47`/`26` (удаление отдельных/всех доступов),
+  - `18`/`42`/`48` (raw RS-485/UART/port команды),
+  - `49`/`50` (запись/чтение NVS-конфигурации).
+  См. реестр: [`../method-codes-reference.md`](../method-codes-reference.md).
 
 > [!WARNING]
 > Для строгой модели запрета обхода device-agent security boundary фиксируется **архитектурой маршрутизации + ACL/policy + onboarding-правилами endpoint-адресации**.
@@ -203,11 +208,11 @@ sequenceDiagram
 
 | Модель | Где исполняются команды открытия | Зависит ли открытие от внешнего облака | Кто владеет событиями/логами | Security boundary |
 |---|---|---|---|---|
-| Cloud Leo4 | Leo4 cloud orchestration + controller | Может зависеть от connectivity | По умолчанию в Leo4, экспорт в customer | Shared boundary |
-| Cloud Leo4 + customer local agent | Local agent + controller, cloud как backend | Для offline pre-authorized операций — нет | Customer получает stream/webhooks + Leo4 history | Strong customer boundary |
-| Dedicated Leo4 | Выделенный Leo4 instance (single tenant) | Зависит от выбранной сети и routing | По контракту (обычно customer-controlled) | Controlled dedicated boundary |
-| Local/on-prem Leo4 | On-prem контур клиента | Нет, при локальной связности | У клиента | Full customer perimeter |
-| Локальный LEO4-компонент на mini-PC/controller | Локальный execution path | Нет для локального path | Локально + sync в cloud при наличии | Max local control |
+| Cloud Leo4 | Leo4 cloud orchestration + controller | Может зависеть от connectivity | По умолчанию в Leo4, экспорт в customer | Разделённая зона ответственности |
+| Cloud Leo4 + customer local agent | Local agent + controller, cloud как backend | Для offline pre-authorized операций — нет | Customer получает stream/webhooks + Leo4 history | Усиленная граница клиента |
+| Dedicated Leo4 | Выделенный Leo4 instance (single tenant) | Зависит от выбранной сети и routing | По контракту (обычно customer-controlled) | Выделенный контролируемый контур |
+| Local/on-prem Leo4 | On-prem контур клиента | Нет, при локальной связности | У клиента | Полный периметр клиента |
+| Локальный LEO4-компонент на mini-PC/controller | Локальный execution path | Нет для локального path | Локально + sync в cloud при наличии | Максимальный локальный контроль |
 
 ## Минимальный тестовый стенд
 
@@ -270,7 +275,9 @@ sequenceDiagram
 
 ## Рекомендованная формулировка ответа клиенту
 
-> Мы подтверждаем, что LEO4 может использоваться как vendor execution layer для контроллеров/замков/событий без переноса вашей бизнес-логики в LEO4. Для строгой security-модели мы рекомендуем customer-controlled execution path: все команды, которые потенциально могут привести к открытию или изменению поведения устройства, проходят только через ваш локальный `device-agent`/`adapter_violanta_leo4`; физические контроллеры при этом не регистрируются как напрямую cloud-addressable unlock endpoints. В этой схеме Leo4 IoT Platform остаётся сильной опцией для телеметрии, RPC, истории событий, webhooks и интеграций, а offline используется только для заранее разрешённых операций с последующей синхронизацией событий после восстановления связи.
+> Мы подтверждаем, что LEO4 может использоваться как vendor execution layer для контроллеров/замков/событий без переноса вашей бизнес-логики в LEO4.  
+> Для строгой security-модели мы рекомендуем customer-controlled execution path: все команды, которые потенциально могут привести к открытию или изменению поведения устройства, проходят только через ваш локальный `device-agent`/`adapter_violanta_leo4`.  
+> Физические контроллеры при этом не регистрируются как напрямую cloud-addressable unlock endpoints. Leo4 IoT Platform остаётся сильной опцией для телеметрии, RPC, истории событий, webhooks и интеграций, а offline используется только для заранее разрешённых операций с последующей синхронизацией событий после восстановления связи.
 
 ## Контроллерный контур Leo4/T-16 (смежные материалы)
 
