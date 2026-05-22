@@ -86,6 +86,7 @@ def validate_png(path: Path) -> None:
 
 
 def render_mermaid_to_png(source: str) -> MermaidImage:
+    # 20 hex chars (80 bits) keep cache filenames compact while keeping collision risk negligible for this document scale.
     digest = hashlib.sha256(source.encode("utf-8")).hexdigest()[:20]
     out_file = MERMAID_CACHE / f"{digest}.png"
     if out_file.exists():
@@ -182,7 +183,9 @@ def cache_hmi_images() -> dict[str, str]:
                 image = Image.new("RGB", (640, 400), color="#eef3fa")
                 draw = ImageDraw.Draw(image)
                 draw.text((28, 170), "L4-HMI image unavailable", fill="#1a2e4a")
-                draw.text((28, 200), filename, fill="#0057b8")
+                draw.text(
+                    (28, 200), "Source image temporarily unreachable", fill="#0057b8"
+                )
                 image.save(target, format="JPEG", quality=92)
         local_paths[filename] = f"_img_cache/{filename}"
     return local_paths
