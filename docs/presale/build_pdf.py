@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import re
+import sys
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -12,7 +13,7 @@ from typing import Final
 import markdown
 import requests
 from bs4 import BeautifulSoup
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, UnidentifiedImageError
 from weasyprint import HTML
 
 ROOT: Final[Path] = Path(__file__).resolve().parent
@@ -20,6 +21,8 @@ SOURCE_MD: Final[Path] = ROOT / "leo4-vendor-execution-layer-response.md"
 OUTPUT_PDF: Final[Path] = ROOT / "leo4-vendor-execution-layer-response.pdf"
 MERMAID_CACHE: Final[Path] = ROOT / "_mermaid_cache"
 IMG_CACHE: Final[Path] = ROOT / "_img_cache"
+DOWNLOAD_TIMEOUT: Final[int] = 45
+MERMAID_TIMEOUT: Final[int] = 60
 
 HMI_IMAGES: Final[dict[str, str]] = {
     "l4-hmi-1-640.jpg": "https://raw.githubusercontent.com/OlegLebedevRU/l4-hmi/main/docs/l4-hmi-1-640.jpg",
@@ -61,7 +64,7 @@ def ensure_dirs() -> None:
 
 
 def download_binary(url: str, target: Path) -> None:
-    response = requests.get(url, timeout=45)
+    response = requests.get(url, timeout=DOWNLOAD_TIMEOUT)
     if response.status_code != 200:
         raise RuntimeError(f"Failed to download {url}: HTTP {response.status_code}")
     target.write_bytes(response.content)
@@ -73,7 +76,7 @@ def validate_png(path: Path) -> None:
             img.verify()
         with Image.open(path) as img:
             width, height = img.size
-    except Exception as exc:  # pragma: no cover
+    except (OSError, ValueError, UnidentifiedImageError) as exc:  # pragma: no cover
         raise RuntimeError(f"Invalid PNG generated at {path}: {exc}") from exc
 
     if width < 50 or height < 50:
@@ -96,7 +99,7 @@ def render_mermaid_to_png(source: str) -> MermaidImage:
     )
     url = f"https://mermaid.ink/img/{encoded}?type=png&bgColor=ffffff&width=900"
     try:
-        response = requests.get(url, timeout=60)
+        response = requests.get(url, timeout=MERMAID_TIMEOUT)
     except requests.RequestException as exc:
         raise RuntimeError(
             f"Mermaid rendering failed for diagram {digest}: unable to reach mermaid.ink ({exc})"
@@ -171,7 +174,11 @@ def cache_hmi_images() -> dict[str, str]:
         if not target.exists():
             try:
                 download_binary(url, target)
-            except Exception:
+            except (requests.RequestException, OSError) as exc:
+                print(
+                    f"Warning: failed to download {url}, using placeholder image ({exc})",
+                    file=sys.stderr,
+                )
                 image = Image.new("RGB", (640, 400), color="#eef3fa")
                 draw = ImageDraw.Draw(image)
                 draw.text((28, 170), "L4-HMI image unavailable", fill="#1a2e4a")
