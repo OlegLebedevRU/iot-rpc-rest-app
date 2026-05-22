@@ -91,7 +91,7 @@ flowchart TD
 
 **Интеграция:** `Local device-agent` ↔ `LEO4 Controller` через локальный REST API (endpoint'ы подняты на контроллере).
 
-**Ориентир по локальному web-flow:** в `OlegLebedevRU/siplite` более развитая локальная модель показана в `main/leo4_web.c`:
+**Ориентир по локальному web-flow:** `OlegLebedevRU/siplite` используется как референс более развитого контроллерного стека Leo4-класса для локального режима. В `main/leo4_web.c` показана практическая модель:
 - `esp_start_webserver()` регистрирует `/gate` (WebSocket), `/event`, `/task`, `/nvs`;
 - поток `leo4_web.c -> /task -> /event -> /nvs` описан в `docs/event_web_architecture_analysis.md`;
 - `/task` и `/event` несут task/result/event семантику, `/gate` работает как gateway/live-channel.
@@ -149,8 +149,9 @@ sequenceDiagram
 **Обязательная граница:** классы команд, идущие через cloud и локально, фиксируются проектным контрактом/policy.
 
 Типовой пример разделения (иллюстративно, финализируется контрактом):
-- **Cloud path:** удалённые операции, межсайтовая оркестрация, централизованный аудит, массовые обновления (`16`, `47/26`, часть `49/50`).
-- **Local path:** latency-sensitive операции на точке, pre-authorized offline-процедуры, локальные fallback-сценарии (`51`, `35`, часть `18/42/48` по ACL).
+- **Cloud path:** удалённые операции, межсайтовая оркестрация, централизованный аудит, массовые обновления (`16`, `47/26`, а также `49/50` для централизованной конфигурации и rollout-изменений).
+- **Local path:** latency-sensitive операции на точке, pre-authorized offline-процедуры, локальные fallback-сценарии (`51`, `35`, а также `18/42/48` только для заранее разрешённых low-level операций по локальному ACL).
+- Критерий маршрутизации фиксируется явно: **каждый method code назначается либо в cloud-path, либо в local-path**, без двойной трактовки в одном и том же контексте.
 
 Hybrid требует:
 - строгой маршрутизации команд (no-ambiguity routing);
@@ -180,7 +181,7 @@ flowchart LR
 |---|---|---|---|---|---|---|---|
 | **Local-only** | У клиента в `Local device-agent` (локальный микробэкенд) | Нет | `Customer Cloud -> Local device-agent -> Local REST Controller -> T-16/locks` | Локально: agent + controller ACL | Локальные event endpoints/каналы + клиентский сбор/аудит | Максимальные для pre-authorized и локальных сценариев | Нужно явно поддерживать нужные RPC-режимы в локальном REST API |
 | **Cloud-orchestrated** | В customer cloud orchestration + Leo4 IoT Platform control plane | Да, обязательно | `Customer Cloud or Local orchestrator -> Leo4 Platform -> MQTT RPC -> Controller -> T-16/locks` | Cloud routing + ACL/policy + onboarding endpoint rules | Events API, webhooks, MQTT `evt/eva`, history в platform | Ограничены архитектурой cloud-пути; offline только по согласованной модели | Риск зависимости от cloud connectivity и требований к cloud governance |
-| **Hybrid** | Разделено между cloud и local по policy | Да, частично (для cloud-класса команд) | Два разрешённых пути: cloud-path и local-path по контракту | Двойная граница: policy router + ACL на обоих путях | Единый event/audit/reconcile поверх cloud+local источников | Высокие для локально разрешённых классов команд | Главный риск — рассинхронизация и bypass без строгого policy-контракта |
+| **Hybrid** | Разделено между cloud и local по policy | Да, частично (для cloud-класса команд) | `cloud-path` и `local-path` по контракту | `policy-router` + ACL на каждом пути | Единый event/audit/reconcile для cloud и local источников | Высокие для локально разрешённых классов команд | Риск рассинхронизации и bypass; нужен строгий policy-контракт |
 
 ## Контроль method codes по policy
 
@@ -325,6 +326,9 @@ flowchart LR
 - [`../server-integration-guide.md`](../server-integration-guide.md)
 
 ### Смежные материалы по локальному web-flow (siplite)
+
+> [!NOTE]
+> Для стабильной трассировки ссылок на проекте рекомендуется зафиксировать конкретный tag/commit `siplite`; ссылки ниже указывают на текущую ветку `master` на момент подготовки документа.
 
 - [`OlegLebedevRU/siplite/main/leo4_web.c`](https://github.com/OlegLebedevRU/siplite/blob/master/main/leo4_web.c)
 - [`OlegLebedevRU/siplite/docs/event_web_architecture_analysis.md`](https://github.com/OlegLebedevRU/siplite/blob/master/docs/event_web_architecture_analysis.md)
