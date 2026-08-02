@@ -175,7 +175,7 @@ Complete reference for all 15 MCP tools exposed by the LEO4 MCP server.
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
 | `device_id` | int | ✅ | — | LEO4 device identifier |
-| `event_type_code` | int | ❌ | `null` | Filter by event type (e.g. 13=CellOpenEvent) |
+| `event_type_code` | int | ❌ | `null` | Filter by event type (e.g. 13=CellOpenEvent, 73=SIPLITE_COMMAND_ACCEPTED) |
 | `tag` | int | ❌ | `null` | Filter by tag (e.g. 304=cell number) |
 | `interval_m` | int | ❌ | `5` | Look-back window in minutes |
 | `limit` | int | ❌ | `50` | Maximum events |
@@ -236,7 +236,7 @@ Complete reference for all 15 MCP tools exposed by the LEO4 MCP server.
 | Name | Type | Required | Default | Description |
 |------|------|----------|---------|-------------|
 | `device_id` | int | ✅ | — | LEO4 device identifier |
-| `event_type_code` | int | ✅ | — | Event type to watch (e.g. 13=CellOpenEvent) |
+| `event_type_code` | int | ✅ | — | Event type to watch (e.g. 13=CellOpenEvent, 73=SIPLITE_COMMAND_ACCEPTED) |
 | `tag` | int | ✅ | — | Tag to filter (e.g. 304=cell number) |
 | `expected_value` | int | ❌ | `null` | If set, only match events where value equals this |
 | `interval_m` | int | ❌ | `5` | Look-back window per poll |
