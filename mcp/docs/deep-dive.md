@@ -189,7 +189,7 @@ Supported `event_type` values:
 | `2` | DeviceDisconnectEvent | Device disconnected | — |
 | `3` | HealthCheckEvent | Periodic heartbeat | tag 301=battery, 302=signal, 303=temp |
 | `13` | CellOpenEvent | Cell physically opened | **tag 304=cell number** |
-| `73` | SIPLITE_COMMAND_ACCEPTED | Siplite local command accepted/delivered to active Client1 long-poll channel (not execution) | tags 411–416 |
+| `73` | SIPLITE_COMMAND_ACCEPTED | Siplite local command accepted/delivered to active Client1 long-poll channel (not execution) | tags 420–425 |
 
 ### Key Tags Reference
 
