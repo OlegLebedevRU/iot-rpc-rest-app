@@ -147,6 +147,9 @@ class FastStreamConfig(BaseModel):
     connect_jitter: float = 0.2
     # Per-attempt wall-clock timeout wrapping broker.start(); 0 = no timeout.
     connect_timeout: float = 5.0
+    # Runtime safety net: periodically re-declare topology after broker restarts.
+    topology_watchdog_enabled: bool = True
+    topology_watchdog_interval: float = 60.0
 
     @model_validator(mode="after")
     def _maybe_rewrite_host(self) -> "FastStreamConfig":

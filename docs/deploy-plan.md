@@ -221,6 +221,11 @@ rate-limit или зафиксировать digest (рекомендуется 
 | Managed PostgreSQL                         | cloud.ru DBaaS             | terraform/UI                                     |
 | Compute-VM                                 | cloud.ru IaaS              | terraform/UI + cloud-init                        |
 
+RabbitMQ device users/ACL are runtime state derived from PostgreSQL. If the
+RabbitMQ data volume is lost or replaced, `app-service` re-applies device users,
+permissions and topic-permissions on startup. Operational recovery details are
+documented in [`docs/rabbitmq-acl-recovery.md`](rabbitmq-acl-recovery.md).
+
 ### 5.2. Структура репозитория после изменений (предложение)
 
 ```

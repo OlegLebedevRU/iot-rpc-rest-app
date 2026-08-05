@@ -24,8 +24,17 @@ class DummyResponse:
 
 
 class DummyAsyncClient:
-    def __init__(self, *args, responses: dict[str, DummyResponse] | None = None, **kwargs):
+    def __init__(
+        self,
+        *args,
+        responses: dict[str, DummyResponse] | None = None,
+        put_responses: dict[str, DummyResponse] | None = None,
+        put_calls: list[tuple[str, dict]] | None = None,
+        **kwargs,
+    ):
         self._responses = responses or {}
+        self._put_responses = put_responses or {}
+        self._put_calls = put_calls
 
     async def __aenter__(self):
         return self
@@ -38,6 +47,11 @@ class DummyAsyncClient:
         if response is None:
             raise AssertionError(f"Unexpected GET {url}")
         return response
+
+    async def put(self, url: str, json: dict):
+        if self._put_calls is not None:
+            self._put_calls.append((url, json))
+        return self._put_responses.get(url, DummyResponse(204, None, url))
 
 
 @pytest.mark.asyncio
@@ -168,3 +182,57 @@ async def test_get_connection_keeps_other_devices_when_one_request_fails(monkeyp
     assert devices[0].user == "SN_OK"
     assert devices[0].client_properties.client_id == "ZYXWVUTSRQPONMLKJIHGFED"
 
+
+@pytest.mark.asyncio
+async def test_set_device_definitions_repairs_acl_for_existing_user(monkeypatch):
+    responses = {
+        "api/users/SN_EXIST": DummyResponse(
+            200,
+            {"name": "SN_EXIST", "tags": ["device"]},
+            "api/users/SN_EXIST",
+        ),
+        "api/permissions/%2F/SN_EXIST": DummyResponse(
+            404,
+            {"error": "not_found"},
+            "api/permissions/%2F/SN_EXIST",
+        ),
+        "api/topic-permissions/%2F/SN_EXIST": DummyResponse(
+            200,
+            [{"exchange": "amq.topic", "write": "^old$", "read": "^old$"}],
+            "api/topic-permissions/%2F/SN_EXIST",
+        ),
+    }
+    put_calls: list[tuple[str, dict]] = []
+
+    monkeypatch.setattr(
+        rmq_admin_api.httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: DummyAsyncClient(
+            *args, responses=responses, put_calls=put_calls, **kwargs
+        ),
+    )
+
+    result = await RmqAdminApi.set_device_definitions(["SN_EXIST"])
+
+    assert result == {
+        "created": 0,
+        "updated": 2,
+        "skipped": 1,
+        "would_create": 0,
+        "would_update": 0,
+        "errors": [],
+    }
+    assert put_calls == [
+        (
+            "api/permissions/%2F/SN_EXIST",
+            {"configure": ".*", "write": ".*", "read": ".*"},
+        ),
+        (
+            "api/topic-permissions/%2F/SN_EXIST",
+            {
+                "exchange": "amq.topic",
+                "write": "^dev.{client_id}.*",
+                "read": "^srv.{client_id}.*",
+            },
+        ),
+    ]

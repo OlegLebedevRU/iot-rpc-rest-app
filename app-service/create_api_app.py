@@ -1,6 +1,8 @@
 import asyncio
+import importlib
 import logging
 import random
+from contextlib import suppress
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -15,6 +17,7 @@ from fastapi.openapi.docs import (
 )
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi_pagination import add_pagination
+from sqlalchemy import text
 
 # Импортируем маршруты и конфигурацию
 from api import router as api_router
@@ -32,6 +35,13 @@ from config.tags import TAGS_METADATA
 
 log = setup_module_logger(__name__, "app_create_app.log")
 logging.getLogger("logger_proxy").disabled = True
+
+_RMQ_DEFINITIONS_SYNC_LOCK_KEY = 2026080501
+_RMQ_DEFINITIONS_SYNC_ATTEMPTS = 5
+_SUBSCRIBER_MODULES = (
+    "core.topologys.fs_queues",
+    "core.topologys.internal_bus",
+)
 
 SUMMARY = """
 ## 📚 Основные элементы АПИ
@@ -65,7 +75,7 @@ try:
     _RETRYABLE_EXCEPTIONS = _RETRYABLE_EXCEPTIONS + (
         aio_pika.exceptions.AMQPConnectionError,
     )
-except (ImportError, AttributeError):
+except ImportError, AttributeError:
     pass
 try:
     import aiormq.exceptions  # type: ignore[import]
@@ -73,8 +83,26 @@ try:
     _RETRYABLE_EXCEPTIONS = _RETRYABLE_EXCEPTIONS + (
         aiormq.exceptions.AMQPConnectionError,
     )
-except (ImportError, AttributeError):
+except ImportError, AttributeError:
     pass
+
+
+def _registered_subscriber_count() -> int:
+    return len(getattr(fs_router, "_subscribers", []))
+
+
+def _ensure_rabbit_subscribers_registered() -> None:
+    """Import all modules that register FastStream subscribers.
+
+    FastStream decorators run at import time.  Keeping these imports explicit in
+    the application factory prevents a startup with declared queues but no
+    consumers after refactors or broker restarts.
+    """
+    before = _registered_subscriber_count()
+    for module_name in _SUBSCRIBER_MODULES:
+        importlib.import_module(module_name)
+    after = _registered_subscriber_count()
+    log.info("RabbitMQ subscribers registered: %d (before=%d)", after, before)
 
 
 async def _start_broker_with_retry() -> None:
@@ -132,10 +160,90 @@ async def _start_broker_with_retry() -> None:
             delay = min(delay * cfg.connect_backoff_factor, cfg.connect_max_delay)
 
 
+async def _rmq_topology_watchdog() -> None:
+    """Periodically re-declare RabbitMQ topology after runtime broker restarts.
+
+    aio-pika robust connections restore consumers after reconnect, but non-durable
+    queues/bindings can be lost when the broker is restarted from a clean or
+    partially restored state.  Re-declaration is idempotent and keeps consumers'
+    queues available without requiring an app restart.
+    """
+    interval = settings.faststream.topology_watchdog_interval
+    while True:
+        await asyncio.sleep(interval)
+        try:
+            await declare_x_q()
+            log.info(
+                "RabbitMQ topology watchdog completed; registered_subscribers=%d",
+                _registered_subscriber_count(),
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            log.warning("RabbitMQ topology watchdog failed; will retry: %s", exc)
+
+
+async def _sync_rmq_device_definitions_on_startup() -> None:
+    """Reconcile RabbitMQ MQTT users and ACL from the devices stored in DB.
+
+    RabbitMQ definitions are persisted in `/var/lib/rabbitmq`, but they can be lost
+    after accidental volume removal or startup from a clean broker.  The DB remains
+    the source of truth for registered devices, so app startup re-applies users,
+    permissions and topic-permissions idempotently.  A PostgreSQL advisory lock
+    prevents a thundering herd when gunicorn starts multiple workers.
+    """
+    from core.services.rmq_admin import RmqAdmin
+
+    for attempt in range(1, _RMQ_DEFINITIONS_SYNC_ATTEMPTS + 1):
+        try:
+            async with db_helper.session_factory() as session:
+                async with session.begin():
+                    lock_acquired = await session.scalar(
+                        text("SELECT pg_try_advisory_xact_lock(:lock_key)"),
+                        {"lock_key": _RMQ_DEFINITIONS_SYNC_LOCK_KEY},
+                    )
+                    if not lock_acquired:
+                        log.info(
+                            "RabbitMQ device ACL sync skipped: another worker holds the lock"
+                        )
+                        return
+
+                    result = await RmqAdmin.set_device_definitions(session)
+
+            log.info("RabbitMQ device ACL sync completed: %s", result)
+            return
+        except Exception as exc:
+            if attempt >= _RMQ_DEFINITIONS_SYNC_ATTEMPTS:
+                log.error(
+                    "RabbitMQ device ACL sync failed after %d attempts; startup continues: %s",
+                    attempt,
+                    exc,
+                )
+                return
+
+            delay = min(2**attempt, 10)
+            log.warning(
+                "RabbitMQ device ACL sync attempt %d/%d failed (%s). Retrying in %ds…",
+                attempt,
+                _RMQ_DEFINITIONS_SYNC_ATTEMPTS,
+                exc,
+                delay,
+            )
+            await asyncio.sleep(delay)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await _start_broker_with_retry()
     await declare_x_q()
+    await _sync_rmq_device_definitions_on_startup()
+    topology_watchdog_task: asyncio.Task | None = None
+    if settings.faststream.topology_watchdog_enabled:
+        topology_watchdog_task = asyncio.create_task(_rmq_topology_watchdog())
+        log.info(
+            "RabbitMQ topology watchdog started: interval=%.1fs",
+            settings.faststream.topology_watchdog_interval,
+        )
     scheduler = AsyncIOScheduler()
     scheduler.configure(jobstores={"default": MemoryJobStore()})
     try:
@@ -164,6 +272,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
 
+    if topology_watchdog_task is not None:
+        topology_watchdog_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await topology_watchdog_task
     await db_helper.dispose()
     scheduler.shutdown()
     # Wrap close() so a broker that is already gone doesn't raise on shutdown.
@@ -210,6 +322,7 @@ def register_static_docs_routes(app: FastAPI) -> None:
 
 
 def create_app(create_custom_static_urls: bool = False) -> FastAPI:
+    _ensure_rabbit_subscribers_registered()
     app = FastAPI(
         title="Leo4",
         version="0.2.1",

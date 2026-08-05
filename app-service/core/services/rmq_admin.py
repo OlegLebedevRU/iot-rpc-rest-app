@@ -15,7 +15,9 @@ class RmqAdmin:
         return devs_online
 
     @classmethod
-    async def repl_devices(cls, session: AsyncSession, api_key: str, dry_run: bool = False):
+    async def repl_devices(
+        cls, session: AsyncSession, api_key: str, dry_run: bool = False
+    ):
         da = await get_factory_device_list(api_key)
         if da and not dry_run:
             await DeviceRepo.add_devices(session, da)
@@ -23,11 +25,10 @@ class RmqAdmin:
 
     @classmethod
     async def set_device_definitions(cls, session: AsyncSession, dry_run: bool = False):
-        names = await RmqAdminApi.get_exist_devices()
-        result = None
-        if names:
-            lu1 = await DeviceRepo.find_missing_devices(session, names)
-            # defns = {"users": [], "permissions": []}
-            if lu1:
-                result = await RmqAdminApi.set_device_definitions(lu1, dry_run=dry_run)
-        return result
+        device_names = [name for name in await DeviceRepo.list(session) if name]
+        if not device_names:
+            return None
+
+        # Always reconcile every device from DB, not only missing RabbitMQ users.
+        # This restores permissions/topic-permissions after RabbitMQ definitions or ACL loss.
+        return await RmqAdminApi.set_device_definitions(device_names, dry_run=dry_run)
