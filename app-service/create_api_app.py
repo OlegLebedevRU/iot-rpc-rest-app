@@ -88,7 +88,7 @@ except ImportError, AttributeError:
 
 
 def _registered_subscriber_count() -> int:
-    return len(getattr(fs_router, "_subscribers", []))
+    return len(getattr(fs_router.broker, "_subscribers", []))
 
 
 def _ensure_rabbit_subscribers_registered() -> None:

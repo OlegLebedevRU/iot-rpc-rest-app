@@ -73,7 +73,7 @@ async def add_one_event(
     msg_headers = getattr(msg, "headers", {}) or {}
     try:
         event_type_code = int(msg_headers.get("event_type_code", 0))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         log.debug(
             "Invalid EVT event_type_code header for billing (expected int): sn=%s raw_value=%s",
             sn,
@@ -148,7 +148,7 @@ async def result(
 
 # Логируем количество подписчиков
 try:
-    count = len(getattr(fs_router, "_subscribers", []))
+    count = len(getattr(fs_router.broker, "_subscribers", []))
     log.info(f"✅ Subscribers registered: {count} handlers")
 except Exception as e:
     log.error(f"Could not log subscribers count: {e}")
