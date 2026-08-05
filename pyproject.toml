@@ -54,3 +54,6 @@ norecursedirs = [
     "examples/**/_deps",
 ]
 
+[tool.black]
+target-version = ["py314"]
+
