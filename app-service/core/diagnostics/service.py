@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+from math import ceil
 from typing import Protocol
 from uuid import UUID, uuid4
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.diagnostics.commands import is_known_command
 from core.diagnostics.schemas import (
@@ -19,6 +22,9 @@ from core.diagnostics.schemas import (
     build_stop_log_task,
 )
 from core.diagnostics.sessions import DiagnosticSession, DiagnosticsSessionRegistry
+from core.crud.device_repo import DeviceRepo
+from core.schemas.device_tasks import TaskCreate
+from core.services.device_tasks import DeviceTasksService
 
 
 class DiagnosticTaskSender(Protocol):
@@ -30,6 +36,57 @@ class NoopDiagnosticTaskSender:
 
     async def send(self, sn: str, task: DiagnosticRpcTask) -> None:
         return None
+
+
+class DeviceTaskDiagnosticTaskSender:
+    """Send diagnostics commands through the existing device-task RPC lifecycle."""
+
+    def __init__(
+        self,
+        *,
+        session: AsyncSession,
+        org_id: int,
+        priority: int = 1,
+    ) -> None:
+        self.session = session
+        self.org_id = org_id
+        self.priority = priority
+
+    @staticmethod
+    def _ttl_minutes(task: DiagnosticRpcTask) -> int:
+        payload_item = task.payload.dt[0]
+        ttl_sec = getattr(payload_item, "ttl_sec", None)
+        if ttl_sec is None:
+            return 1
+        return max(1, ceil(ttl_sec / 60))
+
+    @staticmethod
+    def _ext_task_id(task: DiagnosticRpcTask) -> str:
+        payload_item = task.payload.dt[0]
+        session_id = getattr(payload_item, "session_id")
+        action = getattr(payload_item, "action", None)
+        command_id = getattr(payload_item, "command_id", None)
+        suffix = getattr(action, "value", action) or command_id or "command"
+        return f"diagnostics:{session_id}:{task.method_code}:{suffix}"
+
+    async def send(self, sn: str, task: DiagnosticRpcTask) -> None:
+        device_id = await DeviceRepo.get_device_id(
+            session=self.session,
+            sn=sn,
+            org_id=self.org_id,
+        )
+        if device_id is None:
+            raise ValueError("device_not_available")
+
+        task_create = TaskCreate(
+            ext_task_id=self._ext_task_id(task),
+            device_id=device_id,
+            method_code=task.method_code,
+            priority=self.priority,
+            ttl=self._ttl_minutes(task),
+            payload=task.payload.model_dump(mode="json"),
+        )
+        await DeviceTasksService(self.session, self.org_id).create(task_create)
 
 
 class DiagnosticService:

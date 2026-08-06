@@ -15,7 +15,7 @@ from core.diagnostics.schemas import (
     StartLogMessage,
     StopLogMessage,
 )
-from core.diagnostics.service import DiagnosticService
+from core.diagnostics.service import DeviceTaskDiagnosticTaskSender, DiagnosticService
 from core.diagnostics.sessions import DiagnosticsSessionRegistry
 
 
@@ -114,3 +114,54 @@ async def test_close_browser_sends_cancel_for_active_exec_session():
         CMD_DIAG_CANCEL,
     ]
     assert sender.sent[-1][1].payload.dt[0].reason == "browser_closed"
+
+
+@pytest.mark.asyncio
+async def test_device_task_sender_creates_existing_rpc_task(monkeypatch):
+    created_tasks = []
+
+    async def fake_get_device_id(*, session, sn, org_id):
+        assert sn == "SN001"
+        assert org_id == 7
+        return 123
+
+    async def fake_create(self, task_create):
+        created_tasks.append(task_create)
+
+    monkeypatch.setattr(
+        "core.diagnostics.service.DeviceRepo.get_device_id",
+        fake_get_device_id,
+    )
+    monkeypatch.setattr(
+        "core.diagnostics.service.DeviceTasksService.create",
+        fake_create,
+    )
+
+    service = DiagnosticService(
+        DiagnosticsSessionRegistry(),
+        DeviceTaskDiagnosticTaskSender(session=object(), org_id=7),  # type: ignore[arg-type]
+    )
+
+    session = await service.start_log(
+        "SN001",
+        StartLogMessage(type="start_log", level="debug", ttl_sec=120),
+    )
+
+    assert len(created_tasks) == 1
+    task = created_tasks[0]
+    assert task.device_id == 123
+    assert task.method_code == CMD_DIAG_STREAM_CONTROL
+    assert task.ttl == 2
+    assert task.payload == {
+        "dt": [
+            {
+                "action": "start",
+                "session_id": str(session.session_id),
+                "stream": "esp32-log",
+                "level": "debug",
+                "ttl_sec": 120,
+                "max_rate_bps": 8192,
+                "topic": "dev/SN001/out",
+            }
+        ]
+    }

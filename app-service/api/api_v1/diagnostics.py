@@ -18,7 +18,7 @@ from core.diagnostics.schemas import (
     ExecDiagnosticMessage,
     StopLogMessage,
 )
-from core.diagnostics.service import DiagnosticService
+from core.diagnostics.service import DeviceTaskDiagnosticTaskSender, DiagnosticService
 from core.diagnostics.sessions import DiagnosticSession, registry
 from core.logging_config import setup_module_logger
 
@@ -92,7 +92,10 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
         return
 
     await websocket.accept()
-    service = DiagnosticService(registry)
+    service = DiagnosticService(
+        registry,
+        DeviceTaskDiagnosticTaskSender(session=session, org_id=org_id),
+    )
     forwarders: dict[UUID, asyncio.Task] = {}
 
     async def register_forwarder(session: DiagnosticSession) -> None:
@@ -115,6 +118,7 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
                 if message.type is BrowserMessageType.START_LOG:
                     session = await service.start_log(sn, message)  # type: ignore[arg-type]
                     await register_forwarder(session)
+                    await service.emit_status(session, "started")
                 elif message.type is BrowserMessageType.STOP_LOG:
                     stop_message = message
                     assert isinstance(stop_message, StopLogMessage)
@@ -127,6 +131,7 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
                     assert isinstance(exec_message, ExecDiagnosticMessage)
                     session = await service.exec(sn, exec_message)
                     await register_forwarder(session)
+                    await service.emit_status(session, "started")
                 elif message.type is BrowserMessageType.CANCEL:
                     cancel_message = message
                     assert isinstance(cancel_message, CancelDiagnosticMessage)
