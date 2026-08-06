@@ -5,8 +5,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from pydantic import ValidationError
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.api_v1.api_depends import Session_dep
 from core import settings
+from core.crud.device_repo import DeviceRepo
 from core.diagnostics.schemas import (
     BackendErrorMessage,
     BrowserMessageAdapter,
@@ -27,10 +30,12 @@ router = APIRouter(
 
 
 async def _resolve_websocket_org_id(websocket: WebSocket) -> int | None:
-    api_key = websocket.headers.get("x-api-key")
-    if api_key and api_key in settings.api_keys:
-        return settings.api_keys[api_key]
+    """Resolve org_id from the trusted header injected by nginx-jwt.
 
+    Browser diagnostics WebSockets are intentionally JWT-only: nginx validates
+    the accessToken cookie, extracts the orgId claim and forwards it as this
+    header. API-key fallback is not allowed for this channel.
+    """
     org_id = websocket.headers.get("orgId") or websocket.headers.get("orgid")
     if org_id is None:
         return None
@@ -38,6 +43,16 @@ async def _resolve_websocket_org_id(websocket: WebSocket) -> int | None:
         return int(org_id)
     except ValueError:
         return None
+
+
+async def _is_websocket_device_allowed(
+    session: AsyncSession,
+    *,
+    sn: str,
+    org_id: int,
+) -> bool:
+    device_id = await DeviceRepo.get_device_id(session=session, sn=sn, org_id=org_id)
+    return device_id is not None
 
 
 async def _forward_session_queue(
@@ -60,9 +75,19 @@ async def _send_error(
 
 
 @router.websocket("/ws/devices/{sn}")
-async def diagnostics_ws(websocket: WebSocket, sn: str) -> None:
+async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) -> None:
     org_id = await _resolve_websocket_org_id(websocket)
     if org_id is None:
+        log.warning("Diagnostics websocket rejected: missing/invalid org_id sn=%s", sn)
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
+    if not await _is_websocket_device_allowed(session, sn=sn, org_id=org_id):
+        log.warning(
+            "Diagnostics websocket rejected: device not allowed sn=%s org_id=%s",
+            sn,
+            org_id,
+        )
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 

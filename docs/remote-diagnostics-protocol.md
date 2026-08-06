@@ -17,7 +17,7 @@ Remote Diagnostics добавляет единый механизм для:
 - диагностических команд из заранее заданного allowlist;
 - доставки потока в браузер через цепочку `device → mqtt → backend → websocket → browser`.
 
-Авторизация и владение устройствами остаются в существующей backend-инфраструктуре. Этот протокол не вводит новую модель авторизации.
+Авторизация и владение устройствами остаются в существующей backend-инфраструктуре. Этот протокол не вводит новую модель авторизации: браузерный WebSocket проходит через `nginx-jwt`, где валидируется существующий JWT access-token, а backend дополнительно проверяет принадлежность устройства организации из JWT.
 
 ---
 
@@ -285,9 +285,30 @@ app-service/
 
 ### WebSocket endpoint
 
+Публичный browser endpoint через `nginx-jwt`:
+
+```text
+GET /api/jwt/v1/diagnostics/ws/devices/{sn}
+```
+
+Внутренний backend endpoint после rewrite/proxy:
+
 ```text
 GET /api/v1/diagnostics/ws/devices/{sn}
 ```
+
+### WebSocket auth и ownership
+
+Для браузерного подключения используется существующий JWT-контур:
+
+1. frontend открывает `wss://dev.leo4.ru/api/jwt/v1/diagnostics/ws/devices/{sn}`;
+2. JWT передаётся как cookie `accessToken` — это важно, потому что browser WebSocket API не позволяет надёжно выставлять произвольный `Authorization` header;
+3. `nginx-jwt` валидирует JWT (`RS256`) и извлекает claim `orgId`;
+4. `nginx-jwt` прокидывает в backend только доверенный заголовок `orgId: <jwt_claim_orgId>`;
+5. backend до `websocket.accept()` проверяет, что `{sn}` существует, не удалён и привязан к `orgId`;
+6. при отсутствии валидного JWT, отсутствии/невалидном `orgId` или чужом `{sn}` соединение отклоняется (`1008 Policy Violation` на backend-уровне; nginx может вернуть `401/403` до upgrade).
+
+Клиенту запрещено самостоятельно задавать заголовок `orgId`: внешний nginx-конфиг отклоняет такие запросы, чтобы исключить подмену организации.
 
 ### Browser → Backend messages
 

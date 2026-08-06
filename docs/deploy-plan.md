@@ -19,12 +19,12 @@
 
 | Сервис          | Образ / билд                                | Сеть                               | Порты публикуемые                  | Назначение                                                                 |
 |-----------------|---------------------------------------------|------------------------------------|------------------------------------|----------------------------------------------------------------------------|
-| `app1`          | build `docker-files/app-service/Dockerfile` | `rabbitmq_network`, `pg_network`   | —                                  | FastAPI/FastStream приложение, поднимается через `prestart.sh`+`appup`     |
+| `app1`          | `ghcr.io/oleglebedevru/iot-rpc-rest-app/app-service:${IMAGE_TAG:-latest}` + build fallback `docker-files/app-service/Dockerfile` | `rabbitmq_network`, `pg_network` | — | FastAPI/FastStream приложение, поднимается через `prestart.sh`+`appup`, env из `./app-service/.env` |
 | `rabbitmq`      | `rabbitmq:4-management`                     | `rabbitmq_network`                 | `5672`, `8883`                     | AMQP + MQTT-плагин, конфиг и `definitions.json` через bind-mount           |
 | `pg`            | `postgres`                                  | `pg_network`                       | `5432`                             | PostgreSQL с `pgdata` volume                                               |
 | `pgadmin`       | `dpage/pgadmin4`                            | `pg_network`                       | —                                  | UI к Postgres                                                              |
-| `nginx`         | build `docker-files/nginx-jwt/Dockerfile`   | `rabbitmq_network`, `pg_network`   | `80`, `443`                        | Внешний reverse-proxy + JWT-модуль, внешние сертификаты                    |
-| `nginx-mutual`  | build `docker-files/nginx-mutual/Dockerfile`| `rabbitmq_network`, `pg_network`   | `4443`                             | Внутренний mTLS reverse-proxy для устройств                                |
+| `nginx`         | `ghcr.io/oleglebedevru/iot-rpc-rest-app/nginx-jwt:${IMAGE_TAG:-latest}` + build fallback `docker-files/nginx-jwt/Dockerfile` | `rabbitmq_network`, `pg_network` | `80`, `443`, `1443`, `1444` | Внешний reverse-proxy + JWT-модуль, внешние сертификаты через bind-mount |
+| `nginx-mutual`  | `ghcr.io/oleglebedevru/iot-rpc-rest-app/nginx-mutual:${IMAGE_TAG:-latest}` + build fallback `docker-files/nginx-mutual/Dockerfile` | `rabbitmq_network`, `pg_network` | `4443` | Внутренний mTLS reverse-proxy для устройств, legacy-сертификаты через bind-mount |
 | `certbot`       | `certbot/certbot:latest`                    | —                                  | —                                  | Выпуск/продление LE-сертификатов через webroot                             |
 | `avahi`         | `ydkn/avahi`                                | `host`                             | —                                  | Опциональный mDNS для локального деплоя                                    |
 
@@ -40,29 +40,39 @@ Volumes: `pgdata`, `rabbitmq_data`. Bind-mounts:
   `ENTRYPOINT ["./prestart.sh"]` (выполняет `alembic upgrade head`),
   `CMD ["./appup"]`.
 - **`docker-files/nginx-jwt/Dockerfile`** — `debian:bookworm-slim`, ставит
-  nginx mainline `1.29.4*` из репозитория nginx.org, выкачивает бинарный
-  модуль `ngx-http-auth-jwt-module 2.4.0` с GitHub Releases, конфиг nginx
-  пишется heredoc’ом в Dockerfile.
+  nginx mainline `1.31.1*` из репозитория nginx.org, выкачивает бинарный
+  модуль `ngx-http-auth-jwt-module 2.5.0` (`libjwt-1.18.4`, сборка под
+  nginx `1.31.1`) с GitHub Releases, создаёт совместимый symlink
+  `libjwt.so.2` → `libjwt.so.0`, конфиг nginx пишется heredoc’ом в
+  Dockerfile и валидируется через `nginx -t`. Legacy OpenSSL/SECLEVEL=0
+  в этом образе не включаются: контур для legacy-сертификатов вынесен в
+  отдельный `nginx-mutual`.
 - **`docker-files/nginx-mutual/Dockerfile`** — `debian:bookworm-slim` + nginx
-  из stock-репозитория, копирует `crt/*` и `nginx-configs/.../internal_ssl.conf`.
+  из stock-репозитория, включает legacy provider OpenSSL и `SECLEVEL=0`,
+  копирует публичный `docker-files/nginx-mutual/ca_legacy.crt` и
+  `nginx-configs/.../internal_ssl.conf`; секретные сертификаты из `./crt/`
+  в образ не копируются и монтируются в рантайме.
 - **`docker-files/rmq/compose.yaml`** — отдельный compose только для RabbitMQ
   (по сути дубликат сервиса `rabbitmq` из корневого compose — кандидат на
   удаление либо синхронизацию).
 
-### 1.3. Слабые места текущего DevOps
+### 1.3. Исторически устранённые и оставшиеся слабые места DevOps
 
-1. **Сборка происходит на целевой машине** (`build:` в compose) — каждый
-   деплой = `apt-get update`, скачивание модулей, сборка слоёв; долго,
-   нестабильно (зависит от внешних зеркал nginx.org/GitHub Releases),
-   занимает CPU/диск прод-VM.
-2. **Нет тегирования и отката**: образы строятся «по месту», нет
-   immutable-артефакта, привязанного к git-SHA.
+1. **Сборка на целевой машине для собственных образов устранена как основной
+   сценарий**: последние деплои используют `docker compose pull` из GHCR.
+   `build:` в `compose.yaml` сохранён только как fallback локальной сборки.
+2. **Тегирование и откат частично решены**: собственные образы стали
+   immutable-артефактами в GHCR с тегами `sha-*`, branch, `latest` и semver;
+   откат возможен через `IMAGE_TAG=sha-<prev>` + `docker compose pull/up`.
+   Не хватает автоматизированного CD/approve-flow.
 3. **Секреты в открытом виде**: пароли БД и RabbitMQ зашиты в `compose.yaml`
    и `definitions.json`, сертификаты лежат в `./crt/` рядом с кодом.
 4. **PostgreSQL в одном контейнере с приложением** — нет независимого
    бэкапа/HA/мониторинга, том `pgdata` делит судьбу с VM.
 5. **Дублирование compose-файлов** (`compose.yaml` vs `docker-files/rmq/compose.yaml`).
-6. **Нет CI/CD**: нет `.github/workflows/`, нет линта/тестов/сканов на PR.
+6. **CI/CD покрыт частично**: `.github/workflows/build-and-push.yaml` уже
+   собирает и публикует три собственных образа в GHCR, но отдельные
+   workflow для lint/test/security scan и автоматического CD ещё не добавлены.
 7. **Сети `rabbitmq_network` и `pg_network`** соединяют всё со всем — после
    выноса PG `pg_network` для `nginx`/`rabbitmq` не нужен.
 8. **`avahi` с `network_mode: host`** — несовместим со многими облачными
@@ -89,7 +99,7 @@ Volumes: `pgdata`, `rabbitmq_data`. Bind-mounts:
                 │  └──────────────────────┘                  │
                 └────────────────────────────────────────────┘
                           ▲
-                          │  docker pull ghcr.io/<org>/<svc>:<sha>
+                          │  docker pull ghcr.io/oleglebedevru/iot-rpc-rest-app/<svc>:<sha>
                           │
                 ┌─────────┴──────────┐
                 │  GitHub Actions    │
@@ -105,7 +115,10 @@ Volumes: `pgdata`, `rabbitmq_data`. Bind-mounts:
 - `pg_network` исчезает; `pgadmin` остаётся в `rabbitmq_network` (или в
   отдельной internal-сети) и ходит в managed PG напрямую.
 - Сети переименовываются в нейтральное `app_net` / `edge_net`.
-- В `compose.yaml` секция `build:` заменяется на `image: ghcr.io/<org>/<repo>/<service>:<tag>`.
+- В production-compose секция `build:` заменяется на
+  `image: ghcr.io/oleglebedevru/iot-rpc-rest-app/<service>:<tag>`; в
+  текущем корневом `compose.yaml` для обратной совместимости уже оставлены
+  оба поля: `image:` для pull из GHCR и `build:` как fallback локальной сборки.
 - `alembic upgrade head` (из `prestart.sh`) теперь применяется к managed PG —
   у пользователя БД должны быть права на DDL, либо миграции выносятся в
   отдельный CI-job, выполняющийся под админ-ролью.
@@ -160,11 +173,11 @@ services:
 
 ---
 
-## 4. Переход на GitHub Packages (GHCR)
+## 4. GitHub Packages (GHCR): фактическое состояние
 
 ### 4.1. Стоит ли это делать (да, и вот почему)
 
-| Критерий                       | Build на VM (сейчас)                        | Pull из GHCR (план)                                |
+| Критерий                       | Build на VM (fallback)                      | Pull из GHCR (сейчас)                              |
 |--------------------------------|---------------------------------------------|----------------------------------------------------|
 | Время деплоя                   | минуты (apt-get + сборка модулей)           | секунды (pull тонких слоёв)                        |
 | Воспроизводимость              | плавающая (зависит от зеркал nginx.org)     | immutable digest, привязка к git-SHA               |
@@ -175,9 +188,15 @@ services:
 | Сканирование уязвимостей       | нет                                         | trivy/grype в pipeline на каждый push              |
 | Совместная сборка нескольких VM | каждая собирает заново                     | один артефакт на все                               |
 
-**Вывод:** для трёх собственных образов (`app-service`, `nginx-jwt`,
-`nginx-mutual`) переход на GHCR — однозначно эффективнее прямой сборки на
-целевой машине. Сторонние образы (`rabbitmq:4-management`,
+**Фактический статус:** для трёх собственных образов (`app-service`,
+`nginx-jwt`, `nginx-mutual`) переход на GHCR уже выполнен. Образы
+публикуются workflow `.github/workflows/build-and-push.yaml` в public
+GitHub Packages namespace `ghcr.io/oleglebedevru/iot-rpc-rest-app`, а
+последние ручные деплои на VM выполняются через `docker compose pull` +
+`docker compose up -d`. Локальная сборка на VM сохранена как fallback за
+счёт оставленных секций `build:` в `compose.yaml`.
+
+Сторонние образы (`rabbitmq:4-management`,
 `dpage/pgadmin4`, `certbot/certbot`) тянутся напрямую с Docker Hub — их
 дублировать в GHCR нужно только если цель — отвязаться от Docker Hub
 rate-limit или зафиксировать digest (рекомендуется делать
@@ -185,22 +204,27 @@ rate-limit или зафиксировать digest (рекомендуется 
 
 ### 4.2. Что публикуется
 
-- `ghcr.io/<org>/iot-rpc-rest-app/app-service:<tag>`
-- `ghcr.io/<org>/iot-rpc-rest-app/nginx-jwt:<tag>`
-- `ghcr.io/<org>/iot-rpc-rest-app/nginx-mutual:<tag>`
+- `ghcr.io/oleglebedevru/iot-rpc-rest-app/app-service:<tag>`
+- `ghcr.io/oleglebedevru/iot-rpc-rest-app/nginx-jwt:<tag>`
+- `ghcr.io/oleglebedevru/iot-rpc-rest-app/nginx-mutual:<tag>`
 
 Теги:
-- `sha-<git-sha-short>` — для каждого пуша в `main` (используется в проде);
-- `pr-<num>` — для PR (для smoke-тестов);
-- `latest` — алиас на последний `main` (только для удобства, в compose
+- `sha-<git-sha-short>` — для каждого push/tag/manual build
+  (рекомендуемый тег для воспроизводимого деплоя);
+- имя ветки (`master`, `main` и т. п.) — генерируется
+  `docker/metadata-action` для branch builds;
+- `latest` — алиас на последнюю default-ветку (только для удобства, в compose
   использовать SHA-теги);
-- `vX.Y.Z` — на git-tag (релизы).
+- `vX.Y.Z` и `vX.Y` — на semver git-tag `v*.*.*` (релизы).
+
+Для `pull_request` workflow выполняет только build-проверку (`push: false`),
+поэтому PR-образы в GHCR не публикуются.
 
 ### 4.3. Конфигурация Packages
 
-- Видимость пакетов: **private** (если код внутренний) либо **public**
-  (если ок раздавать образы); права читать выдаются compute-VM через
-  PAT/`GITHUB_TOKEN` deploy-ключ.
+- Видимость пакетов: **public**. VM может выполнять `docker compose pull`
+  без `docker login ghcr.io`. Если в будущем пакеты будут переведены в
+  private, на VM понадобится PAT с `read:packages`.
 - Включить **retention policy**: оставлять последние N untagged + все
   тегированные `vX.Y.Z`.
 - Включить **vulnerability scanning** через Dependabot / Trivy action.
@@ -213,9 +237,9 @@ rate-limit или зафиксировать digest (рекомендуется 
 
 | Артефакт                                  | Где живёт                  | Как обновляется                                  |
 |-------------------------------------------|----------------------------|--------------------------------------------------|
-| Исходники приложения и Dockerfile         | этот репозиторий           | PR → `main`                                      |
-| Образы (3 шт.)                            | GHCR (`ghcr.io/<org>/...`) | CI на push в `main` / git-tag                    |
-| `compose.yaml` для прода                  | этот репозиторий, ветка `main` или отдельный `deploy/` | копируется на VM при деплое      |
+| Исходники приложения и Dockerfile         | этот репозиторий           | PR → `master` / `main`                           |
+| Образы (3 шт.)                            | GHCR (`ghcr.io/oleglebedevru/iot-rpc-rest-app/...`) | CI на push в `master`/`main`, git-tag и ручной запуск |
+| `compose.yaml` для прода                  | этот репозиторий, ветка `master` или отдельный `deploy/` | копируется/обновляется на VM при деплое |
 | `.env` с секретами (PG, JWT, RMQ)         | только на VM (не в git)    | вручную при провижене + GitHub Environments      |
 | Сертификаты `crt/`                        | секрет-хранилище cloud.ru / Vault, монтируются на VM | вне git                                  |
 | Managed PostgreSQL                         | cloud.ru DBaaS             | terraform/UI                                     |
@@ -261,37 +285,42 @@ PGADMIN_DEFAULT_PASSWORD=***
 
 # образы
 IMAGE_TAG=sha-abcdef0
-GHCR_OWNER=<org>
 ```
 
 ---
 
-## 6. Промежуточный вариант «Build only» (без изменения инфраструктуры)
+## 6. Промежуточный вариант «Build only» — внедрённый текущий режим
 
-Цель — получить **первое реальное преимущество от CI** (быстрая,
-воспроизводимая сборка образов в Actions с кэшированием и публикацией в
-GitHub Packages), **не трогая** при этом текущую инфраструктуру:
+Цель этого шага была — получить **первое реальное преимущество от CI**
+(быстрая, воспроизводимая сборка образов в Actions с кэшированием и
+публикацией в GitHub Packages), **не трогая** при этом текущую
+инфраструктуру.
+
+**Фактический статус:** шаг внедрён. Три собственных образа уже хранятся
+в public GHCR namespace `ghcr.io/oleglebedevru/iot-rpc-rest-app`, а
+последние деплои выполняются с VM через `docker compose pull` из GHCR.
 
 - Managed PostgreSQL **не создаётся**, `pg` остаётся контейнером в
   `compose.yaml` как сейчас.
 - Новые сервисы в cloud.ru **не заводятся**, VM/сети/сертификаты — те же.
 - На VM подъём контейнеров остаётся **ручным, по одному сервису**, как и
-  сейчас, — меняется только источник образа: вместо `docker compose build`
-  делаем `docker compose pull` из GHCR.
+  сейчас, — источник образа уже изменён: вместо `docker compose build`
+  используется `docker compose pull` из GHCR.
 - Никакого авто-CD, SSH-ключей в Actions, self-hosted runner’ов,
   Watchtower и т. п. — это всё откладывается до Вариантов A–D раздела 7.
 
-Этот шаг — безопасный «прокси» к целевой архитектуре: он валидирует
-сборочный pipeline и GHCR на боевых образах, не меняя поведение
+Этот шаг — безопасный «прокси» к целевой архитектуре: он уже валидирует
+сборочный pipeline и GHCR на боевых образах, не меняя инфраструктуру
 прод-машины.
 
 ### 6.1. Что меняется в репозитории
 
-1. **`.github/workflows/build-and-push.yaml`** — единственный новый
-   workflow. Триггеры:
-   - `push` в `main` (для основного потока);
+1. **`.github/workflows/build-and-push.yaml`** — текущий workflow сборки
+   и публикации образов. Триггеры:
+   - `push` в `master` и `main`;
+   - git tags `v*.*.*`;
    - `workflow_dispatch` (ручной перезапуск под выбранную ветку/SHA);
-   - опционально `pull_request` — только `build` без `push`, чтобы
+   - `pull_request` в `master`/`main` — только `build` без `push`, чтобы
      ловить поломку сборки на ревью.
 
    Содержание job’ов (matrix по 3 образам — `app-service`, `nginx-jwt`,
@@ -300,22 +329,23 @@ GitHub Packages), **не трогая** при этом текущую инфр�
    - `docker/setup-buildx-action@v3` — buildx с поддержкой gha-кэша;
    - `docker/login-action@v3` к `ghcr.io` (`GITHUB_TOKEN`, permissions
      `packages: write`, `contents: read`);
-   - `docker/metadata-action@v5` — теги `sha-<short>`, `latest` (только
-     для `main`), `vX.Y.Z` (на git-tag);
+   - `docker/metadata-action@v5` — теги `sha-<short>`, имя ветки,
+     `latest` (только для default branch), `vX.Y.Z` и `vX.Y` (на semver
+     git-tag);
    - `docker/build-push-action@v6`:
      - `context` и `file` для каждого Dockerfile,
      - `push: true` (для `pull_request` — `false`),
      - `cache-from: type=gha,scope=<svc>`,
      - `cache-to: type=gha,mode=max,scope=<svc>` —
-       это и есть «Cashes», которые упомянуты в задаче: слои nginx-модуля,
+       это и есть кэш слоёв: слои nginx-модуля,
        `apt-get`, `uv sync` будут кэшироваться между прогонами Actions.
 
 2. **`compose.yaml`** — минимально-инвазивная правка для трёх собственных
    сервисов (`app1`, `nginx`, `nginx-mutual`): к существующей секции
-   `build:` **добавляется** `image:` с тегом GHCR, например:
+   `build:` **добавлено** `image:` с тегом GHCR, например:
    ```
    app1:
-     image: ghcr.io/<org>/iot-rpc-rest-app/app-service:${IMAGE_TAG:-latest}
+     image: ghcr.io/oleglebedevru/iot-rpc-rest-app/app-service:${IMAGE_TAG:-latest}
      build:
        context: .
        dockerfile: docker-files/app-service/Dockerfile
@@ -331,14 +361,15 @@ GitHub Packages), **не трогая** при этом текущую инфр�
    Сервисы без собственной сборки (`rabbitmq`, `pg`, `pgadmin`,
    `certbot`, `avahi`) **не трогаются**.
 
-3. **`.env` на VM** (или `export` в shell) — добавляется одна переменная:
+3. **`.env` на VM** (или `export` в shell) — используется переменная:
    ```
    IMAGE_TAG=sha-abcdef0
    ```
    По умолчанию (если не задана) compose возьмёт `:latest`. Для
    воспроизводимости в проде рекомендуется явно фиксировать SHA-тег.
 
-4. **`docs/deploy-plan.md`** — этот раздел.
+4. **`docs/deploy-plan.md`** — этот раздел поддерживается как описание
+   текущего режима и следующих шагов.
 
 Чего **не** меняем на этом шаге:
 - секции `pg`, `pgdata`, `pg_network` остаются как есть;
@@ -352,7 +383,7 @@ GitHub Packages), **не трогая** при этом текущую инфр�
 Это побочный, но **обязательный** шаг для «Build only»: без него `app1`
 не поднимется из готового образа.
 
-**Как это работает сейчас (as-is, неявно):**
+**Как это работало до правки Build only (as-is, неявно):**
 
 - Конфиг приложения читается через `pydantic-settings`
   (`app-service/core/config.py`):
@@ -374,7 +405,7 @@ GitHub Packages), **не трогая** при этом текущую инфр�
   каталога `app-service/`, включая лежащий рядом `app-service/.env` (он
   сейчас существует на VM и используется). По сути `.env`
   **запекается в образ**.
-- В `compose.yaml` у `app1` сейчас **нет** ни `env_file:`, ни
+- В `compose.yaml` у `app1` тогда **не было** ни `env_file:`, ни
   `environment:`, ни bind-mount’а `.env` (только `./logs:/var/log/app`).
   Compose сам по себе **не** монтирует `./app-service/.env` в контейнер
   и **не** делает `env_file` неявно: автоматический `./.env` рядом с
@@ -388,11 +419,11 @@ git). В образе будет только `/app/.env.template` (значен
 прокинет → `app1` либо упадёт на обязательных полях (`db.url`,
 `faststream.url`), либо стартанёт с заглушками, что хуже.
 
-**Минимальная неконфликтующая правка `compose.yaml`** для `app1`:
+**Внесённая минимальная неконфликтующая правка `compose.yaml`** для `app1`:
 
 ```
 app1:
-  image: ghcr.io/<org>/iot-rpc-rest-app/app-service:${IMAGE_TAG:-latest}
+  image: ghcr.io/oleglebedevru/iot-rpc-rest-app/app-service:${IMAGE_TAG:-latest}
   build:
     context: .
     dockerfile: docker-files/app-service/Dockerfile
@@ -484,17 +515,17 @@ ERROR: failed to compute cache key: "/crt/key_0000.pem": not found
 
 ### 6.3. Конфигурация GitHub Packages
 
-- Видимость пакетов на старте — **public** (проще: `docker pull` с VM
-  работает без логина) **или** **private** + один PAT с `read:packages`
-  на VM (`docker login ghcr.io -u <bot> --password-stdin`).
-  Рекомендуется сразу **private** + PAT, чтобы потом не «разворачивать»
-  обратно.
+- Видимость пакетов сейчас — **public**. `docker pull` / `docker compose pull`
+  с VM работает без `docker login ghcr.io`.
+- Если в будущем пакеты переводятся в **private**, на VM понадобится один
+  PAT с `read:packages` (`docker login ghcr.io -u <bot> --password-stdin`).
 - Retention: оставлять последние ~20 untagged + все тегированные
   (настраивается в Settings → Packages → конкретный package).
-- Никаких GitHub Environments, reviewers, secrets кроме `GITHUB_TOKEN`
-  и (опционально) `GHCR_READ_PAT` для VM — пока не нужно.
+- Для текущего Build only режима не нужны GitHub Environments, reviewers,
+  SSH-секреты или `GHCR_READ_PAT`: `GITHUB_TOKEN` используется только в
+  Actions для публикации public-пакетов.
 
-### 6.4. Ручной деплой на VM (новый флоу, по сервисам)
+### 6.4. Ручной деплой на VM (текущий флоу, по сервисам)
 
 Подключение по SSH к существующей VM, в каталоге репозитория
 (`/opt/iot-rpc-rest-app` или где он лежит сейчас):
@@ -509,10 +540,11 @@ ERROR: failed to compute cache key: "/crt/key_0000.pem": not found
 # 1. Подтянуть актуальные compose.yaml / конфиги / миграции
 git pull
 
-# 2. (один раз) залогиниться в GHCR, если пакеты private
-echo "$GHCR_READ_PAT" | docker login ghcr.io -u <bot-user> --password-stdin
+# 2. GHCR packages public: docker login не нужен.
+# Если пакеты когда-нибудь станут private:
+# echo "$GHCR_READ_PAT" | docker login ghcr.io -u <bot-user> --password-stdin
 
-# 3. Зафиксировать тег образов на этот деплой (короткий git SHA из main)
+# 3. Зафиксировать тег образов на этот деплой (короткий git SHA из master/main)
 export IMAGE_TAG=sha-abcdef0
 
 # 4. По одному сервису — pull + up (как сейчас делается build + up)
@@ -556,8 +588,8 @@ docker image prune -f
   предсказуемый откат;
 - появляется кэш слоёв (`type=gha`) — повторные сборки в Actions
   становятся быстрыми;
-- проверена интеграция с GHCR на боевых образах перед более
-  серьёзными шагами (Managed PG, авто-CD).
+- интеграция с GHCR проверена на боевых образах и последних ручных
+  деплоях перед более серьёзными шагами (Managed PG, авто-CD).
 
 **Что осознанно остаётся «как сейчас»:**
 
@@ -572,26 +604,29 @@ docker image prune -f
 ### 6.7. Чеклист «Build only сделано»
 
 - [x] `.github/workflows/build-and-push.yaml` собирает 3 образа и пушит
-      в GHCR с тегами `sha-<sha>` и `latest` (для `main`).
+      в public GHCR с тегами `sha-<sha>`, branch-тегами, `latest` для
+      default branch и semver-тегами.
 - [x] В `compose.yaml` у `app1`, `nginx`, `nginx-mutual` добавлено поле
-      `image: ghcr.io/.../<svc>:${IMAGE_TAG:-latest}` рядом с `build:`.
+      `image: ghcr.io/oleglebedevru/iot-rpc-rest-app/<svc>:${IMAGE_TAG:-latest}`
+      рядом с `build:`.
 - [x] У `app1` в `compose.yaml` добавлен `env_file: ./app-service/.env`
       (см. §6.2); файл `app-service/.env` присутствует на VM и не
       закоммичен в git.
 - [x] У `nginx-mutual` секретные сертификаты вынесены из Dockerfile в
       bind-mount `./crt/...:/crt/...:ro` (см. §6.2.1) — без этого
       workflow `build-and-push` падает на сборке `nginx-mutual`.
-- [ ] На VM выполнен разовый `docker login ghcr.io` (если private).
-- [ ] Прогнан ручной флоу `git pull` → `docker compose pull <svc>` →
+- [x] GHCR packages public: разовый `docker login ghcr.io` на VM не нужен
+      для текущего режима.
+- [x] Прогнан ручной флоу `git pull` → `docker compose pull <svc>` →
       `docker compose up -d <svc>` по каждому из трёх сервисов.
 - [ ] Проверено, что старый сценарий (`docker compose build <svc>` +
       `up -d <svc>`) по-прежнему работает на случай fallback.
 - [x] Документирован в `docs/deploy-plan.md` (этот раздел) и при
       необходимости — короткой памяткой в `README` репозитория.
 
-После того как этот шаг отработан и стабилизирован, можно переходить к
-разделу 7 (полная автоматизация деплоя) и к выносу PG в managed-сервис
-(раздел 3).
+Так как этот шаг уже отработан на последних деплоях, следующий
+практический этап — раздел 7 (полная автоматизация деплоя) и/или вынос
+PG в managed-сервис (раздел 3).
 
 ---
 
@@ -608,28 +643,31 @@ docker image prune -f
 1. `ci.yaml` — на каждый PR: `uv sync`, `pytest`, `black --check`,
    `docker build` без push (чтобы не публиковать недопроверенное), Trivy
    scan локально собранных образов.
-2. `build-and-push.yaml` — на push в `main` и git-tag:
+2. `build-and-push.yaml` — уже существует; работает на push в
+   `master`/`main`, PR, `workflow_dispatch` и git-tag `v*.*.*`:
    - `docker/setup-buildx-action`
    - `docker/login-action` к `ghcr.io` (`GITHUB_TOKEN` с правом
      `packages: write`)
    - matrix по 3 образам: `app-service`, `nginx-jwt`, `nginx-mutual`
    - `docker/build-push-action` с `cache-from/to: type=gha` и тегами
-     `sha-<sha>`, `latest` (и `vX.Y.Z` на тег)
+     `sha-<sha>`, branch, `latest`, `vX.Y.Z`/`vX.Y` на semver tag.
 3. `deploy.yaml` — `workflow_run` после успешного `build-and-push`
    (или ручной `workflow_dispatch` с выбором тега, или автотриггер на
-   `main`):
+   `master`/`main`):
    - использует **GitHub Environment** `production` с required reviewers
      (защита от случайного деплоя);
    - `appleboy/ssh-action` или нативный `ssh -i $KEY` на VM:
      ```
      cd /opt/iot-rpc-rest-app
      export IMAGE_TAG=sha-${{ github.sha }}
-     echo "$GHCR_TOKEN" | docker login ghcr.io -u <bot> --password-stdin
+     # GHCR packages сейчас public; login нужен только если пакеты станут private.
+     # echo "$GHCR_TOKEN" | docker login ghcr.io -u <bot> --password-stdin
      docker compose -f compose.prod.yaml pull
      docker compose -f compose.prod.yaml up -d
      docker image prune -f
      ```
-   - секреты (`SSH_KEY`, `GHCR_TOKEN`, `VM_HOST`) — в `Environments → production`.
+   - секреты (`SSH_KEY`, `VM_HOST`; `GHCR_TOKEN` только если packages private)
+     — в `Environments → production`.
 
 **Плюсы:** просто, бесплатно, не требует агента на VM.
 **Минусы:** SSH-ключ в Actions; одна VM = одна цель; нет «pull-модели».
@@ -654,12 +692,13 @@ docker compose -f compose.prod.yaml up -d
 **Минусы:** runner = новый сервис, который надо обновлять; даёт CI-доступ
 на прод (нужен ограниченный юзер + sudo-правила только на `docker compose`).
 
-### Вариант C. Pull-модель: Watchtower / Diun + private GHCR
+### Вариант C. Pull-модель: Watchtower / Diun + GHCR
 
-На VM крутится `containrrr/watchtower`, настроенный на private GHCR
-(`REPO_USER`+`REPO_PASS` = bot+PAT), интервал, например, 60 сек. CI просто
-пушит новый тег `latest` (или используется `app1:main`), Watchtower сам
-обнаруживает новый digest и перезапускает контейнеры.
+На VM крутится `containrrr/watchtower` или Diun. Для текущих public GHCR
+packages логин не нужен; если packages станут private, добавляются
+`REPO_USER`+`REPO_PASS` = bot+PAT. CI пушит новый тег `latest` (или
+используется branch tag вроде `master`), Watchtower сам обнаруживает новый
+digest и перезапускает контейнеры.
 
 **Плюсы:** ноль кастомного кода деплоя, GitHub ничего не знает про VM.
 **Минусы:** меньше контроля (нет approve-флоу, нет порядка миграций),
@@ -675,7 +714,8 @@ docker compose -f compose.prod.yaml up -d
   - кладёт `compose.prod.yaml` и `.env` (значения из Ansible Vault или
     GitHub Secrets);
   - монтирует сертификаты из секрет-хранилища;
-  - выполняет `docker login ghcr.io` + `docker compose pull/up -d`;
+  - выполняет `docker compose pull/up -d` (и `docker login ghcr.io`, только
+    если packages переведены в private);
   - идемпотентно — можно безопасно перезапускать.
 
 **Плюсы:** масштабируется на пул машин, единая декларация инфры,
@@ -700,13 +740,15 @@ docker compose -f compose.prod.yaml up -d
 
 ## 8. Пошаговый план миграции
 
-1. **CI-фундамент** (PR в этот репозиторий):
+1. **CI-фундамент** (частично выполнено):
    - добавить `.github/workflows/ci.yaml` (uv sync, pytest, black);
-   - добавить `.github/workflows/build-and-push.yaml` с публикацией трёх
-     образов в GHCR по тегу `sha-<sha>` и `latest`;
-   - проверить, что образы собираются и появляются в GHCR.
+   - [x] добавить `.github/workflows/build-and-push.yaml` с публикацией
+     трёх образов в public GHCR по тегам `sha-<sha>`, branch, `latest`,
+     semver;
+   - [x] проверить, что образы собираются, появляются в GHCR и используются
+     последними ручными деплоями.
 2. **Подготовка `deploy/compose.prod.yaml`**:
-   - убрать `build:`, заменить на `image: ghcr.io/<org>/iot-rpc-rest-app/<svc>:${IMAGE_TAG}`;
+   - убрать `build:`, заменить на `image: ghcr.io/oleglebedevru/iot-rpc-rest-app/<svc>:${IMAGE_TAG}`;
    - убрать сервис `pg` и volume `pgdata`;
    - перенести все секреты в `${VAR}` и описать в `deploy/.env.example`;
    - убрать `avahi` из прод-профиля (или оставить, если VM поддерживает host-network);
@@ -717,13 +759,15 @@ docker compose -f compose.prod.yaml up -d
    - открыть только 80/443/4443 наружу, всё остальное — внутри VPC.
 4. **Первичный деплой вручную**:
    - залить на VM `deploy/compose.prod.yaml` и `.env`;
-   - `docker login ghcr.io`, `docker compose -f compose.prod.yaml up -d`;
+   - для текущих public GHCR packages `docker login ghcr.io` не нужен;
+     выполнить `docker compose -f compose.prod.yaml pull` и
+     `docker compose -f compose.prod.yaml up -d`;
    - убедиться, что `alembic upgrade head` отработал на managed PG.
 5. **Автоматизация (Вариант A)**:
    - добавить `.github/workflows/deploy.yaml` с GitHub Environment
      `production` и required reviewers;
    - проверить деплой через `workflow_dispatch`;
-   - после успеха включить автотриггер по `push` в `main`.
+   - после успеха включить автотриггер по `push` в `master`/`main`.
 6. **Бэкапы и наблюдаемость**:
    - бэкапы PG — встроенные cloud.ru;
    - бэкап `rabbitmq_data` — периодический snapshot диска VM или
@@ -745,7 +789,10 @@ docker compose -f compose.prod.yaml up -d
 
 - [ ] Managed PostgreSQL в cloud.ru поднят, доступен из VPC, TLS-only.
 - [ ] Compute-VM в cloud.ru, Docker установлен, входящий — только 80/443/4443.
-- [ ] Все три собственных образа публикуются в GHCR с тегом `sha-*`.
+- [x] Все три собственных образа публикуются в public GHCR
+      `ghcr.io/oleglebedevru/iot-rpc-rest-app/*` с тегом `sha-*`.
+- [x] Последние ручные деплои выполняются из GHCR через
+      `docker compose pull` + `docker compose up -d`.
 - [ ] `deploy/compose.prod.yaml` использует `image:` из GHCR, без `build:`.
 - [ ] `pg` и `pgdata` удалены из прод-compose; `app1`/`pgadmin` ходят в managed PG.
 - [ ] Секреты вынесены в `.env` на VM / GitHub Environments, в git нет паролей.
