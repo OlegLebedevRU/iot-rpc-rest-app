@@ -36,6 +36,7 @@
 | :-- | :-- | :-- |
 | `1..2999` | ⚙️ Стандартные | Обрабатываются во внутренних подсистемах прошивки: OTA, NVS, UART, загрузка и сброс данных |
 | `3000..3999` | 🌐 Интерактивные | Сквозная передача запросов во внешние шлюзы через WebSocket |
+| `7000..7099` | 🖥️ Remote Diagnostics / Output Streams | Управление live logs, выполнение predefined diagnostic command и отмена diagnostic session; потоковый вывод идёт в `dev/<SN>/out` |
 | `0xFFFF` / `65535` | 🚨 Терминальный | Fail-fast код для завершения вызова при ошибке структуры или валидации |
 
 > ⚠️ Для интерактивных `method_code` из диапазона `3000..3999` устройство обязано завершать вызов в терминальное состояние, то есть сразу публиковать `/res` со статусом `500`, даже если внешний WS-клиент недоступен.
@@ -67,6 +68,9 @@
 | `411` | `CMD_STM32_MCU_UPDATE` | Обновление прошивки сопроцессора STM32 | — | ✅ | — | — |
 | `512` | `CMD_STM32_BIN_DOWNLOAD` | Скачивание бинарного образа для STM32 с запуском задачи | — | ✅ | — | — |
 | `3000..3999` | *(интерактивные коды)* | Роутинг для локальных шлюзов / WS-клиентов | — | ✅ | — | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) |
+| `7000` | `CMD_DIAG_STREAM_CONTROL` | Start/stop volatile output stream, включая ESP32 live logs | — | ✅ | — | [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md) |
+| `7001` | `CMD_DIAG_EXEC` | Выполнение predefined diagnostic command из allowlist агента | — | ✅ | — | [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md) |
+| `7002` | `CMD_DIAG_CANCEL` | Отмена активной diagnostic session | — | ✅ | — | [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md) |
 | `65535` (`0xFFFF`) | `CMD_INVALID_JSON` | Ошибка структуры / валидации, fail-fast завершение | — | ✅ | — | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) |
 
 ---
@@ -312,6 +316,70 @@
 - **Назначение:** сквозные вызовы, где `payload` и структура определяются подключённым клиентом.
 - **Особенность:** fail-fast при недоступности WS-канала.
 
+### 🔸 `7000..7099` — Remote Diagnostics / Output Streams
+- **Совместимость:** агенты/прошивки с поддержкой [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md).
+- **Транспорт управления:** только существующий RPC lifecycle (`srv/<SN>/tsk`, `dev/<SN>/req`, `srv/<SN>/rsp`, `dev/<SN>/res`).
+- **Потоковый вывод:** публикуется устройством в `dev/<SN>/out`; не является event и не заменяет финальный `/res`.
+- **Безопасность:** backend и агент используют allowlist `command_id`; произвольные shell-команды не передаются.
+
+#### `7000` — `CMD_DIAG_STREAM_CONTROL`
+
+Start ESP32 live logs / volatile output stream:
+
+```json
+[
+  {
+    "action": "start",
+    "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
+    "stream": "esp32-log",
+    "level": "debug",
+    "ttl_sec": 300,
+    "max_rate_bps": 8192,
+    "topic": "dev/<SN>/out"
+  }
+]
+```
+
+Stop stream:
+
+```json
+[
+  {
+    "action": "stop",
+    "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
+    "stream": "esp32-log"
+  }
+]
+```
+
+#### `7001` — `CMD_DIAG_EXEC`
+
+```json
+[
+  {
+    "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
+    "command_id": "system_info",
+    "args": {},
+    "ttl_sec": 60,
+    "max_output_bytes": 1048576,
+    "topic": "dev/<SN>/out"
+  }
+]
+```
+
+Финальный `/res` содержит только метаинформацию (`status`, `method_code`, `session_id`, `command_id`, `exit_code`, `output_topic`, `truncated`, `error`), а не большой stdout/stderr.
+
+#### `7002` — `CMD_DIAG_CANCEL`
+
+```json
+[
+  {
+    "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
+    "reason": "browser_closed"
+  }
+]
+```
+
 ---
 
 ## ✅ 4. Краткие правила для интеграции
@@ -330,6 +398,7 @@
 | Файл | Назначение |
 | :-- | :-- |
 | [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md) | Детальное описание транспортного протокола MQTT RPC v5: конверты, топики, User Properties, `correlationData`, polling и trigger |
+| [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md) | Remote diagnostics и live output: `dev/<SN>/out`, output envelope, коды `7000..7002` |
 | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) | Sequence- и flow-диаграммы RPC-обмена |
 | [`mqtt-rpc-correlation-matrix.md`](./mqtt-rpc-correlation-matrix.md) | Сводка по передаче `correlationData` в каждом типе RPC-сообщений |
 | [`1-task-workflow-doc.md`](./1-task-workflow-doc.md) | REST workflow задач и HTTP-форматы поверх того же `method_code` / `payload.dt` |

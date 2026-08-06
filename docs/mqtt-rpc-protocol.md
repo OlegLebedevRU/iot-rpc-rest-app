@@ -6,7 +6,7 @@
 > **Версия:** 1.2  
 > **Дата:** 2026  
 > **Автор:** Oleg_
-> **См. также:** [`method-codes-reference.md`](./method-codes-reference.md), [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md), [`correlation-data-guide.md`](./correlation-data-guide.md)
+> **См. также:** [`method-codes-reference.md`](./method-codes-reference.md), [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md), [`correlation-data-guide.md`](./correlation-data-guide.md), [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md)
 
 ---
 
@@ -46,11 +46,13 @@
 | `dev/<SN>/req` | 🔼 Device | Запрос от устройства к серверу (инициация RPC от клиента) |
 | `dev/<SN>/ack` | 🔼 Device | Подтверждение получения команды от устройства (опционально) |
 | `dev/<SN>/res` | 🔼 Device | Ответ устройства на задачу (результат выполнения) |
+| `dev/<SN>/out` | 🔼 Device | Volatile потоковый вывод для live logs / diagnostics; не является RPC result |
 | `srv/<SN>/tsk` | 🔽 Server | Анонс задачи сервером (только Trigger-сценарий) |
 | `srv/<SN>/rsp` | 🔽 Server | Передача параметров задачи на устройство |
 | `srv/<SN>/cmt` | 🔽 Server | Подтверждение получения результата со стороны сервера (commit) |
 
 > `<SN>` — серийный номер устройства (уникальный идентификатор).
+> `dev/<SN>/out` используется только для streaming output и не участвует в `tsk` → `req` → `rsp` → `res` → `cmt` lifecycle. Управление remote diagnostics выполняется через обычные RPC-задачи с `method_code = 7000..7002`.
 
 ---
 
@@ -353,6 +355,7 @@
 | [`correlation-data-guide.md`](./correlation-data-guide.md) | Руководство по Correlation Data: форматы, fallback-механизмы, рекомендации для разных клиентских библиотек |
 | [`TTL.md`](./TTL.md) | TTL: единица измерения, декремент, поведение при TTL=0, исключение из поллинга |
 | [`method-codes-reference.md`](./method-codes-reference.md) | Реестр `method_code`: диапазоны, форматы `payload.dt`, ответы `res` для каждой команды |
+| [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md) | Remote diagnostics / live logs через `dev/<SN>/out` и RPC-коды `7000..7002` |
 | [`1-task-workflow-doc.md`](./1-task-workflow-doc.md) | REST API: workflow задач через HTTP, жизненный цикл, форматы запросов и ответов |
 | [event-protocol-mqtt.md](https://github.com/OlegLebedevRU/iot-rpc-rest-app/blob/master/docs/event-protocol-mqtt.md) | Протокол асинхронных событий: топики `evt`/`eva`, формат событий и теги `3xx` |
 | [`server-integration-guide.md`](./server-integration-guide.md) | Руководство по интеграции серверной стороны с IoT RPC |

@@ -64,7 +64,9 @@ async def test_select_uses_sn_polling_for_zero_uuid(monkeypatch):
     )
     monkeypatch.setattr(device_tasks_module, "send_rsp", send_rsp)
 
-    await service.select("SN_TEST", device_tasks_module.settings.task_proc_cfg.zero_corr_id, msg)
+    await service.select(
+        "SN_TEST", device_tasks_module.settings.task_proc_cfg.zero_corr_id, msg
+    )
 
     select_next_task_by_sn.assert_awaited_once_with(session, "SN_TEST", 2999)
     select_task_by_id.assert_not_called()
@@ -119,7 +121,7 @@ async def test_select_uses_task_lookup_for_non_zero_uuid(monkeypatch):
 
     await service.select("SN_TEST", corr_id, msg)
 
-    select_task_by_id.assert_awaited_once_with(session, corr_id, 3999)
+    select_task_by_id.assert_awaited_once_with(session, corr_id, 7099)
     select_next_task_by_sn.assert_not_called()
     task_status_update.assert_not_called()
     send_rsp.assert_awaited_once_with(
@@ -129,6 +131,33 @@ async def test_select_uses_task_lookup_for_non_zero_uuid(monkeypatch):
         3 * 60 * 1000,
         "0",
     )
+
+
+@pytest.mark.asyncio
+async def test_triggered_select_allows_diagnostics_without_slave_ws_header(monkeypatch):
+    session = object()
+    service = DeviceTasksService(session, 0)
+    corr_id = uuid4()
+    msg = SimpleNamespace(headers={})
+
+    select_task_by_id = AsyncMock(return_value=None)
+    select_next_task_by_sn = AsyncMock()
+    send_rsp = AsyncMock()
+
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository, "select_task_by_id", select_task_by_id
+    )
+    monkeypatch.setattr(
+        device_tasks_module.TasksRepository,
+        "select_next_task_by_sn",
+        select_next_task_by_sn,
+    )
+    monkeypatch.setattr(device_tasks_module, "send_rsp", send_rsp)
+
+    await service.select("SN_TEST", corr_id, msg)
+
+    select_task_by_id.assert_awaited_once_with(session, corr_id, 7099)
+    select_next_task_by_sn.assert_not_called()
 
 
 @pytest.mark.asyncio

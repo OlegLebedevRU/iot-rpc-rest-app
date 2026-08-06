@@ -74,6 +74,7 @@ class ApiV1Prefix(BaseModel):
     devices: str = "/devices"
     accounts: str = "/accounts"
     webhooks: str = "/webhooks"
+    diagnostics: str = "/diagnostics"
 
 
 class ApiPrefix(BaseModel):
@@ -235,10 +236,12 @@ class RabbitQXConfig(BaseModel):
     ack_queue_name: str = "ack"
     res_queue_name: str = "res"
     evt_queue_name: str = "evt"
+    out_queue_name: str = "out"
     routing_key_dev_ack: str = str(RoutingKey("dev", "*", "ack"))
     routing_key_dev_request: str = str(RoutingKey("dev", "*", "req"))
     routing_key_dev_result: str = str(RoutingKey("dev", "*", "res"))
     routing_key_dev_event: str = str(RoutingKey("dev", "*", "evt"))
+    routing_key_dev_output: str = str(RoutingKey("dev", "*", "out"))
     api_clients_queue: str = "rmq_api_client_action"
 
 

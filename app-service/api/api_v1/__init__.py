@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 
 from core.config import settings
-from .accounts import accounts
 
 from .device_tasks import router as device_tasks_router
 from .administrator import router as admin_router
@@ -13,6 +12,7 @@ from .postamat import router as postamat_router
 from .webhook import router as webhooks_router
 from .gauges import router as gauges_router
 from .billing import router as billing_router
+from .diagnostics import router as diagnostics_router
 
 router = APIRouter(
     prefix=settings.api.v1.prefix,
@@ -28,3 +28,4 @@ router.include_router(postamat_router)
 router.include_router(webhooks_router)
 router.include_router(gauges_router)
 router.include_router(billing_router, include_in_schema=False)
+router.include_router(diagnostics_router)

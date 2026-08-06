@@ -45,6 +45,9 @@ q_req = RabbitQueue(
 )
 q_evt = RabbitQueue(name=topology.evt_queue_name, durable=True)
 q_result = RabbitQueue(name=topology.res_queue_name, durable=True)
+q_out = RabbitQueue(
+    name=topology.out_queue_name, durable=False, arguments=topology.def_queue_args
+)
 q_jobs = RabbitQueue(
     name=settings.ttl_job.queue_name, durable=False, arguments=topology.job_queue_args
 )
@@ -70,6 +73,7 @@ BINDINGS: List[Tuple[RabbitQueue, str, RabbitExchange]] = [
     (q_ack, topology.routing_key_dev_ack, topic_exchange),
     (q_evt, topology.routing_key_dev_event, topic_exchange),
     (q_result, topology.routing_key_dev_result, topic_exchange),
+    (q_out, topology.routing_key_dev_output, topic_exchange),
     (q_jobs, settings.ttl_job.queue_name, direct_exchange),
     (rmq_api_client_action, topology.api_clients_queue, direct_exchange),
     (webhook_action, settings.webhook.webhooks_queue, direct_exchange),
@@ -137,7 +141,7 @@ async def declare_x_q():
     except (ConnectionClosed, ChannelClosed) as e:
         log.error(f"🔗 Соединение с RabbitMQ разорвано: {e}")
         raise
-    except asyncio.TimeoutError as e:
+    except asyncio.TimeoutError:
         log.error("⏰ Таймаут при взаимодействии с RabbitMQ")
         raise
     except Exception as e:

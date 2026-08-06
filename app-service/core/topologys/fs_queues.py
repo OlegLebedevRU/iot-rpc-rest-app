@@ -6,8 +6,9 @@ from core.logging_config import setup_module_logger, log_rpc_debug
 from core.services.device_events_collect import DeviceEventsCollect
 from core.services.billing_publish import publish_billing_event
 from core.services.billing_utils import evt_billing_counter_type, publish_then_process
-from core.topologys.declare import q_ack, q_req, q_evt, q_result
+from core.topologys.declare import q_ack, q_req, q_evt, q_result, q_out
 from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
+from core.diagnostics.mqtt_bridge import handle_device_output_message
 
 from core.services.device_tasks import DeviceTasksService
 
@@ -141,6 +142,14 @@ if _REGISTER_SUBSCRIBERS:
             await _publish_billing_for_sn(
                 session, sn, "res", payload_bytes=payload_bytes
             )
+
+    @fs_router.subscriber(q_out)
+    async def diagnostics_output(
+        msg: RabbitMessage,
+        sn: Sn_dep,
+    ):
+        routing_key = getattr(msg, "routing_key", None) or f"dev.{sn}.out"
+        await handle_device_output_message(routing_key=routing_key, payload=msg.body)
 
 
 # Логируем количество подписчиков

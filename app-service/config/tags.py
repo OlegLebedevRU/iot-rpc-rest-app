@@ -6,6 +6,7 @@ DOCS_EVENTS_FORMAT = "https://github.com/OlegLebedevRU/iot-rpc-rest-app/blob/mas
 DOCS_WEBHOOKS = (
     "https://github.com/OlegLebedevRU/iot-rpc-rest-app/blob/master/docs/3-webhooks.md"
 )
+DOCS_REMOTE_DIAGNOSTICS = "https://github.com/OlegLebedevRU/iot-rpc-rest-app/blob/master/docs/remote-diagnostics-protocol.md"
 
 # Описание тегов с использованием констант
 TAGS_METADATA = [
@@ -85,6 +86,20 @@ API для управления постаматами и их ячейками.
 - Максимум вебхуков на организацию: 2
 
 📄 [Полная документация по вебхукам]({DOCS_WEBHOOKS})
+        """,
+    },
+    {
+        "name": "Diagnostics",
+        "description": f"""
+# 🖥️ Remote diagnostics / live output
+
+WebSocket API для live logs и predefined diagnostic commands.
+
+- Endpoint: `/api/v1/diagnostics/ws/devices/{{sn}}`
+- Управление устройством выполняется через существующий MQTT RPC lifecycle
+- Потоковый вывод приходит из `dev/<SN>/out`
+
+📄 [Протокол remote diagnostics]({DOCS_REMOTE_DIAGNOSTICS})
         """,
     },
 ]

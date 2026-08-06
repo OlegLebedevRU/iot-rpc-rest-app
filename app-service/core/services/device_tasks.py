@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
 from core.crud.dev_tasks_repo import TasksRepository
+from core.diagnostics.commands import DIAGNOSTICS_MAX_METHOD_CODE
 from core.crud.device_repo import DeviceRepo
 from core.logging_config import setup_module_logger, log_rpc_debug
 from core.models.common import TaskStatus
@@ -137,6 +138,10 @@ class DeviceTasksService:
                 ws_count = int(msg_headers["slave_ws"])
         return 3999 if ws_count > 0 else 2999
 
+    @classmethod
+    def _get_trigger_method_limit(cls, msg) -> int:
+        return max(cls._get_method_limit(msg), DIAGNOSTICS_MAX_METHOD_CODE)
+
     @staticmethod
     def _build_task_response(task_data: dict) -> TaskResponsePayload:
         return TaskResponsePayload(
@@ -175,8 +180,10 @@ class DeviceTasksService:
         raw_value = headers.get(key, default)
         try:
             return int(raw_value)
-        except (TypeError, ValueError):
-            log.warning("Invalid RES header %s=%r, using default=%d", key, raw_value, default)
+        except TypeError, ValueError:
+            log.warning(
+                "Invalid RES header %s=%r, using default=%d", key, raw_value, default
+            )
             return default
 
     async def _select_polling_task(
@@ -205,7 +212,11 @@ class DeviceTasksService:
         return self._build_task_response(task_data)
 
     async def select(self, sn, corr_id: UUID4, msg):
-        method_le = self._get_method_limit(msg)
+        method_le = (
+            self._get_method_limit(msg)
+            if self._is_zero_corr_id(corr_id)
+            else self._get_trigger_method_limit(msg)
+        )
         log_rpc_debug(sn, "rpc.req.processing", corr_id=corr_id, method_le=method_le)
         task = await self._select_task(sn, corr_id, method_le)
         if task is not None:
@@ -295,7 +306,7 @@ class DeviceTasksService:
             res_data = json.loads(raw_body)
             if not isinstance(res_data, dict):
                 res_data = {"result": res_data}
-        except (json.JSONDecodeError, TypeError):
+        except json.JSONDecodeError, TypeError:
             res_data = {"result": raw_body}
 
         res_data = self._normalize_result_payload(res_data)

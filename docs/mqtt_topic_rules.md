@@ -64,6 +64,7 @@ packet
 | `ack` | `dev/<SN>/ack` | ✅ Подтверждение получения команды от устройства (опционально) |
 | `req` | `dev/<SN>/req` | 🔍 Запрос устройства на получение задачи из очереди |
 | `res` | `dev/<SN>/res` | 📤 Отправка результата после выполнения задачи |
+| `out` | `dev/<SN>/out` | 🖥️ Volatile потоковый вывод устройства: live logs, diagnostic stdout/stderr, agent output |
 
 ### Server → Device (`srv/<SN>/...`)
 
@@ -73,6 +74,10 @@ packet
 | `rsp` | `srv/<SN>/rsp` | 📥 Ответ сервера с параметрами задачи (payload) |
 | `eva` | `srv/<SN>/eva` | 🔁 Опциональное подтверждение сервером получения события (`evt`) |
 
+> Для remote diagnostics, live logs и ограниченной диагностической консоли не вводятся дополнительные
+> server→device топики. Управление потоками и диагностическими командами выполняется через существующий
+> RPC lifecycle (`tsk`/`req`/`rsp`/`res`). Потоковый вывод устройства публикуется в `dev/<SN>/out`.
+
 ---
 
 ## 📚 Связанные документы
@@ -80,5 +85,6 @@ packet
 | Файл | Назначение |
 | :-- | :-- |
 | [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md) | Полная спецификация RPC-протокола на базе MQTT v5 |
+| [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md) | Live logs и remote diagnostics через `dev/<SN>/out` без новых server→device топиков |
 | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) | 📊 Mermaid-диаграммы: Polling, Trigger, Fail-fast |
 | [`event-protocol-mqtt.md`](./event-protocol-mqtt.md) | Протокол асинхронных событий: топики `evt`/`eva` |
