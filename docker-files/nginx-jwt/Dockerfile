@@ -36,9 +36,9 @@ RUN <<`
 WORKDIR /usr/lib/nginx/modules
 
 # Установка JWT модуля
-#RUN curl -Ls https://github.com/TeslaGov/ngx-http-auth-jwt-module/releases/download/2.4.0/ngx-http-auth-jwt-module-2.4.0_libjwt-1.15.3_nginx-1.29.4.tgz | tar -zx > ngx_http_auth_jwt_module.so
+RUN curl -Ls https://github.com/TeslaGov/ngx-http-auth-jwt-module/releases/download/2.4.0/ngx-http-auth-jwt-module-2.4.0_libjwt-1.15.3_nginx-1.31.1.tgz | tar -zx > ngx_http_auth_jwt_module.so
 #https://github.com/TeslaGov/ngx-http-auth-jwt-module/releases/download/2.5.0/ngx-http-auth-jwt-module-2.5.0_libjwt-1.18.4_nginx-1.31.1.tgz
-RUN curl -Ls https://github.com/TeslaGov/ngx-http-auth-jwt-module/releases/download/2.5.0/ngx-http-auth-jwt-module-2.5.0_libjwt-1.17.2_nginx-1.31.1.tgz | tar -zx > ngx_http_auth_jwt_module.so
+#RUN curl -Ls https://github.com/TeslaGov/ngx-http-auth-jwt-module/releases/download/2.5.0/ngx-http-auth-jwt-module-2.5.0_libjwt-1.17.2_nginx-1.31.1.tgz | tar -zx > ngx_http_auth_jwt_module.so
 
 # Симлинк для libjwt
 RUN ln -s /usr/lib/x86_64-linux-gnu/libjwt.so.0 /usr/lib/x86_64-linux-gnu/libjwt.so.2
