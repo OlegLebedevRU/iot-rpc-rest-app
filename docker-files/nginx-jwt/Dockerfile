@@ -54,7 +54,7 @@ worker_processes  auto;
 error_log  /dev/stderr notice;
 pid        /var/run/nginx.pid;
 
-load_module /usr/lib/nginx/modulesngx_http_auth_jwt_module_2.5.0.so;
+load_module /usr/lib/nginx/modules/ngx_http_auth_jwt_module_2.5.0.so;
 
 events {
     worker_connections  1024;
