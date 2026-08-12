@@ -94,6 +94,57 @@ async def test_service_rejects_unknown_command_id():
 
 
 @pytest.mark.asyncio
+async def test_service_accepts_mssql_query():
+    sender = RecordingSender()
+    service = DiagnosticService(DiagnosticsSessionRegistry(), sender)
+
+    session = await service.exec(
+        "SN001",
+        ExecDiagnosticMessage(type="exec", command_id="mssql_query"),
+    )
+
+    assert session.command_id == "mssql_query"
+    assert sender.sent[0][1].payload.dt[0].command_id == "mssql_query"
+
+
+def test_allowlist_contains_all_expected_commands():
+    from core.diagnostics.commands import DIAGNOSTIC_COMMANDS
+
+    expected = {
+        # Basic
+        "system_info",
+        "echo",
+        "time",
+        # Universal
+        "network_info",
+        "disk_usage",
+        "service_status",
+        # Linux
+        "uptime",
+        "memory_usage",
+        "process_list",
+        "top_processes",
+        "journal_logs",
+        "iptables_rules",
+        "systemctl_status",
+        # Windows
+        "get_processes",
+        "get_services",
+        "event_log",
+        "disk_info",
+        "cpu_usage",
+        "network_config",
+        "os_version",
+        "mssql_query",
+        # Utility
+        "list_commands",
+    }
+
+    missing = expected - set(DIAGNOSTIC_COMMANDS)
+    assert not missing, f"Missing from backend allowlist: {missing}"
+
+
+@pytest.mark.asyncio
 async def test_close_browser_sends_cancel_for_active_exec_session():
     sender = RecordingSender()
     service = DiagnosticService(DiagnosticsSessionRegistry(), sender)
