@@ -140,8 +140,7 @@ def test_allowlist_contains_all_expected_commands():
         "list_commands",
     }
 
-    missing = expected - set(DIAGNOSTIC_COMMANDS)
-    assert not missing, f"Missing from backend allowlist: {missing}"
+    assert set(DIAGNOSTIC_COMMANDS) == expected
 
 
 @pytest.mark.asyncio
