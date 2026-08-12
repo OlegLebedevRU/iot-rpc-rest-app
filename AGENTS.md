@@ -44,6 +44,17 @@ docker compose up -d --build   # поднять инфраструктуру
 - [`docs/event-protocol-mqtt.md`](docs/event-protocol-mqtt.md) — протокол событий
 - [`docs/TTL.md`](docs/TTL.md) — правила декрементирования TTL
 - [`docs/glossary.md`](docs/glossary.md) — глоссарий терминов
+- [`docs/manual-app1-deploy-runbook.md`](docs/manual-app1-deploy-runbook.md) — ручной деплой только `app1` из GHCR, backup/rollback и проверки
+
+## Деплой `app1`
+
+Перед ручным деплоем `app1` агент обязан уточнить режим: деплой самого нового
+app-пакета, восстановление текущего закреплённого tag или rollback. Если
+пользователь просит «только app», следовать
+[`docs/manual-app1-deploy-runbook.md`](docs/manual-app1-deploy-runbook.md):
+фиксировать immutable `IMAGE_TAG=sha-*`, делать backup `.env`, выполнять
+`docker compose pull app1` и `docker compose up -d --no-deps app1`, не трогая
+остальные сервисы.
 
 ## Главные доменные ловушки
 

@@ -90,6 +90,13 @@ flowchart LR
 | 🟠 [**Серверная интеграция: Kotlin + Spring Boot**](./docs/server-integration-guide-kotlin-spring.md) | Пример интеграции на Kotlin + Spring Boot |
 | 🤖 [**Robotics**](./robotics/marketing-overview.md) | LEO4 Robotics Platform: управление автономными устройствами и роботами |
 
+### Операции и деплой
+
+| Документ | Описание |
+|---|---|
+| 🚀 [**Runbook: ручной деплой `app1`**](./docs/manual-app1-deploy-runbook.md) | Аккуратный pull/recreate только `app-service` из GHCR: уточнение режима, `sha-*` tag, backup `.env`, rollback и проверки |
+| 🧭 [**План деплоя**](./docs/deploy-plan.md) | Архитектура GHCR Build only, ручной deploy flow и варианты будущей автоматизации |
+
 ### Обзор платформы
 
 | Документ | Описание |

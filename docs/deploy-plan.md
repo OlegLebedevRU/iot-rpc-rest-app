@@ -527,6 +527,11 @@ ERROR: failed to compute cache key: "/crt/key_0000.pem": not found
 
 ### 6.4. Ручной деплой на VM (текущий флоу, по сервисам)
 
+Подробный операционный runbook для аккуратного деплоя **только `app1`**,
+обязательных уточнений (`самый новый app` vs `восстановить текущий`), backup
+`.env`, rollback и проверок см. в
+[`manual-app1-deploy-runbook.md`](manual-app1-deploy-runbook.md).
+
 Подключение по SSH к существующей VM, в каталоге репозитория
 (`/opt/iot-rpc-rest-app` или где он лежит сейчас):
 
