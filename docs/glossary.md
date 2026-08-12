@@ -136,3 +136,11 @@
 Механизм push‑уведомлений: сервер отправляет HTTP POST‑запрос на заранее настроенный URL при изменении статуса задачи или получении события.
 
 Подробнее: [`docs/3-webhooks.md`](3-webhooks.md)
+
+---
+
+## Integration Bus (интеграционная шина)
+
+Выделенный AMQP‑канал для доменных приложений (server-side): exchanges `integration.topic` / `integration.commands`, per-tenant очереди `q.int.<org_id>.*`, пользователи `int.<org_id>`. Дополняет REST и webhooks; не заменяет MQTT device plane.
+
+Подробнее: [`docs/rfc-integration-bus.md`](rfc-integration-bus.md)
