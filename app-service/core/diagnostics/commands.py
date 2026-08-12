@@ -40,6 +40,10 @@ DIAGNOSTIC_COMMANDS: dict[str, DiagnosticCommandSpec] = {
         command_id="service_status",
         description="Agent/application service status summary.",
     ),
+    "mssql_query": DiagnosticCommandSpec(
+        command_id="mssql_query",
+        description="Execute predefined MSSQL diagnostic query via device agent.",
+    ),
 }
 
 
