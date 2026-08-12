@@ -83,6 +83,22 @@ async def test_service_creates_exec_and_cancel_payloads():
 
 
 @pytest.mark.asyncio
+async def test_service_accepts_mssql_query_command_id():
+    sender = RecordingSender()
+    service = DiagnosticService(DiagnosticsSessionRegistry(), sender)
+
+    session = await service.exec(
+        "SN001",
+        ExecDiagnosticMessage(type="exec", command_id="mssql_query"),
+    )
+
+    assert session.command_id == "mssql_query"
+    assert len(sender.sent) == 1
+    assert sender.sent[0][1].method_code == CMD_DIAG_EXEC
+    assert sender.sent[0][1].payload.dt[0].command_id == "mssql_query"
+
+
+@pytest.mark.asyncio
 async def test_service_rejects_unknown_command_id():
     service = DiagnosticService(DiagnosticsSessionRegistry(), RecordingSender())
 
