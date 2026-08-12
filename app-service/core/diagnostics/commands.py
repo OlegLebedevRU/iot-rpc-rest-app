@@ -24,10 +24,20 @@ class DiagnosticCommandSpec:
 # Backend-side allowlist for public API validation. Device agents still keep their
 # own local allowlist and must reject unsupported command_id values.
 DIAGNOSTIC_COMMANDS: dict[str, DiagnosticCommandSpec] = {
+    # Basic / cross-platform
     "system_info": DiagnosticCommandSpec(
         command_id="system_info",
         description="Basic OS, kernel/firmware and hardware summary.",
     ),
+    "echo": DiagnosticCommandSpec(
+        command_id="echo",
+        description="Echo back the supplied arguments; connectivity/latency check.",
+    ),
+    "time": DiagnosticCommandSpec(
+        command_id="time",
+        description="Return current device clock time.",
+    ),
+    # Universal (any platform)
     "network_info": DiagnosticCommandSpec(
         command_id="network_info",
         description="Network interface, route and DNS diagnostics.",
@@ -40,9 +50,72 @@ DIAGNOSTIC_COMMANDS: dict[str, DiagnosticCommandSpec] = {
         command_id="service_status",
         description="Agent/application service status summary.",
     ),
+    # Linux
+    "uptime": DiagnosticCommandSpec(
+        command_id="uptime",
+        description="System uptime and load average.",
+    ),
+    "memory_usage": DiagnosticCommandSpec(
+        command_id="memory_usage",
+        description="RAM and swap usage statistics.",
+    ),
+    "process_list": DiagnosticCommandSpec(
+        command_id="process_list",
+        description="Full process list snapshot.",
+    ),
+    "top_processes": DiagnosticCommandSpec(
+        command_id="top_processes",
+        description="Top CPU/memory consuming processes.",
+    ),
+    "journal_logs": DiagnosticCommandSpec(
+        command_id="journal_logs",
+        description="Recent systemd journal log entries.",
+    ),
+    "iptables_rules": DiagnosticCommandSpec(
+        command_id="iptables_rules",
+        description="Active iptables/nftables firewall rules.",
+    ),
+    "systemctl_status": DiagnosticCommandSpec(
+        command_id="systemctl_status",
+        description="Status of a specific systemd unit.",
+    ),
+    # Windows
+    "get_processes": DiagnosticCommandSpec(
+        command_id="get_processes",
+        description="Running process list (Windows).",
+    ),
+    "get_services": DiagnosticCommandSpec(
+        command_id="get_services",
+        description="Windows service list and their states.",
+    ),
+    "event_log": DiagnosticCommandSpec(
+        command_id="event_log",
+        description="Recent Windows Event Log entries.",
+    ),
+    "disk_info": DiagnosticCommandSpec(
+        command_id="disk_info",
+        description="Disk partition and volume information (Windows).",
+    ),
+    "cpu_usage": DiagnosticCommandSpec(
+        command_id="cpu_usage",
+        description="CPU utilisation snapshot.",
+    ),
+    "network_config": DiagnosticCommandSpec(
+        command_id="network_config",
+        description="Network adapter configuration (Windows ipconfig).",
+    ),
+    "os_version": DiagnosticCommandSpec(
+        command_id="os_version",
+        description="Detailed OS version and build information.",
+    ),
     "mssql_query": DiagnosticCommandSpec(
         command_id="mssql_query",
-        description="Execute predefined MSSQL diagnostic query via device agent.",
+        description="Execute a predefined MSSQL diagnostic query via the device agent.",
+    ),
+    # Utility
+    "list_commands": DiagnosticCommandSpec(
+        command_id="list_commands",
+        description="Return the list of command_id values supported by the device agent.",
     ),
 }
 
