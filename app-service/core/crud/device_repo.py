@@ -297,3 +297,156 @@ class DeviceRepo:
             stmt = stmt.where(DeviceGauge.type == type)
 
         return await apaginate(session, stmt)
+
+    @classmethod
+    async def provision_terminals(
+        cls,
+        session: AsyncSession,
+        terminals_data: list[dict[str, Any]],
+    ) -> None:
+        """Upsert Org, Device, DeviceOrgBind, and DeviceConnection for provisioned terminals."""
+        if not terminals_data:
+            return
+
+        device_values = [
+            {
+                "device_id": int(d["device_id"]),
+                "sn": str(d["sn"]),
+                "is_deleted": False,
+                "deleted_at": None,
+            }
+            for d in terminals_data
+        ]
+        org_values = [
+            {"org_id": int(d["org_id"]), "name": d.get("name") or f"Org {d['org_id']}"}
+            for d in terminals_data
+        ]
+        bind_values = [
+            {"device_id": int(d["device_id"]), "org_id": int(d["org_id"])}
+            for d in terminals_data
+        ]
+        conn_values = [
+            {"device_id": int(d["device_id"]), "client_id": str(d["sn"])}
+            for d in terminals_data
+        ]
+
+        # 1. Upsert Orgs
+        await session.execute(
+            insert(Org)
+            .values(org_values)
+            .on_conflict_do_nothing(index_elements=["org_id"])
+        )
+
+        # 2. Upsert Devices
+        await session.execute(
+            insert(Device)
+            .values(device_values)
+            .on_conflict_do_update(
+                index_elements=["device_id"],
+                set_=dict(
+                    sn=insert(Device).excluded.sn,
+                    is_deleted=False,
+                    deleted_at=None,
+                ),
+            )
+        )
+
+        # 3. Upsert DeviceOrgBind
+        await session.execute(
+            insert(DeviceOrgBind)
+            .values(bind_values)
+            .on_conflict_do_update(
+                index_elements=["device_id"],
+                set_=dict(org_id=insert(DeviceOrgBind).excluded.org_id),
+            )
+        )
+
+        # 4. Upsert DeviceConnection
+        await session.execute(
+            insert(DeviceConnection)
+            .values(conn_values)
+            .on_conflict_do_update(
+                index_elements=["device_id"],
+                set_=dict(client_id=insert(DeviceConnection).excluded.client_id),
+            )
+        )
+
+        # 5. Optional tags
+        for d in terminals_data:
+            tags = d.get("tags")
+            if tags and isinstance(tags, dict):
+                for tag_k, tag_v in tags.items():
+                    if tag_k and tag_v:
+                        await session.execute(
+                            insert(DeviceTag)
+                            .values(
+                                device_id=int(d["device_id"]),
+                                tag=str(tag_k),
+                                value=str(tag_v),
+                                is_system_tag=True,
+                            )
+                            .on_conflict_do_update(
+                                index_elements=["device_id", "tag", "is_deleted"],
+                                set_=dict(value=str(tag_v)),
+                            )
+                        )
+
+        await session.commit()
+
+    @classmethod
+    async def get_terminals_status_by_device_ids(
+        cls,
+        session: AsyncSession,
+        device_ids: list[int],
+    ) -> list[dict[str, Any]]:
+        """Get provisioning and connection status for a list of device_ids."""
+        if not device_ids:
+            return []
+
+        stmt = (
+            select(
+                Device.device_id,
+                Device.sn,
+                DeviceOrgBind.org_id,
+                DeviceConnection.client_id,
+                DeviceConnection.last_checked_result,
+                DeviceConnection.connected_at,
+                DeviceConnection.checked_at,
+            )
+            .outerjoin(DeviceOrgBind, DeviceOrgBind.device_id == Device.device_id)
+            .outerjoin(DeviceConnection, DeviceConnection.device_id == Device.device_id)
+            .where(Device.device_id.in_(device_ids), Device.is_deleted == False)
+        )
+        res = await session.execute(stmt)
+        rows = res.fetchall()
+
+        found_map: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            dev_id, sn, org_id, _client_id, is_conn, conn_at, chk_at = row
+            found_map[dev_id] = {
+                "device_id": dev_id,
+                "sn": sn,
+                "org_id": org_id,
+                "is_provisioned": True,
+                "is_online": bool(is_conn),
+                "connected_at": conn_at,
+                "checked_at": chk_at,
+            }
+
+        result = []
+        for d_id in device_ids:
+            if d_id in found_map:
+                result.append(found_map[d_id])
+            else:
+                result.append(
+                    {
+                        "device_id": d_id,
+                        "sn": None,
+                        "org_id": None,
+                        "is_provisioned": False,
+                        "is_online": False,
+                        "connected_at": None,
+                        "checked_at": None,
+                    }
+                )
+        return result

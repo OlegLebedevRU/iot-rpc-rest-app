@@ -75,6 +75,7 @@ class ApiV1Prefix(BaseModel):
     accounts: str = "/accounts"
     webhooks: str = "/webhooks"
     diagnostics: str = "/diagnostics"
+    provisioning: str = "/provisioning"
 
 
 class ApiPrefix(BaseModel):
@@ -305,6 +306,7 @@ def parse_api_keys(raw: str) -> Dict[str, int]:
 
 class AuthConfig(BaseModel):
     api_keys_raw: str = Field("", alias="API_KEYS")
+    internal_service_key: str = Field("", alias="INTERNAL_SERVICE_KEY")
 
 
 # Параметры вебхука управляются через APP_CONFIG__WEBHOOK__TIMEOUT, MAX_RETRIES, BACKOFF_FACTOR из .env.

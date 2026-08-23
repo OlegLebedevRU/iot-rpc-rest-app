@@ -13,6 +13,7 @@ from .webhook import router as webhooks_router
 from .gauges import router as gauges_router
 from .billing import router as billing_router
 from .diagnostics import router as diagnostics_router
+from .provisioning import router as provisioning_router
 
 router = APIRouter(
     prefix=settings.api.v1.prefix,
@@ -29,3 +30,4 @@ router.include_router(webhooks_router)
 router.include_router(gauges_router)
 router.include_router(billing_router, include_in_schema=False)
 router.include_router(diagnostics_router)
+router.include_router(provisioning_router, include_in_schema=False)
