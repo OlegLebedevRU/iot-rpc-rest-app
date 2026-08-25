@@ -1,0 +1,127 @@
+{
+  "modelVersion": "1.0",
+  "units": "mm",
+  "cellSizeTypes": {
+    "s": {
+      "width": 300,
+      "height": 200,
+      "depth": 400
+    },
+    "m": {
+      "width": 300,
+      "height": 400,
+      "depth": 400
+    },
+    "l": {
+      "width": 300,
+      "height": 600,
+      "depth": 400
+    },
+    "xl": {
+      "width": 300,
+      "height": 800,
+      "depth": 400
+    }
+  },
+  "locker": {
+    "id": "locker_001",
+    "device_id": 1001,
+    "sn": "a2b9999999c28798d250525",
+    "address": "г. Москва, ул. Примерная, д. 10",
+    "gps": {
+      "lat": 55.7558,
+      "lon": 37.6176
+    },
+    "dimensions": {
+      "width": 1200,
+      "height": 2000,
+      "depth": 400
+    },
+    "columns": [
+      {
+        "id": "col_1",
+        "width": 300,
+        "cells": [
+          {
+            "cl": 1,
+            "sizeType": "m"
+          },
+          {
+            "cl": 2,
+            "sizeType": "l"
+          },
+          {
+            "cl": 3,
+            "sizeType": "xl"
+          },
+          {
+            "cl": 4,
+            "sizeType": "s"
+          }
+        ]
+      },
+      {
+        "id": "col_2",
+        "width": 300,
+        "cells": [
+          {
+            "cl": 5,
+            "sizeType": "xl"
+          },
+          {
+            "cl": 6,
+            "sizeType": "xl"
+          },
+          {
+            "cl": 7,
+            "sizeType": "m"
+          }
+        ]
+      },
+      {
+        "id": "col_3",
+        "width": 300,
+        "cells": [
+          {
+            "cl": 8,
+            "sizeType": "l"
+          },
+          {
+            "cl": 9,
+            "sizeType": "l"
+          },
+          {
+            "cl": 10,
+            "sizeType": "m"
+          },
+          {
+            "cl": 11,
+            "sizeType": "m"
+          }
+        ]
+      },
+      {
+        "id": "col_4",
+        "width": 300,
+        "cells": [
+          {
+            "cl": 12,
+            "sizeType": "m"
+          },
+          {
+            "cl": 13,
+            "sizeType": "m"
+          },
+          {
+            "cl": 14,
+            "sizeType": "l"
+          },
+          {
+            "cl": 15,
+            "sizeType": "l"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/locker.schema.json",
+  "title": "Locker",
+  "type": "object",
+  "required": ["modelVersion", "units", "cellSizeTypes", "locker"],
+  "additionalProperties": false,
+  "properties": {
+    "modelVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+$"
+    },
+    "units": {
+      "type": "string",
+      "enum": ["mm"]
+    },
+    "cellSizeTypes": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/sizeType"
+      }
+    },
+    "locker": {
+      "$ref": "#/$defs/locker"
+    }
+  },
+  "$defs": {
+    "positiveInt": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sizeType": {
+      "type": "object",
+      "required": ["width", "height", "depth"],
+      "additionalProperties": false,
+      "properties": {
+        "width": {
+          "$ref": "#/$defs/positiveInt"
+        },
+        "height": {
+          "$ref": "#/$defs/positiveInt"
+        },
+        "depth": {
+          "$ref": "#/$defs/positiveInt"
+        }
+      }
+    },
+    "gps": {
+      "type": "object",
+      "required": ["lat", "lon"],
+      "additionalProperties": false,
+      "properties": {
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        }
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "required": ["width", "height", "depth"],
+      "additionalProperties": false,
+      "properties": {
+        "width": {
+          "$ref": "#/$defs/positiveInt"
+        },
+        "height": {
+          "$ref": "#/$defs/positiveInt"
+        },
+        "depth": {
+          "$ref": "#/$defs/positiveInt"
+        }
+      }
+    },
+    "cell": {
+      "type": "object",
+      "required": ["cl", "sizeType"],
+      "additionalProperties": false,
+      "properties": {
+        "cl": {
+          "$ref": "#/$defs/positiveInt"
+        },
+        "sizeType": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        }
+      }
+    },
+    "column": {
+      "type": "object",
+      "required": ["id", "width", "cells"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "width": {
+          "$ref": "#/$defs/positiveInt"
+        },
+        "cells": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/cell"
+          }
+        }
+      }
+    },
+    "locker": {
+      "type": "object",
+      "required": ["id", "device_id", "sn", "address", "gps", "dimensions", "columns"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "device_id": {
+          "$ref": "#/$defs/positiveInt"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1
+        },
+        "address": {
+          "type": "string",
+          "minLength": 1
+        },
+        "gps": {
+          "$ref": "#/$defs/gps"
+        },
+        "dimensions": {
+          "$ref": "#/$defs/dimensions"
+        },
+        "columns": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/column"
+          }
+        }
+      }
+    }
+  }
+}
