@@ -22,8 +22,37 @@ async def test_topology_includes_lwt_queues():
     assert q_svc.name == "svc"
     assert "app" in binding_destinations
     assert "svc" in binding_destinations
+    assert "iot.device.connection.events" in binding_destinations
     assert str(settings.rmq.routing_key_dev_app) in binding_keys
     assert str(settings.rmq.routing_key_dev_svc) in binding_keys
+    assert "connection.created" in binding_keys
+    assert "connection.closed" in binding_keys
+
+
+@pytest.mark.asyncio
+async def test_device_connection_events_subscriber_calls_service(monkeypatch):
+    mock_session = AsyncMock(spec=AsyncSession)
+    handled_events = []
+
+    async def fake_handle_connection_event(session, routing_key, payload, headers):
+        handled_events.append((routing_key, payload, headers))
+        return True
+
+    monkeypatch.setattr(
+        fs_queues_module.DeviceService,
+        "handle_connection_event",
+        fake_handle_connection_event,
+    )
+
+    msg = _make_rabbit_msg(b'{"user": "SN_TEST_EVENT", "name": "sock1"}')
+    msg.routing_key = "connection.created"
+    msg.headers = {"x-test": "1"}
+
+    await fs_queues_module.device_connection_events_handler(msg, mock_session)
+
+    assert len(handled_events) == 1
+    assert handled_events[0][0] == "connection.created"
+    assert handled_events[0][1]["user"] == "SN_TEST_EVENT"
 
 
 @pytest.mark.asyncio

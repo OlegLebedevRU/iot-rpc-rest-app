@@ -1,12 +1,50 @@
+import asyncio
+import time
+from datetime import datetime, timezone
+from typing import Any
+
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from core import settings
 from core.crud.device_repo import DeviceRepo
+from core.integrations.rmq_admin_api import (
+    RmqAdminApi,
+    extract_device_sn_from_conn,
+    IGNORED_USERS,
+)
 from core.logging_config import setup_module_logger
 from core.schemas.devices import DeviceConnectStatus, DeviceTagPut
 from core.services.rmq_admin import RmqAdmin
 
 log = setup_module_logger(__name__, "srv_devices.log")
+
+
+def extract_device_sn(payload: dict, headers: dict) -> str | None:
+    """Извлекает и валидирует Device SN из payload и headers AMQP-сообщения."""
+    user = payload.get("user") or headers.get("user")
+    if user and isinstance(user, str) and user.strip().lower() not in IGNORED_USERS:
+        return user.strip()
+
+    client_props = payload.get("client_properties") or headers.get("client_properties")
+    if isinstance(client_props, dict):
+        client_id = client_props.get("client_id")
+        if (
+            client_id
+            and isinstance(client_id, str)
+            and client_id.strip().lower() not in IGNORED_USERS
+        ):
+            return client_id.strip()
+
+    client_id_hdr = headers.get("client_id") or payload.get("client_id")
+    if (
+        client_id_hdr
+        and isinstance(client_id_hdr, str)
+        and client_id_hdr.strip().lower() not in IGNORED_USERS
+    ):
+        return client_id_hdr.strip()
+
+    return None
 
 
 class DeviceService:
@@ -23,30 +61,239 @@ class DeviceService:
         pass
 
     @classmethod
-    async def update_device_connections(cls, session: AsyncSession):
-        # todo need iterable select - request
-        list_devices = await DeviceRepo.list(session)
-        known_sn_set = await DeviceRepo.get_devices_with_known_connect_state(session)
-        sn_to_poll = [sn for sn in list_devices if sn and sn not in known_sn_set]
-
-        if not sn_to_poll:
-            return
-
-        dev_online = await RmqAdmin.get_online_devices(sn_to_poll) or []
-        dev_statuses: list[DeviceConnectStatus] = [
-            DeviceConnectStatus(
-                client_id=d.user,
-                connected_at=d.connected_at,
-                last_checked_result=True,
-                device_id=0,
-                details=d,
+    async def handle_connection_event(
+        cls,
+        session: AsyncSession,
+        routing_key: str,
+        payload: dict,
+        headers: dict,
+    ) -> bool:
+        """Обрабатывает AMQP-событие connection.created или connection.closed."""
+        device_sn = extract_device_sn(payload, headers)
+        if not device_sn:
+            log.debug(
+                "Ignored non-device connection event (routing_key=%s): user=%s, client_id=%s",
+                routing_key,
+                payload.get("user") or headers.get("user"),
+                headers.get("client_id"),
             )
-            for d in dev_online
-        ]
-        # log.debug("service DeviceService: update device connections %s", dev_statuses)
-        await DeviceRepo.reset_connection_flag(session, sn_to_poll)
-        await DeviceRepo.update_connections(session, dev_statuses)
-        await session.commit()
+            return False
+
+        conn_name = payload.get("name") or headers.get("name")
+        connected_at = payload.get("connected_at") or headers.get("connected_at")
+
+        details = {
+            "conn_name": conn_name,
+            "name": conn_name,
+            "peer_host": payload.get("peer_host") or headers.get("peer_host"),
+            "peer_port": payload.get("peer_port") or headers.get("peer_port"),
+            "ssl": payload.get("ssl") if "ssl" in payload else headers.get("ssl"),
+            "ssl_cipher": payload.get("ssl_cipher") or headers.get("ssl_cipher"),
+            "ssl_protocol": payload.get("ssl_protocol") or headers.get("ssl_protocol"),
+            "peer_cert_subject": payload.get("peer_cert_subject") or headers.get("peer_cert_subject"),
+            "peer_cert_validity": payload.get("peer_cert_validity") or headers.get("peer_cert_validity"),
+            "protocol": payload.get("protocol") or headers.get("protocol"),
+            "connected_at": connected_at,
+            "bytes_received": payload.get("recv_oct") or headers.get("recv_oct"),
+            "bytes_sent": payload.get("send_oct") or headers.get("send_oct"),
+            "client_properties": payload.get("client_properties") or headers.get("client_properties"),
+        }
+        details = {k: v for k, v in details.items() if v is not None}
+
+        if "connection.created" in routing_key:
+            res = await DeviceRepo.handle_connection_created(
+                session=session,
+                sn=device_sn,
+                conn_name=conn_name,
+                connected_at=connected_at,
+                details=details,
+            )
+            await session.commit()
+            log.info("Handled connection.created for %s (conn_name=%s)", device_sn, conn_name)
+            return res
+        elif "connection.closed" in routing_key:
+            res = await DeviceRepo.handle_connection_closed(
+                session=session,
+                sn=device_sn,
+                conn_name=conn_name,
+                closed_at=connected_at,
+                details=details,
+            )
+            await session.commit()
+            log.info(
+                "Handled connection.closed for %s (conn_name=%s, reset=%s)",
+                device_sn,
+                conn_name,
+                res,
+            )
+            return res
+        else:
+            log.warning("Unknown connection event routing key: %s", routing_key)
+            return False
+
+    @classmethod
+    async def reconcile_device_connections(
+        cls,
+        session: AsyncSession,
+        time_budget: float | None = None,
+        chunk_size: int | None = None,
+    ) -> dict[str, int]:
+        """Фоновая сверка (Reconciliation Loop) между RabbitMQ Management API и БД.
+
+        Выполняет порционную обработку списка терминалов (chunks по 50-100 устройств)
+        без блокировки event loop, с контролем временного бюджета.
+        """
+        budget = (
+            time_budget
+            if time_budget is not None
+            else settings.rmq.device_sync_time_budget_sec
+        )
+        chunk_sz = (
+            chunk_size
+            if chunk_size is not None
+            else settings.rmq.device_sync_chunk_size
+        )
+        start_time = time.monotonic()
+
+        log.info(
+            "Starting device connections reconciliation (time_budget=%.1fs, chunk_size=%d)...",
+            budget,
+            chunk_sz,
+        )
+
+        # 1. Fetch active connections from RMQ
+        raw_conns = await RmqAdminApi.get_all_connections(
+            time_budget_sec=min(budget / 2, 10.0), page_size=chunk_sz
+        )
+
+        active_map: dict[str, dict[str, Any]] = {}
+        for conn in raw_conns:
+            sn = extract_device_sn_from_conn(conn)
+            if sn:
+                active_map[sn] = conn
+
+        # 2. Fetch all DB connections
+        db_connections = await DeviceRepo.get_all_connections(session)
+        if not db_connections:
+            log.info("No device connections found in DB to reconcile.")
+            return {
+                "total_db": 0,
+                "online_rmq": len(active_map),
+                "reconciled_online": 0,
+                "reconciled_offline": 0,
+                "updated_telemetry": 0,
+            }
+
+        reconciled_online = 0
+        reconciled_offline = 0
+        updated_telemetry = 0
+
+        # 3. Process in chunks
+        for i in range(0, len(db_connections), chunk_sz):
+            elapsed = time.monotonic() - start_time
+            if elapsed >= budget:
+                log.warning(
+                    "Reconciliation loop time budget reached (%.2fs >= %.2fs). Processed %d/%d devices.",
+                    elapsed,
+                    budget,
+                    i,
+                    len(db_connections),
+                )
+                break
+
+            chunk = db_connections[i : i + chunk_sz]
+            for conn_row in chunk:
+                sn = conn_row.client_id
+                if not sn:
+                    continue
+
+                if sn in active_map:
+                    raw_conn = active_map[sn]
+                    conn_name = raw_conn.get("name")
+                    connected_at_raw = raw_conn.get("connected_at")
+                    dt_conn = None
+                    if isinstance(connected_at_raw, (int, float)):
+                        if connected_at_raw > 1e11:
+                            dt_conn = datetime.fromtimestamp(
+                                connected_at_raw / 1000, tz=timezone.utc
+                            ).replace(tzinfo=None)
+                        else:
+                            dt_conn = datetime.fromtimestamp(
+                                connected_at_raw, tz=timezone.utc
+                            ).replace(tzinfo=None)
+
+                    telemetry = {
+                        "conn_name": conn_name,
+                        "name": conn_name,
+                        "peer_host": raw_conn.get("peer_host"),
+                        "peer_port": raw_conn.get("peer_port"),
+                        "ssl": raw_conn.get("ssl"),
+                        "ssl_cipher": raw_conn.get("ssl_cipher"),
+                        "ssl_protocol": raw_conn.get("ssl_protocol"),
+                        "peer_cert_subject": raw_conn.get("peer_cert_subject"),
+                        "protocol": raw_conn.get("protocol"),
+                        "connected_at": connected_at_raw,
+                        "bytes_received": raw_conn.get("recv_oct"),
+                        "bytes_sent": raw_conn.get("send_oct"),
+                    }
+
+                    if not conn_row.last_checked_result:
+                        conn_row.last_checked_result = True
+                        reconciled_online += 1
+
+                    conn_row.checked_at = datetime.now(timezone.utc).replace(
+                        tzinfo=None
+                    )
+                    if dt_conn:
+                        conn_row.connected_at = dt_conn
+
+                    current_details = (
+                        dict(conn_row.details)
+                        if isinstance(conn_row.details, dict)
+                        else {}
+                    )
+                    current_details.update(
+                        {k: v for k, v in telemetry.items() if v is not None}
+                    )
+                    conn_row.details = current_details
+                    updated_telemetry += 1
+                else:
+                    if conn_row.last_checked_result:
+                        conn_row.last_checked_result = False
+                        conn_row.checked_at = datetime.now(timezone.utc).replace(
+                            tzinfo=None
+                        )
+                        if conn_row.details and isinstance(conn_row.details, dict):
+                            current_details = dict(conn_row.details)
+                            current_details["conn_name"] = None
+                            conn_row.details = current_details
+                        reconciled_offline += 1
+
+            await session.commit()
+            await asyncio.sleep(0.01)
+
+        log.info(
+            "Device connections reconciliation finished in %.2fs: total_db=%d, online_rmq=%d, reconciled_online=%d, reconciled_offline=%d, updated_telemetry=%d",
+            time.monotonic() - start_time,
+            len(db_connections),
+            len(active_map),
+            reconciled_online,
+            reconciled_offline,
+            updated_telemetry,
+        )
+
+        return {
+            "total_db": len(db_connections),
+            "online_rmq": len(active_map),
+            "reconciled_online": reconciled_online,
+            "reconciled_offline": reconciled_offline,
+            "updated_telemetry": updated_telemetry,
+        }
+
+    @classmethod
+    async def update_device_connections(cls, session: AsyncSession):
+        """Псевдоним для совместимости."""
+        return await cls.reconcile_device_connections(session)
 
     @classmethod
     async def proxy_upsert_tag(

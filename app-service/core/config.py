@@ -222,8 +222,10 @@ class RoutingKey:
 class RabbitQXConfig(BaseModel):
     x_name: str = "amq.topic"
     x_name_direct: str = "amq.direct"
+    event_exchange_name: str = "amq.rabbitmq.event"
     def_queue_args: dict = {"x-message-ttl": 600000}
     job_queue_args: dict = {"x-message-ttl": 600000}
+    conn_event_queue_args: dict = {"x-message-ttl": 86400000}
     prefix_dev: str = "dev"
     prefix_srv: str = "srv"
     # core -> dev
@@ -240,6 +242,7 @@ class RabbitQXConfig(BaseModel):
     out_queue_name: str = "out"
     app_queue_name: str = "app"
     svc_queue_name: str = "svc"
+    conn_events_queue_name: str = "iot.device.connection.events"
     routing_key_dev_ack: str = str(RoutingKey("dev", "*", "ack"))
     routing_key_dev_request: str = str(RoutingKey("dev", "*", "req"))
     routing_key_dev_result: str = str(RoutingKey("dev", "*", "res"))
@@ -247,7 +250,13 @@ class RabbitQXConfig(BaseModel):
     routing_key_dev_output: str = str(RoutingKey("dev", "*", "out"))
     routing_key_dev_app: str = str(RoutingKey("dev", "*", "app"))
     routing_key_dev_svc: str = str(RoutingKey("dev", "*", "svc"))
+    routing_key_conn_created: str = "connection.created"
+    routing_key_conn_closed: str = "connection.closed"
     api_clients_queue: str = "rmq_api_client_action"
+    # Reconciliation and polling settings
+    device_poll_interval_sec: int = 600
+    device_sync_chunk_size: int = 100
+    device_sync_time_budget_sec: float = 30.0
 
 
 class JobTtlConfig(BaseModel):

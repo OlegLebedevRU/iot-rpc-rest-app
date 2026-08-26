@@ -1,3 +1,4 @@
+import json
 import logging
 from faststream.rabbit.fastapi import RabbitMessage
 from core.crud.device_repo import DeviceRepo
@@ -6,10 +7,20 @@ from core.logging_config import setup_module_logger, log_rpc_debug
 from core.services.device_events_collect import DeviceEventsCollect
 from core.services.billing_publish import publish_billing_event
 from core.services.billing_utils import evt_billing_counter_type, publish_then_process
-from core.topologys.declare import q_ack, q_req, q_evt, q_result, q_out, q_app, q_svc
+from core.topologys.declare import (
+    q_ack,
+    q_req,
+    q_evt,
+    q_result,
+    q_out,
+    q_app,
+    q_svc,
+    q_device_conn_events,
+)
 from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
 from core.diagnostics.mqtt_bridge import handle_device_output_message
 
+from core.services.devices import DeviceService
 from core.services.device_tasks import DeviceTasksService
 
 log = setup_module_logger(__name__, "topology_queues.log")
@@ -200,6 +211,35 @@ if _REGISTER_SUBSCRIBERS:
 
         await DeviceRepo.update_connect_flag(session, sn, "svc_connect", value)
         await session.commit()
+
+    @fs_router.subscriber(q_device_conn_events)
+    async def device_connection_events_handler(
+        msg: RabbitMessage,
+        session: Session_dep,
+    ):
+        routing_key = (
+            getattr(msg, "routing_key", "")
+            or getattr(getattr(msg, "raw_message", None), "routing_key", "")
+            or ""
+        )
+        headers = (
+            getattr(msg, "headers", None)
+            or getattr(getattr(msg, "raw_message", None), "headers", None)
+            or {}
+        )
+        try:
+            payload = json.loads((msg.body or b"{}").decode("utf-8", errors="replace"))
+            if not isinstance(payload, dict):
+                payload = {}
+        except Exception:
+            payload = {}
+
+        await DeviceService.handle_connection_event(
+            session=session,
+            routing_key=routing_key,
+            payload=payload,
+            headers=headers,
+        )
 
 
 # Логируем количество подписчиков

@@ -177,7 +177,7 @@ services:
   #  restart: always
 configs:
   plugins:
-    content: "[rabbitmq_management, rabbitmq_mqtt]."
+    content: "[rabbitmq_management, rabbitmq_mqtt, rabbitmq_event_exchange]."
 volumes:
   pgdata:
   rabbitmq_data:

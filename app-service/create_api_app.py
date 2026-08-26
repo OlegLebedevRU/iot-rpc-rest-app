@@ -27,6 +27,7 @@ from core.fs_broker import fs_router
 from core.logging_config import setup_module_logger
 from core.models import db_helper
 from core.services.device_task_processing import act_ttl
+from core.services.devices import DeviceService
 from core.services.billing import BillingService
 from core.topologys.declare import declare_x_q
 
@@ -232,6 +233,44 @@ async def _sync_rmq_device_definitions_on_startup() -> None:
             await asyncio.sleep(delay)
 
 
+async def _initial_device_connections_sync_cold_boot() -> None:
+    """Non-blocking background initial sync for device connections at startup."""
+    log.info(
+        "Starting background initial device connections reconciliation (cold boot)..."
+    )
+    try:
+        await asyncio.sleep(1.0)
+        async for session in db_helper.session_getter():
+            await DeviceService.reconcile_device_connections(
+                session,
+                time_budget=settings.rmq.device_sync_time_budget_sec,
+                chunk_size=settings.rmq.device_sync_chunk_size,
+            )
+            break
+        log.info(
+            "Background initial device connections reconciliation completed."
+        )
+    except Exception as exc:
+        log.warning(
+            "Initial device connections reconciliation encountered an error: %s",
+            exc,
+        )
+
+
+async def _periodic_device_reconciliation_job() -> None:
+    """Periodic background reconciliation of device connections."""
+    async for session in db_helper.session_getter():
+        try:
+            await DeviceService.reconcile_device_connections(
+                session,
+                time_budget=settings.rmq.device_sync_time_budget_sec,
+                chunk_size=settings.rmq.device_sync_chunk_size,
+            )
+        except Exception as e:
+            log.error("Periodic device reconciliation job failed: %s", e)
+        break
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await _start_broker_with_retry()
@@ -244,6 +283,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "RabbitMQ topology watchdog started: interval=%.1fs",
             settings.faststream.topology_watchdog_interval,
         )
+    cold_boot_task = asyncio.create_task(_initial_device_connections_sync_cold_boot())
     scheduler = AsyncIOScheduler()
     scheduler.configure(jobstores={"default": MemoryJobStore()})
     try:
@@ -253,6 +293,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             coalesce=True,
             trigger=IntervalTrigger(minutes=settings.ttl_job.tick_interval),
             id=settings.ttl_job.id_name,
+            replace_existing=True,
+        )
+        scheduler.add_job(
+            _periodic_device_reconciliation_job,
+            coalesce=True,
+            trigger=IntervalTrigger(seconds=settings.rmq.device_poll_interval_sec),
+            id="device_reconciliation_job",
             replace_existing=True,
         )
         # Billing: monthly calculation job — runs daily at 00:15,
@@ -272,6 +319,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
 
+    if not cold_boot_task.done():
+        cold_boot_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await cold_boot_task
     if topology_watchdog_task is not None:
         topology_watchdog_task.cancel()
         with suppress(asyncio.CancelledError):

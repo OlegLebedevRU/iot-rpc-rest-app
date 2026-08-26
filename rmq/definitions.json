@@ -155,10 +155,36 @@
         "x-queue-type": "classic",
         "x-message-ttl": 600000
       }
+    },
+    {
+      "name": "iot.device.connection.events",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic",
+        "x-message-ttl": 86400000
+      }
     }
   ],
   "exchanges": [],
   "bindings": [
+    {
+      "source": "amq.rabbitmq.event",
+      "vhost": "/",
+      "destination": "iot.device.connection.events",
+      "destination_type": "queue",
+      "routing_key": "connection.created",
+      "arguments": {}
+    },
+    {
+      "source": "amq.rabbitmq.event",
+      "vhost": "/",
+      "destination": "iot.device.connection.events",
+      "destination_type": "queue",
+      "routing_key": "connection.closed",
+      "arguments": {}
+    },
     {
       "source": "amq.direct",
       "vhost": "/",

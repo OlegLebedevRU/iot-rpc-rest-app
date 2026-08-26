@@ -53,7 +53,7 @@ services:
       interval: 30s
 configs:
   plugins:
-    content: "[rabbitmq_management, rabbitmq_mqtt]." 
+    content: "[rabbitmq_management, rabbitmq_mqtt, rabbitmq_event_exchange]."
 volumes:
   rabbitmq_data:
     driver: local

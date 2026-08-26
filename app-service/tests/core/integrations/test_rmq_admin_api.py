@@ -42,8 +42,13 @@ class DummyAsyncClient:
     async def __aexit__(self, exc_type, exc, tb):
         return False
 
-    async def get(self, url: str):
-        response = self._responses.get(url)
+    async def get(self, url: str, params: dict | None = None, **kwargs):
+        if params:
+            query_str = "&".join(f"{k}={v}" for k, v in params.items())
+            full_url = f"{url}?{query_str}"
+            response = self._responses.get(full_url) or self._responses.get(url)
+        else:
+            response = self._responses.get(url)
         if response is None:
             raise AssertionError(f"Unexpected GET {url}")
         return response
@@ -236,3 +241,46 @@ async def test_set_device_definitions_repairs_acl_for_existing_user(monkeypatch)
             },
         ),
     ]
+
+
+@pytest.mark.asyncio
+async def test_get_all_connections_paginated(monkeypatch):
+    responses = {
+        "api/connections?page=1&page_size=2&pagination=true": DummyResponse(
+            200,
+            {
+                "total_count": 3,
+                "item_count": 2,
+                "page": 1,
+                "page_count": 2,
+                "items": [
+                    {"user": "SN_PAGE_1", "name": "sock1"},
+                    {"user": "SN_PAGE_2", "name": "sock2"},
+                ],
+            },
+            "api/connections?page=1&page_size=2&pagination=true",
+        ),
+        "api/connections?page=2&page_size=2&pagination=true": DummyResponse(
+            200,
+            {
+                "total_count": 3,
+                "item_count": 1,
+                "page": 2,
+                "page_count": 2,
+                "items": [
+                    {"user": "SN_PAGE_3", "name": "sock3"},
+                ],
+            },
+            "api/connections?page=2&page_size=2&pagination=true",
+        ),
+    }
+
+    monkeypatch.setattr(
+        rmq_admin_api.httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: DummyAsyncClient(*args, responses=responses, **kwargs),
+    )
+
+    conns = await RmqAdminApi.get_all_connections(time_budget_sec=5.0, page_size=2)
+    assert len(conns) == 3
+    assert [c["user"] for c in conns] == ["SN_PAGE_1", "SN_PAGE_2", "SN_PAGE_3"]

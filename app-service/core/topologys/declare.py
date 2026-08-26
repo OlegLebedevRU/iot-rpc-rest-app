@@ -31,6 +31,9 @@ topic_exchange = RabbitExchange(
 direct_exchange = RabbitExchange(
     name=topology.x_name_direct, type=ExchangeType.DIRECT, declare=False
 )
+event_exchange = RabbitExchange(
+    name=topology.event_exchange_name, type=ExchangeType.TOPIC, declare=False
+)
 
 # Публикаторы
 job_publisher = fs_router.publisher(exchange=direct_exchange)
@@ -72,6 +75,11 @@ billing_action = RabbitQueue(
     durable=True,
     arguments=settings.billing.def_queue_args,
 )
+q_device_conn_events = RabbitQueue(
+    name=topology.conn_events_queue_name,
+    durable=True,
+    arguments=topology.conn_event_queue_args,
+)
 
 # Список биндингов: (queue, routing_key, exchange)
 BINDINGS: List[Tuple[RabbitQueue, str, RabbitExchange]] = [
@@ -82,6 +90,8 @@ BINDINGS: List[Tuple[RabbitQueue, str, RabbitExchange]] = [
     (q_out, topology.routing_key_dev_output, topic_exchange),
     (q_app, topology.routing_key_dev_app, topic_exchange),
     (q_svc, topology.routing_key_dev_svc, topic_exchange),
+    (q_device_conn_events, topology.routing_key_conn_created, event_exchange),
+    (q_device_conn_events, topology.routing_key_conn_closed, event_exchange),
     (q_jobs, settings.ttl_job.queue_name, direct_exchange),
     (rmq_api_client_action, topology.api_clients_queue, direct_exchange),
     (webhook_action, settings.webhook.webhooks_queue, direct_exchange),
@@ -116,10 +126,14 @@ async def declare_x_q():
         direct_ex: RobustExchange = await asyncio.wait_for(
             broker.declare_exchange(direct_exchange), timeout=10.0
         )
+        event_ex: RobustExchange = await asyncio.wait_for(
+            broker.declare_exchange(event_exchange), timeout=10.0
+        )
 
         exchange_map = {
             topology.x_name: topic_ex,
             topology.x_name_direct: direct_ex,
+            topology.event_exchange_name: event_ex,
         }
 
         for rabbit_queue, routing_key, exchange in BINDINGS:

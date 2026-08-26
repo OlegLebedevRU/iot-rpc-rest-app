@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 from fastapi_pagination.ext.sqlalchemy import apaginate
 
@@ -230,43 +231,185 @@ class DeviceRepo:
         cls, session: AsyncSession, sn: str, flag_name: str, value: bool
     ):
         """
-        Атомарно обновляет флаг подключения (app_connect или svc_connect),
-        пересчитывает last_checked_result по формуле:
-        COALESCE(app_connect, false) OR COALESCE(svc_connect, false),
-        обновляет checked_at = NOW() и connected_at = NOW() (при value=True).
+        Атомарно обновляет флаг подключения (app_connect или svc_connect)
+        и обновляет checked_at = NOW().
+        Не перезаписывает и не сбрасывает last_checked_result.
         """
-        if flag_name == "app_connect":
-            stmt = (
-                update(DeviceConnection)
-                .where(DeviceConnection.client_id == sn)
-                .values(
-                    app_connect=value,
-                    last_checked_result=sql.or_(
-                        sql.literal(value),
-                        func.coalesce(DeviceConnection.svc_connect, False),
-                    ),
-                    checked_at=func.now(),
-                    **({"connected_at": func.now()} if value else {}),
-                )
-            )
-        elif flag_name == "svc_connect":
-            stmt = (
-                update(DeviceConnection)
-                .where(DeviceConnection.client_id == sn)
-                .values(
-                    svc_connect=value,
-                    last_checked_result=sql.or_(
-                        func.coalesce(DeviceConnection.app_connect, False),
-                        sql.literal(value),
-                    ),
-                    checked_at=func.now(),
-                    **({"connected_at": func.now()} if value else {}),
-                )
-            )
-        else:
+        if flag_name not in ("app_connect", "svc_connect"):
             raise ValueError(f"Invalid connection flag name: {flag_name}")
 
+        stmt = (
+            update(DeviceConnection)
+            .where(DeviceConnection.client_id == sn)
+            .values(
+                {
+                    flag_name: value,
+                    "checked_at": func.now(),
+                }
+            )
+        )
         await session.execute(stmt)
+
+    @classmethod
+    async def handle_connection_created(
+        cls,
+        session: AsyncSession,
+        sn: str,
+        conn_name: str | None = None,
+        connected_at: datetime | int | float | None = None,
+        details: dict | None = None,
+    ) -> bool:
+        """
+        Обрабатывает событие connection.created для устройства по SN.
+        Устанавливает last_checked_result = True, обновляет checked_at,
+        connected_at и сохраняет conn_name и телеметрию в details.
+        Не сбрасывает и не изменяет app_connect и svc_connect.
+        """
+        dt_connected_at = None
+        if isinstance(connected_at, (int, float)):
+            if connected_at > 1e11:
+                dt_connected_at = datetime.fromtimestamp(
+                    connected_at / 1000, tz=timezone.utc
+                ).replace(tzinfo=None)
+            else:
+                dt_connected_at = datetime.fromtimestamp(
+                    connected_at, tz=timezone.utc
+                ).replace(tzinfo=None)
+        elif isinstance(connected_at, datetime):
+            dt_connected_at = (
+                connected_at.replace(tzinfo=None)
+                if connected_at.tzinfo
+                else connected_at
+            )
+
+        details_dict = dict(details) if isinstance(details, dict) else {}
+        if conn_name:
+            details_dict["conn_name"] = conn_name
+            details_dict["name"] = conn_name
+        if connected_at is not None:
+            details_dict["connected_at"] = connected_at
+
+        stmt = select(DeviceConnection).where(DeviceConnection.client_id == sn)
+        res = await session.execute(stmt)
+        conn_row = res.scalar_one_or_none()
+
+        now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        if conn_row is not None:
+            conn_row.last_checked_result = True
+            conn_row.checked_at = now_dt
+            if dt_connected_at is not None:
+                conn_row.connected_at = dt_connected_at
+            elif conn_row.connected_at is None:
+                conn_row.connected_at = now_dt
+
+            merged_details = (
+                dict(conn_row.details)
+                if isinstance(conn_row.details, dict)
+                else {}
+            )
+            merged_details.update(details_dict)
+            conn_row.details = merged_details
+            return True
+        else:
+            dev_id = await cls.get_device_id(session, sn=sn)
+            if dev_id is not None:
+                new_conn = DeviceConnection(
+                    device_id=dev_id,
+                    client_id=sn,
+                    last_checked_result=True,
+                    checked_at=now_dt,
+                    connected_at=dt_connected_at or now_dt,
+                    details=details_dict,
+                )
+                session.add(new_conn)
+                return True
+            else:
+                log.info("Received connection.created for unknown device SN=%s", sn)
+                return False
+
+    @classmethod
+    async def handle_connection_closed(
+        cls,
+        session: AsyncSession,
+        sn: str,
+        conn_name: str | None = None,
+        closed_at: datetime | int | float | None = None,
+        details: dict | None = None,
+    ) -> bool:
+        """
+        Обрабатывает событие connection.closed для устройства по SN.
+        Защита от race condition: сбрасывает last_checked_result = False только если
+        закрывающееся соединение совпадает с текущим активным conn_name или новее.
+        Не сбрасывает и не изменяет app_connect и svc_connect.
+        """
+        stmt = select(DeviceConnection).where(DeviceConnection.client_id == sn)
+        res = await session.execute(stmt)
+        conn_row = res.scalar_one_or_none()
+
+        if conn_row is None:
+            return False
+
+        now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        if conn_row.last_checked_result:
+            current_details = (
+                conn_row.details if isinstance(conn_row.details, dict) else {}
+            )
+            current_conn_name = current_details.get("conn_name") or current_details.get("name")
+
+            if conn_name and current_conn_name and conn_name != current_conn_name:
+                log.info(
+                    "Race condition on connection.closed for SN=%s: closed conn '%s' != active conn '%s'. Skipping status reset.",
+                    sn,
+                    conn_name,
+                    current_conn_name,
+                )
+                return False
+
+            if closed_at is not None and conn_row.connected_at is not None:
+                dt_closed_at = None
+                if isinstance(closed_at, (int, float)):
+                    if closed_at > 1e11:
+                        dt_closed_at = datetime.fromtimestamp(
+                            closed_at / 1000, tz=timezone.utc
+                        ).replace(tzinfo=None)
+                    else:
+                        dt_closed_at = datetime.fromtimestamp(
+                            closed_at, tz=timezone.utc
+                        ).replace(tzinfo=None)
+                elif isinstance(closed_at, datetime):
+                    dt_closed_at = (
+                        closed_at.replace(tzinfo=None)
+                        if closed_at.tzinfo
+                        else closed_at
+                    )
+
+                if dt_closed_at and dt_closed_at < conn_row.connected_at:
+                    log.info(
+                        "Out-of-order connection.closed for SN=%s: closed_at (%s) < connected_at (%s). Skipping status reset.",
+                        sn,
+                        dt_closed_at,
+                        conn_row.connected_at,
+                    )
+                    return False
+
+            conn_row.last_checked_result = False
+            conn_row.checked_at = now_dt
+            merged_details = dict(current_details)
+            merged_details["conn_name"] = None
+            conn_row.details = merged_details
+            return True
+        else:
+            conn_row.checked_at = now_dt
+            return True
+
+    @classmethod
+    async def get_all_connections(cls, session: AsyncSession) -> list[DeviceConnection]:
+        """Возвращает все записи DeviceConnection из БД."""
+        stmt = select(DeviceConnection)
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
 
     @classmethod
     async def get_devices_with_known_connect_state(

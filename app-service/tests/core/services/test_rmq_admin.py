@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.crud.device_repo import DeviceRepo
 from core.integrations.rmq_admin_api import RmqAdminApi
+from core.schemas.rmq_admin import DeviceConnectionDetails
 from core.services.rmq_admin import RmqAdmin
 from typing import cast
 
@@ -51,3 +52,27 @@ async def test_set_device_definitions_returns_none_without_devices(monkeypatch):
         await RmqAdmin.set_device_definitions(session=cast(AsyncSession, object()))
         is None
     )
+
+
+@pytest.mark.asyncio
+async def test_rmq_admin_get_online_devices(monkeypatch):
+    async def fake_get_connection(sn_arr):
+        return [
+            DeviceConnectionDetails.model_validate(
+                {
+                    "user": "SN_100",
+                    "connected_at": 1700000000000,
+                    "peer_host": "127.0.0.1",
+                    "peer_port": 50000,
+                    "protocol": "MQTT",
+                    "peer_cert_subject": "CN=SN_100",
+                    "peer_cert_validity": "valid",
+                    "client_properties": {"client_id": "SN_100"},
+                }
+            )
+        ]
+
+    monkeypatch.setattr(RmqAdminApi, "get_connection", fake_get_connection)
+    res = await RmqAdmin.get_online_devices(["SN_100", "SN_200"])
+    assert len(res) == 1
+    assert res[0].user == "SN_100"

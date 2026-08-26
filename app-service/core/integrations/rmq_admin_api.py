@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import time
+from typing import Any
 from urllib.parse import quote, urljoin
 
 from core.logging_config import setup_module_logger
@@ -12,6 +14,29 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 # ogging.getLogger("httpx._client").setLevel(logging.WARNING)
 
 log = setup_module_logger(__name__, "rabbit_admin_api.log")
+
+IGNORED_USERS: frozenset[str] = frozenset(
+    {"guest", "admin", "user", "internal", "root", "anonymous", "null", "none"}
+)
+
+
+def extract_device_sn_from_conn(conn_data: dict[str, Any]) -> str | None:
+    """Извлекает серийный номер устройства из данных соединения RabbitMQ."""
+    user = conn_data.get("user")
+    if user and isinstance(user, str) and user.strip().lower() not in IGNORED_USERS:
+        return user.strip()
+
+    client_props = conn_data.get("client_properties")
+    if isinstance(client_props, dict):
+        client_id = client_props.get("client_id")
+        if (
+            client_id
+            and isinstance(client_id, str)
+            and client_id.strip().lower() not in IGNORED_USERS
+        ):
+            return client_id.strip()
+
+    return None
 
 
 async def fetch_one(session, suffix, param):
@@ -96,6 +121,82 @@ class RmqAdminApi:
             return None
         response.raise_for_status()
         return response.json()
+
+    @classmethod
+    async def get_all_connections(
+        cls,
+        time_budget_sec: float = 10.0,
+        page_size: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Получает список всех активных соединений из RabbitMQ Management API
+        с контролем временного бюджета и порционной загрузкой при необходимости.
+        """
+        start_time = time.monotonic()
+        url = cls._admin_url()
+        all_connections: list[dict[str, Any]] = []
+
+        try:
+            timeout = httpx.Timeout(min(time_budget_sec, 10.0), connect=5.0)
+            async with httpx.AsyncClient(base_url=url, timeout=timeout) as client:
+                page = 1
+                while True:
+                    elapsed = time.monotonic() - start_time
+                    remaining_budget = time_budget_sec - elapsed
+                    if remaining_budget <= 0.5:
+                        log.warning(
+                            "Time budget exhausted while fetching RMQ connections (elapsed=%.2fs, budget=%.2fs). Collected %d connections so far.",
+                            elapsed,
+                            time_budget_sec,
+                            len(all_connections),
+                        )
+                        break
+
+                    try:
+                        resp = await client.get(
+                            "api/connections",
+                            params={
+                                "page": page,
+                                "page_size": page_size,
+                                "pagination": "true",
+                            },
+                        )
+                    except Exception as e:
+                        log.warning("HTTP error querying api/connections: %s", e)
+                        break
+
+                    if resp.status_code != 200:
+                        if page == 1:
+                            try:
+                                fallback_resp = await client.get("api/connections")
+                                if fallback_resp.status_code == 200:
+                                    data = fallback_resp.json()
+                                    if isinstance(data, list):
+                                        return data
+                            except Exception as e:
+                                log.warning("HTTP fallback query error: %s", e)
+                        log.warning("Failed to fetch RMQ connections: status=%d", resp.status_code)
+                        break
+
+                    data = resp.json()
+                    if isinstance(data, dict) and "items" in data:
+                        items = data.get("items", [])
+                        all_connections.extend(items)
+                        page_count = data.get("page_count", 1)
+                        if page >= page_count or not items:
+                            break
+                        page += 1
+                    elif isinstance(data, list):
+                        all_connections.extend(data)
+                        break
+                    else:
+                        break
+
+                    await asyncio.sleep(0.01)
+
+        except Exception as exc:
+            log.warning("Exception while fetching RMQ connections: %s", exc)
+
+        return all_connections
 
     @classmethod
     async def get_connection(cls, sn_arr):
