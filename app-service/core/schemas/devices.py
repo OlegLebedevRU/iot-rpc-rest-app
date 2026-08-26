@@ -16,6 +16,8 @@ class DeviceConnectStatus(BaseModel):
     connected_at: Optional[int] = None
     checked_at: Optional[int] = None
     last_checked_result: bool
+    app_connect: Optional[bool] = None
+    svc_connect: Optional[bool] = None
     details: DeviceConnectionDetails  # Optional[Json]
 
 
@@ -41,7 +43,9 @@ class DeviceConnectView(BaseModel):
     connected_at: Optional[datetime] = None
     checked_at: Optional[datetime] = None
     last_checked_result: bool
-    details: Optional[DeviceConnectionDetails]  # Optional[Json]
+    app_connect: Optional[bool] = None
+    svc_connect: Optional[bool] = None
+    details: Optional[DeviceConnectionDetails] = None  # Optional[Json]
 
 
 class DeviceListResult(BaseModel):

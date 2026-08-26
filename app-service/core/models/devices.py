@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy import (
     Integer,
@@ -165,6 +165,12 @@ class DeviceConnection(Base):
     )
     client_id: Mapped[str] = mapped_column(String, nullable=True)
     last_checked_result: Mapped[bool] = mapped_column(Boolean, default=False)
+    app_connect: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True, default=None
+    )
+    svc_connect: Mapped[Optional[bool]] = mapped_column(
+        Boolean, nullable=True, default=None
+    )
     details: Mapped[str] = mapped_column(JSONB, nullable=True)
     # Определение индекса на поле client_id
     # CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_tb_device_connections_client_id ON tb_device_connections(client_id)

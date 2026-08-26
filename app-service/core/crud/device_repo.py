@@ -5,7 +5,7 @@ from fastapi_pagination.ext.sqlalchemy import apaginate
 from core.logging_config import setup_module_logger
 from typing import Any, List
 
-from sqlalchemy import select, not_, func, update, text
+from sqlalchemy import select, not_, func, update, text, sql
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.orm import joinedload, load_only
@@ -224,6 +224,64 @@ class DeviceRepo:
         )
         # commit in service with transaction (reset-update)
         # await session.commit()
+
+    @classmethod
+    async def update_connect_flag(
+        cls, session: AsyncSession, sn: str, flag_name: str, value: bool
+    ):
+        """
+        Атомарно обновляет флаг подключения (app_connect или svc_connect),
+        пересчитывает last_checked_result по формуле:
+        COALESCE(app_connect, false) OR COALESCE(svc_connect, false),
+        обновляет checked_at = NOW() и connected_at = NOW() (при value=True).
+        """
+        if flag_name == "app_connect":
+            stmt = (
+                update(DeviceConnection)
+                .where(DeviceConnection.client_id == sn)
+                .values(
+                    app_connect=value,
+                    last_checked_result=sql.or_(
+                        sql.literal(value),
+                        func.coalesce(DeviceConnection.svc_connect, False),
+                    ),
+                    checked_at=func.now(),
+                    **({"connected_at": func.now()} if value else {}),
+                )
+            )
+        elif flag_name == "svc_connect":
+            stmt = (
+                update(DeviceConnection)
+                .where(DeviceConnection.client_id == sn)
+                .values(
+                    svc_connect=value,
+                    last_checked_result=sql.or_(
+                        func.coalesce(DeviceConnection.app_connect, False),
+                        sql.literal(value),
+                    ),
+                    checked_at=func.now(),
+                    **({"connected_at": func.now()} if value else {}),
+                )
+            )
+        else:
+            raise ValueError(f"Invalid connection flag name: {flag_name}")
+
+        await session.execute(stmt)
+
+    @classmethod
+    async def get_devices_with_known_connect_state(
+        cls, session: AsyncSession
+    ) -> set[str]:
+        """
+        Возвращает множество client_id (serial numbers) устройств,
+        у которых хотя бы один из LWT флагов (app_connect или svc_connect) не NULL.
+        """
+        stmt = select(DeviceConnection.client_id).where(
+            DeviceConnection.app_connect.isnot(None)
+            | DeviceConnection.svc_connect.isnot(None)
+        )
+        result = await session.execute(stmt)
+        return {sn for sn in result.scalars().all() if sn}
 
     @classmethod
     async def list(cls, session: AsyncSession) -> List[str]:

@@ -238,11 +238,15 @@ class RabbitQXConfig(BaseModel):
     res_queue_name: str = "res"
     evt_queue_name: str = "evt"
     out_queue_name: str = "out"
+    app_queue_name: str = "app"
+    svc_queue_name: str = "svc"
     routing_key_dev_ack: str = str(RoutingKey("dev", "*", "ack"))
     routing_key_dev_request: str = str(RoutingKey("dev", "*", "req"))
     routing_key_dev_result: str = str(RoutingKey("dev", "*", "res"))
     routing_key_dev_event: str = str(RoutingKey("dev", "*", "evt"))
     routing_key_dev_output: str = str(RoutingKey("dev", "*", "out"))
+    routing_key_dev_app: str = str(RoutingKey("dev", "*", "app"))
+    routing_key_dev_svc: str = str(RoutingKey("dev", "*", "svc"))
     api_clients_queue: str = "rmq_api_client_action"
 
 

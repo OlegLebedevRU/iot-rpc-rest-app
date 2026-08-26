@@ -6,7 +6,7 @@ from core.logging_config import setup_module_logger, log_rpc_debug
 from core.services.device_events_collect import DeviceEventsCollect
 from core.services.billing_publish import publish_billing_event
 from core.services.billing_utils import evt_billing_counter_type, publish_then_process
-from core.topologys.declare import q_ack, q_req, q_evt, q_result, q_out
+from core.topologys.declare import q_ack, q_req, q_evt, q_result, q_out, q_app, q_svc
 from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
 from core.diagnostics.mqtt_bridge import handle_device_output_message
 
@@ -150,6 +150,56 @@ if _REGISTER_SUBSCRIBERS:
     ):
         routing_key = getattr(msg, "routing_key", None) or f"dev.{sn}.out"
         await handle_device_output_message(routing_key=routing_key, payload=msg.body)
+
+    @fs_router.subscriber(q_app)
+    async def app_connect_handler(
+        msg: RabbitMessage,
+        session: Session_dep,
+        sn: Sn_dep,
+    ):
+        try:
+            body = (
+                (msg.body or b"").decode("utf-8", errors="replace").strip().strip('"')
+            )
+        except Exception as e:
+            log.warning("Failed to decode app connect message for %s: %s", sn, e)
+            return
+
+        if body == "app_online":
+            value = True
+        elif body == "app_offline":
+            value = False
+        else:
+            log.warning("Unknown app connect message payload for %s: %s", sn, body)
+            return
+
+        await DeviceRepo.update_connect_flag(session, sn, "app_connect", value)
+        await session.commit()
+
+    @fs_router.subscriber(q_svc)
+    async def svc_connect_handler(
+        msg: RabbitMessage,
+        session: Session_dep,
+        sn: Sn_dep,
+    ):
+        try:
+            body = (
+                (msg.body or b"").decode("utf-8", errors="replace").strip().strip('"')
+            )
+        except Exception as e:
+            log.warning("Failed to decode svc connect message for %s: %s", sn, e)
+            return
+
+        if body == "svc_online":
+            value = True
+        elif body == "svc_offline":
+            value = False
+        else:
+            log.warning("Unknown svc connect message payload for %s: %s", sn, body)
+            return
+
+        await DeviceRepo.update_connect_flag(session, sn, "svc_connect", value)
+        await session.commit()
 
 
 # Логируем количество подписчиков

@@ -135,6 +135,26 @@
       "arguments": {
         "x-queue-type": "classic"
       }
+    },
+    {
+      "name": "app",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic",
+        "x-message-ttl": 600000
+      }
+    },
+    {
+      "name": "svc",
+      "vhost": "/",
+      "durable": true,
+      "auto_delete": false,
+      "arguments": {
+        "x-queue-type": "classic",
+        "x-message-ttl": 600000
+      }
     }
   ],
   "exchanges": [],
@@ -177,6 +197,22 @@
       "destination": "res",
       "destination_type": "queue",
       "routing_key": "dev.*.res",
+      "arguments": {}
+    },
+    {
+      "source": "amq.topic",
+      "vhost": "/",
+      "destination": "app",
+      "destination_type": "queue",
+      "routing_key": "dev.*.app",
+      "arguments": {}
+    },
+    {
+      "source": "amq.topic",
+      "vhost": "/",
+      "destination": "svc",
+      "destination_type": "queue",
+      "routing_key": "dev.*.svc",
       "arguments": {}
     }
   ]

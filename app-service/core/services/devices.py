@@ -26,7 +26,13 @@ class DeviceService:
     async def update_device_connections(cls, session: AsyncSession):
         # todo need iterable select - request
         list_devices = await DeviceRepo.list(session)
-        dev_online = await RmqAdmin.get_online_devices(list_devices) or []
+        known_sn_set = await DeviceRepo.get_devices_with_known_connect_state(session)
+        sn_to_poll = [sn for sn in list_devices if sn and sn not in known_sn_set]
+
+        if not sn_to_poll:
+            return
+
+        dev_online = await RmqAdmin.get_online_devices(sn_to_poll) or []
         dev_statuses: list[DeviceConnectStatus] = [
             DeviceConnectStatus(
                 client_id=d.user,
@@ -38,7 +44,7 @@ class DeviceService:
             for d in dev_online
         ]
         # log.debug("service DeviceService: update device connections %s", dev_statuses)
-        await DeviceRepo.reset_connection_flag(session, list_devices)
+        await DeviceRepo.reset_connection_flag(session, sn_to_poll)
         await DeviceRepo.update_connections(session, dev_statuses)
         await session.commit()
 

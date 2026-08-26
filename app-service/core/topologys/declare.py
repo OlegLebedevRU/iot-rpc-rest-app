@@ -48,6 +48,12 @@ q_result = RabbitQueue(name=topology.res_queue_name, durable=True)
 q_out = RabbitQueue(
     name=topology.out_queue_name, durable=False, arguments=topology.def_queue_args
 )
+q_app = RabbitQueue(
+    name=topology.app_queue_name, durable=True, arguments=topology.def_queue_args
+)
+q_svc = RabbitQueue(
+    name=topology.svc_queue_name, durable=True, arguments=topology.def_queue_args
+)
 q_jobs = RabbitQueue(
     name=settings.ttl_job.queue_name, durable=False, arguments=topology.job_queue_args
 )
@@ -74,6 +80,8 @@ BINDINGS: List[Tuple[RabbitQueue, str, RabbitExchange]] = [
     (q_evt, topology.routing_key_dev_event, topic_exchange),
     (q_result, topology.routing_key_dev_result, topic_exchange),
     (q_out, topology.routing_key_dev_output, topic_exchange),
+    (q_app, topology.routing_key_dev_app, topic_exchange),
+    (q_svc, topology.routing_key_dev_svc, topic_exchange),
     (q_jobs, settings.ttl_job.queue_name, direct_exchange),
     (rmq_api_client_action, topology.api_clients_queue, direct_exchange),
     (webhook_action, settings.webhook.webhooks_queue, direct_exchange),
