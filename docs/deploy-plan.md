@@ -58,13 +58,14 @@ Volumes: `pgdata`, `rabbitmq_data`. Bind-mounts:
 
 ### 1.3. Исторически устранённые и оставшиеся слабые места DevOps
 
-1. **Сборка на целевой машине для собственных образов устранена как основной
-   сценарий**: последние деплои используют `docker compose pull` из GHCR.
-   `build:` в `compose.yaml` сохранён только как fallback локальной сборки.
-2. **Тегирование и откат частично решены**: собственные образы стали
-   immutable-артефактами в GHCR с тегами `sha-*`, branch, `latest` и semver;
-   откат возможен через `IMAGE_TAG=sha-<prev>` + `docker compose pull/up`.
-   Не хватает автоматизированного CD/approve-flow.
+1. **Фактический сценарий деплоя**: основным и наиболее надёжным методом деплоя
+   является локальная сборка на целевой машине через `docker compose build app1`
+   с последующим перезапуском `docker compose up -d --no-deps app1`. Сборка и
+   деплой готовых пакетов через GitHub Packages (GHCR) сохранены как альтернативный
+   вариант (применяемый только при наличии прямого указания).
+2. **Тегирование и откат**: собственные образы поддерживают версионирование
+   через Git-коммиты (для локальной сборки) и immutable-артефакты в GHCR с
+   тегами `sha-*`, branch, `latest` (при использовании registry).
 3. **Секреты в открытом виде**: пароли БД и RabbitMQ зашиты в `compose.yaml`
    и `definitions.json`, сертификаты лежат в `./crt/` рядом с кодом.
 4. **PostgreSQL в одном контейнере с приложением** — нет независимого
@@ -525,51 +526,49 @@ ERROR: failed to compute cache key: "/crt/key_0000.pem": not found
   SSH-секреты или `GHCR_READ_PAT`: `GITHUB_TOKEN` используется только в
   Actions для публикации public-пакетов.
 
-### 6.4. Ручной деплой на VM (текущий флоу, по сервисам)
+### 6.4. Ручной деплой на VM (фактический флоу по сервисам)
 
 Подробный операционный runbook для аккуратного деплоя **только `app1`**,
-обязательных уточнений (`самый новый app` vs `восстановить текущий`), backup
+обязательных уточнений, сборки на хосте, деплоя из GHCR (по требованию), backup
 `.env`, rollback и проверок см. в
 [`manual-app1-deploy-runbook.md`](manual-app1-deploy-runbook.md).
 
-Подключение по SSH к существующей VM, в каталоге репозитория
-(`/opt/iot-rpc-rest-app` или где он лежит сейчас):
+Подключение по SSH к целевой VM, в каталог репозитория (`/home/user1/iot-rpc-rest-app`):
 
-**Предусловие (одноразовое):** на VM должен лежать
-`./app-service/.env` с боевыми значениями (как сейчас) — он
+**Предусловие:** на VM должен лежать `./app-service/.env` с боевыми значениями — он
 прокидывается в `app1` через `env_file:` (см. §6.2). Если файла нет,
-`docker compose up -d app1` упадёт с `env file ... not found` ещё до
-старта контейнера.
+`docker compose up -d app1` упадёт с ошибкой до старта контейнера.
+
+#### Основной сценарий (локальная сборка на хосте):
 
 ```bash
-# 1. Подтянуть актуальные compose.yaml / конфиги / миграции
-git pull
+# 1. Подтянуть актуальный код / миграции / конфиги
+git fetch origin && git checkout <target_branch_or_commit>
 
-# 2. GHCR packages public: docker login не нужен.
-# Если пакеты когда-нибудь станут private:
-# echo "$GHCR_READ_PAT" | docker login ghcr.io -u <bot-user> --password-stdin
+# 2. Собрать образ сервиса напрямую на VM
+sudo docker compose build app1
 
-# 3. Зафиксировать тег образов на этот деплой (короткий git SHA из master/main)
+# 3. Безопасно перезапустить только сервис приложения без зависимостей
+sudo docker compose up -d --no-deps app1
+
+# 4. Проверить статус и логи
+sudo docker compose ps app1
+sudo docker compose logs --tail=100 app1
+```
+
+#### Альтернативный сценарий (GHCR — только при прямом указании):
+
+```bash
+# 1. Зафиксировать тег образа (короткий git SHA из master/main)
 export IMAGE_TAG=sha-abcdef0
 
-# 4. По одному сервису — pull + up (как сейчас делается build + up)
-docker compose pull app1
-docker compose up -d app1
-
-docker compose pull nginx
-docker compose up -d nginx
-
-docker compose pull nginx-mutual
-docker compose up -d nginx-mutual
-
-# 5. Проверки и чистка
-docker compose ps
-docker image prune -f
+# 2. Pull + up целевого сервиса
+sudo env IMAGE_TAG=$IMAGE_TAG docker compose pull app1
+sudo env IMAGE_TAG=$IMAGE_TAG docker compose up -d --no-deps app1
 ```
 
 Для сторонних сервисов (`rabbitmq`, `pg`, `pgadmin`, `certbot`,
-`avahi`) — всё как сейчас: `docker compose up -d <svc>` по необходимости,
-без `build`.
+`avahi`) — `docker compose up -d <svc>` по необходимости, без `build`.
 
 ### 6.5. Сравнение со старым ручным флоу
 
@@ -794,10 +793,9 @@ digest и перезапускает контейнеры.
 
 - [ ] Managed PostgreSQL в cloud.ru поднят, доступен из VPC, TLS-only.
 - [ ] Compute-VM в cloud.ru, Docker установлен, входящий — только 80/443/4443.
-- [x] Все три собственных образа публикуются в public GHCR
-      `ghcr.io/oleglebedevru/iot-rpc-rest-app/*` с тегом `sha-*`.
-- [x] Последние ручные деплои выполняются из GHCR через
-      `docker compose pull` + `docker compose up -d`.
+- [x] Основной флоу ручного деплоя выполняется через сборку на хосте (`docker compose build app1` + `docker compose up -d --no-deps app1`).
+- [x] Деплой из GHCR (`docker compose pull app1`) доступен и задокументирован как альтернативный вариант (при наличии прямого указания).
+- [x] Все три собственных образа публикуются в public GHCR `ghcr.io/oleglebedevru/iot-rpc-rest-app/*` с тегом `sha-*`.
 - [ ] `deploy/compose.prod.yaml` использует `image:` из GHCR, без `build:`.
 - [ ] `pg` и `pgdata` удалены из прод-compose; `app1`/`pgadmin` ходят в managed PG.
 - [ ] Секреты вынесены в `.env` на VM / GitHub Environments, в git нет паролей.

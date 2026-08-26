@@ -94,8 +94,8 @@ flowchart LR
 
 | Документ | Описание |
 |---|---|
-| 🚀 [**Runbook: ручной деплой `app1`**](./docs/manual-app1-deploy-runbook.md) | Аккуратный pull/recreate только `app-service` из GHCR: уточнение режима, `sha-*` tag, backup `.env`, rollback и проверки |
-| 🧭 [**План деплоя**](./docs/deploy-plan.md) | Архитектура GHCR Build only, ручной deploy flow и варианты будущей автоматизации |
+| 🚀 [**Runbook: ручной деплой `app1`**](./docs/manual-app1-deploy-runbook.md) | Безопасный деплой `app1`: сборка напрямую на хосте (`docker compose build app1`), альтернативный деплой из GHCR, backup/rollback и проверки |
+| 🧭 [**План деплоя**](./docs/deploy-plan.md) | Архитектура деплоя (сборка на хосте / GHCR по запросу), пошаговые сценарии и план автоматизации |
 
 ### Обзор платформы
 

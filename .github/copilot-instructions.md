@@ -25,7 +25,7 @@
 7. `docs/3-webhooks.md` — push‑уведомления.
 8. `docs/correlation-data-guide.md` — обязательная correlation data в RPC.
 9. `docs/mqtt_topic_rules.md` — правила топиков.
-10. `docs/manual-app1-deploy-runbook.md` — ручной деплой только `app1` из GHCR, backup/rollback и проверки.
+10. `docs/manual-app1-deploy-runbook.md` — ручной деплой только `app1` (сборка на хосте / GHCR по запросу), backup/rollback и проверки.
 
 ## Команды разработки
 ```bash
@@ -47,14 +47,13 @@ LEO4_DRY_RUN=1 python -m leo4_mcp        # без реальной сети
 ```
 
 ## Ручной деплой `app1`
-- Перед деплоем обязательно уточнить режим: **самый новый app-пакет**,
-  **восстановить текущий закреплённый tag** или **rollback**.
-- Если пользователь просит «только app», выполнять только runbook
-  `docs/manual-app1-deploy-runbook.md`: определить immutable `sha-*` tag,
-  сделать backup `.env`, выполнить `docker compose pull app1` и
+- Основной и фактический сценарий деплоя `app1` — сборка напрямую на целевом хосте
+  через `docker compose build app1` и перезапуск `docker compose up -d --no-deps app1`.
+- Вариант деплоя готовых образов из GHCR (`docker compose pull app1`) используется
+  **только при наличии прямого указания** пользователя.
+- Если пользователь просит «только app», выполнять runbook
+  `docs/manual-app1-deploy-runbook.md`: сделать backup `.env`, выполнить
   `docker compose up -d --no-deps app1`, затем проверить `ps`, логи и HTTP `200`.
-- Не использовать плавающий Docker tag `latest` как финальное production-состояние,
-  если пользователь явно не попросил именно `:latest`.
 - Не пересоздавать `pg`, `rabbitmq`, `nginx`, `nginx-mutual`, `pgadmin`, `certbot`,
   если запрос был «только app».
 
