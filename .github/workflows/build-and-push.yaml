@@ -7,16 +7,17 @@ name: Build and push images to GHCR
 # `docker compose pull`. Деплой остаётся ручным, по сервисам.
 
 on:
-  push:
-    branches:
-      - master
-      - main
-    tags:
-      - 'v*.*.*'
-  pull_request:
-    branches:
-      - master
-      - main
+  # Автоматические триггеры отключены; сборка и публикация запускаются вручную
+  # push:
+  #   branches:
+  #     - master
+  #     - main
+  #   tags:
+  #     - 'v*.*.*'
+  # pull_request:
+  #   branches:
+  #     - master
+  #     - main
   workflow_dispatch:
 
 # Имя GHCR-репозитория формируется из owner/repo владельца этого репо
