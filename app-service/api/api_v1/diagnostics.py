@@ -30,19 +30,53 @@ router = APIRouter(
 
 
 async def _resolve_websocket_org_id(websocket: WebSocket) -> int | None:
-    """Resolve org_id from the trusted header injected by nginx-jwt.
+    """Resolve org_id from the trusted header injected by nginx-jwt."""
+    role = str(
+        websocket.headers.get("X-Role")
+        or websocket.headers.get("jwt-role")
+        or ""
+    ).lower()
+    role_id = str(websocket.headers.get("X-Role-Id") or "").lower()
+    user_id = str(
+        websocket.headers.get("X-User-Id")
+        or websocket.headers.get("jwt-sub")
+        or websocket.headers.get("sub")
+        or ""
+    )
+    is_superuser = (
+        role in ("superuser", "admin", "1")
+        or role_id in ("1", "superuser", "admin")
+        or user_id == "1"
+    )
+    if not is_superuser:
+        log.warning(
+            "Diagnostics websocket rejected: non-superuser role=%s role_id=%s user_id=%s",
+            role,
+            role_id,
+            user_id,
+        )
+        return None
 
-    Browser diagnostics WebSockets are intentionally JWT-only: nginx validates
-    the accessToken cookie, extracts the orgId claim and forwards it as this
-    header. API-key fallback is not allowed for this channel.
-    """
-    org_id = websocket.headers.get("orgId") or websocket.headers.get("orgid")
-    if org_id is None:
-        return None
-    try:
-        return int(org_id)
-    except ValueError:
-        return None
+    query_org_id = websocket.query_params.get("org_id")
+    if query_org_id:
+        try:
+            return int(query_org_id)
+        except ValueError:
+            pass
+
+    org_id = (
+        websocket.headers.get("orgId")
+        or websocket.headers.get("orgid")
+        or websocket.headers.get("X-Org-Id")
+        or websocket.headers.get("jwt-org")
+        or websocket.headers.get("org")
+    )
+    if org_id is not None:
+        try:
+            return int(org_id)
+        except ValueError:
+            return None
+    return None
 
 
 async def _is_websocket_device_allowed(
