@@ -11,8 +11,13 @@ from api.api_v1 import diagnostics as diagnostics_api
 
 
 class DummyWebSocket:
-    def __init__(self, headers: dict[str, str]) -> None:
+    def __init__(
+        self,
+        headers: dict[str, str],
+        query_params: dict[str, str] | None = None,
+    ) -> None:
         self.headers = headers
+        self.query_params = query_params or {}
         self.accepted = False
         self.close_code: int | None = None
 
@@ -36,9 +41,12 @@ async def test_resolve_websocket_org_id_does_not_accept_api_key() -> None:
 @pytest.mark.asyncio
 async def test_resolve_websocket_org_id_from_forwarded_header() -> None:
     cases = [
-        ({"orgId": "42"}, 42),
-        ({"orgid": "43"}, 43),
-        ({"orgId": "bad"}, None),
+        ({"X-Role": "superuser", "orgId": "42"}, 42),
+        ({"X-Role": "admin", "orgid": "43"}, 43),
+        ({"X-User-Id": "1", "orgId": "44"}, 44),
+        ({"X-Role": "superuser", "orgId": "bad"}, None),
+        ({"X-Role": "superuser"}, None),
+        ({"orgId": "42"}, None),  # Rejected because not superuser
         ({}, None),
     ]
 
@@ -91,7 +99,7 @@ async def test_diagnostics_ws_rejects_foreign_device_before_accept(monkeypatch) 
     monkeypatch.setattr(
         diagnostics_api, "_is_websocket_device_allowed", fake_is_allowed
     )
-    websocket = DummyWebSocket({"orgId": "7"})
+    websocket = DummyWebSocket({"X-Role": "superuser", "orgId": "7"})
 
     await diagnostics_api.diagnostics_ws(
         cast(WebSocket, websocket), "SN001", cast(AsyncSession, object())

@@ -45,3 +45,19 @@ class TerminalStatusResult(BaseModel):
 
 class BatchTerminalStatusResponse(BaseModel):
     statuses: list[TerminalStatusResult]
+
+
+class OrgApiKeyProvisionRequest(BaseModel):
+    org_id: int
+    api_key: str = Field(..., min_length=1, max_length=128)
+    name: str | None = None
+    is_active: bool = True
+
+
+class OrgApiKeyResponse(BaseModel):
+    org_id: int
+    api_key: str
+    name: str | None = None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime

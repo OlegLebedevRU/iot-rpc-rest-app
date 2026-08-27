@@ -11,6 +11,8 @@ from core.schemas.provisioning import (
     BatchTerminalProvisionRequest,
     BatchTerminalProvisionResponse,
     BatchTerminalStatusResponse,
+    OrgApiKeyProvisionRequest,
+    OrgApiKeyResponse,
     TerminalProvisionRequest,
     TerminalProvisionResult,
     TerminalStatusQuery,
@@ -117,3 +119,55 @@ async def get_terminals_status(
         session, query.device_ids
     )
     return BatchTerminalStatusResponse(statuses=statuses)
+
+
+@router.post(
+    "/api-keys",
+    description="Provision or update API key for an organization",
+    response_model=OrgApiKeyResponse,
+)
+async def provision_org_api_key(
+    request: OrgApiKeyProvisionRequest,
+    session: Session_dep,
+    _: Auth_dep,
+) -> OrgApiKeyResponse:
+    return await ProvisioningService.provision_org_api_key(session, request)
+
+
+@router.get(
+    "/api-keys/{org_id}",
+    description="Get API key details for an organization (with optional masking)",
+    response_model=OrgApiKeyResponse,
+)
+async def get_org_api_key(
+    org_id: int,
+    session: Session_dep,
+    _: Auth_dep,
+    mask: bool = False,
+) -> OrgApiKeyResponse:
+    result = await ProvisioningService.get_org_api_key(session, org_id, mask=mask)
+    if result is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"API key for organization {org_id} not found",
+        )
+    return result
+
+
+@router.delete(
+    "/api-keys/{org_id}",
+    description="Delete API key for an organization",
+    response_model=dict,
+)
+async def delete_org_api_key(
+    org_id: int,
+    session: Session_dep,
+    _: Auth_dep,
+) -> dict:
+    deleted = await ProvisioningService.delete_org_api_key(session, org_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"API key for organization {org_id} not found",
+        )
+    return {"status": "deleted", "org_id": org_id}

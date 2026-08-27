@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import datetime
 from typing import List, Optional
 
@@ -24,6 +26,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.models import Postamat
+from core.models.org_api_key import OrgApiKey
 from core.models.webhook import OrgWebhook
 
 
@@ -205,6 +208,13 @@ class Org(Base):
     webhooks: Mapped[List["OrgWebhook"]] = relationship(
         "OrgWebhook",
         back_populates="org",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+    api_key_record: Mapped[OrgApiKey | None] = relationship(
+        "OrgApiKey",
+        back_populates="org",
+        uselist=False,
         cascade="all, delete-orphan",
         passive_deletes=True,
     )

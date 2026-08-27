@@ -40,9 +40,6 @@ jobs:
           - service: app-service
             dockerfile: docker-files/app-service/Dockerfile
             context: .
-          - service: nginx-jwt
-            dockerfile: docker-files/nginx-jwt/Dockerfile
-            context: .
           - service: nginx-mutual
             dockerfile: docker-files/nginx-mutual/Dockerfile
             context: .

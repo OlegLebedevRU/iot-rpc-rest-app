@@ -5,6 +5,8 @@ from core.crud.device_repo import DeviceRepo
 from core.integrations.rmq_admin_api import RmqAdminApi
 from core.logging_config import setup_module_logger
 from core.schemas.provisioning import (
+    OrgApiKeyProvisionRequest,
+    OrgApiKeyResponse,
     TerminalProvisionRequest,
     TerminalProvisionResult,
     TerminalStatusResult,
@@ -118,3 +120,110 @@ class ProvisioningService:
             )
             for s in raw_statuses
         ]
+
+    @classmethod
+    def mask_api_key(cls, key: str) -> str:
+        if not key:
+            return ""
+        if len(key) <= 8:
+            return "*" * (len(key) - 2) + key[-2:] if len(key) > 2 else "*" * len(key)
+        return key[:4] + "*" * (len(key) - 8) + key[-4:]
+
+    @classmethod
+    async def provision_org_api_key(
+        cls,
+        session: AsyncSession,
+        request: OrgApiKeyProvisionRequest,
+    ) -> OrgApiKeyResponse:
+        from core.models import Org, OrgApiKey
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+        from sqlalchemy import select, func
+        from fastapi import HTTPException, status
+
+        existing_key_owner = await session.scalar(
+            select(OrgApiKey.org_id).where(
+                OrgApiKey.api_key == request.api_key,
+                OrgApiKey.org_id != request.org_id,
+            )
+        )
+        if existing_key_owner is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"API key is already assigned to organization {existing_key_owner}",
+            )
+
+        # Ensure parent Org exists in tb_orgs
+        await session.execute(
+            pg_insert(Org)
+            .values({"org_id": request.org_id, "name": request.name or f"Org {request.org_id}", "is_deleted": False})
+            .on_conflict_do_nothing(index_elements=["org_id"])
+        )
+
+        stmt = (
+            pg_insert(OrgApiKey)
+            .values(
+                {
+                    "org_id": request.org_id,
+                    "api_key": request.api_key,
+                    "name": request.name,
+                    "is_active": request.is_active,
+                }
+            )
+            .on_conflict_do_update(
+                index_elements=["org_id"],
+                set_={
+                    "api_key": request.api_key,
+                    "name": request.name,
+                    "is_active": request.is_active,
+                    "updated_at": func.current_timestamp(),
+                },
+            )
+            .returning(OrgApiKey)
+        )
+        result = await session.scalar(stmt)
+        await session.commit()
+        return OrgApiKeyResponse(
+            org_id=result.org_id,
+            api_key=result.api_key,
+            name=result.name,
+            is_active=result.is_active,
+            created_at=result.created_at,
+            updated_at=result.updated_at,
+        )
+
+    @classmethod
+    async def get_org_api_key(
+        cls,
+        session: AsyncSession,
+        org_id: int,
+        mask: bool = False,
+    ) -> OrgApiKeyResponse | None:
+        from core.models import OrgApiKey
+        from sqlalchemy import select
+
+        stmt = select(OrgApiKey).where(OrgApiKey.org_id == org_id)
+        record = await session.scalar(stmt)
+        if record is None:
+            return None
+        return OrgApiKeyResponse(
+            org_id=record.org_id,
+            api_key=cls.mask_api_key(record.api_key) if mask else record.api_key,
+            name=record.name,
+            is_active=record.is_active,
+            created_at=record.created_at,
+            updated_at=record.updated_at,
+        )
+
+    @classmethod
+    async def delete_org_api_key(
+        cls,
+        session: AsyncSession,
+        org_id: int,
+    ) -> bool:
+        from core.models import OrgApiKey
+        from sqlalchemy import delete
+
+        stmt = delete(OrgApiKey).where(OrgApiKey.org_id == org_id)
+        result = await session.execute(stmt)
+        await session.commit()
+        return bool(result.rowcount and result.rowcount > 0)

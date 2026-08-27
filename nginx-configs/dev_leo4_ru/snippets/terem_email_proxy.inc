@@ -1,5 +1,3 @@
-auth_jwt_enabled off;
-
 if ($terem_device_id = "") {
     return 403 "Forbidden: client certificate OU is required\n";
 }
