@@ -19,7 +19,6 @@ os.environ.setdefault("APP_CONFIG__AUTH__API_KEYS", "test:1")
 os.environ.setdefault("APP_CONFIG__LEO4__URL", "http://localhost")
 os.environ.setdefault("APP_CONFIG__LEO4__API_KEY", "x")
 os.environ.setdefault("APP_CONFIG__LEO4__ADMIN_URL", "http://localhost")
-os.environ.setdefault("APP_CONFIG__LEO4__CERT_URL", "http://localhost")
 
 logging.handlers.RotatingFileHandler = (
     lambda *args, **kwargs: logging.NullHandler()
