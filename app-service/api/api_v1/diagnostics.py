@@ -92,10 +92,22 @@ async def _is_websocket_device_allowed(
 async def _forward_session_queue(
     websocket: WebSocket,
     session: DiagnosticSession,
+    forwarders: dict[UUID, asyncio.Task] | None = None,
 ) -> None:
-    while True:
-        message = await session.queue.get()
-        await websocket.send_json(message.model_dump(mode="json"))
+    try:
+        while True:
+            message = await session.queue.get()
+            try:
+                await websocket.send_json(message.model_dump(mode="json"))
+                # When eof is reached, execution has completed on the device
+                if getattr(message, "eof", False):
+                    break
+            finally:
+                session.queue.task_done()
+    finally:
+        await registry.remove(session.sn, session.session_id)
+        if forwarders is not None:
+            forwarders.pop(session.session_id, None)
 
 
 async def _send_error(
@@ -134,7 +146,7 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
 
     async def register_forwarder(session: DiagnosticSession) -> None:
         forwarders[session.session_id] = asyncio.create_task(
-            _forward_session_queue(websocket, session)
+            _forward_session_queue(websocket, session, forwarders)
         )
 
     try:
@@ -152,7 +164,6 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
                 if message.type is BrowserMessageType.START_LOG:
                     session = await service.start_log(sn, message)  # type: ignore[arg-type]
                     await register_forwarder(session)
-                    await service.emit_status(session, "started")
                 elif message.type is BrowserMessageType.STOP_LOG:
                     stop_message = message
                     assert isinstance(stop_message, StopLogMessage)
@@ -165,7 +176,6 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
                     assert isinstance(exec_message, ExecDiagnosticMessage)
                     session = await service.exec(sn, exec_message)
                     await register_forwarder(session)
-                    await service.emit_status(session, "started")
                 elif message.type is BrowserMessageType.CANCEL:
                     cancel_message = message
                     assert isinstance(cancel_message, CancelDiagnosticMessage)
@@ -178,8 +188,13 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
     except WebSocketDisconnect:
         log.info("Diagnostics websocket disconnected: sn=%s org_id=%s", sn, org_id)
     finally:
-        for session_id, task in list(forwarders.items()):
+        active_sessions = list(forwarders.items())
+        forwarders.clear()
+        for session_id, task in active_sessions:
             task.cancel()
             await service.close_session(sn, session_id)
-        if forwarders:
-            await asyncio.gather(*forwarders.values(), return_exceptions=True)
+        if active_sessions:
+            await asyncio.gather(
+                *(task for _, task in active_sessions),
+                return_exceptions=True,
+            )

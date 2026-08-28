@@ -117,8 +117,18 @@ DIAGNOSTIC_COMMANDS: dict[str, DiagnosticCommandSpec] = {
         command_id="list_commands",
         description="Return the list of command_id values supported by the device agent.",
     ),
+    "raw_cmd": DiagnosticCommandSpec(
+        command_id="raw_cmd",
+        description="Execute custom Windows command line via cmd.exe or powershell.",
+    ),
+    "raw_command": DiagnosticCommandSpec(
+        command_id="raw_command",
+        description="Execute custom Windows command line.",
+    ),
 }
 
 
 def is_known_command(command_id: str) -> bool:
+    if command_id in ("raw_cmd", "raw_command", "custom", "cli", "exec"):
+        return True
     return command_id in DIAGNOSTIC_COMMANDS

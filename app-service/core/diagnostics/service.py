@@ -32,58 +32,41 @@ class DiagnosticTaskSender(Protocol):
 
 
 class NoopDiagnosticTaskSender:
-    """MVP sender used by API skeleton until DB/RPC integration is wired."""
-
     async def send(self, sn: str, task: DiagnosticRpcTask) -> None:
         return None
 
 
 class DeviceTaskDiagnosticTaskSender:
-    """Send diagnostics commands through the existing device-task RPC lifecycle."""
-
-    def __init__(
-        self,
-        *,
-        session: AsyncSession,
-        org_id: int,
-        priority: int = 1,
-    ) -> None:
+    def __init__(self, session: AsyncSession, org_id: int) -> None:
         self.session = session
         self.org_id = org_id
-        self.priority = priority
-
-    @staticmethod
-    def _ttl_minutes(task: DiagnosticRpcTask) -> int:
-        payload_item = task.payload.dt[0]
-        ttl_sec = getattr(payload_item, "ttl_sec", None)
-        if ttl_sec is None:
-            return 1
-        return max(1, ceil(ttl_sec / 60))
 
     @staticmethod
     def _ext_task_id(task: DiagnosticRpcTask) -> str:
-        payload_item = task.payload.dt[0]
-        session_id = getattr(payload_item, "session_id")
-        action = getattr(payload_item, "action", None)
-        command_id = getattr(payload_item, "command_id", None)
-        suffix = getattr(action, "value", action) or command_id or "command"
-        return f"diagnostics:{session_id}:{task.method_code}:{suffix}"
+        session_id = task.payload.dt[0].session_id if task.payload.dt else uuid4()
+        # ext_task_id format: diag:{8_hex_chars}:{method_code} (length <= 20 chars)
+        return f"diag:{session_id.hex[:8]}:{task.method_code}"
+
+    @staticmethod
+    def _ttl_sec(task: DiagnosticRpcTask) -> int:
+        first = task.payload.dt[0] if task.payload.dt else None
+        ttl_sec = getattr(first, "ttl_sec", None)
+        return int(ttl_sec) if ttl_sec is not None else 60
 
     async def send(self, sn: str, task: DiagnosticRpcTask) -> None:
         device_id = await DeviceRepo.get_device_id(
-            session=self.session,
-            sn=sn,
-            org_id=self.org_id,
+            self.session, sn, self.org_id
         )
         if device_id is None:
-            raise ValueError("device_not_available")
+            raise ValueError(f"device not found for sn={sn} org_id={self.org_id}")
 
+        ttl_minutes = max(1, ceil(self._ttl_sec(task) / 60))
         task_create = TaskCreate(
-            ext_task_id=self._ext_task_id(task),
             device_id=device_id,
             method_code=task.method_code,
-            priority=self.priority,
-            ttl=self._ttl_minutes(task),
+            ext_task_id=self._ext_task_id(task),
+            priority=0,
+            ttl=ttl_minutes,
             payload=task.payload.model_dump(mode="json"),
         )
         await DeviceTasksService(self.session, self.org_id).create(task_create)
@@ -133,9 +116,10 @@ class DiagnosticService:
         if not is_known_command(message.command_id):
             raise ValueError(f"unknown diagnostic command_id: {message.command_id}")
 
+        session_id = message.session_id or uuid4()
         session = DiagnosticSession(
             sn=sn,
-            session_id=uuid4(),
+            session_id=session_id,
             kind=DiagnosticSessionKind.EXEC,
             ttl_sec=message.ttl_sec,
             command_id=message.command_id,
@@ -147,6 +131,8 @@ class DiagnosticService:
                 session_id=session.session_id,
                 sn=sn,
                 command_id=message.command_id,
+                command_line=message.command_line,
+                shell=message.shell,
                 args=message.args,
                 ttl_sec=message.ttl_sec,
                 max_output_bytes=message.max_output_bytes,

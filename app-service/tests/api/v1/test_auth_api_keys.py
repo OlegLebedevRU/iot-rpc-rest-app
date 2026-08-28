@@ -145,6 +145,61 @@ async def test_get_org_id_via_superuser_headers():
 
 
 @pytest.mark.asyncio
+async def test_get_org_id_via_bearer_jwt_and_jwt_headers():
+    jwt_token = "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.e30.signature"
+    req = _make_request({
+        "Authorization": jwt_token,
+        "jwt-sub": "o.lebedev",
+        "jwt-org": "15",
+    })
+    session = AsyncMock()
+
+    org_id = await get_org_id_dependency(
+        request=req,
+        session=session,
+        api_key_upper=None,
+        api_key_lower=None,
+        internal_service_key=None,
+        auth_header=jwt_token,
+        org_id_str=None,
+        x_org_id_str=None,
+        role_header=None,
+        role_id_header=None,
+        jwt_role_header=None,
+        org_id_query=None,
+    )
+    assert org_id == 15
+    # Ensure DB API key search was not performed for JWT Bearer
+    session.scalar.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_org_id_via_tenant_user_jwt_headers():
+    req = _make_request({
+        "jwt-sub": "regular_user",
+        "jwt-org": "25",
+        "role": "user",
+    })
+    session = AsyncMock()
+
+    org_id = await get_org_id_dependency(
+        request=req,
+        session=session,
+        api_key_upper=None,
+        api_key_lower=None,
+        internal_service_key=None,
+        auth_header=None,
+        org_id_str=None,
+        x_org_id_str=None,
+        role_header=None,
+        role_id_header=None,
+        jwt_role_header=None,
+        org_id_query=None,
+    )
+    assert org_id == 25
+
+
+@pytest.mark.asyncio
 async def test_get_org_id_missing_all_credentials_raises_401():
     req = _make_request({})
     session = AsyncMock()

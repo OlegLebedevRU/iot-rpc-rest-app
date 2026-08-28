@@ -152,6 +152,8 @@ def test_allowlist_contains_all_expected_commands():
         "network_config",
         "os_version",
         "mssql_query",
+        "raw_cmd",
+        "raw_command",
         # Utility
         "list_commands",
     }
@@ -186,7 +188,7 @@ async def test_close_browser_sends_cancel_for_active_exec_session():
 async def test_device_task_sender_creates_existing_rpc_task(monkeypatch):
     created_tasks = []
 
-    async def fake_get_device_id(*, session, sn, org_id):
+    async def fake_get_device_id(session, sn="", org_id=0):
         assert sn == "SN001"
         assert org_id == 7
         return 123

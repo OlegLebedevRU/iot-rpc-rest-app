@@ -41,17 +41,20 @@ async def test_resolve_websocket_org_id_does_not_accept_api_key() -> None:
 @pytest.mark.asyncio
 async def test_resolve_websocket_org_id_from_forwarded_header() -> None:
     cases = [
-        ({"X-Role": "superuser", "orgId": "42"}, 42),
-        ({"X-Role": "admin", "orgid": "43"}, 43),
-        ({"X-User-Id": "1", "orgId": "44"}, 44),
-        ({"X-Role": "superuser", "orgId": "bad"}, None),
-        ({"X-Role": "superuser"}, None),
-        ({"orgId": "42"}, None),  # Rejected because not superuser
-        ({}, None),
+        ({"X-Role": "superuser", "orgId": "42"}, {}, 42),
+        ({"X-Role": "admin", "orgid": "43"}, {}, 43),
+        ({"X-User-Id": "1", "orgId": "44"}, {}, 44),
+        ({"jwt-role": "admin", "jwt-org": "45"}, {}, 45),
+        ({"X-Role-Id": "1", "X-Org-Id": "46"}, {}, 46),
+        ({"X-Role": "superuser"}, {"org_id": "47"}, 47),
+        ({"X-Role": "superuser", "orgId": "bad"}, {}, None),
+        ({"X-Role": "superuser"}, {}, None),
+        ({"orgId": "42"}, {}, None),  # Rejected because not superuser
+        ({}, {}, None),
     ]
 
-    for headers, expected in cases:
-        websocket = DummyWebSocket(headers)
+    for headers, query_params, expected in cases:
+        websocket = DummyWebSocket(headers, query_params=query_params)
 
         assert (
             await diagnostics_api._resolve_websocket_org_id(cast(WebSocket, websocket))

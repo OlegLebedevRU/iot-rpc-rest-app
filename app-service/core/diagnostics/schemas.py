@@ -60,7 +60,7 @@ class BrowserMessageType(StrEnum):
 
 
 class BrowserBaseMessage(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     type: BrowserMessageType
 
@@ -81,7 +81,11 @@ class StopLogMessage(BrowserBaseMessage):
 
 class ExecDiagnosticMessage(BrowserBaseMessage):
     type: Literal[BrowserMessageType.EXEC] = BrowserMessageType.EXEC
-    command_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.:-]+$")
+    command_id: str = Field(default="raw_cmd", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.:-]+$")
+    command_line: str | None = Field(default=None, max_length=4096)
+    shell: str | None = Field(default="cmd", max_length=32)
+    session_id: UUID | None = Field(default=None)
+    sn: str | None = Field(default=None, max_length=64)
     args: dict[str, Any] = Field(default_factory=dict)
     ttl_sec: int = Field(default=DEFAULT_DIAG_EXEC_TTL_SEC, ge=1, le=3600)
     max_output_bytes: int = Field(default=DEFAULT_MAX_OUTPUT_BYTES, ge=1)
@@ -90,6 +94,7 @@ class ExecDiagnosticMessage(BrowserBaseMessage):
 class CancelDiagnosticMessage(BrowserBaseMessage):
     type: Literal[BrowserMessageType.CANCEL] = BrowserMessageType.CANCEL
     session_id: UUID
+    sn: str | None = Field(default=None, max_length=64)
     reason: str | None = Field(default=None, max_length=128)
 
 
@@ -118,14 +123,16 @@ class DiagStreamControlPayload(BaseModel):
 
 
 class DiagExecPayload(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="allow")
 
     session_id: UUID
-    command_id: str = Field(min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.:-]+$")
+    command_id: str = Field(default="raw_cmd", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.:-]+$")
+    command_line: str | None = None
+    shell: str | None = "cmd"
     args: dict[str, Any] = Field(default_factory=dict)
     ttl_sec: int = Field(default=DEFAULT_DIAG_EXEC_TTL_SEC, ge=1, le=3600)
     max_output_bytes: int = Field(default=DEFAULT_MAX_OUTPUT_BYTES, ge=1)
-    topic: str
+    topic: str | None = None
 
 
 class DiagCancelPayload(BaseModel):
@@ -251,12 +258,16 @@ def build_stop_log_task(
 def build_exec_task(
     *,
     session_id: UUID,
-    sn: str,
-    command_id: str,
+    sn: str | None = None,
+    command_id: str = "raw_cmd",
+    command_line: str | None = None,
+    shell: str | None = "cmd",
     args: dict[str, Any] | None = None,
     ttl_sec: int = DEFAULT_DIAG_EXEC_TTL_SEC,
     max_output_bytes: int = DEFAULT_MAX_OUTPUT_BYTES,
+    topic: str | None = None,
 ) -> DiagnosticRpcTask:
+    topic_value = topic or (f"dev/{sn}/out" if sn else None)
     return DiagnosticRpcTask(
         method_code=CMD_DIAG_EXEC,
         payload=DiagnosticRpcPayload(
@@ -264,10 +275,12 @@ def build_exec_task(
                 DiagExecPayload(
                     session_id=session_id,
                     command_id=command_id,
+                    command_line=command_line,
+                    shell=shell,
                     args=args or {},
                     ttl_sec=ttl_sec,
                     max_output_bytes=max_output_bytes,
-                    topic=f"dev/{sn}/out",
+                    topic=topic_value,
                 )
             ]
         ),

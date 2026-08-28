@@ -144,6 +144,8 @@ def test_rpc_payload_builders():
     assert exec_task.payload.dt[0].model_dump(mode="json") == {
         "session_id": str(session_id),
         "command_id": "system_info",
+        "command_line": None,
+        "shell": "cmd",
         "args": {"verbose": True},
         "ttl_sec": 60,
         "max_output_bytes": 1048576,
