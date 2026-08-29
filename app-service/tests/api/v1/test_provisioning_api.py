@@ -87,7 +87,7 @@ async def test_provisioning_api_auth_and_flow(monkeypatch):
     ) as ac:
         # 1. Reject without auth
         resp = await ac.post(
-            "/api/v1/provisioning/terminals",
+            "/api/internal/v1/provisioning/terminals",
             json={"device_id": 773, "sn": "a4b0000773c12345d230826", "org_id": 12},
         )
         assert resp.status_code == 403
@@ -95,7 +95,7 @@ async def test_provisioning_api_auth_and_flow(monkeypatch):
         # 2. Allow with X-Internal-Service-Key
         headers = {"X-Internal-Service-Key": "secret123"}
         resp = await ac.post(
-            "/api/v1/provisioning/terminals",
+            "/api/internal/v1/provisioning/terminals",
             headers=headers,
             json={"device_id": 773, "sn": "a4b0000773c12345d230826", "org_id": 12},
         )
@@ -107,7 +107,7 @@ async def test_provisioning_api_auth_and_flow(monkeypatch):
 
         # 3. Query status
         status_resp = await ac.post(
-            "/api/v1/provisioning/terminals/status",
+            "/api/internal/v1/provisioning/terminals/status",
             headers=headers,
             json={"device_ids": [773, 999]},
         )
@@ -121,7 +121,7 @@ async def test_provisioning_api_auth_and_flow(monkeypatch):
 
         # 4. Provision API key
         key_resp = await ac.post(
-            "/api/v1/provisioning/api-keys",
+            "/api/internal/v1/provisioning/api-keys",
             headers=headers,
             json={
                 "org_id": 12,
@@ -138,7 +138,7 @@ async def test_provisioning_api_auth_and_flow(monkeypatch):
 
         # 5. Get API key unmasked
         get_resp = await ac.get(
-            "/api/v1/provisioning/api-keys/12",
+            "/api/internal/v1/provisioning/api-keys/12",
             headers=headers,
         )
         assert get_resp.status_code == 200
@@ -146,7 +146,7 @@ async def test_provisioning_api_auth_and_flow(monkeypatch):
 
         # 6. Get API key masked
         get_masked_resp = await ac.get(
-            "/api/v1/provisioning/api-keys/12?mask=true",
+            "/api/internal/v1/provisioning/api-keys/12?mask=true",
             headers=headers,
         )
         assert get_masked_resp.status_code == 200
@@ -154,14 +154,14 @@ async def test_provisioning_api_auth_and_flow(monkeypatch):
 
         # 7. Get non-existent API key -> 404
         get_404 = await ac.get(
-            "/api/v1/provisioning/api-keys/999",
+            "/api/internal/v1/provisioning/api-keys/999",
             headers=headers,
         )
         assert get_404.status_code == 404
 
         # 8. Delete API key
         del_resp = await ac.delete(
-            "/api/v1/provisioning/api-keys/12",
+            "/api/internal/v1/provisioning/api-keys/12",
             headers=headers,
         )
         assert del_resp.status_code == 200
@@ -169,7 +169,7 @@ async def test_provisioning_api_auth_and_flow(monkeypatch):
 
         # 9. Delete non-existent API key -> 404
         del_404 = await ac.delete(
-            "/api/v1/provisioning/api-keys/999",
+            "/api/internal/v1/provisioning/api-keys/999",
             headers=headers,
         )
         assert del_404.status_code == 404

@@ -1,12 +1,11 @@
-from typing import Annotated, Optional
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Security, status
-from fastapi.security import APIKeyHeader
+from fastapi import APIRouter, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.internal_v1.internal_depends import Internal_Auth_dep, Session_dep
 from core.config import settings
 from core.logging_config import setup_module_logger
-from core.models import db_helper
 from core.schemas.provisioning import (
     BatchTerminalProvisionRequest,
     BatchTerminalProvisionResponse,
@@ -19,57 +18,13 @@ from core.schemas.provisioning import (
 )
 from core.services.provisioning import ProvisioningService
 
-log = setup_module_logger(__name__, "api_provisioning.log")
+log = setup_module_logger(__name__, "api_internal_provisioning.log")
 
 router = APIRouter(
-    prefix=settings.api.v1.provisioning,
-    tags=["Provisioning"],
+    prefix=settings.api.internal_v1.provisioning,
+    tags=["Internal Provisioning"],
+    include_in_schema=False,
 )
-
-service_key_header = APIKeyHeader(name="X-Internal-Service-Key", auto_error=False)
-api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
-
-
-async def verify_service_auth(
-    internal_key: Optional[str] = Security(service_key_header),
-    api_key: Optional[str] = Security(api_key_header),
-    auth_header: Optional[str] = Header(None, alias="Authorization"),
-) -> bool:
-    """Verify service authorization using internal service token or valid API key."""
-    configured_secret = (settings.auth.internal_service_key or "").strip()
-
-    # 1. If configured internal secret is provided, check exact match
-    if configured_secret:
-        if internal_key and internal_key == configured_secret:
-            return True
-        if api_key and api_key == configured_secret:
-            return True
-        if auth_header and auth_header.replace("Bearer ", "").strip() == configured_secret:
-            return True
-        log.warning("Provisioning auth failed: invalid internal service key")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid internal service credentials",
-        )
-
-    # 2. Fallback: check if standard api_key is recognized
-    if api_key and api_key in settings.api_keys:
-        return True
-
-    # 3. If no secrets configured at all (e.g. local dev), allow with warning
-    if not settings.api_keys and not configured_secret:
-        log.warning("Provisioning auth bypassed: no API keys or internal service key configured")
-        return True
-
-    log.warning("Provisioning auth failed: no valid credentials provided")
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Missing or invalid authentication credentials",
-    )
-
-
-Session_dep = Annotated[AsyncSession, Depends(db_helper.session_getter)]
-Auth_dep = Annotated[bool, Depends(verify_service_auth)]
 
 
 @router.post(
@@ -80,7 +35,7 @@ Auth_dep = Annotated[bool, Depends(verify_service_auth)]
 async def provision_single_terminal(
     request: TerminalProvisionRequest,
     session: Session_dep,
-    _: Auth_dep,
+    _: Internal_Auth_dep,
 ) -> TerminalProvisionResult:
     results = await ProvisioningService.provision_terminals(session, [request])
     if not results:
@@ -99,7 +54,7 @@ async def provision_single_terminal(
 async def provision_batch_terminals(
     request: BatchTerminalProvisionRequest,
     session: Session_dep,
-    _: Auth_dep,
+    _: Internal_Auth_dep,
 ) -> BatchTerminalProvisionResponse:
     results = await ProvisioningService.provision_terminals(session, request.terminals)
     return BatchTerminalProvisionResponse(results=results)
@@ -113,7 +68,7 @@ async def provision_batch_terminals(
 async def get_terminals_status(
     query: TerminalStatusQuery,
     session: Session_dep,
-    _: Auth_dep,
+    _: Internal_Auth_dep,
 ) -> BatchTerminalStatusResponse:
     statuses = await ProvisioningService.get_terminals_status(
         session, query.device_ids
@@ -129,7 +84,7 @@ async def get_terminals_status(
 async def provision_org_api_key(
     request: OrgApiKeyProvisionRequest,
     session: Session_dep,
-    _: Auth_dep,
+    _: Internal_Auth_dep,
 ) -> OrgApiKeyResponse:
     return await ProvisioningService.provision_org_api_key(session, request)
 
@@ -142,7 +97,7 @@ async def provision_org_api_key(
 async def get_org_api_key(
     org_id: int,
     session: Session_dep,
-    _: Auth_dep,
+    _: Internal_Auth_dep,
     mask: bool = False,
 ) -> OrgApiKeyResponse:
     result = await ProvisioningService.get_org_api_key(session, org_id, mask=mask)
@@ -162,7 +117,7 @@ async def get_org_api_key(
 async def delete_org_api_key(
     org_id: int,
     session: Session_dep,
-    _: Auth_dep,
+    _: Internal_Auth_dep,
 ) -> dict:
     deleted = await ProvisioningService.delete_org_api_key(session, org_id)
     if not deleted:

@@ -1,18 +1,21 @@
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
-from datetime import datetime, UTC
+from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 from starlette.requests import Request
 
 from api.api_v1.api_depends import get_org_id_dependency
+from api.internal_v1.internal_depends import (
+    verify_internal_service_auth,
+    get_internal_org_id,
+    get_internal_billing_org_id,
+)
 from core.config import settings
-from core.schemas.provisioning import OrgApiKeyProvisionRequest
 from core.services.provisioning import ProvisioningService
 
 
-def _make_request(headers: dict[str, str] | None = None) -> Request:
+def _make_request(headers: dict[str, str] | None = None, query: str = "") -> Request:
     raw_headers = []
     if headers:
         for k, v in headers.items():
@@ -21,14 +24,35 @@ def _make_request(headers: dict[str, str] | None = None) -> Request:
         "type": "http",
         "method": "GET",
         "path": "/test",
+        "query_string": query.encode("latin-1"),
         "headers": raw_headers,
         "state": {},
     }
     return Request(scope)
 
 
+# ==========================================
+# Public API Tests (get_org_id_dependency)
+# ==========================================
+
+
 @pytest.mark.asyncio
 async def test_get_org_id_via_active_db_api_key():
+    req = _make_request({"x-api-key": "test_valid_key"})
+    session = AsyncMock()
+    session.scalar.return_value = 42
+
+    org_id = await get_org_id_dependency(
+        request=req,
+        session=session,
+        api_key="test_valid_key",
+    )
+    assert org_id == 42
+    assert req.state.billing_org_id == 42
+
+
+@pytest.mark.asyncio
+async def test_get_org_id_via_upper_header_fallback():
     req = _make_request({"X-API-Key": "test_valid_key"})
     session = AsyncMock()
     session.scalar.return_value = 42
@@ -36,19 +60,9 @@ async def test_get_org_id_via_active_db_api_key():
     org_id = await get_org_id_dependency(
         request=req,
         session=session,
-        api_key_upper="test_valid_key",
-        api_key_lower=None,
-        internal_service_key=None,
-        auth_header=None,
-        org_id_str=None,
-        x_org_id_str=None,
-        role_header=None,
-        role_id_header=None,
-        jwt_role_header=None,
-        org_id_query=None,
+        api_key=None,
     )
     assert org_id == 42
-    assert req.state.billing_org_id == 42
 
 
 @pytest.mark.asyncio
@@ -60,23 +74,29 @@ async def test_get_org_id_via_authorization_api_key_header():
     org_id = await get_org_id_dependency(
         request=req,
         session=session,
-        api_key_upper=None,
-        api_key_lower=None,
-        internal_service_key=None,
-        auth_header="ApiKey test_auth_key",
-        org_id_str=None,
-        x_org_id_str=None,
-        role_header=None,
-        role_id_header=None,
-        jwt_role_header=None,
-        org_id_query=None,
+        api_key=None,
     )
     assert org_id == 55
 
 
 @pytest.mark.asyncio
+async def test_get_org_id_via_static_settings_fallback():
+    req = _make_request({"x-api-key": "test:1"})
+    session = AsyncMock()
+    session.scalar.return_value = None  # Not in DB
+
+    # APP_CONFIG__AUTH__API_KEYS is initialized to {"test": 1} in tests/conftest
+    org_id = await get_org_id_dependency(
+        request=req,
+        session=session,
+        api_key="test",
+    )
+    assert org_id == 1
+
+
+@pytest.mark.asyncio
 async def test_get_org_id_invalid_api_key_raises_401():
-    req = _make_request({"X-API-Key": "invalid_key"})
+    req = _make_request({"x-api-key": "invalid_key"})
     session = AsyncMock()
     session.scalar.return_value = None
 
@@ -84,123 +104,14 @@ async def test_get_org_id_invalid_api_key_raises_401():
         await get_org_id_dependency(
             request=req,
             session=session,
-            api_key_upper="invalid_key",
-            api_key_lower=None,
-            internal_service_key=None,
-            auth_header=None,
-            org_id_str=None,
-            x_org_id_str=None,
-            role_header=None,
-            role_id_header=None,
-            jwt_role_header=None,
-            org_id_query=None,
+            api_key="invalid_key",
         )
     assert exc_info.value.status_code == 401
     assert "Invalid or inactive API Key" in exc_info.value.detail
 
 
 @pytest.mark.asyncio
-async def test_get_org_id_via_internal_service_key(monkeypatch):
-    monkeypatch.setattr(settings.auth, "internal_service_key", "super_internal_secret")
-    req = _make_request({"X-Internal-Service-Key": "super_internal_secret"})
-    session = AsyncMock()
-
-    org_id = await get_org_id_dependency(
-        request=req,
-        session=session,
-        api_key_upper=None,
-        api_key_lower=None,
-        internal_service_key="super_internal_secret",
-        auth_header=None,
-        org_id_str="88",
-        x_org_id_str=None,
-        role_header=None,
-        role_id_header=None,
-        jwt_role_header=None,
-        org_id_query=None,
-    )
-    assert org_id == 88
-
-
-@pytest.mark.asyncio
-async def test_get_org_id_via_superuser_headers():
-    req = _make_request({"X-Role": "superuser", "orgId": "99"})
-    session = AsyncMock()
-
-    org_id = await get_org_id_dependency(
-        request=req,
-        session=session,
-        api_key_upper=None,
-        api_key_lower=None,
-        internal_service_key=None,
-        auth_header=None,
-        org_id_str="99",
-        x_org_id_str=None,
-        role_header="superuser",
-        role_id_header=None,
-        jwt_role_header=None,
-        org_id_query=None,
-    )
-    assert org_id == 99
-
-
-@pytest.mark.asyncio
-async def test_get_org_id_via_bearer_jwt_and_jwt_headers():
-    jwt_token = "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.e30.signature"
-    req = _make_request({
-        "Authorization": jwt_token,
-        "jwt-sub": "o.lebedev",
-        "jwt-org": "15",
-    })
-    session = AsyncMock()
-
-    org_id = await get_org_id_dependency(
-        request=req,
-        session=session,
-        api_key_upper=None,
-        api_key_lower=None,
-        internal_service_key=None,
-        auth_header=jwt_token,
-        org_id_str=None,
-        x_org_id_str=None,
-        role_header=None,
-        role_id_header=None,
-        jwt_role_header=None,
-        org_id_query=None,
-    )
-    assert org_id == 15
-    # Ensure DB API key search was not performed for JWT Bearer
-    session.scalar.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_get_org_id_via_tenant_user_jwt_headers():
-    req = _make_request({
-        "jwt-sub": "regular_user",
-        "jwt-org": "25",
-        "role": "user",
-    })
-    session = AsyncMock()
-
-    org_id = await get_org_id_dependency(
-        request=req,
-        session=session,
-        api_key_upper=None,
-        api_key_lower=None,
-        internal_service_key=None,
-        auth_header=None,
-        org_id_str=None,
-        x_org_id_str=None,
-        role_header=None,
-        role_id_header=None,
-        jwt_role_header=None,
-        org_id_query=None,
-    )
-    assert org_id == 25
-
-
-@pytest.mark.asyncio
-async def test_get_org_id_missing_all_credentials_raises_401():
+async def test_get_org_id_missing_api_key_raises_401():
     req = _make_request({})
     session = AsyncMock()
 
@@ -208,18 +119,78 @@ async def test_get_org_id_missing_all_credentials_raises_401():
         await get_org_id_dependency(
             request=req,
             session=session,
-            api_key_upper=None,
-            api_key_lower=None,
-            internal_service_key=None,
-            auth_header=None,
-            org_id_str=None,
-            x_org_id_str=None,
-            role_header=None,
-            role_id_header=None,
-            jwt_role_header=None,
-            org_id_query=None,
+            api_key=None,
         )
     assert exc_info.value.status_code == 401
+    assert "Missing or invalid authentication credentials" in exc_info.value.detail
+
+
+# ==========================================
+# Internal API Tests (internal_depends.py)
+# ==========================================
+
+
+@pytest.mark.asyncio
+async def test_verify_internal_service_auth_header(monkeypatch):
+    monkeypatch.setattr(settings.auth, "internal_service_key", "secret_123")
+    req = _make_request({"X-Internal-Service-Key": "secret_123"})
+    assert await verify_internal_service_auth(req) is True
+
+
+@pytest.mark.asyncio
+async def test_verify_internal_service_auth_bearer(monkeypatch):
+    monkeypatch.setattr(settings.auth, "internal_service_key", "secret_123")
+    req = _make_request({"Authorization": "Bearer secret_123"})
+    assert await verify_internal_service_auth(req) is True
+
+
+@pytest.mark.asyncio
+async def test_verify_internal_service_auth_invalid(monkeypatch):
+    monkeypatch.setattr(settings.auth, "internal_service_key", "secret_123")
+    req = _make_request({"X-Internal-Service-Key": "wrong_key"})
+    with pytest.raises(HTTPException) as exc_info:
+        await verify_internal_service_auth(req)
+    assert exc_info.value.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_get_internal_org_id_via_header():
+    req = _make_request({"X-Org-Id": "100"})
+    org_id = await get_internal_org_id(req, _=True)
+    assert org_id == 100
+    assert req.state.billing_org_id == 100
+
+
+@pytest.mark.asyncio
+async def test_get_internal_org_id_via_query():
+    req = _make_request(query="org_id=200")
+    org_id = await get_internal_org_id(req, _=True)
+    assert org_id == 200
+
+
+@pytest.mark.asyncio
+async def test_get_internal_org_id_missing():
+    req = _make_request({})
+    with pytest.raises(HTTPException) as exc_info:
+        await get_internal_org_id(req, _=True)
+    assert exc_info.value.status_code == 400
+    assert "Missing required 'X-Org-Id'" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_get_internal_org_id_invalid_int():
+    req = _make_request({"X-Org-Id": "not_an_int"})
+    with pytest.raises(HTTPException) as exc_info:
+        await get_internal_org_id(req, _=True)
+    assert exc_info.value.status_code == 400
+    assert "must be a valid integer" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_get_internal_billing_org_id_default_zero():
+    req = _make_request({})
+    org_id = await get_internal_billing_org_id(req, _=True)
+    assert org_id == 0
 
 
 def test_mask_api_key_utility():

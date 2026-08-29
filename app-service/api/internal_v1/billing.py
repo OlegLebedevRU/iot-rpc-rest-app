@@ -1,4 +1,4 @@
-"""Billing admin endpoints — only accessible for org_id=0."""
+"""Billing admin endpoints — only accessible for internal service / org_id=0."""
 
 from datetime import date
 from typing import Annotated
@@ -6,8 +6,11 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from starlette import status
 
-from api.api_v1.api_depends import Session_dep, Org_dep
-from core import settings
+from api.internal_v1.internal_depends import (
+    Internal_Auth_dep,
+    Internal_Billing_Org_dep,
+    Session_dep,
+)
 from core.crud.billing_repo import BillingRepo
 from core.logging_config import setup_module_logger
 from core.schemas.billing import (
@@ -22,11 +25,11 @@ from core.services.billing_utils import (
     require_billing_admin,
 )
 
-log = setup_module_logger(__name__, "api_billing.log")
+log = setup_module_logger(__name__, "api_internal_billing.log")
 
 router = APIRouter(
     prefix="/billing",
-    tags=["Billing Admin"],
+    tags=["Internal Billing Admin"],
     include_in_schema=False,
 )
 
@@ -61,7 +64,7 @@ async def _would_affect_current_month(
 @router.get("/coefficients", response_model=list[BillingCoefficientOut])
 async def list_coefficients(
     session: Session_dep,
-    org_id: Org_dep,
+    org_id: Internal_Billing_Org_dep,
 ) -> list[BillingCoefficientOut]:
     require_billing_admin(org_id)
     rows = await BillingRepo.list_coefficients(session)
@@ -71,15 +74,11 @@ async def list_coefficients(
 @router.put("/coefficients", response_model=BillingCoefficientOut)
 async def set_coefficients(
     session: Session_dep,
-    org_id: Org_dep,
+    org_id: Internal_Billing_Org_dep,
     body: BillingCoefficientCreate,
 ) -> BillingCoefficientOut:
     require_billing_admin(org_id)
 
-    # Cannot set or change coefficients that affect the current billing month.
-    # Coefficients are resolved as "latest with effective_from <= period_start",
-    # so effective_from in [current_month_start, next_month_start) would affect
-    # the current month.  Only past or future-month dates are allowed.
     today = date.today()
     current_month_start = today.replace(day=1)
     if current_month_start.month == 12:
@@ -128,7 +127,7 @@ async def set_coefficients(
 @router.get("/consumption", response_model=BillingCounterOut | None)
 async def get_consumption(
     session: Session_dep,
-    org_id: Org_dep,
+    org_id: Internal_Billing_Org_dep,
     target_org_id: Annotated[int, Query(description="Org to query billing for")],
     period: Annotated[
         date, Query(description="First day of the month (e.g. 2026-03-01)")
@@ -144,7 +143,7 @@ async def get_consumption(
 @router.get("/consumption/history", response_model=list[BillingCounterOut])
 async def get_consumption_history(
     session: Session_dep,
-    org_id: Org_dep,
+    org_id: Internal_Billing_Org_dep,
     target_org_id: Annotated[int, Query(description="Org to query billing for")],
 ) -> list[BillingCounterOut]:
     require_billing_admin(org_id)
@@ -158,7 +157,7 @@ async def get_consumption_history(
 @router.post("/recalculate")
 async def recalculate(
     session: Session_dep,
-    org_id: Org_dep,
+    org_id: Internal_Billing_Org_dep,
     body: BillingRecalculateRequest,
 ) -> dict:
     require_billing_admin(org_id)

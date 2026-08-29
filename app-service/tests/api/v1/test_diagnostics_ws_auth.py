@@ -7,7 +7,7 @@ from fastapi import WebSocket
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette import status
 
-from api.api_v1 import diagnostics as diagnostics_api
+from api.internal_v1 import diagnostics as diagnostics_api
 
 
 class DummyWebSocket:

@@ -6,7 +6,6 @@ DOCS_EVENTS_FORMAT = "https://github.com/OlegLebedevRU/iot-rpc-rest-app/blob/mas
 DOCS_WEBHOOKS = (
     "https://github.com/OlegLebedevRU/iot-rpc-rest-app/blob/master/docs/3-webhooks.md"
 )
-DOCS_REMOTE_DIAGNOSTICS = "https://github.com/OlegLebedevRU/iot-rpc-rest-app/blob/master/docs/remote-diagnostics-protocol.md"
 
 # Описание тегов с использованием констант
 TAGS_METADATA = [
@@ -17,7 +16,7 @@ TAGS_METADATA = [
 
 Отправка команд устройствам и получение результатов.
 
-- Создание задач (например, открыть ячейку)
+- Создание задач (например, выполнение команд)
 - Получение статуса задачи
 - Просмотр истории задач по `device_id`
 - Поддержка пагинации
@@ -32,7 +31,7 @@ TAGS_METADATA = [
         "description": f"""
 # 🔔 События с устройств
 
-Получение событий, генерируемых устройствами (например, открытие двери, сканирование QR).
+Получение событий, генерируемых устройствами (например, телеметрия, датчики, состояние).
 
 ### Доступные эндпоинты:
 - `/events/` — пагинированный список событий по `device_id`
@@ -49,7 +48,7 @@ TAGS_METADATA = [
         "description": """
 # 💡 Устройства
 
-Работа с устройствами (postamat, терминалы и т.п.).
+Работа с реестром устройств организации.
 
 ### Функции:
 - Получение списка устройств с их статусом
@@ -60,18 +59,15 @@ TAGS_METADATA = [
         """,
     },
     {
-        "name": "Postamats",
+        "name": "Gauges",
         "description": """
-# 📦 Постаматы
+# 📊 Метрики и датчики (Gauges)
 
-API для управления постаматами и их ячейками.
+Получение показаний датчиков и метрик состояния оборудования.
 
 ### Возможности:
-- Получить список всех постаматов
-- Получить ростамат с детализацией по ячейкам
-- Отправить команду (например, `lock_cells`, `unlock_door`)
-
-Каждая команда возвращает `task_id` для отслеживания результата.
+- Пагинированный список показаний датчиков
+- Фильтрация по `device_id` и типу метрики
         """,
     },
     {
@@ -86,20 +82,6 @@ API для управления постаматами и их ячейками.
 - Максимум вебхуков на организацию: 2
 
 📄 [Полная документация по вебхукам]({DOCS_WEBHOOKS})
-        """,
-    },
-    {
-        "name": "Diagnostics",
-        "description": f"""
-# 🖥️ Remote diagnostics / live output
-
-WebSocket API для live logs и predefined diagnostic commands.
-
-- Endpoint: `/api/v1/diagnostics/ws/devices/{{sn}}`
-- Управление устройством выполняется через существующий MQTT RPC lifecycle
-- Потоковый вывод приходит из `dev/<SN>/out`
-
-📄 [Протокол remote diagnostics]({DOCS_REMOTE_DIAGNOSTICS})
         """,
     },
 ]

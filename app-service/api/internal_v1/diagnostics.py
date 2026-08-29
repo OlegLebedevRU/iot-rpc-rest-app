@@ -7,7 +7,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.api_v1.api_depends import Session_dep
+from api.internal_v1.internal_depends import Session_dep
 from core import settings
 from core.crud.device_repo import DeviceRepo
 from core.diagnostics.schemas import (
@@ -22,15 +22,16 @@ from core.diagnostics.service import DeviceTaskDiagnosticTaskSender, DiagnosticS
 from core.diagnostics.sessions import DiagnosticSession, registry
 from core.logging_config import setup_module_logger
 
-log = setup_module_logger(__name__, "api_diagnostics.log")
+log = setup_module_logger(__name__, "api_internal_diagnostics.log")
 router = APIRouter(
-    prefix=f"{settings.api.v1.diagnostics}",
-    tags=["Diagnostics"],
+    prefix=settings.api.internal_v1.diagnostics,
+    tags=["Internal Diagnostics"],
+    include_in_schema=False,
 )
 
 
 async def _resolve_websocket_org_id(websocket: WebSocket) -> int | None:
-    """Resolve org_id from the trusted header injected by nginx-jwt."""
+    """Resolve org_id from the trusted headers injected by internal auth gateway."""
     role = str(
         websocket.headers.get("X-Role")
         or websocket.headers.get("jwt-role")
@@ -99,7 +100,6 @@ async def _forward_session_queue(
             message = await session.queue.get()
             try:
                 await websocket.send_json(message.model_dump(mode="json"))
-                # When eof is reached, execution has completed on the device
                 if getattr(message, "eof", False):
                     break
             finally:

@@ -69,18 +69,29 @@ class LoggingConfig(BaseModel):
 class ApiV1Prefix(BaseModel):
     prefix: str = "/v1"
     device_tasks: str = "/device-tasks"
-    admin: str = "/admin"
     device_events: str = "/device-events"
     devices: str = "/devices"
-    accounts: str = "/accounts"
     webhooks: str = "/webhooks"
-    diagnostics: str = "/diagnostics"
+    gauges: str = "/gauges"
+
+
+class ApiInternalV1Prefix(BaseModel):
+    prefix: str = "/internal/v1"
     provisioning: str = "/provisioning"
+    billing: str = "/billing"
+    admin: str = "/admin"
+    diagnostics: str = "/diagnostics"
+    devices: str = "/devices"
+    device_tasks: str = "/device-tasks"
+    device_events: str = "/device-events"
+    gauges: str = "/gauges"
+    webhooks: str = "/webhooks"
 
 
 class ApiPrefix(BaseModel):
     prefix: str = "/api"
     v1: ApiV1Prefix = ApiV1Prefix()
+    internal_v1: ApiInternalV1Prefix = ApiInternalV1Prefix()
 
 
 # Hosts that are already local / compose-internal — no rewrite needed.

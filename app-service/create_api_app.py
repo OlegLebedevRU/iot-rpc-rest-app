@@ -51,13 +51,13 @@ SUMMARY = """
 | Тег | Краткое описание |
 |-----|------------------|
 | **Device tasks** | Команды устройствам (создание и отслеживание задач) |
-| **Device events** | Получение и фильтрация событий с пагинацией и инкрементальной выборкой (ссылка на документацию) |
-| **Devices** | Управление устройствами и тегами |
-| **Postamats** | Работа с постаматами и ячейками |
-| **Webhooks** | Настройка вебхуков с ссылкой на полную документацию |
+| **Device events** | Получение и фильтрация событий с пагинацией и инкрементальной выборкой |
+| **Devices** | Реестр устройств организации и управление тегами |
+| **Gauges** | Показания датчиков и метрик оборудования |
+| **Webhooks** | Настройка вебхуков для получения событий |
 
 ### 🔐 Безопасность
-- Все эндпоинты требуют `x-api-key`
+- Все эндпоинты требуют заголовок `x-api-key`
 - Принадлежность ресурсов к организации проверяется автоматически
 
 """
@@ -347,8 +347,47 @@ async def _billing_monthly_job() -> None:
         break
 
 
+def get_scalar_api_reference_html(
+    openapi_url: str,
+    title: str = "Leo4 IoT Platform - API Reference",
+) -> str:
+    return f"""<!doctype html>
+<html>
+  <head>
+    <title>{title}</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <style>
+      body {{
+        margin: 0;
+        padding: 0;
+      }}
+    </style>
+  </head>
+  <body>
+    <script
+      id="api-reference"
+      data-url="{openapi_url}"
+      src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"
+    ></script>
+  </body>
+</html>"""
+
+
 def register_static_docs_routes(app: FastAPI) -> None:
     @app.get("/docs", include_in_schema=False)
+    async def scalar_docs_html() -> HTMLResponse:
+        openapi_url = str(app.openapi_url or "/openapi.json")
+        return HTMLResponse(
+            get_scalar_api_reference_html(
+                openapi_url=openapi_url,
+                title=f"{app.title} - API Reference",
+            )
+        )
+
+    @app.get("/swagger", include_in_schema=False)
+    @app.get("/legacy-docs", include_in_schema=False)
     async def custom_swagger_ui_html() -> HTMLResponse:
         return get_swagger_ui_html(
             openapi_url=str(app.openapi_url),
@@ -372,7 +411,7 @@ def register_static_docs_routes(app: FastAPI) -> None:
         )
 
 
-def create_app(create_custom_static_urls: bool = False) -> FastAPI:
+def create_app(create_custom_static_urls: bool = True) -> FastAPI:
     _ensure_rabbit_subscribers_registered()
     app = FastAPI(
         title="Leo4",
@@ -381,8 +420,8 @@ def create_app(create_custom_static_urls: bool = False) -> FastAPI:
         default_response_class=JSONResponse,
         lifespan=lifespan,
         openapi_tags=TAGS_METADATA,
-        docs_url="/docs" if create_custom_static_urls else "/legacy-docs",
-        redoc_url=None if create_custom_static_urls else "/redoc",
+        docs_url=None,
+        redoc_url=None,
     )
     add_pagination(app)
     app.include_router(api_router)
@@ -393,7 +432,6 @@ def create_app(create_custom_static_urls: bool = False) -> FastAPI:
 
     app.add_middleware(BillingApiCounterMiddleware)
 
-    if create_custom_static_urls:
-        register_static_docs_routes(app)
+    register_static_docs_routes(app)
 
     return app
