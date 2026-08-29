@@ -101,6 +101,40 @@ class DeviceService:
         details = {k: v for k, v in details.items() if v is not None}
 
         if "connection.created" in routing_key:
+            # Обновляем connection.details через RMQ Management API в момент подключения
+            # (актуализирует данные сертификата mTLS, шифрования и сокета)
+            try:
+                single_details = await RmqAdminApi.get_single_connection_details(
+                    conn_name=conn_name, sn=device_sn, timeout_sec=2.0
+                )
+                if single_details and isinstance(single_details, dict):
+                    conn_name = single_details.get("name") or conn_name
+                    connected_at = single_details.get("connected_at") or connected_at
+                    details.update(
+                        {
+                            "conn_name": conn_name,
+                            "name": conn_name,
+                            "user": single_details.get("user") or details.get("user"),
+                            "peer_host": single_details.get("peer_host") or details.get("peer_host"),
+                            "peer_port": single_details.get("peer_port") or details.get("peer_port"),
+                            "ssl": single_details.get("ssl") if "ssl" in single_details else details.get("ssl"),
+                            "ssl_cipher": single_details.get("ssl_cipher") or details.get("ssl_cipher"),
+                            "ssl_protocol": single_details.get("ssl_protocol") or details.get("ssl_protocol"),
+                            "peer_cert_subject": single_details.get("peer_cert_subject") or details.get("peer_cert_subject"),
+                            "peer_cert_validity": single_details.get("peer_cert_validity") or details.get("peer_cert_validity"),
+                            "protocol": single_details.get("protocol") or details.get("protocol"),
+                            "connected_at": connected_at,
+                            "bytes_received": single_details.get("recv_oct") or details.get("bytes_received"),
+                            "bytes_sent": single_details.get("send_oct") or details.get("bytes_sent"),
+                            "recv_oct": single_details.get("recv_oct") or details.get("recv_oct"),
+                            "send_oct": single_details.get("send_oct") or details.get("send_oct"),
+                            "client_properties": single_details.get("client_properties") or details.get("client_properties"),
+                        }
+                    )
+                    details = {k: v for k, v in details.items() if v is not None}
+            except Exception as e:
+                log.debug("Failed to fetch fresh connection details for %s: %s", device_sn, e)
+
             res = await DeviceRepo.handle_connection_created(
                 session=session,
                 sn=device_sn,
@@ -231,10 +265,14 @@ class DeviceService:
                         "ssl_cipher": raw_conn.get("ssl_cipher"),
                         "ssl_protocol": raw_conn.get("ssl_protocol"),
                         "peer_cert_subject": raw_conn.get("peer_cert_subject"),
+                        "peer_cert_validity": raw_conn.get("peer_cert_validity"),
+                        "client_properties": raw_conn.get("client_properties"),
                         "protocol": raw_conn.get("protocol"),
                         "connected_at": connected_at_raw,
                         "bytes_received": raw_conn.get("recv_oct"),
                         "bytes_sent": raw_conn.get("send_oct"),
+                        "recv_oct": raw_conn.get("recv_oct"),
+                        "send_oct": raw_conn.get("send_oct"),
                     }
 
                     if not conn_row.last_checked_result:

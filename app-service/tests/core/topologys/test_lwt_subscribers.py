@@ -185,3 +185,59 @@ async def test_out_handler_does_not_call_billing(monkeypatch):
         await fs_queues_module.diagnostics_output(msg, "SN_OUT_TEST")
         mock_handle.assert_awaited_once()
         mock_billing.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_app_and_svc_connect_handlers_json_payload(monkeypatch):
+    mock_session = AsyncMock(spec=AsyncSession)
+    updated_args = []
+
+    async def fake_update_connect_flag(session, sn, flag_name, value):
+        updated_args.append((sn, flag_name, value))
+
+    monkeypatch.setattr(
+        fs_queues_module.DeviceRepo, "update_connect_flag", fake_update_connect_flag
+    )
+
+    # JSON with status field
+    msg1 = _make_rabbit_msg(b'{"status": "app_online"}')
+    await fs_queues_module.app_connect_handler(msg1, mock_session, "SN_JSON_1")
+
+    # JSON with boolean app_connect
+    msg2 = _make_rabbit_msg(b'{"app_connect": false}')
+    await fs_queues_module.app_connect_handler(msg2, mock_session, "SN_JSON_2")
+
+    # JSON with state field for svc
+    msg3 = _make_rabbit_msg(b'{"state": "svc_online"}')
+    await fs_queues_module.svc_connect_handler(msg3, mock_session, "SN_JSON_3")
+
+    # JSON with boolean svc_connect
+    msg4 = _make_rabbit_msg(b'{"svc_connect": false}')
+    await fs_queues_module.svc_connect_handler(msg4, mock_session, "SN_JSON_4")
+
+    assert updated_args == [
+        ("SN_JSON_1", "app_connect", True),
+        ("SN_JSON_2", "app_connect", False),
+        ("SN_JSON_3", "svc_connect", True),
+        ("SN_JSON_4", "svc_connect", False),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_sn_getter_dep_formats():
+    from core.topologys.fs_depends import sn_getter_dep
+
+    # 1. Standard dot-separated
+    msg1 = MagicMock()
+    msg1.raw_message.routing_key = "dev.a4b0000773c82116d210826.app"
+    assert await sn_getter_dep(msg1) == "a4b0000773c82116d210826"
+
+    # 2. Slash-separated (MQTT standard)
+    msg2 = MagicMock()
+    msg2.raw_message.routing_key = "dev/a4b0000773c82116d210826/svc"
+    assert await sn_getter_dep(msg2) == "a4b0000773c82116d210826"
+
+    # 3. Custom length SN
+    msg3 = MagicMock()
+    msg3.raw_message.routing_key = "dev.custom_device_serial_123.app"
+    assert await sn_getter_dep(msg3) == "custom_device_serial_123"

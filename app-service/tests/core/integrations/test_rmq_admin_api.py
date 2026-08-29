@@ -284,3 +284,79 @@ async def test_get_all_connections_paginated(monkeypatch):
     conns = await RmqAdminApi.get_all_connections(time_budget_sec=5.0, page_size=2)
     assert len(conns) == 3
     assert [c["user"] for c in conns] == ["SN_PAGE_1", "SN_PAGE_2", "SN_PAGE_3"]
+
+
+@pytest.mark.asyncio
+async def test_get_single_connection_details(monkeypatch):
+    responses = {
+        "api/connections/127.0.0.1%3A50000%20-%3E%20172.18.0.2%3A8883": DummyResponse(
+            200,
+            {
+                "name": "127.0.0.1:50000 -> 172.18.0.2:8883",
+                "user": "SN_SINGLE",
+                "connected_at": 1710000000,
+                "peer_host": "127.0.0.1",
+                "peer_port": 50000,
+                "peer_cert_subject": "CN=SN_SINGLE,O=TestOrg",
+                "peer_cert_validity": "2026-08-24T21:43:32Z - 2027-08-24T21:43:32Z",
+                "ssl": True,
+                "ssl_cipher": "TLS_AES_256_GCM_SHA384",
+                "protocol": "MQTT 5-0",
+                "recv_oct": 1024,
+                "send_oct": 2048,
+                "client_properties": {"client_id": "SN_SINGLE"},
+            },
+            "api/connections/127.0.0.1%3A50000%20-%3E%20172.18.0.2%3A8883",
+        ),
+        "api/connections/username/SN_BY_USER": DummyResponse(
+            200,
+            [
+                {
+                    "name": "127.0.0.2:50001 -> 172.18.0.2:8883",
+                    "user": "SN_BY_USER",
+                }
+            ],
+            "api/connections/username/SN_BY_USER",
+        ),
+        "api/connections/127.0.0.2%3A50001%20-%3E%20172.18.0.2%3A8883": DummyResponse(
+            200,
+            {
+                "name": "127.0.0.2:50001 -> 172.18.0.2:8883",
+                "user": "SN_BY_USER",
+                "connected_at": 1710000001,
+                "peer_host": "127.0.0.2",
+                "peer_port": 50001,
+                "peer_cert_subject": "CN=SN_BY_USER,O=TestOrg",
+                "peer_cert_validity": "2026-08-24T21:43:32Z - 2027-08-24T21:43:32Z",
+                "ssl": True,
+                "ssl_cipher": "TLS_AES_256_GCM_SHA384",
+                "protocol": "MQTT 5-0",
+            },
+            "api/connections/127.0.0.2%3A50001%20-%3E%20172.18.0.2%3A8883",
+        ),
+    }
+
+    monkeypatch.setattr(
+        rmq_admin_api.httpx,
+        "AsyncClient",
+        lambda *args, **kwargs: DummyAsyncClient(*args, responses=responses, **kwargs),
+    )
+
+    # 1. По имени сокета
+    res1 = await RmqAdminApi.get_single_connection_details(
+        conn_name="127.0.0.1:50000 -> 172.18.0.2:8883"
+    )
+    assert res1 is not None
+    assert res1["user"] == "SN_SINGLE"
+    assert res1["peer_cert_subject"] == "CN=SN_SINGLE,O=TestOrg"
+    assert res1["peer_cert_validity"] == "2026-08-24T21:43:32Z - 2027-08-24T21:43:32Z"
+
+    # 2. По SN устройства
+    res2 = await RmqAdminApi.get_single_connection_details(sn="SN_BY_USER")
+    assert res2 is not None
+    assert res2["user"] == "SN_BY_USER"
+    assert res2["peer_cert_subject"] == "CN=SN_BY_USER,O=TestOrg"
+
+    # 3. Пустой вызов
+    res3 = await RmqAdminApi.get_single_connection_details()
+    assert res3 is None

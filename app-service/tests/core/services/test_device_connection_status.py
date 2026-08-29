@@ -336,3 +336,95 @@ def test_device_connection_availability_computation():
     )
     assert view4.is_app_available is None
     assert view4.is_svc_available is None
+
+
+@pytest.mark.asyncio
+async def test_handle_connection_created_fetches_and_updates_cert_details(monkeypatch):
+    mock_session = AsyncMock(spec=AsyncSession)
+    mock_row = DeviceConnection(
+        device_id=10,
+        client_id="SN_TEST_CERT",
+        last_checked_result=False,
+        app_connect=True,
+        svc_connect=True,
+        details={"peer_cert_subject": "CN=OLD_CERT"},
+    )
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_row
+    mock_session.execute.return_value = mock_result
+
+    async def fake_get_single_details(conn_name=None, sn=None, timeout_sec=2.0):
+        return {
+            "name": "127.0.0.1:52222 -> 127.0.0.1:8883",
+            "user": "SN_TEST_CERT",
+            "peer_host": "94.29.22.239",
+            "peer_port": 2310,
+            "peer_cert_subject": "CN=SN_TEST_CERT,O=NewOrg",
+            "peer_cert_validity": "2026-08-24T21:43:32Z - 2027-08-24T21:43:32Z",
+            "ssl": True,
+            "ssl_cipher": "aes_128_gcm",
+            "ssl_protocol": "tlsv1.2",
+            "protocol": "MQTT 5-0",
+            "recv_oct": 1234,
+            "send_oct": 5678,
+            "connected_at": 1787735367117,
+        }
+
+    monkeypatch.setattr(
+        RmqAdminApi, "get_single_connection_details", fake_get_single_details
+    )
+
+    res = await DeviceService.handle_connection_event(
+        session=mock_session,
+        routing_key="connection.created",
+        payload={
+            "user": "SN_TEST_CERT",
+            "name": "127.0.0.1:52222 -> 127.0.0.1:8883",
+        },
+        headers={},
+    )
+
+    assert res is True
+    assert mock_row.last_checked_result is True
+    assert mock_row.details["peer_cert_subject"] == "CN=SN_TEST_CERT,O=NewOrg"
+    assert (
+        mock_row.details["peer_cert_validity"]
+        == "2026-08-24T21:43:32Z - 2027-08-24T21:43:32Z"
+    )
+    assert mock_row.details["ssl_cipher"] == "aes_128_gcm"
+    assert mock_row.details["bytes_received"] == 1234
+    assert mock_row.details["bytes_sent"] == 5678
+
+
+@pytest.mark.asyncio
+async def test_handle_connection_closed_with_past_connected_at_not_ignored():
+    mock_session = AsyncMock(spec=AsyncSession)
+    mock_row = DeviceConnection(
+        device_id=10,
+        client_id="SN_TEST_DISC",
+        last_checked_result=True,
+        connected_at=datetime(2026, 8, 26, 15, 0, 0),
+        app_connect=True,
+        svc_connect=True,
+        details={"conn_name": "127.0.0.1:53333 -> 127.0.0.1:8883"},
+    )
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = mock_row
+    mock_session.execute.return_value = mock_result
+
+    res = await DeviceService.handle_connection_event(
+        session=mock_session,
+        routing_key="connection.closed",
+        payload={
+            "user": "SN_TEST_DISC",
+            "name": "127.0.0.1:53333 -> 127.0.0.1:8883",
+            "connected_at": 1787730000000,
+        },
+        headers={},
+    )
+
+    assert res is True
+    assert mock_row.last_checked_result is False
+    assert mock_row.app_connect is True
+    assert mock_row.svc_connect is True
+    assert mock_row.details["conn_name"] is None

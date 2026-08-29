@@ -234,6 +234,7 @@ class DeviceRepo:
         Атомарно обновляет флаг подключения (app_connect или svc_connect)
         и обновляет checked_at = NOW().
         Не перезаписывает и не сбрасывает last_checked_result.
+        Если запись в таблице DeviceConnection отсутствует, создает/актуализирует её.
         """
         if flag_name not in ("app_connect", "svc_connect"):
             raise ValueError(f"Invalid connection flag name: {flag_name}")
@@ -248,7 +249,29 @@ class DeviceRepo:
                 }
             )
         )
-        await session.execute(stmt)
+        res = await session.execute(stmt)
+        if res.rowcount == 0:
+            dev_id = await cls.get_device_id(session, sn=sn)
+            if dev_id is not None:
+                stmt_by_dev = select(DeviceConnection).where(
+                    DeviceConnection.device_id == dev_id
+                )
+                res_dev = await session.execute(stmt_by_dev)
+                conn_row = res_dev.scalar_one_or_none()
+                now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+                if conn_row is not None:
+                    conn_row.client_id = sn
+                    setattr(conn_row, flag_name, value)
+                    conn_row.checked_at = now_dt
+                else:
+                    new_conn = DeviceConnection(
+                        device_id=dev_id,
+                        client_id=sn,
+                        last_checked_result=False,
+                        checked_at=now_dt,
+                        **{flag_name: value},
+                    )
+                    session.add(new_conn)
 
     @classmethod
     async def handle_connection_created(
@@ -293,9 +316,20 @@ class DeviceRepo:
         res = await session.execute(stmt)
         conn_row = res.scalar_one_or_none()
 
+        dev_id = None
+        if conn_row is None:
+            dev_id = await cls.get_device_id(session, sn=sn)
+            if dev_id is not None:
+                stmt_dev = select(DeviceConnection).where(
+                    DeviceConnection.device_id == dev_id
+                )
+                res_dev = await session.execute(stmt_dev)
+                conn_row = res_dev.scalar_one_or_none()
+
         now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
 
         if conn_row is not None:
+            conn_row.client_id = sn
             conn_row.last_checked_result = True
             conn_row.checked_at = now_dt
             if dt_connected_at is not None:
@@ -312,7 +346,8 @@ class DeviceRepo:
             conn_row.details = merged_details
             return True
         else:
-            dev_id = await cls.get_device_id(session, sn=sn)
+            if dev_id is None:
+                dev_id = await cls.get_device_id(session, sn=sn)
             if dev_id is not None:
                 new_conn = DeviceConnection(
                     device_id=dev_id,
@@ -340,12 +375,22 @@ class DeviceRepo:
         """
         Обрабатывает событие connection.closed для устройства по SN.
         Защита от race condition: сбрасывает last_checked_result = False только если
-        закрывающееся соединение совпадает с текущим активным conn_name или новее.
+        закрывающееся соединение совпадает с текущим активным conn_name или если
+        активное имя соединения не зафиксировано.
         Не сбрасывает и не изменяет app_connect и svc_connect.
         """
         stmt = select(DeviceConnection).where(DeviceConnection.client_id == sn)
         res = await session.execute(stmt)
         conn_row = res.scalar_one_or_none()
+
+        if conn_row is None:
+            dev_id = await cls.get_device_id(session, sn=sn)
+            if dev_id is not None:
+                stmt_dev = select(DeviceConnection).where(
+                    DeviceConnection.device_id == dev_id
+                )
+                res_dev = await session.execute(stmt_dev)
+                conn_row = res_dev.scalar_one_or_none()
 
         if conn_row is None:
             return False
@@ -356,8 +401,11 @@ class DeviceRepo:
             current_details = (
                 conn_row.details if isinstance(conn_row.details, dict) else {}
             )
-            current_conn_name = current_details.get("conn_name") or current_details.get("name")
+            current_conn_name = (
+                current_details.get("conn_name") or current_details.get("name")
+            )
 
+            # Если имена обоих сокетов известны и не совпадают -> закрылся старый сокет (гонка при реконнекте)
             if conn_name and current_conn_name and conn_name != current_conn_name:
                 log.info(
                     "Race condition on connection.closed for SN=%s: closed conn '%s' != active conn '%s'. Skipping status reset.",
@@ -366,33 +414,6 @@ class DeviceRepo:
                     current_conn_name,
                 )
                 return False
-
-            if closed_at is not None and conn_row.connected_at is not None:
-                dt_closed_at = None
-                if isinstance(closed_at, (int, float)):
-                    if closed_at > 1e11:
-                        dt_closed_at = datetime.fromtimestamp(
-                            closed_at / 1000, tz=timezone.utc
-                        ).replace(tzinfo=None)
-                    else:
-                        dt_closed_at = datetime.fromtimestamp(
-                            closed_at, tz=timezone.utc
-                        ).replace(tzinfo=None)
-                elif isinstance(closed_at, datetime):
-                    dt_closed_at = (
-                        closed_at.replace(tzinfo=None)
-                        if closed_at.tzinfo
-                        else closed_at
-                    )
-
-                if dt_closed_at and dt_closed_at < conn_row.connected_at:
-                    log.info(
-                        "Out-of-order connection.closed for SN=%s: closed_at (%s) < connected_at (%s). Skipping status reset.",
-                        sn,
-                        dt_closed_at,
-                        conn_row.connected_at,
-                    )
-                    return False
 
             conn_row.last_checked_result = False
             conn_row.checked_at = now_dt

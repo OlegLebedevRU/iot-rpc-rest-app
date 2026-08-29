@@ -123,6 +123,59 @@ class RmqAdminApi:
         return response.json()
 
     @classmethod
+    async def get_single_connection_details(
+        cls,
+        conn_name: str | None = None,
+        sn: str | None = None,
+        timeout_sec: float = 2.0,
+    ) -> dict[str, Any] | None:
+        """Получает детальную информацию об одном соединении из RabbitMQ Management API."""
+        if not conn_name and not sn:
+            return None
+
+        url = cls._admin_url()
+        try:
+            timeout = httpx.Timeout(timeout_sec, connect=min(1.5, timeout_sec))
+            async with httpx.AsyncClient(base_url=url, timeout=timeout) as client:
+                if conn_name:
+                    data = await cls._get_json_or_none(
+                        client, f"api/connections/{cls._quote_path(conn_name)}"
+                    )
+                    if isinstance(data, dict) and data:
+                        return data
+
+                if sn:
+                    user_quoted = cls._quote_path(sn)
+                    conns = await cls._get_json_or_none(
+                        client, f"api/connections/username/{user_quoted}"
+                    )
+                    if isinstance(conns, list) and conns:
+                        target_conn = conns[-1]
+                        target_name = (
+                            target_conn.get("name")
+                            if isinstance(target_conn, dict)
+                            else None
+                        )
+                        if target_name:
+                            data = await cls._get_json_or_none(
+                                client,
+                                f"api/connections/{cls._quote_path(target_name)}",
+                            )
+                            if isinstance(data, dict) and data:
+                                return data
+                        if isinstance(target_conn, dict):
+                            return target_conn
+        except Exception as exc:
+            log.warning(
+                "Failed to fetch single connection details from RMQ API (conn_name=%s, sn=%s): %s",
+                conn_name,
+                sn,
+                exc,
+            )
+
+        return None
+
+    @classmethod
     async def get_all_connections(
         cls,
         time_budget_sec: float = 10.0,

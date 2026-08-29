@@ -25,12 +25,22 @@ for handler in log.handlers:
 
 
 async def sn_getter_dep(msg: RabbitMessage) -> str:
-    # log.info(
-    #     "Mqtt received topic= <%s>, headers=%s",
-    #     msg.raw_message.routing_key,
-    #     msg.raw_message.headers,
-    # )
-    return msg.raw_message.routing_key[4:-4]
+    rk = (
+        getattr(getattr(msg, "raw_message", None), "routing_key", None)
+        or getattr(msg, "routing_key", None)
+        or ""
+    )
+    if "." in rk:
+        parts = rk.split(".")
+        if len(parts) >= 3 and parts[0] == "dev":
+            return ".".join(parts[1:-1])
+    elif "/" in rk:
+        parts = rk.split("/")
+        if len(parts) >= 3 and parts[0] == "dev":
+            return "/".join(parts[1:-1])
+    if len(rk) > 8 and (rk.startswith("dev.") or rk.startswith("dev/")):
+        return rk[4:-4]
+    return rk
 
 
 Sn_dep = Annotated[str, Depends(sn_getter_dep)]

@@ -176,11 +176,29 @@ if _REGISTER_SUBSCRIBERS:
             log.warning("Failed to decode app connect message for %s: %s", sn, e)
             return
 
-        if body == "app_online":
+        value: bool | None = None
+        lower_body = body.lower()
+        if lower_body in ("app_online", "online", "true", "1"):
             value = True
-        elif body == "app_offline":
+        elif lower_body in ("app_offline", "offline", "false", "0"):
             value = False
         else:
+            try:
+                data = json.loads(body)
+                if isinstance(data, dict):
+                    status = str(data.get("status") or data.get("state") or "").lower()
+                    if status in ("app_online", "online", "true", "1"):
+                        value = True
+                    elif status in ("app_offline", "offline", "false", "0"):
+                        value = False
+                    elif "app_connect" in data:
+                        value = bool(data["app_connect"])
+                    elif "online" in data:
+                        value = bool(data["online"])
+            except Exception:
+                pass
+
+        if value is None:
             log.warning("Unknown app connect message payload for %s: %s", sn, body)
             return
 
@@ -201,11 +219,29 @@ if _REGISTER_SUBSCRIBERS:
             log.warning("Failed to decode svc connect message for %s: %s", sn, e)
             return
 
-        if body == "svc_online":
+        value: bool | None = None
+        lower_body = body.lower()
+        if lower_body in ("svc_online", "online", "true", "1"):
             value = True
-        elif body == "svc_offline":
+        elif lower_body in ("svc_offline", "offline", "false", "0"):
             value = False
         else:
+            try:
+                data = json.loads(body)
+                if isinstance(data, dict):
+                    status = str(data.get("status") or data.get("state") or "").lower()
+                    if status in ("svc_online", "online", "true", "1"):
+                        value = True
+                    elif status in ("svc_offline", "offline", "false", "0"):
+                        value = False
+                    elif "svc_connect" in data:
+                        value = bool(data["svc_connect"])
+                    elif "online" in data:
+                        value = bool(data["online"])
+            except Exception:
+                pass
+
+        if value is None:
             log.warning("Unknown svc connect message payload for %s: %s", sn, body)
             return
 
@@ -225,6 +261,11 @@ if _REGISTER_SUBSCRIBERS:
         headers = (
             getattr(msg, "headers", None)
             or getattr(getattr(msg, "raw_message", None), "headers", None)
+            or getattr(
+                getattr(getattr(msg, "raw_message", None), "properties", None),
+                "headers",
+                None,
+            )
             or {}
         )
         try:
