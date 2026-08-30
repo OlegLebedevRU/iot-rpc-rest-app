@@ -71,13 +71,6 @@
 
   "topic_permissions": [
     {
-        "user": "^a.*",
-        "vhost": "/",
-        "exchange": "amq.topic",
-        "write": "^dev.{client_id}.*",
-        "read": "^srv.{client_id}.*"
-    },
-    {
         "user": "a3b0000000c10221d290825",
         "vhost": "/",
         "exchange": "amq.topic",
