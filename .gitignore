@@ -182,3 +182,8 @@ cython_debug/
 /docs/local-files/
 /.mimocode/
 /.gigacode/
+*.zip
+*.tar.gz
+*.tgz
+*.rar
+*.7z
