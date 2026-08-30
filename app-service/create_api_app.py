@@ -66,9 +66,11 @@ SUMMARY = """
 # Connection exceptions that are worth retrying (network / broker not ready).
 # We try to import aio_pika-specific errors; fall back gracefully if absent.
 _RETRYABLE_EXCEPTIONS: tuple[type[BaseException], ...] = (
+    TimeoutError,
     asyncio.TimeoutError,
     OSError,
     ConnectionError,
+    Exception,
 )
 try:
     import aio_pika.exceptions  # type: ignore[import]
