@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from typing import Literal, Dict
+from typing import Literal, Dict, Any
 from urllib.parse import urlparse, urlunparse
 
-from pydantic import AmqpDsn, UUID4, HttpUrl, Field, model_validator
+from pydantic import AmqpDsn, UUID4, HttpUrl, Field, model_validator, field_validator
 from pydantic import BaseModel
 from pydantic import PostgresDsn
 from pydantic_settings import (
@@ -230,6 +230,22 @@ class RoutingKey:
         return f"{self.prefix}.{self.sn}.{self.suffix}"
 
 
+def _parse_str_set(value: Any) -> set[str]:
+    if isinstance(value, str):
+        return {item.strip().lower() for item in value.split(",") if item.strip()}
+    if isinstance(value, (list, set, frozenset, tuple)):
+        return {str(item).strip().lower() for item in value if str(item).strip()}
+    return set()
+
+
+def _parse_str_list(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [item.strip().lower() for item in value.split(",") if item.strip()]
+    if isinstance(value, (list, set, frozenset, tuple)):
+        return [str(item).strip().lower() for item in value if str(item).strip()]
+    return []
+
+
 class RabbitQXConfig(BaseModel):
     x_name: str = "amq.topic"
     x_name_direct: str = "amq.direct"
@@ -268,6 +284,30 @@ class RabbitQXConfig(BaseModel):
     device_poll_interval_sec: int = 600
     device_sync_chunk_size: int = 100
     device_sync_time_budget_sec: float = 30.0
+
+    # System/Service users and prefixes filter
+    ignored_users: set[str] = {
+        "guest",
+        "admin",
+        "user",
+        "internal",
+        "root",
+        "anonymous",
+        "null",
+        "none",
+        "etran_service",
+    }
+    service_user_prefixes: list[str] = ["etran", "menubuilder"]
+
+    @field_validator("ignored_users", mode="before")
+    @classmethod
+    def _validate_ignored_users(cls, v: Any) -> set[str]:
+        return _parse_str_set(v)
+
+    @field_validator("service_user_prefixes", mode="before")
+    @classmethod
+    def _validate_service_user_prefixes(cls, v: Any) -> list[str]:
+        return _parse_str_list(v)
 
 
 class JobTtlConfig(BaseModel):

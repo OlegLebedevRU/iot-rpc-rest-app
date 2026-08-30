@@ -211,6 +211,9 @@ for i in {1..30}; do
     sleep 2
 done
 
+echo "=== Применение актуальных дефиниций в runtime Mnesia ==="
+sudo docker compose exec rabbitmq rabbitmqctl import_definitions /etc/rabbitmq/definitions.json 2>/dev/null || true
+
 sudo docker compose ps rabbitmq
 '@
 
@@ -284,8 +287,8 @@ $script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.
 
 Ожидаемый результат:
 - Пользователь `etran_service` присутствует в списке пользователей.
-- Права на запись/чтение в vhost `/`: `^(amq\.topic|telemetry\..*)`.
-- Топиковые права на exchange `amq.topic`: `write = ^dev\..*\.gauge\..*`, `read = ^dev\..*\.gauge\..*`.
+- Права на vhost `/`: `configure = ^(mqtt-subscription-.*|telemetry\..*)`, `write/read = ^(amq\.topic|mqtt-subscription-.*|telemetry\..*)`.
+- Топиковые права на exchange `amq.topic`: `write = ^(dev\..*\.gauge\..*|telemetry\..*)`, `read = ^(dev\..*\.gauge\..*|telemetry\..*)`.
 
 ### 4.3. Проверка логов приложения `app1` и шедулера задач
 

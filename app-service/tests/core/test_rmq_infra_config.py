@@ -40,9 +40,9 @@ def test_definitions_json_etran_service():
     assert len(permissions) == 1, "etran_service permissions missing or duplicated"
     perm = permissions[0]
     assert perm.get("vhost") == "/"
-    assert perm.get("configure") == ""
-    assert perm.get("write") == "^(amq\\.topic|telemetry\\..*)"
-    assert perm.get("read") == "^(amq\\.topic|telemetry\\..*)"
+    assert perm.get("configure") == "^(mqtt-subscription-.*|telemetry\\..*)"
+    assert perm.get("write") == "^(amq\\.topic|mqtt-subscription-.*|telemetry\\..*)"
+    assert perm.get("read") == "^(amq\\.topic|mqtt-subscription-.*|telemetry\\..*)"
 
     # 3. Topic Permissions check
     topic_perms = [
@@ -52,8 +52,8 @@ def test_definitions_json_etran_service():
     assert len(topic_perms) == 1, "etran_service topic_permissions on amq.topic missing"
     tp = topic_perms[0]
     assert tp.get("vhost") == "/"
-    assert tp.get("write") == r"^dev\..*\.gauge\..*"
-    assert tp.get("read") == r"^dev\..*\.gauge\..*"
+    assert tp.get("write") == "^(dev\\..*\\.gauge\\..*|telemetry\\..*)"
+    assert tp.get("read") == "^(dev\\..*\\.gauge\\..*|telemetry\\..*)"
 
 
 def test_rabbitmq_conf_listeners_and_mqtt():

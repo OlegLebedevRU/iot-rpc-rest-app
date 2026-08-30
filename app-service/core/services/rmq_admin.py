@@ -26,6 +26,10 @@ class RmqAdmin:
     @classmethod
     async def set_device_definitions(cls, session: AsyncSession, dry_run: bool = False):
         device_names = [name for name in await DeviceRepo.list(session) if name]
+
+        # Always reconcile baseline service definitions (etran_service, etc.)
+        await RmqAdminApi.reconcile_service_definitions(dry_run=dry_run)
+
         if not device_names:
             return None
 

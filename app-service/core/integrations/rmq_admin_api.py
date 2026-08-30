@@ -16,14 +16,52 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 log = setup_module_logger(__name__, "rabbit_admin_api.log")
 
 IGNORED_USERS: frozenset[str] = frozenset(
-    {"guest", "admin", "user", "internal", "root", "anonymous", "null", "none"}
+    {"guest", "admin", "user", "internal", "root", "anonymous", "null", "none", "etran_service"}
 )
+
+
+def is_ignored_or_service_identity(
+    identity: str | None,
+    ignored_users: set[str] | frozenset[str] | None = None,
+    prefixes: list[str] | tuple[str, ...] | None = None,
+) -> bool:
+    """Проверяет, является ли пользователь или client_id системным/сервисным."""
+    if not identity or not isinstance(identity, str):
+        return True
+    norm = identity.strip().lower()
+    if not norm:
+        return True
+
+    # 1. Проверка точного совпадения со списком системных пользователей
+    users_set = (
+        ignored_users
+        if ignored_users is not None
+        else getattr(getattr(settings, "rmq", None), "ignored_users", IGNORED_USERS)
+    )
+    if norm in users_set:
+        return True
+
+    # 2. Проверка сервисных префиксов
+    prefix_list = (
+        prefixes
+        if prefixes is not None
+        else getattr(
+            getattr(settings, "rmq", None),
+            "service_user_prefixes",
+            ["etran", "menubuilder"],
+        )
+    )
+    for pfx in prefix_list:
+        if pfx and norm.startswith(pfx.lower()):
+            return True
+
+    return False
 
 
 def extract_device_sn_from_conn(conn_data: dict[str, Any]) -> str | None:
     """Извлекает серийный номер устройства из данных соединения RabbitMQ."""
     user = conn_data.get("user")
-    if user and isinstance(user, str) and user.strip().lower() not in IGNORED_USERS:
+    if user and isinstance(user, str) and not is_ignored_or_service_identity(user):
         return user.strip()
 
     client_props = conn_data.get("client_properties")
@@ -32,7 +70,7 @@ def extract_device_sn_from_conn(conn_data: dict[str, Any]) -> str | None:
         if (
             client_id
             and isinstance(client_id, str)
-            and client_id.strip().lower() not in IGNORED_USERS
+            and not is_ignored_or_service_identity(client_id)
         ):
             return client_id.strip()
 
@@ -464,9 +502,62 @@ class RmqAdminApi:
         return terminated_count
 
     @classmethod
+    async def reconcile_service_definitions(cls, dry_run: bool = False) -> dict[str, Any]:
+        """Идемпотентно обновляет права сервисных пользователей (etran_service) через Management API."""
+        result = {"updated": 0, "errors": []}
+        vhost_quoted = cls._quote_path(cls._vhost)
+        etran_user = "etran_service"
+        user_quoted = cls._quote_path(etran_user)
+        perm_payload = {
+            "configure": "^(mqtt-subscription-.*|telemetry\\..*)",
+            "write": "^(amq\\.topic|mqtt-subscription-.*|telemetry\\..*)",
+            "read": "^(amq\\.topic|mqtt-subscription-.*|telemetry\\..*)",
+        }
+        topic_payload = {
+            "exchange": cls._exchange,
+            "write": "^(dev\\..*\\.gauge\\..*|telemetry\\..*)",
+            "read": "^(dev\\..*\\.gauge\\..*|telemetry\\..*)",
+        }
+        try:
+            async with httpx.AsyncClient(base_url=cls._admin_url(), timeout=10.0) as client:
+                user = await cls._get_json_or_none(client, f"api/users/{user_quoted}")
+                if user is not None:
+                    existing_perm = await cls._get_json_or_none(
+                        client, f"api/permissions/{vhost_quoted}/{user_quoted}"
+                    )
+                    if not cls._same_permissions(existing_perm, perm_payload):
+                        if not dry_run:
+                            upsert_perm = await client.put(
+                                f"api/permissions/{vhost_quoted}/{user_quoted}",
+                                json=perm_payload,
+                            )
+                            upsert_perm.raise_for_status()
+                        result["updated"] += 1
+
+                    existing_topic_perm = await cls._get_json_or_none(
+                        client, f"api/topic-permissions/{vhost_quoted}/{user_quoted}"
+                    )
+                    if not cls._same_topic_permissions(existing_topic_perm, topic_payload):
+                        if not dry_run:
+                            upsert_topic_perm = await client.put(
+                                f"api/topic-permissions/{vhost_quoted}/{user_quoted}",
+                                json=topic_payload,
+                            )
+                            upsert_topic_perm.raise_for_status()
+                        result["updated"] += 1
+        except Exception as e:
+            result["errors"].append({"service_user": etran_user, "error": str(e)})
+            log.warning("RMQ service definitions reconcile error for '%s': %s", etran_user, e)
+
+        return result
+
+    @classmethod
     async def block_device_user(cls, username: str) -> bool:
         """Блокирует устройство в RabbitMQ: обнуляет права и принудительно сбрасывает сокеты."""
         if not username:
+            return False
+        if is_ignored_or_service_identity(username):
+            log.warning("Refusing to block system or service user: %s", username)
             return False
         vhost_quoted = cls._quote_path(cls._vhost)
         user_quoted = cls._quote_path(username)

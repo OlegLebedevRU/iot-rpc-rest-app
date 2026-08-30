@@ -13,6 +13,7 @@ from core.crud.device_repo import DeviceRepo
 from core.integrations.rmq_admin_api import (
     RmqAdminApi,
     extract_device_sn_from_conn,
+    is_ignored_or_service_identity,
     IGNORED_USERS,
 )
 from core.logging_config import setup_module_logger
@@ -70,6 +71,9 @@ def evaluate_connection_collision(
     2) DEVICE_CLONE: одинаковый SN и сертификат, но скачки по любым разным IP-адресам
        (многооконный фильтр: >= 3 подключений за 180с и >= 2 смен хостов).
     """
+    if not sn or is_ignored_or_service_identity(sn):
+        return None, None
+
     if now_ts is None:
         now_ts = time.time()
 
@@ -150,7 +154,7 @@ def evaluate_connection_collision(
 def extract_device_sn(payload: dict, headers: dict) -> str | None:
     """Извлекает и валидирует Device SN из payload и headers AMQP-сообщения."""
     user = payload.get("user") or headers.get("user")
-    if user and isinstance(user, str) and user.strip().lower() not in IGNORED_USERS:
+    if user and isinstance(user, str) and not is_ignored_or_service_identity(user):
         return user.strip()
 
     client_props = payload.get("client_properties") or headers.get("client_properties")
@@ -159,7 +163,7 @@ def extract_device_sn(payload: dict, headers: dict) -> str | None:
         if (
             client_id
             and isinstance(client_id, str)
-            and client_id.strip().lower() not in IGNORED_USERS
+            and not is_ignored_or_service_identity(client_id)
         ):
             return client_id.strip()
 
@@ -167,7 +171,7 @@ def extract_device_sn(payload: dict, headers: dict) -> str | None:
     if (
         client_id_hdr
         and isinstance(client_id_hdr, str)
-        and client_id_hdr.strip().lower() not in IGNORED_USERS
+        and not is_ignored_or_service_identity(client_id_hdr)
     ):
         return client_id_hdr.strip()
 

@@ -63,9 +63,9 @@
     {
       "user": "etran_service",
       "vhost": "/",
-      "configure": "",
-      "write": "^(amq\\.topic|telemetry\\..*)",
-      "read": "^(amq\\.topic|telemetry\\..*)"
+      "configure": "^(mqtt-subscription-.*|telemetry\\..*)",
+      "write": "^(amq\\.topic|mqtt-subscription-.*|telemetry\\..*)",
+      "read": "^(amq\\.topic|mqtt-subscription-.*|telemetry\\..*)"
     }
   ],
 
@@ -95,8 +95,8 @@
         "user": "etran_service",
         "vhost": "/",
         "exchange": "amq.topic",
-        "write": "^dev\\..*\\.gauge\\..*",
-        "read": "^dev\\..*\\.gauge\\..*"
+        "write": "^(dev\\..*\\.gauge\\..*|telemetry\\..*)",
+        "read": "^(dev\\..*\\.gauge\\..*|telemetry\\..*)"
     }
   ],
   "parameters": [],
