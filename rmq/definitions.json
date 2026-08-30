@@ -24,6 +24,13 @@
         "device"
       ],
       "limits": {}
+    },
+    {
+      "name": "etran_service",
+      "password_hash": "EjRWeBg7tP7cGDzFUHytEFTo2tEGhjlRanuQBMBN1mDQMvo3",
+      "hashing_algorithm": "rabbit_password_hashing_sha256",
+      "tags": [],
+      "limits": {}
     }
   ],
   "vhosts": [
@@ -52,6 +59,13 @@
       "configure": ".*",
       "write": ".*",
       "read": ".*"
+    },
+    {
+      "user": "etran_service",
+      "vhost": "/",
+      "configure": "",
+      "write": "^(amq\\.topic|telemetry\\..*)",
+      "read": "^(amq\\.topic|telemetry\\..*)"
     }
   ],
 
@@ -76,8 +90,15 @@
         "exchange": "amq.topic",
         "write": ".*",
         "read": ".*"
+    },
+    {
+        "user": "etran_service",
+        "vhost": "/",
+        "exchange": "amq.topic",
+        "write": "^dev\\..*\\.gauge\\..*",
+        "read": "^dev\\..*\\.gauge\\..*"
     }
-],
+  ],
   "parameters": [],
   "global_parameters": [
     {

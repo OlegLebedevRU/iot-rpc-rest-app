@@ -528,10 +528,11 @@ ERROR: failed to compute cache key: "/crt/key_0000.pem": not found
 
 ### 6.4. Ручной деплой на VM (фактический флоу по сервисам)
 
-Подробный операционный runbook для аккуратного деплоя **только `app1`**,
-обязательных уточнений, сборки на хосте, деплоя из GHCR (по требованию), backup
-`.env`, rollback и проверок см. в
-[`manual-app1-deploy-runbook.md`](manual-app1-deploy-runbook.md).
+Для проведения ручных деплоев на целевой VM сформированы два специализированных пошаговых регламента:
+1. **Деплой только логики приложения (`app1`)**:
+   [`manual-app1-deploy-runbook.md`](manual-app1-deploy-runbook.md) — регламент для задач уровня приложения (сборка на хосте, GHCR по требованию, backup `.env`, rollback, изоляция БД и брокера).
+2. **Деплой инфраструктуры брокера RabbitMQ, межсервисных сетей и прокси**:
+   [`manual-infra-and-rmq-deploy-runbook.md`](manual-infra-and-rmq-deploy-runbook.md) — регламент для изменений `rmq/rabbitmq.conf` (слушатели портов, plain MQTT 1883), `rmq/definitions.json` (сервисные пользователи, топиковые ACL `amq.topic`), общих Docker-сетей (`iot_rabbitmq_network`), прокси `nginx`/`nginx-mutual`, с сохранением томов данных (`rabbitmq_data`, `pgdata`) и сессий устройств.
 
 Подключение по SSH к целевой VM, в каталог репозитория (`/home/user1/iot-rpc-rest-app`):
 

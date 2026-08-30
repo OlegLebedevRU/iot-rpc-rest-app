@@ -80,7 +80,8 @@ async def test_get_org_id_via_authorization_api_key_header():
 
 
 @pytest.mark.asyncio
-async def test_get_org_id_via_static_settings_fallback():
+async def test_get_org_id_via_static_settings_fallback(monkeypatch):
+    monkeypatch.setattr(settings.auth, "api_keys_raw", "test:1")
     req = _make_request({"x-api-key": "test:1"})
     session = AsyncMock()
     session.scalar.return_value = None  # Not in DB

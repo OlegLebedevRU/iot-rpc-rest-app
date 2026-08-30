@@ -95,6 +95,7 @@ flowchart LR
 | Документ | Описание |
 |---|---|
 | 🚀 [**Runbook: ручной деплой `app1`**](./docs/manual-app1-deploy-runbook.md) | Безопасный деплой `app1`: сборка напрямую на хосте (`docker compose build app1`), альтернативный деплой из GHCR, backup/rollback и проверки |
+| 🛡️ [**Runbook: деплой инфраструктуры RabbitMQ и сетей**](./docs/manual-infra-and-rmq-deploy-runbook.md) | Безопасный деплой инфраструктуры брокера (`rabbitmq.conf`, `definitions.json`), общих Docker-сетей (`iot_rabbitmq_network`), Nginx-прокси и zero-data-loss бэкапы/проверки |
 | 🧭 [**План деплоя**](./docs/deploy-plan.md) | Архитектура деплоя (сборка на хосте / GHCR по запросу), пошаговые сценарии и план автоматизации |
 
 ### Обзор платформы

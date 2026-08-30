@@ -41,6 +41,9 @@ Invoke-RestMethod -Method Post "https://dev.leo4.ru/api/v1/admin/?action=get_u&d
 
 ## Operational rules
 
+For end-to-end safe infrastructure and RabbitMQ deployment procedures, refer to:
+- [`manual-infra-and-rmq-deploy-runbook.md`](manual-infra-and-rmq-deploy-runbook.md) — complete runbook for deploying RabbitMQ configuration, definitions, and inter-service networks without data loss.
+
 Do **not** run destructive Compose commands against production volumes:
 
 ```powershell

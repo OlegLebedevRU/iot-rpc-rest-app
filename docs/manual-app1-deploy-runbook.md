@@ -6,9 +6,11 @@
 
 Связанные документы:
 
+- [`manual-infra-and-rmq-deploy-runbook.md`](manual-infra-and-rmq-deploy-runbook.md) — регламент деплоя инфраструктуры RabbitMQ, межсервисных сетей, definitions и reverse-proxy.
 - [`deploy-plan.md`](deploy-plan.md) — общий план архитектуры и деплоя.
 - [`deploy-plan.md` §6.2](deploy-plan.md#62-env-и-конфигурация-app1-без-локального-билда) — почему `app-service/.env` прокидывается через `env_file`.
 - [`deploy-plan.md` §6.4](deploy-plan.md#64-ручной-деплой-на-vm-текущий-флоу-по-сервисам) — общий ручной флоу по сервисам.
+- [`rabbitmq-acl-recovery.md`](rabbitmq-acl-recovery.md) — регламент восстановления динамических ACL устройств.
 
 ---
 
@@ -41,6 +43,10 @@
 > Если запрос «только app», **строго запрещено** выполнять `docker compose up -d` без
 > имени сервиса и **запрещено** пересоздавать `pg`, `rabbitmq`, `nginx`, `nginx-mutual`,
 > `pgadmin`, `certbot`. Всегда использовать флаг `--no-deps app1`.
+> 
+> 💡 Если задача включает обновление конфигурации брокера сообщений (`rmq/rabbitmq.conf`, `rmq/definitions.json`),
+> сетевой топологии Docker Compose (`iot_rabbitmq_network`) или комплексный рестарт сервисов,
+> используйте регламент: [`manual-infra-and-rmq-deploy-runbook.md`](manual-infra-and-rmq-deploy-runbook.md).
 
 ---
 

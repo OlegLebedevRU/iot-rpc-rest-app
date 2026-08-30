@@ -181,6 +181,7 @@ volumes:
 
 networks:
   rabbitmq_network:
+    name: iot_rabbitmq_network
     driver: bridge
   pg_network:
     driver: bridge
