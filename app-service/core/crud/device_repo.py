@@ -14,6 +14,7 @@ from sqlalchemy.orm import joinedload, load_only
 from core.models import (
     Device,
     DeviceConnection,
+    DeviceAuditLog,
     Org,
     DeviceTag,
     DeviceOrgBind,
@@ -53,7 +54,18 @@ class DeviceRepo:
         )
 
         result = await session.execute(stmt)
-        return result.unique().scalars().all()
+        devices = list(result.unique().scalars().all())
+
+        # Если запрошен конкретный терминал, обогащаем объект connection топ-5 событиями аудит-лога
+        if device_id is not None and devices:
+            for dev in devices:
+                if dev.connection:
+                    audit_logs = await cls.get_recent_audit_logs(
+                        session, dev.device_id, limit=5
+                    )
+                    dev.connection.recent_audit_events = audit_logs
+
+        return devices
 
     @classmethod
     async def get_device_sn(
@@ -329,6 +341,14 @@ class DeviceRepo:
         now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
 
         if conn_row is not None:
+            if conn_row.is_blocked:
+                log.info(
+                    "Device SN=%s is BLOCKED (%s). Refusing connection.created status update.",
+                    sn,
+                    conn_row.violation_type,
+                )
+                return False
+
             conn_row.client_id = sn
             conn_row.last_checked_result = True
             conn_row.checked_at = now_dt
@@ -589,7 +609,12 @@ class DeviceRepo:
             .values(conn_values)
             .on_conflict_do_update(
                 index_elements=["device_id"],
-                set_=dict(client_id=insert(DeviceConnection).excluded.client_id),
+                set_=dict(
+                    client_id=insert(DeviceConnection).excluded.client_id,
+                    is_blocked=False,
+                    violation_type=None,
+                    violation_details=None,
+                ),
             )
         )
 
@@ -613,7 +638,155 @@ class DeviceRepo:
                             )
                         )
 
+        # 6. Audit log for provisioned terminals
+        for d in terminals_data:
+            dev_id = int(d["device_id"])
+            org_id = int(d["org_id"])
+            actor = d.get("actor") or "api/provisioning"
+            await cls.add_audit_log(
+                session=session,
+                device_id=dev_id,
+                org_id=org_id,
+                event_type="PROVISIONED",
+                actor=actor,
+                details={"sn": str(d["sn"]), "name": d.get("name")},
+            )
+
         await session.commit()
+
+    @classmethod
+    async def add_audit_log(
+        cls,
+        session: AsyncSession,
+        device_id: int,
+        org_id: int,
+        event_type: str,
+        actor: str | None = None,
+        details: dict | None = None,
+    ) -> DeviceAuditLog:
+        """Создает запись в tb_device_audit_logs."""
+        audit_entry = DeviceAuditLog(
+            device_id=device_id,
+            org_id=org_id,
+            event_type=event_type,
+            actor=actor,
+            details=details,
+        )
+        session.add(audit_entry)
+        return audit_entry
+
+    @classmethod
+    async def get_recent_audit_logs(
+        cls,
+        session: AsyncSession,
+        device_id: int,
+        limit: int = 5,
+    ) -> list[DeviceAuditLog]:
+        """Возвращает последние N записей аудит-лога для устройства."""
+        stmt = (
+            select(DeviceAuditLog)
+            .where(DeviceAuditLog.device_id == device_id)
+            .order_by(DeviceAuditLog.created_at.desc(), DeviceAuditLog.id.desc())
+            .limit(limit)
+        )
+        res = await session.execute(stmt)
+        return list(res.scalars().all())
+
+    @classmethod
+    async def mark_device_blocked(
+        cls,
+        session: AsyncSession,
+        sn: str,
+        violation_type: str,
+        violation_details: dict | None = None,
+        actor: str = "system/detector",
+    ) -> tuple[int | None, int | None]:
+        """Помечает устройство как заблокированное при обнаружении коллизии (DEVICE_CLONE или SN_COLLISION),
+
+        сохраняет детали нарушения и записывает событие в tb_device_audit_logs (идемпотентно).
+        Возвращает (device_id, org_id).
+        """
+        stmt = select(DeviceConnection).where(DeviceConnection.client_id == sn)
+        res = await session.execute(stmt)
+        conn_row = res.scalar_one_or_none()
+
+        dev_id = None
+        if conn_row:
+            dev_id = conn_row.device_id
+        else:
+            dev_id = await cls.get_device_id(session, sn=sn)
+            if dev_id is not None:
+                stmt_dev = select(DeviceConnection).where(
+                    DeviceConnection.device_id == dev_id
+                )
+                res_dev = await session.execute(stmt_dev)
+                conn_row = res_dev.scalar_one_or_none()
+
+        if dev_id is None:
+            log.warning("Cannot block unknown device SN=%s", sn)
+            return None, None
+
+        org_id = await cls.get_org_id_by_device_id(session, dev_id) or 0
+        now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+
+        was_blocked = conn_row.is_blocked if conn_row else False
+        prev_violation = conn_row.violation_type if conn_row else None
+
+        if conn_row:
+            conn_row.is_blocked = True
+            conn_row.last_checked_result = False
+            conn_row.violation_type = violation_type
+            conn_row.violation_details = violation_details
+            conn_row.checked_at = now_dt
+        else:
+            conn_row = DeviceConnection(
+                device_id=dev_id,
+                client_id=sn,
+                last_checked_result=False,
+                checked_at=now_dt,
+                is_blocked=True,
+                violation_type=violation_type,
+                violation_details=violation_details,
+            )
+            session.add(conn_row)
+
+        # Пишем в аудит-лог только если статус блокировки изменился или сменился тип нарушения
+        if not was_blocked or prev_violation != violation_type:
+            await cls.add_audit_log(
+                session=session,
+                device_id=dev_id,
+                org_id=org_id,
+                event_type=violation_type,
+                actor=actor,
+                details=violation_details,
+            )
+
+        return dev_id, org_id
+
+    @classmethod
+    async def unblock_device(
+        cls,
+        session: AsyncSession,
+        device_id: int,
+        actor: str = "api/provisioning",
+    ) -> None:
+        """Сбрасывает флаги блокировки и нарушений в DeviceConnection."""
+        stmt = select(DeviceConnection).where(DeviceConnection.device_id == device_id)
+        res = await session.execute(stmt)
+        conn_row = res.scalar_one_or_none()
+        if conn_row and conn_row.is_blocked:
+            conn_row.is_blocked = False
+            conn_row.violation_type = None
+            conn_row.violation_details = None
+            org_id = await cls.get_org_id_by_device_id(session, device_id) or 0
+            await cls.add_audit_log(
+                session=session,
+                device_id=device_id,
+                org_id=org_id,
+                event_type="UNBLOCKED",
+                actor=actor,
+                details={"reason": "Manual or provisioning unblock"},
+            )
 
     @classmethod
     async def get_terminals_status_by_device_ids(

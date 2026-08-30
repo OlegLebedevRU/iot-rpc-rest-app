@@ -11,6 +11,7 @@ from core.schemas.provisioning import (
     TerminalProvisionResult,
     TerminalStatusResult,
 )
+from core.services.devices import clear_device_connection_history
 
 log = setup_module_logger(__name__, "srv_provisioning.log")
 
@@ -74,9 +75,10 @@ class ProvisioningService:
         except Exception as e:
             log.info("Could not fetch connection status during provisioning: %s", e)
 
-        # 5. Build results
+        # 5. Build results and clear collision history
         results: list[TerminalProvisionResult] = []
         for t in terminals:
+            clear_device_connection_history(t.sn)
             online_info = online_devices_map.get(t.sn)
             is_online = online_info is not None
             conn_at = None

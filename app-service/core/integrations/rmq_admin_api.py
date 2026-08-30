@@ -421,3 +421,115 @@ class RmqAdminApi:
         mode = "dry-run" if dry_run else "apply"
         log.info("set RMQ definitions incrementally (%s) = %s", mode, result)
         return result
+
+    @classmethod
+    async def terminate_connection(cls, conn_name: str) -> bool:
+        """Принудительно закрывает соединение в RabbitMQ по имени сокета."""
+        if not conn_name:
+            return False
+        try:
+            conn_quoted = cls._quote_path(conn_name)
+            async with httpx.AsyncClient(base_url=cls._admin_url(), timeout=5.0) as client:
+                resp = await client.delete(f"api/connections/{conn_quoted}")
+                if resp.status_code in (200, 204, 404):
+                    log.info("Terminated RMQ connection %s (status=%s)", conn_name, resp.status_code)
+                    return True
+                resp.raise_for_status()
+                return True
+        except Exception as e:
+            log.warning("Failed to terminate RMQ connection %s: %s", conn_name, e)
+            return False
+
+    @classmethod
+    async def terminate_user_connections(cls, username: str) -> int:
+        """Принудительно закрывает все активные соединения указанного пользователя."""
+        if not username:
+            return 0
+        terminated_count = 0
+        try:
+            user_quoted = cls._quote_path(username)
+            async with httpx.AsyncClient(base_url=cls._admin_url(), timeout=5.0) as client:
+                conns = await cls._get_json_or_none(client, f"api/connections/username/{user_quoted}")
+                if isinstance(conns, list):
+                    for conn in conns:
+                        if isinstance(conn, dict):
+                            name = conn.get("name")
+                            if name:
+                                resp = await client.delete(f"api/connections/{cls._quote_path(name)}")
+                                if resp.status_code in (200, 204, 404):
+                                    terminated_count += 1
+            log.info("Terminated %d connections for user %s", terminated_count, username)
+        except Exception as e:
+            log.warning("Failed to terminate user connections for %s: %s", username, e)
+        return terminated_count
+
+    @classmethod
+    async def block_device_user(cls, username: str) -> bool:
+        """Блокирует устройство в RabbitMQ: обнуляет права и принудительно сбрасывает сокеты."""
+        if not username:
+            return False
+        vhost_quoted = cls._quote_path(cls._vhost)
+        user_quoted = cls._quote_path(username)
+        block_perm = {"configure": "^$", "write": "^$", "read": "^$"}
+        try:
+            async with httpx.AsyncClient(base_url=cls._admin_url(), timeout=5.0) as client:
+                # 1. Revoke vhost permissions
+                resp = await client.put(
+                    f"api/permissions/{vhost_quoted}/{user_quoted}",
+                    json=block_perm,
+                )
+                resp.raise_for_status()
+
+                # 2. Clear topic permissions
+                try:
+                    await client.delete(f"api/topic-permissions/{vhost_quoted}/{user_quoted}")
+                except Exception:
+                    pass
+
+            # 3. Kill active connections
+            await cls.terminate_user_connections(username)
+            log.info("Successfully blocked device user %s in RabbitMQ", username)
+            return True
+        except Exception as e:
+            log.warning("Failed to block device user %s in RabbitMQ: %s", username, e)
+            return False
+
+    @classmethod
+    async def unblock_device_user(cls, username: str) -> bool:
+        """Разблокирует устройство в RabbitMQ: восстанавливает стандартные права доступа."""
+        if not username:
+            return False
+        vhost_quoted = cls._quote_path(cls._vhost)
+        user_quoted = cls._quote_path(username)
+        perm_payload = cls._permission_payload()
+        topic_payload = cls._topic_permission_payload()
+        try:
+            async with httpx.AsyncClient(base_url=cls._admin_url(), timeout=5.0) as client:
+                # 1. Ensure user exists
+                user = await cls._get_json_or_none(client, f"api/users/{user_quoted}")
+                if user is None:
+                    create_resp = await client.put(
+                        f"api/users/{user_quoted}",
+                        json=cls._user_payload(username),
+                    )
+                    create_resp.raise_for_status()
+
+                # 2. Restore vhost permissions
+                perm_resp = await client.put(
+                    f"api/permissions/{vhost_quoted}/{user_quoted}",
+                    json=perm_payload,
+                )
+                perm_resp.raise_for_status()
+
+                # 3. Restore topic permissions
+                topic_resp = await client.put(
+                    f"api/topic-permissions/{vhost_quoted}/{user_quoted}",
+                    json=topic_payload,
+                )
+                topic_resp.raise_for_status()
+
+            log.info("Successfully unblocked device user %s in RabbitMQ", username)
+            return True
+        except Exception as e:
+            log.warning("Failed to unblock device user %s in RabbitMQ: %s", username, e)
+            return False

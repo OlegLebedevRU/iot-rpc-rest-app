@@ -5,6 +5,7 @@ __all__ = (
     "OrgApiKey",
     "Device",
     "DeviceConnection",
+    "DeviceAuditLog",
     "DevTask",
     "DevTaskPayload",
     "DevTaskStatus",
@@ -33,6 +34,7 @@ from .devices import (
     DeviceTag,
     DeviceGauge,
     DeviceConnection,
+    DeviceAuditLog,
     Device,
 )
 from .postamat import Postamat

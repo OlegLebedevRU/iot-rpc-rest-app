@@ -5,6 +5,7 @@ from typing import List, Optional
 
 from sqlalchemy import (
     Integer,
+    BigInteger,
     String,
     ForeignKey,
     Boolean,
@@ -72,6 +73,12 @@ class Device(Base):
         passive_deletes=True,
         single_parent=True,
         uselist=False,
+    )
+    audit_logs: Mapped[List["DeviceAuditLog"]] = relationship(
+        "DeviceAuditLog",
+        back_populates="device",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
 
@@ -175,6 +182,15 @@ class DeviceConnection(Base):
         Boolean, nullable=True, default=None
     )
     details: Mapped[str] = mapped_column(JSONB, nullable=True)
+    is_blocked: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=sql.false()
+    )
+    violation_type: Mapped[Optional[str]] = mapped_column(
+        String(50), nullable=True, default=None
+    )
+    violation_details: Mapped[Optional[dict]] = mapped_column(
+        JSONB, nullable=True, default=None
+    )
     # Определение индекса на поле client_id
     # CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_tb_device_connections_client_id ON tb_device_connections(client_id)
 
@@ -187,6 +203,27 @@ class DeviceConnection(Base):
         back_populates="connection",
         single_parent=True,
         uselist=False,
+    )
+
+
+class DeviceAuditLog(Base):
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    device_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey(Device.device_id, ondelete="CASCADE"), index=True
+    )
+    org_id: Mapped[int] = mapped_column(Integer, index=True)
+    event_type: Mapped[str] = mapped_column(String(50), index=True)
+    actor: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    details: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=func.current_timestamp(0),
+        default=None,
+    )
+
+    device: Mapped["Device"] = relationship(
+        back_populates="audit_logs",
+        single_parent=True,
     )
 
 

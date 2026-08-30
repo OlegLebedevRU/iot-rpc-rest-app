@@ -166,3 +166,5 @@ cython_debug/
 /docs/protokol-vzaimodeistviya-s-kontrollerom.md
 /docs/server-rpc-debug-runbook.md
 /docs/local-files/
+/.mimocode/
+/.gigacode/

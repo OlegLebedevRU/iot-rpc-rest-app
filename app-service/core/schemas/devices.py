@@ -39,6 +39,16 @@ class DeviceGaugesView(BaseModel):
     gauges: Json
 
 
+class DeviceAuditEventView(BaseModel):
+    id: int
+    device_id: int
+    org_id: int
+    event_type: str
+    actor: Optional[str] = None
+    details: Optional[dict[str, Any]] = None
+    created_at: datetime
+
+
 class DeviceConnectView(BaseModel):
     device_id: int
     client_id: str
@@ -48,20 +58,24 @@ class DeviceConnectView(BaseModel):
     app_connect: bool | None = None
     svc_connect: bool | None = None
     details: DeviceConnectionDetails | dict[str, Any] | None = None
+    is_blocked: bool = False
+    violation_type: Optional[str] = None
+    violation_details: Optional[dict[str, Any]] = None
+    recent_audit_events: Optional[List[DeviceAuditEventView]] = None
 
     @computed_field
     @property
     def is_app_available(self) -> Optional[bool]:
         if self.app_connect is None:
             return None
-        return bool(self.last_checked_result and self.app_connect)
+        return bool(self.last_checked_result and self.app_connect and not self.is_blocked)
 
     @computed_field
     @property
     def is_svc_available(self) -> Optional[bool]:
         if self.svc_connect is None:
             return None
-        return bool(self.last_checked_result and self.svc_connect)
+        return bool(self.last_checked_result and self.svc_connect and not self.is_blocked)
 
 
 class DeviceListResult(BaseModel):
