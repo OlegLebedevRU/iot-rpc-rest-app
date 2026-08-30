@@ -21,6 +21,7 @@
 |---|---|---|---|
 | `X-Internal-Service-Key` | String | **Обязательно** | Секретный ключ сервиса (соответствует значению `APP_CONFIG__AUTH__INTERNAL_SERVICE_KEY` в `.env`). Также поддерживается формат `Authorization: Bearer <secret>`. |
 | `X-Org-Id` | Integer | Обязательно для tenant-запросов | Идентификатор организации, от имени которой выполняется операция. (Также поддерживается `?org_id=<id>` в query). |
+| `X-Role` | String | Опционально (MenuBuilder/Gateway) | Роль пользователя (`superuser`, `admin`, `user`). При роли `superuser`/`admin` query-параметр `?org_id=<id>` переопределяет заголовок `X-Org-Id`, позволяя администратору инспектировать любой тенант. Для обычных пользователей жестко используется `X-Org-Id` из токена. |
 | `Content-Type` | String | Для POST/PUT | `application/json` |
 
 ---

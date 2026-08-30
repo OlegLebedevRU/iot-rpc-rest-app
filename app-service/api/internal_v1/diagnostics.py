@@ -7,7 +7,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.internal_v1.internal_depends import Session_dep
+from api.internal_v1.internal_depends import Session_dep, is_request_superuser
 from core import settings
 from core.crud.device_repo import DeviceRepo
 from core.diagnostics.schemas import (
@@ -32,30 +32,8 @@ router = APIRouter(
 
 async def _resolve_websocket_org_id(websocket: WebSocket) -> int | None:
     """Resolve org_id from the trusted headers injected by internal auth gateway."""
-    role = str(
-        websocket.headers.get("X-Role")
-        or websocket.headers.get("jwt-role")
-        or ""
-    ).lower()
-    role_id = str(websocket.headers.get("X-Role-Id") or "").lower()
-    user_id = str(
-        websocket.headers.get("X-User-Id")
-        or websocket.headers.get("jwt-sub")
-        or websocket.headers.get("sub")
-        or ""
-    )
-    is_superuser = (
-        role in ("superuser", "admin", "1")
-        or role_id in ("1", "superuser", "admin")
-        or user_id == "1"
-    )
-    if not is_superuser:
-        log.warning(
-            "Diagnostics websocket rejected: non-superuser role=%s role_id=%s user_id=%s",
-            role,
-            role_id,
-            user_id,
-        )
+    if not is_request_superuser(websocket):
+        log.warning("Diagnostics websocket rejected: non-superuser")
         return None
 
     query_org_id = websocket.query_params.get("org_id")
@@ -69,6 +47,7 @@ async def _resolve_websocket_org_id(websocket: WebSocket) -> int | None:
         websocket.headers.get("orgId")
         or websocket.headers.get("orgid")
         or websocket.headers.get("X-Org-Id")
+        or websocket.headers.get("x-org-id")
         or websocket.headers.get("jwt-org")
         or websocket.headers.get("org")
     )
