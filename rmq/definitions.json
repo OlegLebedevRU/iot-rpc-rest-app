@@ -120,7 +120,8 @@
       "durable": false,
       "auto_delete": false,
       "arguments": {
-        "x-queue-type": "classic"
+        "x-queue-type": "classic",
+        "x-message-ttl": 600000
       }
     },
     {
