@@ -17,7 +17,7 @@ from core.integrations.rmq_admin_api import (
     IGNORED_USERS,
 )
 from core.logging_config import setup_module_logger
-from core.schemas.devices import DeviceConnectStatus, DeviceTagPut
+from core.schemas.devices import DeviceConnectStatus, DeviceTagPut, DeviceListResponse
 from core.services.rmq_admin import RmqAdmin
 
 log = setup_module_logger(__name__, "srv_devices.log")
@@ -180,8 +180,29 @@ def extract_device_sn(payload: dict, headers: dict) -> str | None:
 
 class DeviceService:
     @classmethod
-    async def get_list(cls, session: AsyncSession, org_id, device_id: int | None):
-        return await DeviceRepo.get(session, org_id, device_id)
+    async def get_list(
+        cls,
+        session: AsyncSession,
+        org_id: int,
+        device_id: int | None = None,
+        page: int = 1,
+        size: int = 20,
+        q: str | None = None,
+        status: str | None = None,
+        sort_by: str = "device_id",
+        sort_order: str = "asc",
+    ) -> DeviceListResponse:
+        return await DeviceRepo.get(
+            session=session,
+            org_id=org_id,
+            device_id=device_id,
+            page=page,
+            size=size,
+            q=q,
+            status=status,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        )
 
     @classmethod
     async def get_connect_status_ids(cls, device_ids: [int]):

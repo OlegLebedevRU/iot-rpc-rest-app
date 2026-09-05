@@ -6,10 +6,11 @@ from fastapi_pagination.ext.sqlalchemy import apaginate
 from core.logging_config import setup_module_logger
 from typing import Any, List
 
-from sqlalchemy import select, not_, func, update, text, sql
+from sqlalchemy import select, not_, func, update, text, sql, case, cast, String, or_, and_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
-from sqlalchemy.orm import joinedload, load_only
+from sqlalchemy.orm import joinedload, load_only, selectinload, contains_eager
+from fastapi import HTTPException
 
 from core.models import (
     Device,
@@ -20,7 +21,12 @@ from core.models import (
     DeviceOrgBind,
     DeviceGauge,
 )
-from core.schemas.devices import DeviceConnectStatus
+from core.schemas.devices import (
+    DeviceConnectStatus,
+    DeviceListResponse,
+    DeviceStats,
+    DeviceListResult,
+)
 
 log = setup_module_logger(__name__, "repo_devices.log")
 
@@ -28,29 +34,177 @@ log = setup_module_logger(__name__, "repo_devices.log")
 class DeviceRepo:
 
     @classmethod
-    async def get(cls, session: AsyncSession, org_id: int, device_id: int | None):
-        stmt_org = (
-            select(DeviceOrgBind.device_id)
-            .where(DeviceOrgBind.org_id == org_id)
-            .subquery("devices")
-        )
-        if device_id is not None:
-            stmt_org = (
-                select(DeviceOrgBind.device_id)
-                .where(
-                    DeviceOrgBind.org_id == org_id, DeviceOrgBind.device_id == device_id
-                )
-                .subquery("devices")
+    async def get(
+        cls,
+        session: AsyncSession,
+        org_id: int,
+        device_id: int | None = None,
+        page: int = 1,
+        size: int = 20,
+        q: str | None = None,
+        status: str | None = None,
+        sort_by: str = "device_id",
+        sort_order: str = "asc",
+    ) -> DeviceListResponse:
+        if page < 1:
+            raise HTTPException(status_code=400, detail="page must be >= 1")
+        if size < 1 or size > 100:
+            raise HTTPException(status_code=400, detail="size must be between 1 and 100")
+
+        sb = (sort_by or "device_id").strip().lower()
+        if sb not in ("device_id", "sn", "connected_at", "status"):
+            raise HTTPException(status_code=400, detail=f"Invalid sort_by: {sort_by}")
+
+        so = (sort_order or "asc").strip().lower()
+        if so not in ("asc", "desc"):
+            raise HTTPException(status_code=400, detail=f"Invalid sort_order: {sort_order}")
+
+        st = (status or "").strip().lower()
+        if st and st not in ("all", "online", "offline", "blocked"):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status: {status}. Allowed values: 'all', 'online', 'offline', 'blocked'",
             )
 
+        online_cond = and_(
+            DeviceConnection.last_checked_result.is_(True),
+            or_(
+                DeviceConnection.is_blocked.is_(False),
+                DeviceConnection.is_blocked.is_(None),
+            ),
+        )
+        offline_cond = and_(
+            or_(
+                DeviceConnection.last_checked_result.is_(False),
+                DeviceConnection.last_checked_result.is_(None),
+            ),
+            or_(
+                DeviceConnection.is_blocked.is_(False),
+                DeviceConnection.is_blocked.is_(None),
+            ),
+        )
+        blocked_cond = DeviceConnection.is_blocked.is_(True)
+
+        stats_stmt = (
+            select(
+                func.count(Device.id).label("total"),
+                func.count(case((online_cond, 1), else_=None)).label("online"),
+                func.count(case((offline_cond, 1), else_=None)).label("offline"),
+                func.count(case((blocked_cond, 1), else_=None)).label("blocked"),
+            )
+            .select_from(Device)
+            .join(DeviceOrgBind, Device.device_id == DeviceOrgBind.device_id)
+            .outerjoin(DeviceConnection, Device.device_id == DeviceConnection.device_id)
+            .where(
+                DeviceOrgBind.org_id == org_id,
+                Device.is_deleted.is_(False),
+            )
+        )
+        stats_res = await session.execute(stats_stmt)
+        stats_row = stats_res.one()
+        stats_data = DeviceStats(
+            total=stats_row.total or 0,
+            online=stats_row.online or 0,
+            offline=stats_row.offline or 0,
+            blocked=stats_row.blocked or 0,
+        )
+
+        where_clauses = [
+            DeviceOrgBind.org_id == org_id,
+            Device.is_deleted.is_(False),
+        ]
+
+        if device_id is not None:
+            where_clauses.append(Device.device_id == device_id)
+
+        has_status_filter = False
+        if st == "online":
+            where_clauses.append(online_cond)
+            has_status_filter = True
+        elif st == "offline":
+            where_clauses.append(offline_cond)
+            has_status_filter = True
+        elif st == "blocked":
+            where_clauses.append(blocked_cond)
+            has_status_filter = True
+
+        has_q_filter = False
+        if q and q.strip():
+            has_q_filter = True
+            search_str = q.strip()
+            pattern = f"%{search_str}%"
+            tag_subq = (
+                select(DeviceTag.device_id)
+                .where(
+                    DeviceTag.is_deleted.is_(False),
+                    DeviceTag.tag.in_(["name", "description", "app", "sys"]),
+                    DeviceTag.value.ilike(pattern),
+                )
+            )
+            q_filter = or_(
+                Device.sn.ilike(pattern),
+                cast(Device.device_id, String).ilike(pattern),
+                DeviceConnection.violation_type.ilike(pattern),
+                Device.device_id.in_(tag_subq),
+            )
+            where_clauses.append(q_filter)
+
+        if device_id is None and not has_status_filter and not has_q_filter:
+            filtered_total = stats_data.total
+        else:
+            count_stmt = (
+                select(func.count(Device.id))
+                .select_from(Device)
+                .join(DeviceOrgBind, Device.device_id == DeviceOrgBind.device_id)
+                .outerjoin(DeviceConnection, Device.device_id == DeviceConnection.device_id)
+                .where(*where_clauses)
+            )
+            filtered_total = (await session.scalar(count_stmt)) or 0
+
+        pages = (filtered_total + size - 1) // size if filtered_total > 0 else 0
+
+        order_by_list = []
+        if sb == "device_id":
+            order_by_list.append(Device.device_id.desc() if so == "desc" else Device.device_id.asc())
+        elif sb == "sn":
+            order_by_list.append(Device.sn.desc() if so == "desc" else Device.sn.asc())
+            order_by_list.append(Device.device_id.desc() if so == "desc" else Device.device_id.asc())
+        elif sb == "connected_at":
+            conn_order = (
+                DeviceConnection.connected_at.desc().nulls_last()
+                if so == "desc"
+                else DeviceConnection.connected_at.asc().nulls_last()
+            )
+            order_by_list.append(conn_order)
+            order_by_list.append(Device.device_id.desc() if so == "desc" else Device.device_id.asc())
+        elif sb == "status":
+            status_order_expr = case(
+                (DeviceConnection.is_blocked.is_(True), "blocked"),
+                (DeviceConnection.last_checked_result.is_(True), "online"),
+                else_="offline",
+            )
+            status_order = (
+                status_order_expr.desc()
+                if so == "desc"
+                else status_order_expr.asc()
+            )
+            order_by_list.append(status_order)
+            order_by_list.append(Device.device_id.desc() if so == "desc" else Device.device_id.asc())
+
+        offset = (page - 1) * size
         stmt = (
             select(Device)
-            .options(load_only(Device.device_id, Device.sn))
-            .options(joinedload(Device.connection))
-            .options(joinedload(Device.device_tags))
-            .options(joinedload(Device.device_gauges))
-            .where(Device.device_id.in_(select(stmt_org.c.device_id)))
-            .where(Device.is_deleted == False)
+            .join(DeviceOrgBind, Device.device_id == DeviceOrgBind.device_id)
+            .outerjoin(DeviceConnection, Device.device_id == DeviceConnection.device_id)
+            .where(*where_clauses)
+            .order_by(*order_by_list)
+            .offset(offset)
+            .limit(size)
+            .options(
+                contains_eager(Device.connection),
+                selectinload(Device.device_tags),
+                selectinload(Device.device_gauges),
+            )
         )
 
         result = await session.execute(stmt)
@@ -65,7 +219,14 @@ class DeviceRepo:
                     )
                     dev.connection.recent_audit_events = audit_logs
 
-        return devices
+        return DeviceListResponse(
+            items=devices,
+            total=filtered_total,
+            page=page,
+            size=size,
+            pages=pages,
+            stats=stats_data,
+        )
 
     @classmethod
     async def get_device_sn(

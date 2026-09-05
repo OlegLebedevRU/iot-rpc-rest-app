@@ -149,13 +149,23 @@ async def test_internal_api_auth_and_operations(monkeypatch):
         assert resp_no_org.status_code == 400
         assert "Missing required 'X-Org-Id'" in resp_no_org.json()["detail"]
 
+        empty_device_response = {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "size": 20,
+            "pages": 0,
+            "stats": {"total": 0, "online": 0, "offline": 0, "blocked": 0},
+        }
+
         # 3. Devices with valid headers
         with patch("core.services.devices.DeviceService.get_list", new_callable=AsyncMock) as mock_get_list:
-            mock_get_list.return_value = []
+            mock_get_list.return_value = empty_device_response
             resp = await ac.get("/api/internal/v1/devices/", headers=headers)
             assert resp.status_code == 200
-            assert resp.json() == []
-            mock_get_list.assert_called_once_with(mock_get_list.call_args[0][0], 42, None)
+            assert resp.json() == empty_device_response
+            assert mock_get_list.call_args.kwargs["org_id"] == 42
+            assert mock_get_list.call_args.kwargs["device_id"] is None
 
         # 4. Devices with superuser role and query org_id=339 (should pass 339 to service)
         su_headers = {
@@ -164,10 +174,11 @@ async def test_internal_api_auth_and_operations(monkeypatch):
             "X-Role": "superuser",
         }
         with patch("core.services.devices.DeviceService.get_list", new_callable=AsyncMock) as mock_get_list:
-            mock_get_list.return_value = []
+            mock_get_list.return_value = empty_device_response
             resp = await ac.get("/api/internal/v1/devices/?org_id=339", headers=su_headers)
             assert resp.status_code == 200
-            mock_get_list.assert_called_once_with(mock_get_list.call_args[0][0], 339, None)
+            assert mock_get_list.call_args.kwargs["org_id"] == 339
+            assert mock_get_list.call_args.kwargs["device_id"] is None
 
         # 5. Devices with regular user role and query org_id=339 (should strictly pass 1 from header)
         user_headers = {
@@ -176,10 +187,11 @@ async def test_internal_api_auth_and_operations(monkeypatch):
             "X-Role": "user",
         }
         with patch("core.services.devices.DeviceService.get_list", new_callable=AsyncMock) as mock_get_list:
-            mock_get_list.return_value = []
+            mock_get_list.return_value = empty_device_response
             resp = await ac.get("/api/internal/v1/devices/?org_id=339", headers=user_headers)
             assert resp.status_code == 200
-            mock_get_list.assert_called_once_with(mock_get_list.call_args[0][0], 1, None)
+            assert mock_get_list.call_args.kwargs["org_id"] == 1
+            assert mock_get_list.call_args.kwargs["device_id"] is None
 
         # 6. Webhooks list with superuser override
         with patch("core.crud.webhook_repo.WebhookRepo.get_all_by_org", new_callable=AsyncMock) as mock_webhooks:
