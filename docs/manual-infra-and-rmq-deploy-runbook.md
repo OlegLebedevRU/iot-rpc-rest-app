@@ -19,18 +19,20 @@
 4. **Конфигурация reverse-proxy**: синхронизация `nginx` и `nginx-mutual` при изменении сетевых настроек или сертификатов.
 
 > ⚠️ **КРИТИЧЕСКИЕ ПРАВИЛА СОХРАННОСТИ ДАННЫХ:**
-> - **СТРОГО ЗАПРЕЩЕНО** выполнять `docker compose down -v` или удалять тома `iot-rpc-rest-app_rabbitmq_data` и `iot-rpc-rest-app_pgdata`. В них хранятся динамические аккаунты устройств, постоянные сессии MQTT и БД PostgreSQL.
-> - **СТРОГО ЗАПРЕЩЕНО** публиковать сервисный порт Plain MQTT `1883` наружу в интернет на хосте. Доступ к нему разрешён исключительно внутри изолированной сети Docker `iot_rabbitmq_network`.
-> - **СОБЛЮДАТЬ ИЗОЛЯЦИЮ СЕРВИСОВ**: перезапуск компонентов выполняется поэтапно через `docker compose up -d --no-deps <service>` во избежание неконтролируемого каскадного перезапуска базы данных `pg`.
+> - **СТРОГО ЗАПРЕЩЕНО** выполнять `docker compose down -v` или удалять том `rabbitmq_data`. В нём хранятся динамические аккаунты устройств и постоянные сессии MQTT. База данных PostgreSQL вынесена на внешний хост `10.0.0.7:5432/iot_rpc` и не управляется локальным compose.
+> - **СТРОГО ЗАПРЕЩЕНО** публиковать сервисный порт Plain MQTT `1883` наружу в интернет на хосте. Доступ к нему разрешён исключительно внутри изолированной сети Docker.
+> - **СОБЛЮДАТЬ ИЗОЛЯЦИЮ СЕРВИСОВ**: перезапуск компонентов выполняется поэтапно через `docker compose up -d --no-deps <service>`.
 
 ---
 
 ## 1. Проверенный рабочий стенд и реквизиты
 
-- **Целевой хост**: `user1@176.108.247.249`
-- **SSH-ключ (Windows)**: `D:\.ssh\free-tier-cloud_ru`
-- **Рабочий каталог на VM**: `/home/user1/iot-rpc-rest-app`
-- **Общая Docker-сеть**: `iot_rabbitmq_network` (bridge)
+- **Целевой хост**: `user1@87.242.100.34`
+- **SSH-ключ (Windows)**: `d:\.ssh\id_ed25519`
+- **Каталог оркестратора Compose**: `/home/user1` (`/home/user1/compose.yaml`)
+- **Рабочий каталог репозитория на VM**: `/home/user1/iot-rpc-rest-app`
+- **Конфигурации Nginx**: `/home/user1/nginx-configs` и `/home/user1/nginx-mutual-legacy`
+- **Общая Docker-сеть**: `user1_default` (bridge)
 - **Порты RabbitMQ**:
   - `5672` (AMQP 0-9-1) — внутренний транспорт между `app1` и RabbitMQ;
   - `1883` (Plain MQTT) — внутренний слушатель для межсервисной телеметрии (`etranprocessing`);
@@ -47,7 +49,7 @@
 
 #### Паттерн А: Неинтерактивный вызов одиночной команды
 ```powershell
-ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "cd /home/user1/iot-rpc-rest-app && sudo docker compose ps"
+ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "cd /home/user1 && sudo docker compose ps"
 ```
 - `-n`: предотвращает чтение из `stdin` (защита от фонового блокирования сессии).
 - `-o BatchMode=yes`: отключает интерактивные запросы пароля, завершая команду с ошибкой при сбое ключа.
@@ -56,13 +58,12 @@ ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "c
 ```powershell
 $script = @'
 set -euo pipefail
-cd /home/user1/iot-rpc-rest-app
+cd /home/user1
 echo "=== Checking runtime status ==="
 sudo docker compose ps
-sudo docker network ls | grep iot_rabbitmq_network || true
 '@
 
-$script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "bash -s"
+$script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "bash -s"
 ```
 - Гарантирует целостность переменных `$VAR`, пайплайнов и флагов `set -euo pipefail` без экранирования в PowerShell.
 
@@ -72,9 +73,10 @@ $script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.
 
 ```powershell
 # Синхронизация инфраструктурных файлов
-scp -i "D:\.ssh\free-tier-cloud_ru" compose.yaml user1@176.108.247.249:/home/user1/iot-rpc-rest-app/compose.yaml
-scp -i "D:\.ssh\free-tier-cloud_ru" rmq/rabbitmq.conf user1@176.108.247.249:/home/user1/iot-rpc-rest-app/rmq/rabbitmq.conf
-scp -i "D:\.ssh\free-tier-cloud_ru" rmq/definitions.json user1@176.108.247.249:/home/user1/iot-rpc-rest-app/rmq/definitions.json
+scp -i "d:\.ssh\id_ed25519" compose.yaml user1@87.242.100.34:/home/user1/iot-rpc-rest-app/compose.yaml
+scp -i "d:\.ssh\id_ed25519" rmq/rabbitmq.conf user1@87.242.100.34:/home/user1/iot-rpc-rest-app/rmq/rabbitmq.conf
+scp -i "d:\.ssh\id_ed25519" rmq/definitions.json user1@87.242.100.34:/home/user1/iot-rpc-rest-app/rmq/definitions.json
+scp -i "d:\.ssh\id_ed25519" rmq/enabled_plugins user1@87.242.100.34:/home/user1/iot-rpc-rest-app/rmq/enabled_plugins
 ```
 
 ---
@@ -88,42 +90,42 @@ scp -i "D:\.ssh\free-tier-cloud_ru" rmq/definitions.json user1@176.108.247.249:/
 ```powershell
 $script = @'
 set -euo pipefail
-cd /home/user1/iot-rpc-rest-app
+cd /home/user1
 
 echo "=== 1. Проверка активных контейнеров ==="
 sudo docker compose ps
 
 echo "=== 2. Проверка томов Docker (гарантия сохранности данных) ==="
-sudo docker volume ls | grep -E "rabbitmq_data|pgdata"
+sudo docker volume ls | grep -E "rabbitmq_data"
 
 echo "=== 3. Проверка существующих сетей ==="
 sudo docker network ls
 '@
 
-$script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "bash -s"
+$script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "bash -s"
 ```
 
 ---
 
-### Этап 2. Комплексное резервное копирование конфигураций и дефиниций
+## Этап 2. Комплексное резервное копирование конфигураций и дефиниций
 
 Создаём резервные копии всех изменяемых файлов и экспортируем живые runtime-дефиниции RabbitMQ (включая динамические аккаунты устройств).
 
 ```powershell
 $script = @'
 set -euo pipefail
-cd /home/user1/iot-rpc-rest-app
+cd /home/user1
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-BACKUP_DIR="/home/user1/iot-rpc-rest-app/backups/backup-$TIMESTAMP"
+BACKUP_DIR="/home/user1/backups/backup-$TIMESTAMP"
 mkdir -p "$BACKUP_DIR"
 
 echo "=== Резервное копирование файлов в $BACKUP_DIR ==="
-test -f .env && cp .env "$BACKUP_DIR/.env" || true
-test -f app-service/.env && cp app-service/.env "$BACKUP_DIR/app-service.env" || true
 test -f compose.yaml && cp compose.yaml "$BACKUP_DIR/compose.yaml" || true
-test -f rmq/rabbitmq.conf && cp rmq/rabbitmq.conf "$BACKUP_DIR/rabbitmq.conf" || true
-test -f rmq/definitions.json && cp rmq/definitions.json "$BACKUP_DIR/definitions.json" || true
+test -f iot-rpc-rest-app/app-service/.env && cp iot-rpc-rest-app/app-service/.env "$BACKUP_DIR/app-service.env" || true
+test -f iot-rpc-rest-app/rmq/rabbitmq.conf && cp iot-rpc-rest-app/rmq/rabbitmq.conf "$BACKUP_DIR/rabbitmq.conf" || true
+test -f iot-rpc-rest-app/rmq/definitions.json && cp iot-rpc-rest-app/rmq/definitions.json "$BACKUP_DIR/definitions.json" || true
+test -f iot-rpc-rest-app/rmq/enabled_plugins && cp iot-rpc-rest-app/rmq/enabled_plugins "$BACKUP_DIR/enabled_plugins" || true
 
 echo "=== Экспорт live-дефиниций RabbitMQ ==="
 sudo docker compose exec -T rabbitmq rabbitmqctl export_definitions /tmp/definitions-live.json || true
@@ -136,14 +138,14 @@ echo "Бэкап завершён: $BACKUP_DIR"
 ls -la "$BACKUP_DIR"
 '@
 
-$script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "bash -s"
+$script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "bash -s"
 ```
 
 ---
 
 ### Этап 3. Синхронизация файлов и актуализация кода на сервере
 
-Переносим актуальные файлы конфигурации (`compose.yaml`, `rmq/rabbitmq.conf`, `rmq/definitions.json`) и исходный код:
+Переносим актуальные файлы конфигурации (`compose.yaml`, `rmq/rabbitmq.conf`, `rmq/definitions.json`, `rmq/enabled_plugins`) и исходный код:
 
 ```powershell
 $script = @'
@@ -152,10 +154,12 @@ cd /home/user1/iot-rpc-rest-app
 
 echo "=== Актуализация рабочего дерева Git ==="
 git fetch origin
+git checkout master
+git pull --ff-only
 git status -s
 '@
 
-$script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "bash -s"
+$script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "bash -s"
 ```
 
 *(Если деплой выполняется напрямую с рабочей станции без коммита в `origin/master`, передайте изменённые файлы через `scp`, как показано в § 2.2).*
@@ -164,38 +168,38 @@ $script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.
 
 ### Этап 4. Сборка и перезапуск сервиса `app1`
 
-Выполняем локальную сборку образа приложения на хосте с помощью `uv` и перезапускаем `app1` с флагом `--no-deps`.
+Выполняем локальную сборку образа приложения на хосте с помощью `uv` и перезапускаем `app1` с флагом `--no-deps`:
 
 ```powershell
 $script = @'
 set -euo pipefail
-cd /home/user1/iot-rpc-rest-app
+cd /home/user1
 
 echo "=== Сборка образа app1 ==="
 sudo docker compose build app1
 
-echo "=== Перезапуск контейнера app1 (с созданием/подключением к iot_rabbitmq_network) ==="
+echo "=== Перезапуск контейнера app1 ==="
 sudo docker compose up -d --no-deps app1
 sudo docker compose ps app1
 '@
 
-$script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "bash -s"
+$script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "bash -s"
 ```
 
-При старте контейнера скрипт `prestart.sh` автоматически применит миграции Alembic (`alembic upgrade head`), а приложение подключится к БД и брокеру.
+При старте контейнера скрипт `prestart.sh` автоматически применит миграции Alembic (`alembic upgrade head`), а приложение подключится к внешней БД и брокеру. Также автоматически запустится фоновая синхронизация прав устройств в RabbitMQ.
 
 ---
 
 ### Этап 5. Безопасный перезапуск брокера сообщений `rabbitmq`
 
-Пересоздаём контейнер `rabbitmq` для применения новых параметров `rabbitmq.conf`, дефиниций `definitions.json` и подключения к сети `iot_rabbitmq_network`.
+Пересоздаём контейнер `rabbitmq` для применения новых параметров `rabbitmq.conf`, дефиниций `definitions.json` и плагинов `enabled_plugins`:
 
 > 💡 **Важно:** Volume `rabbitmq_data` сохраняется неизменным. RabbitMQ подгрузит обновлённый конфигурационный файл слушателей и применит новые статические сущности из `definitions.json`, не затронув сохранённые в БД Mnesia динамические токены устройств.
 
 ```powershell
 $script = @'
 set -euo pipefail
-cd /home/user1/iot-rpc-rest-app
+cd /home/user1
 
 echo "=== Перезапуск RabbitMQ ==="
 sudo docker compose up -d --no-deps rabbitmq
@@ -217,26 +221,41 @@ sudo docker compose exec rabbitmq rabbitmqctl import_definitions /etc/rabbitmq/d
 sudo docker compose ps rabbitmq
 '@
 
-$script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "bash -s"
+$script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "bash -s"
 ```
 
 ---
 
-### Этап 6. Обновление сетевой связности прокси (`nginx`, `nginx-mutual`)
+### Этап 6. Обновление и перезапуск прокси (`nginx`, `nginx-mutual`)
 
-Для того чтобы reverse-proxy контейнеры получили правильный DNS-роутинг в новой сети `iot_rabbitmq_network`, перезапускаем их:
+Для того чтобы reverse-proxy контейнеры перечитали конфигурации:
 
 ```powershell
 $script = @'
 set -euo pipefail
-cd /home/user1/iot-rpc-rest-app
+cd /home/user1
 
-echo "=== Перезапуск Nginx reverse-proxy контейнеров ==="
-sudo docker compose up -d --no-deps nginx nginx-mutual
-sudo docker compose ps nginx nginx-mutual
+echo "=== Перезапуск Nginx reverse-proxy ==="
+sudo docker compose up -d --no-deps nginx
+sudo docker compose ps nginx
 '@
 
-$script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "bash -s"
+$script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "bash -s"
+```
+
+Если обновлялся legacy mTLS прокси:
+
+```powershell
+$script = @'
+set -euo pipefail
+cd /home/user1/nginx-mutual-legacy
+
+echo "=== Перезапуск legacy nginx-mutual ==="
+sudo docker compose up -d --no-deps nginx-mutual
+sudo docker compose ps
+'@
+
+$script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "bash -s"
 ```
 
 ---
@@ -247,14 +266,14 @@ $script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.
 
 ### 4.1. Проверка слушателей протоколов RabbitMQ
 
-Убедиться, что активны все 4 требуемых слушателя:
+Убедиться, что активны все требуемые слушатели:
 - `1883` — Plain MQTT (для телеметрии);
 - `8883` — MQTT over TLS (для IoT-терминалов);
 - `5672` — AMQP (для ядра приложения);
 - `15672` — HTTP Management.
 
 ```powershell
-ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "sudo docker compose -f /home/user1/iot-rpc-rest-app/compose.yaml exec rabbitmq rabbitmq-diagnostics listeners"
+ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmq-diagnostics listeners"
 ```
 
 Ожидаемый вывод содержит строки вида:
@@ -271,18 +290,17 @@ Interface: [::], port: 5672, protocol: amqp, purpose: AMQP 0-9-1
 
 ```powershell
 $script = @'
-cd /home/user1/iot-rpc-rest-app
 echo "=== Список пользователей RabbitMQ ==="
-sudo docker compose exec rabbitmq rabbitmqctl list_users | grep -E "etran_service|admin"
+sudo docker exec rabbitmq rabbitmqctl list_users | grep -E "etran_service|admin|device"
 
 echo "=== Права на vhost / ==="
-sudo docker compose exec rabbitmq rabbitmqctl list_permissions -p / | grep "etran_service"
+sudo docker exec rabbitmq rabbitmqctl list_permissions -p / | grep "etran_service"
 
 echo "=== Топиковые разрешения на exchange amq.topic ==="
-sudo docker compose exec rabbitmq rabbitmqctl list_topic_permissions -p / | grep "etran_service"
+sudo docker exec rabbitmq rabbitmqctl list_topic_permissions -p / | grep "etran_service"
 '@
 
-$script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "bash -s"
+$script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "bash -s"
 ```
 
 Ожидаемый результат:
@@ -295,7 +313,7 @@ $script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.
 Проверяем успешный запуск Gunicorn/Uvicorn, отсутствие ошибок AMQP и активность периодических задач (TTL/Watchdog):
 
 ```powershell
-ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "cd /home/user1/iot-rpc-rest-app && sudo docker compose logs --tail=50 app1"
+ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "sudo docker logs --tail=50 app1"
 ```
 
 Ключевые маркеры в логах:
@@ -306,19 +324,24 @@ ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "c
 
 ### 4.4. Проверка доступности REST API через Nginx
 
-Выполняем тестовый HTTP-запрос к эндпоинту документации OpenAPI:
+Выполняем проверку API с хоста или извне:
 
 ```powershell
-ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "curl -k -s -o /dev/null -w '%{http_code}\n' https://127.0.0.1/docs"
+curl.exe -s -k -H "X-API-Key: testkey_org1_abc" "https://dev.leo4.ru:3000/api/v1/devices/"
 ```
-Ожидаемый код ответа: `200`.
+Ожидаемый код ответа: `200` и JSON-ответ.
+
+Внутренняя проверка через контейнер:
+```powershell
+ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "sudo docker exec app1 python -c 'from urllib.request import urlopen; r=urlopen(\"http://127.0.0.1:8000/docs\", timeout=5); print(\"API Status:\", r.status)'"
+```
 
 ### 4.5. Запуск набора тестов внутри контейнера
 
 Для полной уверенности в интеграции запускаем `pytest` непосредственно в контейнере `app1`:
 
 ```powershell
-ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "sudo docker compose -f /home/user1/iot-rpc-rest-app/compose.yaml exec app1 pytest"
+ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "sudo docker exec app1 uv run pytest"
 ```
 Все тесты API, сервисов, схем и интеграций должны завершаться со статусом `passed`.
 
@@ -333,20 +356,21 @@ ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "s
 ```powershell
 $script = @'
 set -euo pipefail
-cd /home/user1/iot-rpc-rest-app
+cd /home/user1
 
-LATEST_BACKUP=$(ls -td /home/user1/iot-rpc-rest-app/backups/backup-* | head -1)
+LATEST_BACKUP=$(ls -td /home/user1/backups/backup-* | head -1)
 echo "Восстановление конфигураций из: $LATEST_BACKUP"
 
 test -f "$LATEST_BACKUP/compose.yaml" && cp "$LATEST_BACKUP/compose.yaml" compose.yaml
-test -f "$LATEST_BACKUP/rabbitmq.conf" && cp "$LATEST_BACKUP/rabbitmq.conf" rmq/rabbitmq.conf
-test -f "$LATEST_BACKUP/definitions.json" && cp "$LATEST_BACKUP/definitions.json" rmq/definitions.json
+test -f "$LATEST_BACKUP/rabbitmq.conf" && cp "$LATEST_BACKUP/rabbitmq.conf" iot-rpc-rest-app/rmq/rabbitmq.conf
+test -f "$LATEST_BACKUP/definitions.json" && cp "$LATEST_BACKUP/definitions.json" iot-rpc-rest-app/rmq/definitions.json
+test -f "$LATEST_BACKUP/enabled_plugins" && cp "$LATEST_BACKUP/enabled_plugins" iot-rpc-rest-app/rmq/enabled_plugins
 
 echo "Перезапуск сервисов в исходном состоянии..."
-sudo docker compose up -d --no-deps rabbitmq app1 nginx nginx-mutual
+sudo docker compose up -d --no-deps rabbitmq app1 nginx
 '@
 
-$script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "bash -s"
+$script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "bash -s"
 ```
 
 ### 5.2. Принудительное восстановление динамических ACL устройств
@@ -354,8 +378,8 @@ $script | ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.
 Если при перезапуске брокера возникли проблемы с авторизацией существующих терминалов (ошибки `Reason Code 134` или `access refused`), вызывается эндпоинт принудительной синхронизации:
 
 ```powershell
-# Изнутри сервера или через curl
-ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "curl -k -X POST 'https://127.0.0.1/api/v1/admin/?action=get_u'"
+# Изнутри контейнера app1 или через curl:
+ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "sudo docker exec app1 curl -s -X POST 'http://127.0.0.1:8000/api/internal/v1/admin/?action=get_u' -H 'X-Internal-Service-Key: internal-service-key-dev'"
 ```
 Это синхронизирует всех зарегистрированных в PostgreSQL устройств в Mnesia-хранилище RabbitMQ.
 
@@ -363,40 +387,40 @@ ssh -n -i "D:\.ssh\free-tier-cloud_ru" -o BatchMode=yes user1@176.108.247.249 "c
 
 ## 6. Готовый PowerShell-скрипт полного цикла деплоя
 
-Для автоматизации регулярного проведения таких обновлений оператор может использовать следующий готовый PowerShell-скрипт:
+Для автоматизации проведения инфраструктурных обновлений оператор может использовать следующий готовый PowerShell-скрипт:
 
 ```powershell
 <#
 .SYNOPSIS
-    Скрипт безопасного деплоя инфраструктуры RabbitMQ и приложения Leo4.
+    Скрипт безопасного деплоя инфраструктуры RabbitMQ и приложения Leo4 на новом сервере.
 #>
 
 $ErrorActionPreference = "Stop"
-$SSH_KEY = "D:\.ssh\free-tier-cloud_ru"
-$SSH_HOST = "user1@176.108.247.249"
-$REMOTE_DIR = "/home/user1/iot-rpc-rest-app"
+$SSH_KEY = "d:\.ssh\id_ed25519"
+$SSH_HOST = "user1@87.242.100.34"
+$COMPOSE_DIR = "/home/user1"
+$REPO_DIR = "/home/user1/iot-rpc-rest-app"
 
 Write-Host "==> [1/6] Подключение и создание резервной копии..." -ForegroundColor Cyan
 $backupScript = @"
 set -euo pipefail
-cd $REMOTE_DIR
 TS=\$(date +%Y%m%d-%H%M%S)
-BDIR="$REMOTE_DIR/backups/backup-\$TS"
+BDIR="/home/user1/backups/backup-\$TS"
 mkdir -p "\$BDIR"
-cp compose.yaml rmq/rabbitmq.conf rmq/definitions.json "\$BDIR/" 2>/dev/null || true
+cp $COMPOSE_DIR/compose.yaml $REPO_DIR/rmq/rabbitmq.conf $REPO_DIR/rmq/definitions.json $REPO_DIR/rmq/enabled_plugins "\$BDIR/" 2>/dev/null || true
 echo "Backup created at \$BDIR"
 "@
 $backupScript | ssh -n -i $SSH_KEY -o BatchMode=yes $SSH_HOST "bash -s"
 
 Write-Host "==> [2/6] Синхронизация файлов на сервер..." -ForegroundColor Cyan
-scp -i $SSH_KEY compose.yaml "${SSH_HOST}:${REMOTE_DIR}/compose.yaml"
-scp -i $SSH_KEY rmq/rabbitmq.conf "${SSH_HOST}:${REMOTE_DIR}/rmq/rabbitmq.conf"
-scp -i $SSH_KEY rmq/definitions.json "${SSH_HOST}:${REMOTE_DIR}/rmq/definitions.json"
+scp -i $SSH_KEY rmq/rabbitmq.conf "${SSH_HOST}:${REPO_DIR}/rmq/rabbitmq.conf"
+scp -i $SSH_KEY rmq/definitions.json "${SSH_HOST}:${REPO_DIR}/rmq/definitions.json"
+scp -i $SSH_KEY rmq/enabled_plugins "${SSH_HOST}:${REPO_DIR}/rmq/enabled_plugins"
 
 Write-Host "==> [3/6] Сборка и перезапуск app1..." -ForegroundColor Cyan
 $deployAppScript = @"
 set -euo pipefail
-cd $REMOTE_DIR
+cd $COMPOSE_DIR
 sudo docker compose build app1
 sudo docker compose up -d --no-deps app1
 "@
@@ -405,27 +429,26 @@ $deployAppScript | ssh -n -i $SSH_KEY -o BatchMode=yes $SSH_HOST "bash -s"
 Write-Host "==> [4/6] Перезапуск RabbitMQ и Nginx..." -ForegroundColor Cyan
 $deployInfraScript = @"
 set -euo pipefail
-cd $REMOTE_DIR
+cd $COMPOSE_DIR
 sudo docker compose up -d --no-deps rabbitmq
-sudo docker compose up -d --no-deps nginx nginx-mutual
+sudo docker compose up -d --no-deps nginx
 "@
 $deployInfraScript | ssh -n -i $SSH_KEY -o BatchMode=yes $SSH_HOST "bash -s"
 
 Write-Host "==> [5/6] Верификация слушателей и статуса сервисов..." -ForegroundColor Cyan
 $verifyScript = @"
 set -euo pipefail
-cd $REMOTE_DIR
 echo "--- Docker Containers ---"
-sudo docker compose ps
+cd $COMPOSE_DIR && sudo docker compose ps
 echo "--- RabbitMQ Listeners ---"
-sudo docker compose exec rabbitmq rabbitmq-diagnostics listeners
-echo "--- Checking REST API ---"
-curl -k -s -o /dev/null -w "API Response Code: %{http_code}\n" https://127.0.0.1/docs
+sudo docker exec rabbitmq rabbitmq-diagnostics listeners
+echo "--- Checking Internal App Status ---"
+sudo docker exec app1 python -c 'from urllib.request import urlopen; r=urlopen("http://127.0.0.1:8000/docs", timeout=5); print("API Response Code:", r.status)'
 "@
 $verifyScript | ssh -n -i $SSH_KEY -o BatchMode=yes $SSH_HOST "bash -s"
 
 Write-Host "==> [6/6] Запуск тестов в контейнере..." -ForegroundColor Cyan
-ssh -n -i $SSH_KEY -o BatchMode=yes $SSH_HOST "sudo docker compose -f $REMOTE_DIR/compose.yaml exec app1 pytest"
+ssh -n -i $SSH_KEY -o BatchMode=yes $SSH_HOST "sudo docker exec app1 uv run pytest"
 
 Write-Host "==> Деплой успешно завершён и верифицирован!" -ForegroundColor Green
 ```

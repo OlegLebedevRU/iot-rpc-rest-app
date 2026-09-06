@@ -136,6 +136,7 @@ crt/
 backups/
 *.backup
 *.backup-*
+*.dump
 .output.txt
 .venv
 env/

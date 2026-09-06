@@ -534,9 +534,11 @@ ERROR: failed to compute cache key: "/crt/key_0000.pem": not found
 2. **Деплой инфраструктуры брокера RabbitMQ, межсервисных сетей и прокси**:
    [`manual-infra-and-rmq-deploy-runbook.md`](manual-infra-and-rmq-deploy-runbook.md) — регламент для изменений `rmq/rabbitmq.conf` (слушатели портов, plain MQTT 1883), `rmq/definitions.json` (сервисные пользователи, топиковые ACL `amq.topic`), общих Docker-сетей (`iot_rabbitmq_network`), прокси `nginx`/`nginx-mutual`, с сохранением томов данных (`rabbitmq_data`, `pgdata`) и сессий устройств.
 
-Подключение по SSH к целевой VM, в каталог репозитория (`/home/user1/iot-rpc-rest-app`):
+Подключение по SSH к новому серверу (`user1@87.242.100.34`, ключ `d:\.ssh\id_ed25519`):
+- Корень мультисервисного Compose: `/home/user1` (`/home/user1/compose.yaml`)
+- Каталог репозитория приложения: `/home/user1/iot-rpc-rest-app`
 
-**Предусловие:** на VM должен лежать `./app-service/.env` с боевыми значениями — он
+**Предусловие:** на сервере лежит `./iot-rpc-rest-app/app-service/.env` с боевыми значениями — он
 прокидывается в `app1` через `env_file:` (см. §6.2). Если файла нет,
 `docker compose up -d app1` упадёт с ошибкой до старта контейнера.
 
@@ -544,9 +546,11 @@ ERROR: failed to compute cache key: "/crt/key_0000.pem": not found
 
 ```bash
 # 1. Подтянуть актуальный код / миграции / конфиги
-git fetch origin && git checkout <target_branch_or_commit>
+cd /home/user1/iot-rpc-rest-app
+git fetch origin && git checkout master && git pull --ff-only
 
 # 2. Собрать образ сервиса напрямую на VM
+cd /home/user1
 sudo docker compose build app1
 
 # 3. Безопасно перезапустить только сервис приложения без зависимостей
@@ -554,7 +558,7 @@ sudo docker compose up -d --no-deps app1
 
 # 4. Проверить статус и логи
 sudo docker compose ps app1
-sudo docker compose logs --tail=100 app1
+sudo docker compose logs --tail=50 app1
 ```
 
 #### Альтернативный сценарий (GHCR — только при прямом указании):
@@ -564,6 +568,7 @@ sudo docker compose logs --tail=100 app1
 export IMAGE_TAG=sha-abcdef0
 
 # 2. Pull + up целевого сервиса
+cd /home/user1
 sudo env IMAGE_TAG=$IMAGE_TAG docker compose pull app1
 sudo env IMAGE_TAG=$IMAGE_TAG docker compose up -d --no-deps app1
 ```

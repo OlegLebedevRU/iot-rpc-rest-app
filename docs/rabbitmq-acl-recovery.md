@@ -30,13 +30,19 @@ The application reconciles RabbitMQ MQTT device access at startup:
 The manual admin action remains available for forced recovery:
 
 ```powershell
-Invoke-RestMethod -Method Post "https://dev.leo4.ru/api/v1/admin/?action=get_u"
+# Через внутренний шлюз или curl из контейнера app1:
+Invoke-RestMethod -Method Post "https://dev.leo4.ru:3000/api/internal/v1/admin/?action=get_u" -Headers @{"X-Internal-Service-Key"="<INTERNAL_SERVICE_KEY>"}
 ```
 
 Use dry-run first when diagnosing:
 
 ```powershell
-Invoke-RestMethod -Method Post "https://dev.leo4.ru/api/v1/admin/?action=get_u&dry_run=true"
+Invoke-RestMethod -Method Post "https://dev.leo4.ru:3000/api/internal/v1/admin/?action=get_u&dry_run=true" -Headers @{"X-Internal-Service-Key"="<INTERNAL_SERVICE_KEY>"}
+```
+
+Или напрямую из контейнера `app1` на сервере:
+```bash
+sudo docker exec app1 curl -s -X POST "http://127.0.0.1:8000/api/internal/v1/admin/?action=get_u" -H "X-Internal-Service-Key: <INTERNAL_SERVICE_KEY>"
 ```
 
 ## Operational rules
@@ -98,7 +104,7 @@ RabbitMQ device ACL sync completed: {...}
 3. Trigger the idempotent reconciliation manually:
 
 ```powershell
-Invoke-RestMethod -Method Post "https://dev.leo4.ru/api/v1/admin/?action=get_u"
+Invoke-RestMethod -Method Post "https://dev.leo4.ru:3000/api/internal/v1/admin/?action=get_u" -Headers @{"X-Internal-Service-Key"="<INTERNAL_SERVICE_KEY>"}
 ```
 
 4. Watch RabbitMQ logs for remaining authentication errors.

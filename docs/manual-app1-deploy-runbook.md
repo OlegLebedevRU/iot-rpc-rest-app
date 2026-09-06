@@ -33,48 +33,53 @@
 
 Также уточнить:
 
-- хост, пользователя и SSH-ключ;
-- каталог репозитория на VM (по умолчанию `/home/user1/iot-rpc-rest-app`);
-- сервис: только `app1` / `app-service` или ещё `nginx`/`nginx-mutual`;
+- хост, пользователя и SSH-ключ (`user1@87.242.100.34`, ключ `d:\.ssh\id_ed25519`);
+- каталоги на сервере: корень compose `/home/user1` (где лежит `/home/user1/compose.yaml`) и каталог репозитория приложения `/home/user1/iot-rpc-rest-app`;
+- сервис: только `app1` / `app-service` или ещё другие компоненты;
 - допустимо ли запускать Alembic-миграции при старте `app1`
   (`prestart.sh` автоматически выполняет `alembic upgrade head`).
 
 > ⚠️ **Критическое правило изоляции:**
 > Если запрос «только app», **строго запрещено** выполнять `docker compose up -d` без
-> имени сервиса и **запрещено** пересоздавать `pg`, `rabbitmq`, `nginx`, `nginx-mutual`,
-> `pgadmin`, `certbot`. Всегда использовать флаг `--no-deps app1`.
+> имени сервиса и **запрещено** пересоздавать `rabbitmq`, `nginx`, `nginx-mutual`,
+> `processing-backend`, `menubuilder-backend`. Всегда использовать флаг `--no-deps app1`.
 > 
 > 💡 Если задача включает обновление конфигурации брокера сообщений (`rmq/rabbitmq.conf`, `rmq/definitions.json`),
-> сетевой топологии Docker Compose (`iot_rabbitmq_network`) или комплексный рестарт сервисов,
+> сетевой топологии Docker Compose или комплексный рестарт сервисов,
 > используйте регламент: [`manual-infra-and-rmq-deploy-runbook.md`](manual-infra-and-rmq-deploy-runbook.md).
 
 ---
 
 ## 1. Проверенная конфигурация
 
-В `compose.yaml` основной сервис `app1` настроен для поддержки как локальной сборки,
-так и внешнего образа:
+На новом сервере мультисервисный оркестратор платформы находится в `/home/user1/compose.yaml`,
+а репозиторий приложения — в `/home/user1/iot-rpc-rest-app`:
 
 ```yaml
+# /home/user1/compose.yaml
 services:
   app1:
     build:
-      context: .
-      dockerfile: docker-files/app-service/Dockerfile
-    image: ghcr.io/oleglebedevru/iot-rpc-rest-app/app-service:${IMAGE_TAG:-latest}
+      context: ./iot-rpc-rest-app
+      dockerfile: ./docker-files/app-service/Dockerfile
+    container_name: app1
+    restart: always
     env_file:
-      - ./app-service/.env
+      - ./iot-rpc-rest-app/app-service/.env
+    volumes:
+      - ./iot-rpc-rest-app/logs:/var/log/app
 ```
 
-На целевом хосте рядом с `compose.yaml` находится каталог `./app-service/.env` с
-runtime-переменными приложения (настройки БД, брокера RabbitMQ, API-ключей). Файл `.env`
+В каталоге репозитория `./iot-rpc-rest-app/app-service/.env` находятся
+runtime-переменные приложения (настройки внешней БД `10.0.0.7:5432/iot_rpc`, брокера RabbitMQ, API-ключей). Файл `.env`
 не коммитится в git и не должен выводиться целиком в чат/логи.
 
-Проверенный рабочий стенд:
+Проверенный рабочий стенд (новый сервер):
 
-- SSH: `user1@176.108.247.249`
-- SSH-ключ (Windows): `D:\.ssh\free-tier-cloud_ru`
-- Каталог на VM: `/home/user1/iot-rpc-rest-app`
+- SSH: `user1@87.242.100.34`
+- SSH-ключ (Windows): `d:\.ssh\id_ed25519`
+- Каталог оркестратора Compose: `/home/user1` (`/home/user1/compose.yaml`)
+- Каталог репозитория на VM: `/home/user1/iot-rpc-rest-app`
 - Основной сервис: `app1`
 
 ---
@@ -83,16 +88,16 @@ runtime-переменными приложения (настройки БД, б
 
 Команды ниже предполагают Windows PowerShell на рабочей машине оператора и bash на VM.
 
-### 2.1. Проверить доступность SSH и каталог проекта
+### 2.1. Проверить доступность SSH и каталоги проекта
 
 ```powershell
-ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "pwd; hostname; ls -la /home/user1/iot-rpc-rest-app/compose.yaml"
+ssh -n -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "pwd; hostname; ls -la /home/user1/compose.yaml /home/user1/iot-rpc-rest-app/docker-files/app-service/Dockerfile"
 ```
 
 ### 2.2. Проверить статус текущего контейнера `app1`
 
 ```powershell
-ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "cd /home/user1/iot-rpc-rest-app && sudo docker compose ps app1"
+ssh -n -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "cd /home/user1 && sudo docker compose ps app1"
 ```
 
 ### 2.3. Создать бэкап runtime-конфигурации
@@ -100,7 +105,7 @@ ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "cd /home/user1/iot-rp
 Перед проведением любых работ обязательно создать резервную копию конфигурационных файлов:
 
 ```powershell
-ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "cd /home/user1/iot-rpc-rest-app && cp app-service/.env app-service/.env.backup-\$(date +%Y%m%d-%H%M%S) 2>/dev/null || true; test -f .env && cp .env .env.backup-\$(date +%Y%m%d-%H%M%S) || true"
+ssh -n -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "cd /home/user1/iot-rpc-rest-app && cp app-service/.env app-service/.env.backup-\$(date +%Y%m%d-%H%M%S) 2>/dev/null || true"
 ```
 
 ---
@@ -111,38 +116,40 @@ ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "cd /home/user1/iot-rp
 
 ### 3.1. Синхронизация актуального кода на сервере
 
-Перейти в каталог проекта на VM и получить актуальный код из репозитория:
+Перейти в каталог репозитория на VM и получить актуальный код:
 
 ```powershell
 $script = @'
 set -euo pipefail
 cd /home/user1/iot-rpc-rest-app
 
-echo "=== 1. Git fetch & checkout ==="
+echo "=== 1. Git fetch & pull ==="
 git fetch origin
+git checkout master
+git pull --ff-only
 git status
 git log -1 --oneline
 '@
 
-$script | ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "bash -s"
+$script | ssh -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "bash -s"
 ```
 
 *(Если изменения переносятся напрямую или через checkout конкретной ветки/коммита, убедитесь, что рабочее дерево содержит нужный коммит).*
 
 ### 3.2. Сборка Docker-образа напрямую на целевой машине
 
-Запустить сборку только сервиса `app1`:
+Запустить сборку сервиса `app1` из корня compose `/home/user1`:
 
 ```powershell
 $script = @'
 set -euo pipefail
-cd /home/user1/iot-rpc-rest-app
+cd /home/user1
 
 echo "=== 2. Building app1 image locally ==="
 sudo docker compose build app1
 '@
 
-$script | ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "bash -s"
+$script | ssh -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "bash -s"
 ```
 
 ### 3.3. Безопасный перезапуск только `app1`
@@ -152,14 +159,14 @@ $script | ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "bash -s"
 ```powershell
 $script = @'
 set -euo pipefail
-cd /home/user1/iot-rpc-rest-app
+cd /home/user1
 
 echo "=== 3. Restarting app1 container ==="
 sudo docker compose up -d --no-deps app1
 sudo docker compose ps app1
 '@
 
-$script | ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "bash -s"
+$script | ssh -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "bash -s"
 ```
 
 ---
@@ -182,7 +189,7 @@ git rev-parse --short origin/master
 ### 4.2. Предварительный Pull образа из GHCR
 
 ```powershell
-ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" 'set -e; cd /home/user1/iot-rpc-rest-app; TARGET_TAG=sha-73193e3; echo "Pulling $TARGET_TAG"; sudo env IMAGE_TAG=$TARGET_TAG docker compose pull app1'
+ssh -n -i "d:\.ssh\id_ed25519" user1@87.242.100.34 'set -e; cd /home/user1; TARGET_TAG=sha-73193e3; echo "Pulling $TARGET_TAG"; sudo env IMAGE_TAG=$TARGET_TAG docker compose pull app1'
 ```
 
 Если pull падает с `manifest unknown`, значит пакет ещё не собран в GHCR. Не менять `.env`.
@@ -192,7 +199,7 @@ ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" 'set -e; cd /home/user
 ```powershell
 $script = @'
 set -euo pipefail
-cd /home/user1/iot-rpc-rest-app
+cd /home/user1
 
 TARGET_TAG=sha-73193e3
 BACKUP=.env.backup-before-app1-deploy-$(date +%Y%m%d-%H%M%S)
@@ -204,7 +211,7 @@ sudo env IMAGE_TAG=$TARGET_TAG docker compose up -d --no-deps app1
 sudo docker compose ps app1
 '@
 
-$script | ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "bash -s"
+$script | ssh -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "bash -s"
 ```
 
 ---
@@ -213,12 +220,14 @@ $script | ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "bash -s"
 
 ### Вариант 5.1. Откат для основного сценария (сборка на хосте)
 
-1. Переключить git на предыдущий стабильный коммит:
+1. Переключить git на предыдущий стабильный коммит в каталоге репозитория:
    ```bash
+   cd /home/user1/iot-rpc-rest-app
    git checkout <previous_commit_sha>
    ```
-2. Пересобрать и перезапустить `app1`:
+2. Пересобрать и перезапустить `app1` из корня compose:
    ```bash
+   cd /home/user1
    sudo docker compose build app1
    sudo docker compose up -d --no-deps app1
    ```
@@ -227,6 +236,7 @@ $script | ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "bash -s"
 
 1. Найти резервную копию `.env`:
    ```bash
+   cd /home/user1
    ls -1t .env.backup-before-app1-deploy-* | head -1
    ```
 2. Восстановить предыдущий `IMAGE_TAG` и перезапустить:
@@ -242,7 +252,7 @@ $script | ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "bash -s"
 ### 6.1. Проверка статуса контейнера и логов запуска
 
 ```powershell
-ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "cd /home/user1/iot-rpc-rest-app && sudo docker compose ps app1 && echo '--- last logs ---' && sudo docker compose logs --no-color --tail=100 app1"
+ssh -n -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "cd /home/user1 && sudo docker compose ps app1 && echo '--- last logs ---' && sudo docker compose logs --no-color --tail=50 app1"
 ```
 
 **Маркеры успешного старта:**
@@ -250,20 +260,28 @@ ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "cd /home/user1/iot-rp
 - В логах присутствует `Migrations applied!` (успешное применение миграций Alembic).
 - В логах зафиксировано подключение FastStream к RabbitMQ и запуск маршрутов.
 - Gunicorn/Uvicorn завершил запуск: `Application startup complete`.
+- В логах зафиксирована актуализация прав устройств: `RabbitMQ device ACL sync completed`.
 
 ### 6.2. Внутренняя проверка HTTP эндпоинта
 
 ```powershell
-ssh user1@176.108.247.249 -i "D:\.ssh\free-tier-cloud_ru" "sudo docker exec app1 python -c 'from urllib.request import urlopen; r=urlopen(\"http://127.0.0.1:8000/docs\", timeout=5); print(\"internal_http_status:\", r.status); r.close()'"
+ssh -n -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "sudo docker exec app1 python -c 'from urllib.request import urlopen; r=urlopen(\"http://127.0.0.1:8000/docs\", timeout=5); print(\"internal_http_status:\", r.status); r.close()'"
 ```
 Ожидаемый вывод: `internal_http_status: 200`.
 
 ### 6.3. Проверка через внешний Nginx шлюз с API-ключом
 
 ```powershell
-curl.exe -s -k -H "X-API-Key: testkey_org1_abc" "https://dev.leo4.ru/api/v1/devices/"
+curl.exe -s -k -H "X-API-Key: testkey_org1_abc" "https://dev.leo4.ru:3000/api/v1/devices/"
 ```
 Ожидаемый вывод: HTTP 200 и JSON со списком устройств организации.
+
+### 6.4. Проверка синхронизации прав устройств в RabbitMQ
+
+```powershell
+ssh -n -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "sudo docker logs --tail=50 app1 | grep 'device ACL sync'"
+```
+Ожидаемый вывод: `RabbitMQ device ACL sync completed: {'created': ..., 'updated': ..., ...}`.
 
 ---
 
