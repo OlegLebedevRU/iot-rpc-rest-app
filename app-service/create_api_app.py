@@ -368,11 +368,17 @@ def get_scalar_api_reference_html(
     </style>
   </head>
   <body>
+    <div id="app"></div>
     <script
       id="api-reference"
       data-url="{openapi_url}"
       src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"
     ></script>
+    <script>
+      Scalar.createApiReference('#app', {{
+        url: '{openapi_url}',
+      }})
+    </script>
   </body>
 </html>"""
 

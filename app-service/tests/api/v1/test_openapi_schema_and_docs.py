@@ -70,6 +70,8 @@ async def test_docs_endpoints_status():
         resp_scalar = await ac.get("/docs")
         assert resp_scalar.status_code == 200
         assert "@scalar/api-reference" in resp_scalar.text
+        assert "Scalar.createApiReference" in resp_scalar.text
+        assert 'id="app"' in resp_scalar.text
 
         # Swagger UI at /swagger and /legacy-docs
         resp_swagger = await ac.get("/swagger")
