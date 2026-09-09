@@ -13,12 +13,14 @@ from core.topologys.declare import (
     q_evt,
     q_result,
     q_out,
+    q_ctl,
     q_app,
     q_svc,
     q_device_conn_events,
 )
 from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
 from core.diagnostics.mqtt_bridge import handle_device_output_message
+from core.remote_input.mqtt_bridge import handle_device_ctl_message
 
 from core.services.devices import DeviceService
 from core.services.device_tasks import DeviceTasksService
@@ -161,6 +163,11 @@ if _REGISTER_SUBSCRIBERS:
     ):
         routing_key = getattr(msg, "routing_key", None) or f"dev.{sn}.out"
         await handle_device_output_message(routing_key=routing_key, payload=msg.body)
+
+    @fs_router.subscriber(q_ctl)
+    async def remote_input_ctl(msg: RabbitMessage, sn: Sn_dep):
+        routing_key = getattr(msg, "routing_key", None) or f"dev.{sn}.ctl"
+        await handle_device_ctl_message(routing_key=routing_key, payload=msg.body)
 
     @fs_router.subscriber(q_app)
     async def app_connect_handler(

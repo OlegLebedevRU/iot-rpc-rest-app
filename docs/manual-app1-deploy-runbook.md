@@ -283,19 +283,42 @@ ssh -n -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "sudo docker logs --tail=50 a
 ```
 Ожидаемый вывод: `RabbitMQ device ACL sync completed: {'created': ..., 'updated': ..., ...}`.
 
+### 6.5. Remote Input: проверки после деплоя
+
+1. **Проверка очереди `ctl` и консьюмера в RabbitMQ:**
+   ```powershell
+   ssh -n -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmqctl list_queues name messages consumers | grep -E '^(ctl|evt|out|ack|req|res)\b'"
+   ```
+   Ожидается: очередь `ctl` присутствует и имеет `consumers: 1`.
+
+2. **Проверка биндингов топиков управления:**
+   ```powershell
+   ssh -n -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "sudo docker exec rabbitmq rabbitmqctl list_bindings | grep -E 'dev\.\*\.(ctl|evt)'"
+   ```
+   Ожидается: точный биндинг `dev.*.ctl` на очередь `ctl`, биндинг `dev.*.evt` на очередь `evt` остаётся неизменным.
+
+3. **Smoke-тест Internal API (проверка статуса устройства):**
+   ```bash
+   KEY=$(grep -E '^APP_CONFIG__AUTH__INTERNAL_SERVICE_KEY=' /home/user1/iot-rpc-rest-app/app-service/.env | cut -d= -f2- || grep -E '^INTERNAL_SERVICE_KEY=' /home/user1/iot-rpc-rest-app/app-service/.env | cut -d= -f2-)
+   sudo docker exec app1 curl -s -o /dev/null -w '%{http_code}\n' -H "X-Internal-Service-Key: $KEY" -H "X-Org-Id: 1" -H "X-Role: admin" http://127.0.0.1:8000/api/internal/v1/remote-input/devices/<SN>/status
+   ```
+   Ожидается: HTTP 200 (при существовании устройства) или HTTP 403 (при cross-tenant/отсутствии устройства для организации).
+
 ---
 
 ## 7. Частые ошибки и их устранение
 
-1. **`Permission denied` к Docker socket:**
+1. **`WEB_CONCURRENCY > 1` при включённом Remote Input / Diagnostics:**
+   - In-memory state (реестры lease, pending, presence) требует работы сервиса строго с одним воркером (`WEB_CONCURRENCY=1`). При масштабировании воркеров требуется вынос состояния в Redis (roadmap).
+2. **`Permission denied` к Docker socket:**
    - Выполнять команды с `sudo` либо добавить пользователя в группу `docker`.
-2. **Перезапуск лишних контейнеров при деплое:**
+3. **Перезапуск лишних контейнеров при деплое:**
    - Забыт флаг `--no-deps app1`. Никогда не вызывать `docker compose up -d` без явного указания `--no-deps app1`.
-3. **PowerShell съедает переменные bash (`$TARGET_TAG`, `$(date)`):**
+4. **PowerShell съедает переменные bash (`$TARGET_TAG`, `$(date)`):**
    - Использовать передачу скрипта через heredoc `@' ... '@` и `ssh ... "bash -s"`.
-4. **Ошибки миграций Alembic при старте:**
+5. **Ошибки миграций Alembic при старте:**
    - Проверить лог контейнера: `sudo docker compose logs app1`. При конфликтах миграций проверить состояние таблицы `alembic_version` в БД.
-5. **Отсутствует файл `app-service/.env`:**
+6. **Отсутствует файл `app-service/.env`:**
    - `docker compose up -d` выдаст ошибку отсутствия файла env. Восстановить файл из бэкапа `app-service/.env.backup-*`.
 
 ---

@@ -74,6 +74,25 @@
 * `POST /api/internal/v1/admin/?action=get_d` — Репликация реестра устройств.
 * `POST /api/internal/v1/admin/?action=get_u` — Репликация определений пользователей RabbitMQ.
 
+### 3.10. Удалённое управление вводом Remote Input (`/api/internal/v1/remote-input`)
+Предназначено для интеграции с MenuBuilder (операторский интерфейс удалённого рабочего стола терминала). Управление разрешено ролям `superuser`, `admin`, `user` (роли 1–3); роль `viewer` (4) отклоняется с кодом `403`.
+
+#### Маршруты REST:
+* `GET /api/internal/v1/remote-input/devices/{sn}/status` — Получение текущего статуса присутствия агента `l4desk` и активной аренды (`200 StatusResponse`).
+* `POST /api/internal/v1/remote-input/devices/{sn}/lease` — Запрос на получение эксклюзивной аренды управления терминалом (`201 LeaseResponse`; при занятости `409 Conflict {"detail":"lease busy","owner_user_id":"...","expires_at":"..."}`).
+* `POST /api/internal/v1/remote-input/lease/{lease_id}/keepalive` — Продление срока действия аренды на 60 секунд (`200 LeaseResponse`).
+* `DELETE /api/internal/v1/remote-input/lease/{lease_id}` — Досрочный отзыв аренды и отмена ожидающих команд (`204 No Content`).
+* `POST /api/internal/v1/remote-input/lease/{lease_id}/pointer-move` — Отправка перемещения указателя мыши best-effort (`202 Accepted {"accepted":true}`).
+* `POST /api/internal/v1/remote-input/lease/{lease_id}/mouse-click` — Отправка клика мыши с синхронным ожиданием подтверждения ACK/NACK (`200 ClickResult`).
+
+#### WebSocket командный канал:
+* `WebSocket /api/internal/v1/remote-input/ws/lease/{lease_id}` — Полнодуплексный командный канал управления для оператора.
+  * **Аутентификация при подключении**: проверка `X-Internal-Service-Key`, соответствие `X-Org-Id` и `X-User-Id` владельцу аренды.
+  * **Сразу после подключения**: сервер отправляет сообщение `hello` с параметрами лимитов и текущий `presence`.
+  * **Входящие сообщения (BFF → app1)**: `pointer_move` (`x`, `y`), `mouse_click` (`x`, `y`, `button`, `client_ref`), `keepalive`, `release`.
+  * **Исходящие сообщения (app1 → BFF)**: `hello`, `presence`, `click_result`, `error` (`rate_limited`, `invalid_message`, `payload_too_large`), `lease_revoked`.
+  * При закрытии соединения аренда автоматически отзывается с причиной `released`.
+
 ---
 
 ## 4. Примеры вызовов из смежных сервисов

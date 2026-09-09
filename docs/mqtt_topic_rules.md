@@ -65,6 +65,7 @@ packet
 | `req` | `dev/<SN>/req` | 🔍 Запрос устройства на получение задачи из очереди |
 | `res` | `dev/<SN>/res` | 📤 Отправка результата после выполнения задачи |
 | `out` | `dev/<SN>/out` | 🖥️ Volatile потоковый вывод устройства: live logs, diagnostic stdout/stderr, agent output |
+| `ctl` | `dev/<SN>/ctl` | 🎮 ACK/NACK и presence агента удалённого ввода `l4desk` (retained presence) |
 
 ### Server → Device (`srv/<SN>/...`)
 
@@ -73,10 +74,15 @@ packet
 | `tsk` | `srv/<SN>/tsk` | 🔔 Мгновенное уведомление устройства о новой задаче (без payload) |
 | `rsp` | `srv/<SN>/rsp` | 📥 Ответ сервера с параметрами задачи (payload) |
 | `eva` | `srv/<SN>/eva` | 🔁 Опциональное подтверждение сервером получения события (`evt`) |
+| `ctl` | `srv/<SN>/ctl` | 🎮 Оперативные команды удалённого ввода: pointer_move/mouse_click, QoS 1, без retain |
 
 > Для remote diagnostics, live logs и ограниченной диагностической консоли не вводятся дополнительные
 > server→device топики. Управление потоками и диагностическими командами выполняется через существующий
 > RPC lifecycle (`tsk`/`req`/`rsp`/`res`). Потоковый вывод устройства публикуется в `dev/<SN>/out`.
+> 
+> **Внимание:** Инфраструктура удалённого управления вводом (Remote Input, агент `l4desk`) вынесена в отдельный
+> выделенный канал управления `srv/<SN>/ctl` и `dev/<SN>/ctl`. Она **не** использует RPC (`tsk/req/rsp/res`),
+> не проходит через потоковый лог `out` и не порождает событий `DeviceEvent`.
 
 ---
 
@@ -86,5 +92,6 @@ packet
 | :-- | :-- |
 | [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md) | Полная спецификация RPC-протокола на базе MQTT v5 |
 | [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md) | Live logs и remote diagnostics через `dev/<SN>/out` без новых server→device топиков |
+| [`remote-input-protocol.md`](./remote-input-protocol.md) | Спецификация протокола удалённого ввода `l4desk` (`srv/<SN>/ctl`, `dev/<SN>/ctl`) |
 | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) | 📊 Mermaid-диаграммы: Polling, Trigger, Fail-fast |
 | [`event-protocol-mqtt.md`](./event-protocol-mqtt.md) | Протокол асинхронных событий: топики `evt`/`eva` |

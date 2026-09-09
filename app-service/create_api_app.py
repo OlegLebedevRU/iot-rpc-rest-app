@@ -249,9 +249,7 @@ async def _initial_device_connections_sync_cold_boot() -> None:
                 chunk_size=settings.rmq.device_sync_chunk_size,
             )
             break
-        log.info(
-            "Background initial device connections reconciliation completed."
-        )
+        log.info("Background initial device connections reconciliation completed.")
     except Exception as exc:
         log.warning(
             "Initial device connections reconciliation encountered an error: %s",
@@ -273,8 +271,32 @@ async def _periodic_device_reconciliation_job() -> None:
         break
 
 
+async def _remote_input_cleanup_loop() -> None:
+    """Periodic cleanup of expired remote input leases and pending commands."""
+    from core.remote_input.leases import lease_registry
+    from core.remote_input.pending import pending_registry
+
+    while True:
+        try:
+            await asyncio.sleep(1.0)
+            await lease_registry.cleanup_expired()
+            await pending_registry.expire()
+        except asyncio.CancelledError:
+            break
+        except Exception as exc:
+            log.warning("Remote input cleanup loop error: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    if settings.gunicorn.workers > 1:
+        log.warning(
+            "Memory-only state (remote_input, diagnostics) requires a single gunicorn worker (WEB_CONCURRENCY=1). "
+            "Current workers=%d. Running with >1 workers will cause lease/pending/presence state desynchronization across workers! "
+            "Consider WEB_CONCURRENCY=1 until Redis-backed state is implemented.",
+            settings.gunicorn.workers,
+        )
+
     await _start_broker_with_retry()
     await declare_x_q()
     await _sync_rmq_device_definitions_on_startup()
@@ -286,6 +308,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             settings.faststream.topology_watchdog_interval,
         )
     cold_boot_task = asyncio.create_task(_initial_device_connections_sync_cold_boot())
+    remote_input_cleanup_task = asyncio.create_task(_remote_input_cleanup_loop())
     scheduler = AsyncIOScheduler()
     scheduler.configure(jobstores={"default": MemoryJobStore()})
     try:
@@ -325,6 +348,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         cold_boot_task.cancel()
         with suppress(asyncio.CancelledError):
             await cold_boot_task
+    if not remote_input_cleanup_task.done():
+        remote_input_cleanup_task.cancel()
+        with suppress(asyncio.CancelledError):
+            await remote_input_cleanup_task
     if topology_watchdog_task is not None:
         topology_watchdog_task.cancel()
         with suppress(asyncio.CancelledError):

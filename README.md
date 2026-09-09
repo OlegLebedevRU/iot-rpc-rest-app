@@ -67,6 +67,7 @@ flowchart LR
 | Документ | Описание |
 |---|---|
 | 📡 [**RPC-протокол (MQTT v5)**](./docs/mqtt-rpc-protocol.md) | Асинхронный RPC поверх MQTT 5: топики, correlation data, Polling & Trigger |
+| 🎮 [**Remote Input Protocol (`ctl`, `l4desk`)**](./docs/remote-input-protocol.md) | Инфраструктура удалённого управления вводом: lease, presence, ACK/NACK, rate limits |
 | 🔢 [**Справочник method_code**](./docs/method-codes-reference.md) | Единый источник истины по `method_code`, совместимости `Platerra` / `Siplite` / `l4-hmi`, форматам `payload.dt` и ответам `res` |
 | 📋 [**REST API: задачи (task workflow)**](./docs/1-task-workflow-doc.md) | HTTP-интерфейс управления задачами: touch_task, статусы, вебхуки |
 | 📨 [**API событий устройств (events)**](./docs/2-events-api-format-description.md) | Получение асинхронных событий и телеметрии через REST |

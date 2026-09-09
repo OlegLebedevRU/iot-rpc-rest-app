@@ -11,6 +11,7 @@ from .device_tasks import router as device_tasks_router
 from .device_events import router as device_events_router
 from .gauges import router as gauges_router
 from .webhooks import router as webhooks_router
+from .remote_input import router as remote_input_router
 
 router = APIRouter(
     prefix=settings.api.internal_v1.prefix,
@@ -24,3 +25,4 @@ router.include_router(device_tasks_router, include_in_schema=False)
 router.include_router(device_events_router, include_in_schema=False)
 router.include_router(gauges_router, include_in_schema=False)
 router.include_router(webhooks_router, include_in_schema=False)
+router.include_router(remote_input_router, include_in_schema=False)

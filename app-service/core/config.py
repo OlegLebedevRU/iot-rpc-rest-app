@@ -86,6 +86,7 @@ class ApiInternalV1Prefix(BaseModel):
     device_events: str = "/device-events"
     gauges: str = "/gauges"
     webhooks: str = "/webhooks"
+    remote_input: str = "/remote-input"
 
 
 class ApiPrefix(BaseModel):
@@ -261,6 +262,7 @@ class RabbitQXConfig(BaseModel):
     suffix_response: str = "rsp"
     suffix_result_ack: str = "rac"
     suffix_commited: str = "cmt"
+    suffix_control: str = "ctl"
     # dev -> core
     req_queue_name: str = "req"
     ack_queue_name: str = "ack"
@@ -269,6 +271,8 @@ class RabbitQXConfig(BaseModel):
     out_queue_name: str = "out"
     app_queue_name: str = "app"
     svc_queue_name: str = "svc"
+    ctl_queue_name: str = "ctl"
+    ctl_queue_args: dict = {"x-message-ttl": 15000}
     conn_events_queue_name: str = "iot.device.connection.events"
     routing_key_dev_ack: str = str(RoutingKey("dev", "*", "ack"))
     routing_key_dev_request: str = str(RoutingKey("dev", "*", "req"))
@@ -277,6 +281,7 @@ class RabbitQXConfig(BaseModel):
     routing_key_dev_output: str = str(RoutingKey("dev", "*", "out"))
     routing_key_dev_app: str = str(RoutingKey("dev", "*", "app"))
     routing_key_dev_svc: str = str(RoutingKey("dev", "*", "svc"))
+    routing_key_dev_control: str = str(RoutingKey("dev", "*", "ctl"))
     routing_key_conn_created: str = "connection.created"
     routing_key_conn_closed: str = "connection.closed"
     api_clients_queue: str = "rmq_api_client_action"
@@ -395,12 +400,28 @@ class BillingConfig(BaseModel):
     block_size: int = 2048
 
 
+class RemoteInputConfig(BaseModel):
+    lease_ttl_sec: int = 60
+    lease_keepalive_sec: int = 15
+    click_ack_timeout_ms: int = 5000
+    click_ttl_ms: int = 5000
+    move_ttl_ms: int = 2000
+    move_rate_per_sec: int = 10
+    click_rate_per_sec: int = 5
+    max_command_payload_bytes: int = 1024
+    max_inbound_payload_bytes: int = 2048
+    pending_max_per_lease: int = 32
+    pending_max_total: int = 1024
+    presence_stale_sec: int = 90
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(".env.template", ".env"),
         case_sensitive=False,
         env_nested_delimiter="__",
         env_prefix="APP_CONFIG__",
+        extra="ignore",
     )
 
     run: RunConfig = RunConfig()
@@ -418,6 +439,7 @@ class Settings(BaseSettings):
     auth: AuthConfig
     webhook: WebhookConfigModel = WebhookConfigModel()
     billing: BillingConfig = BillingConfig()
+    remote_input: RemoteInputConfig = RemoteInputConfig()
 
     @property
     def api_keys(self) -> Dict[str, int]:
