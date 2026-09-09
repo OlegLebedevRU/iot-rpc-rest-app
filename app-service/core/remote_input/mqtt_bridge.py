@@ -19,6 +19,7 @@ from core.remote_input.schemas import (
     CtlInboundMessage,
     CtlNack,
     CtlPresence,
+    CtlStreamEvent,
 )
 
 log = setup_module_logger(__name__, "remote_input.log")
@@ -84,9 +85,15 @@ async def handle_device_ctl_message(
                 return False
 
             if isinstance(envelope, CtlAck):
+                if envelope.inventory is not None:
+                    await p_registry.update_inventory(sn, envelope.inventory)
+
                 res = PendingResult(
-                    result="injected",
+                    result=envelope.result,
                     terminal_time_ms=envelope.terminal_time_ms,
+                    stream_instance_id=envelope.stream_instance_id,
+                    state=envelope.state,
+                    inventory=envelope.inventory,
                 )
                 resolved = await cmd_registry.resolve(envelope.command_id, res)
                 if not resolved:
@@ -97,16 +104,17 @@ async def handle_device_ctl_message(
                     )
                 else:
                     log.info(
-                        "ACK resolved for command_id=%s lease_id=%s sn=%s result=injected",
+                        "ACK resolved for command_id=%s lease_id=%s sn=%s result=%s",
                         envelope.command_id,
                         envelope.lease_id,
                         sn,
+                        envelope.result,
                     )
                 return resolved
             else:
                 res = PendingResult(
                     result="nack",
-                    code=envelope.code,
+                    code=str(envelope.code),
                     message=envelope.message,
                     terminal_time_ms=envelope.terminal_time_ms,
                 )
@@ -131,6 +139,10 @@ async def handle_device_ctl_message(
 
         elif isinstance(envelope, CtlPresence):
             await p_registry.update(sn, envelope)
+            return True
+
+        elif isinstance(envelope, CtlStreamEvent):
+            await p_registry.update_stream_event(sn, envelope)
             return True
 
         return False

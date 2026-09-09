@@ -409,10 +409,17 @@ class RemoteInputConfig(BaseModel):
     move_rate_per_sec: int = 10
     click_rate_per_sec: int = 5
     max_command_payload_bytes: int = 1024
-    max_inbound_payload_bytes: int = 2048
+    max_inbound_payload_bytes: int = 65536
     pending_max_per_lease: int = 32
     pending_max_total: int = 1024
     presence_stale_sec: int = 90
+    ws_disconnect_grace_sec: int = 10
+    stream_start_timeout_sec: int = 15
+    inventory_timeout_sec: int = 5
+
+
+class DiagnosticsConfig(BaseModel):
+    implicit_console_lease: bool = True
 
 
 class Settings(BaseSettings):
@@ -440,6 +447,7 @@ class Settings(BaseSettings):
     webhook: WebhookConfigModel = WebhookConfigModel()
     billing: BillingConfig = BillingConfig()
     remote_input: RemoteInputConfig = RemoteInputConfig()
+    diagnostics: DiagnosticsConfig = DiagnosticsConfig()
 
     @property
     def api_keys(self) -> Dict[str, int]:

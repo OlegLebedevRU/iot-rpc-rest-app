@@ -351,10 +351,33 @@ MVP может хранить registry in-memory. Для горизонталь�
 
 ---
 
-## 11. Связанные документы
+## 11. Консоль под монопольной арендой (Console Under Lease)
+
+В рамках единой монопольной модели аренды терминала (Prompt 3.1) диагностическая сессия Console объединена с `LeaseRegistry`.
+
+### 11.1. Правила взаимодействия
+1. **Взаимное исключение**: Console доступна только роли `superuser`. При активной сессии Console блокируются любые попытки запустить трансляцию или дистанционное управление (`stream`, `input`, `view`). И наоборот: активная сессия `stream` или `input` блокирует открытие Console.
+2. **Идентификация сессии**: WebSocket принимает `lease_id` (через query-параметр) и заголовки `X-User-Id` / `X-Session-Id` (либо query `session_id`). При несовпадении владельца или неактивной аренде соединение закрывается с кодом `4409` (`lease_inactive`, `scope_mismatch`, `lease_not_owner`).
+3. **Разрыв соединения**: При закрытии WebSocket вызывается `mark_ws_disconnected`. Запускается grace-таймер (10 секунд). Если переподключения не произошло, аренда отзывается фоновой задачей `cleanup_expired`.
+
+### 11.2. Переходный режим (Implicit Console Lease)
+Для обратной совместимости с текущим фронтендом MenuBuilder (до обновления BFF) предусмотрен переходный режим:
+- Флаг настроек: `settings.diagnostics.implicit_console_lease` (по умолчанию `true`).
+- Если `lease_id` не передан в запросе, backend для пользователя с ролью `superuser` автоматически пытается неявно захватить аренду `scope: console`.
+- Первым сообщением в WebSocket клиенту отправляется идентификатор аренды:
+  ```json
+  {"type": "lease", "lease_id": "<uuid4>"}
+  ```
+- Если терминал занят другим пользователем, соединение закрывается с кодом `4409` (`lease_busy`).
+- После обновления MenuBuilder флаг `implicit_console_lease` будет переведён в `false`.
+
+---
+
+## 12. Связанные документы
 
 | Файл | Назначение |
 | :-- | :-- |
+| [`remote-input-protocol.md`](./remote-input-protocol.md) | Единая модель аренды (Lease Model), control-plane `ctl` |
 | [`mqtt_topic_rules.md`](./mqtt_topic_rules.md) | Правила топиков, включая `dev/<SN>/out` |
 | [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md) | Базовый RPC lifecycle `tsk`/`req`/`rsp`/`res`/`cmt` |
 | [`method-codes-reference.md`](./method-codes-reference.md) | Реестр `method_code`, включая `7000..7002` |

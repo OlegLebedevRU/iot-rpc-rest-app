@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from pydantic import ValidationError
@@ -21,6 +21,7 @@ from core.diagnostics.schemas import (
 from core.diagnostics.service import DeviceTaskDiagnosticTaskSender, DiagnosticService
 from core.diagnostics.sessions import DiagnosticSession, registry
 from core.logging_config import setup_module_logger
+from core.remote_input.leases import LeaseConflictError, lease_registry
 
 log = setup_module_logger(__name__, "api_internal_diagnostics.log")
 router = APIRouter(
@@ -28,6 +29,17 @@ router = APIRouter(
     tags=["Internal Diagnostics"],
     include_in_schema=False,
 )
+
+active_diagnostics_ws: dict[str, WebSocket] = {}
+
+
+async def close_diagnostics_ws_for_sn(sn: str, reason: str = "lease_revoked") -> None:
+    ws = active_diagnostics_ws.pop(sn, None)
+    if ws is not None:
+        try:
+            await ws.close(code=4409, reason=reason)
+        except Exception:
+            pass
 
 
 async def _resolve_websocket_org_id(websocket: WebSocket) -> int | None:
@@ -116,16 +128,80 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
+    caller_user_id = (
+        websocket.headers.get("X-User-Id")
+        or websocket.query_params.get("user_id")
+        or "superuser"
+    )
+    caller_session_id = websocket.headers.get(
+        "X-Session-Id"
+    ) or websocket.query_params.get("session_id")
+    lease_id_raw = websocket.query_params.get("lease_id") or websocket.headers.get(
+        "X-Lease-Id"
+    )
+
+    implicit_lease = False
+    if lease_id_raw:
+        try:
+            lease_id = UUID(lease_id_raw)
+        except ValueError:
+            await websocket.close(code=4409, reason="invalid_lease_id")
+            return
+
+        lease = await lease_registry.get(lease_id)
+        if lease is None or not lease.is_active() or lease.sn != sn:
+            await websocket.close(code=4409, reason="lease_inactive")
+            return
+        if lease.scope != "console":
+            await websocket.close(code=4409, reason="scope_mismatch")
+            return
+        if lease.owner_user_id != caller_user_id:
+            await websocket.close(code=4409, reason="lease_not_owner")
+            return
+        if caller_session_id and lease.owner_session_id != caller_session_id:
+            await websocket.close(code=4409, reason="lease_session_mismatch")
+            return
+    else:
+        if not settings.diagnostics.implicit_console_lease:
+            await websocket.close(code=4409, reason="lease_required")
+            return
+
+        device_id = (
+            await DeviceRepo.get_device_id(session=session, sn=sn, org_id=org_id) or 0
+        )
+        implicit_session = caller_session_id or str(uuid4())
+        try:
+            lease = await lease_registry.acquire(
+                org_id=org_id,
+                device_id=device_id,
+                sn=sn,
+                owner_user_id=caller_user_id,
+                owner_role="superuser",
+                ttl_sec=settings.remote_input.lease_ttl_sec,
+                scope="console",
+                owner_session_id=implicit_session,
+            )
+            implicit_lease = True
+        except LeaseConflictError:
+            await websocket.close(code=4409, reason="lease_busy")
+            return
+
     await websocket.accept()
+    active_diagnostics_ws[sn] = websocket
+    await lease_registry.mark_ws_connected(lease.lease_id)
+
+    if implicit_lease:
+        await websocket.send_json({"type": "lease", "lease_id": str(lease.lease_id)})
+
     service = DiagnosticService(
         registry,
         DeviceTaskDiagnosticTaskSender(session=session, org_id=org_id),
     )
     forwarders: dict[UUID, asyncio.Task] = {}
 
-    async def register_forwarder(session: DiagnosticSession) -> None:
-        forwarders[session.session_id] = asyncio.create_task(
-            _forward_session_queue(websocket, session, forwarders)
+    async def register_forwarder(diag_sess: DiagnosticSession) -> None:
+        forwarders[diag_sess.session_id] = asyncio.create_task(
+            _forward_session_queue(websocket, diag_sess, forwarders)
         )
 
     try:
@@ -141,8 +217,8 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
 
             try:
                 if message.type is BrowserMessageType.START_LOG:
-                    session = await service.start_log(sn, message)  # type: ignore[arg-type]
-                    await register_forwarder(session)
+                    diag_sess = await service.start_log(sn, message)  # type: ignore[arg-type]
+                    await register_forwarder(diag_sess)
                 elif message.type is BrowserMessageType.STOP_LOG:
                     stop_message = message
                     assert isinstance(stop_message, StopLogMessage)
@@ -153,8 +229,8 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
                 elif message.type is BrowserMessageType.EXEC:
                     exec_message = message
                     assert isinstance(exec_message, ExecDiagnosticMessage)
-                    session = await service.exec(sn, exec_message)
-                    await register_forwarder(session)
+                    diag_sess = await service.exec(sn, exec_message)
+                    await register_forwarder(diag_sess)
                 elif message.type is BrowserMessageType.CANCEL:
                     cancel_message = message
                     assert isinstance(cancel_message, CancelDiagnosticMessage)
@@ -167,6 +243,8 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
     except WebSocketDisconnect:
         log.info("Diagnostics websocket disconnected: sn=%s org_id=%s", sn, org_id)
     finally:
+        active_diagnostics_ws.pop(sn, None)
+        await lease_registry.mark_ws_disconnected(lease.lease_id)
         active_sessions = list(forwarders.items())
         forwarders.clear()
         for session_id, task in active_sessions:

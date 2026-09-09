@@ -1,17 +1,36 @@
 from __future__ import annotations
 
 import json
+from typing import Any
+
 from core.config import settings
 from core.logging_config import setup_module_logger
-from core.remote_input.schemas import MouseClickCommand, PointerMoveCommand
+from core.remote_input.schemas import (
+    InventoryGetCommand,
+    KeyEventCommand,
+    MouseClickCommand,
+    PointerMoveCommand,
+    StreamStartCommand,
+    StreamStopCommand,
+)
 from core.topologys.declare import topic_publisher
 
 log = setup_module_logger(__name__, "remote_input.log")
 
+CtlCommand = (
+    PointerMoveCommand
+    | MouseClickCommand
+    | InventoryGetCommand
+    | StreamStartCommand
+    | StreamStopCommand
+    | KeyEventCommand
+    | Any
+)
+
 
 async def send_ctl_command(
     sn: str,
-    command: PointerMoveCommand | MouseClickCommand,
+    command: CtlCommand,
     ttl_ms: int,
 ) -> None:
     message_dict = command.model_dump(mode="json")

@@ -5,6 +5,7 @@ from uuid import UUID
 
 from fastapi import (
     APIRouter,
+    HTTPException,
     Request,
     Response,
     WebSocket,
@@ -22,21 +23,30 @@ from api.internal_v1.internal_depends import (
 from core.config import settings
 from core.logging_config import setup_module_logger
 from core.remote_input.leases import lease_registry
-from core.remote_input.pending import pending_registry
 from core.remote_input.presence import presence_registry
-from core.remote_input.rate_limit import rate_limiter
 from core.remote_input.schemas import (
+    ALLOWED_VK_CODES,
     ClickRequest,
     ClickResult,
+    DeleteByOwnerRequest,
+    InventoryInfo,
+    KeyRequest,
+    KeyResult,
     LeaseRequest,
     LeaseResponse,
     MoveRequest,
+    ScopeUpgradeRequest,
     StatusResponse,
+    StreamStartRequest,
+    StreamStartResponse,
+    StreamStopResponse,
     WsClickResult,
     WsError,
     WsHello,
     WsInboundAdapter,
     WsKeepalive,
+    WsKeyEvent,
+    WsKeyResult,
     WsLeaseRevoked,
     WsLimits,
     WsMouseClick,
@@ -91,16 +101,43 @@ def extract_caller_user_id(request_or_ws: Request | WebSocket) -> str:
     return str(
         request_or_ws.headers.get("X-User-Id")
         or request_or_ws.headers.get("x-user-id")
+        or (
+            request_or_ws.query_params.get("user_id")
+            if hasattr(request_or_ws, "query_params")
+            else None
+        )
         or request_or_ws.headers.get("jwt-sub")
         or request_or_ws.headers.get("sub")
         or ""
     ).strip()
 
 
+def extract_caller_session_id(
+    request_or_ws: Request | WebSocket, required: bool = True
+) -> str:
+    session_id = (
+        request_or_ws.headers.get("X-Session-Id")
+        or request_or_ws.headers.get("x-session-id")
+        or (
+            request_or_ws.query_params.get("session_id")
+            if hasattr(request_or_ws, "query_params")
+            else None
+        )
+        or ""
+    ).strip()
+    if required and not session_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing required X-Session-Id header or session_id query param",
+        )
+    return session_id
+
+
 def verify_ws_internal_auth(ws: WebSocket) -> bool:
     key = (
         ws.headers.get("X-Internal-Service-Key")
         or ws.headers.get("x-internal-service-key")
+        or ws.query_params.get("internal_service_key")
         or ""
     )
     if not key:
@@ -142,6 +179,7 @@ async def acquire_lease(
     session: Session_dep,
     body: LeaseRequest | None = None,
 ) -> LeaseResponse:
+    session_id = extract_caller_session_id(request)
     caller_role = (
         body.owner_role if body and body.owner_role else None
     ) or extract_caller_role(request)
@@ -150,6 +188,8 @@ async def acquire_lease(
         or extract_caller_user_id(request)
         or "unknown"
     )
+    scope = body.scope if body else "input"
+    ttl_sec = body.ttl_sec if body else None
 
     return await remote_input_service.acquire_lease(
         session=session,
@@ -157,6 +197,36 @@ async def acquire_lease(
         org_id=org_id,
         owner_user_id=caller_user_id,
         owner_role=caller_role,
+        scope=scope,
+        owner_session_id=session_id,
+        ttl_sec=ttl_sec,
+        is_superuser=is_request_superuser(request),
+    )
+
+
+@router.post(
+    "/lease/{lease_id}/scope",
+    response_model=LeaseResponse,
+)
+async def upgrade_lease_scope(
+    lease_id: UUID,
+    body: ScopeUpgradeRequest,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    request: Request,
+) -> LeaseResponse:
+    session_id = extract_caller_session_id(request)
+    caller_user_id = extract_caller_user_id(request)
+    caller_role = extract_caller_role(request)
+
+    return await remote_input_service.upgrade_scope(
+        lease_id=lease_id,
+        org_id=org_id,
+        new_scope=body.scope,
+        caller_user_id=caller_user_id,
+        caller_session_id=session_id,
+        caller_role=caller_role,
+        is_superuser=is_request_superuser(request),
     )
 
 
@@ -170,9 +240,14 @@ async def keepalive_lease(
     _: Internal_Auth_dep,
     request: Request,
 ) -> LeaseResponse:
+    session_id = extract_caller_session_id(request)
+    caller_user_id = extract_caller_user_id(request)
+
     return await remote_input_service.keepalive(
         lease_id=lease_id,
         org_id=org_id,
+        caller_user_id=caller_user_id,
+        caller_session_id=session_id,
         is_superuser=is_request_superuser(request),
     )
 
@@ -187,16 +262,112 @@ async def release_lease(
     _: Internal_Auth_dep,
     request: Request,
 ) -> Response:
+    session_id = extract_caller_session_id(request)
+    caller_user_id = extract_caller_user_id(request)
+
     await remote_input_service.release(
         lease_id=lease_id,
         org_id=org_id,
+        caller_user_id=caller_user_id,
+        caller_session_id=session_id,
         is_superuser=is_request_superuser(request),
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.delete(
+    "/leases/by-owner",
+)
+async def delete_leases_by_owner(
+    body: DeleteByOwnerRequest,
+    _: Internal_Auth_dep,
+) -> dict[str, int]:
+    return await remote_input_service.release_by_owner(
+        user_id=body.user_id,
+        session_id=body.session_id,
+    )
+
+
+@router.get(
+    "/devices/{sn}/inventory",
+    response_model=InventoryInfo,
+)
+async def get_device_inventory(
+    sn: str,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    session: Session_dep,
+    request: Request,
+    refresh: int = 0,
+) -> InventoryInfo:
+    caller_user_id = extract_caller_user_id(request)
+    session_id = extract_caller_session_id(request, required=False)
+
+    return await remote_input_service.get_inventory(
+        session=session,
+        sn=sn,
+        org_id=org_id,
+        refresh=bool(refresh),
+        caller_user_id=caller_user_id,
+        caller_session_id=session_id,
+        is_superuser=is_request_superuser(request),
+    )
+
+
+@router.post(
+    "/lease/{lease_id}/stream/start",
+    response_model=StreamStartResponse,
+)
+async def post_stream_start(
+    lease_id: UUID,
+    body: StreamStartRequest,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    request: Request,
+) -> StreamStartResponse:
+    session_id = extract_caller_session_id(request)
+    caller_user_id = extract_caller_user_id(request)
+
+    return await remote_input_service.stream_start(
+        lease_id=lease_id,
+        org_id=org_id,
+        mode=body.mode,
+        source_id=body.source_id,
+        profile=body.profile,
+        caller_user_id=caller_user_id,
+        caller_session_id=session_id,
+        is_superuser=is_request_superuser(request),
+    )
+
+
+@router.post(
+    "/lease/{lease_id}/stream/stop",
+    response_model=StreamStopResponse,
+)
+async def post_stream_stop(
+    lease_id: UUID,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    request: Request,
+) -> StreamStopResponse:
+    session_id = extract_caller_session_id(request)
+    caller_user_id = extract_caller_user_id(request)
+
+    return await remote_input_service.stream_stop(
+        lease_id=lease_id,
+        org_id=org_id,
+        caller_user_id=caller_user_id,
+        caller_session_id=session_id,
+        is_superuser=is_request_superuser(request),
+    )
+
+
 @router.post(
     "/lease/{lease_id}/pointer-move",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+@router.post(
+    "/lease/{lease_id}/pointer/move",
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def post_pointer_move(
@@ -206,17 +377,28 @@ async def post_pointer_move(
     _: Internal_Auth_dep,
     request: Request,
 ) -> dict[str, bool]:
+    session_id = extract_caller_session_id(request)
+    caller_user_id = extract_caller_user_id(request)
+
     return await remote_input_service.pointer_move(
         lease_id=lease_id,
         org_id=org_id,
         x=body.x,
         y=body.y,
+        desktop_id=body.desktop_id,
+        stream_instance_id=body.stream_instance_id,
+        caller_user_id=caller_user_id,
+        caller_session_id=session_id,
         is_superuser=is_request_superuser(request),
     )
 
 
 @router.post(
     "/lease/{lease_id}/mouse-click",
+    response_model=ClickResult,
+)
+@router.post(
+    "/lease/{lease_id}/mouse/click",
     response_model=ClickResult,
 )
 async def post_mouse_click(
@@ -226,6 +408,9 @@ async def post_mouse_click(
     _: Internal_Auth_dep,
     request: Request,
 ) -> ClickResult:
+    session_id = extract_caller_session_id(request)
+    caller_user_id = extract_caller_user_id(request)
+
     return await remote_input_service.mouse_click(
         lease_id=lease_id,
         org_id=org_id,
@@ -233,6 +418,39 @@ async def post_mouse_click(
         y=body.y,
         button=body.button,
         client_ref=body.client_ref,
+        desktop_id=body.desktop_id,
+        stream_instance_id=body.stream_instance_id,
+        caller_user_id=caller_user_id,
+        caller_session_id=session_id,
+        is_superuser=is_request_superuser(request),
+    )
+
+
+@router.post(
+    "/lease/{lease_id}/key",
+    response_model=KeyResult,
+)
+async def post_key_event(
+    lease_id: UUID,
+    body: KeyRequest,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    request: Request,
+) -> KeyResult:
+    session_id = extract_caller_session_id(request)
+    caller_user_id = extract_caller_user_id(request)
+
+    return await remote_input_service.key_event(
+        lease_id=lease_id,
+        org_id=org_id,
+        kind=body.kind,
+        vk=body.vk,
+        text=body.text,
+        client_ref=body.client_ref,
+        desktop_id=body.desktop_id,
+        stream_instance_id=body.stream_instance_id,
+        caller_user_id=caller_user_id,
+        caller_session_id=session_id,
         is_superuser=is_request_superuser(request),
     )
 
@@ -251,17 +469,7 @@ async def remote_input_ws(
         await websocket.close(code=4403)
         return
 
-    # 2. Caller Role Verification
-    caller_role = extract_caller_role(websocket)
-    is_su = is_request_superuser(websocket)
-    if (caller_role in ("viewer", "4")) and not is_su:
-        log.warning(
-            "Rejecting remote input WS: caller role '%s' not allowed", caller_role
-        )
-        await websocket.close(code=4403)
-        return
-
-    # 3. Lease Lookup & Expiry Check
+    # 2. Lease Lookup & Expiry Check
     lease = await lease_registry.get(lease_id)
     if lease is None or not lease.is_active():
         log.warning(
@@ -269,6 +477,21 @@ async def remote_input_ws(
         )
         await websocket.close(code=4404)
         return
+
+    caller_role = extract_caller_role(websocket)
+    caller_user_id = extract_caller_user_id(websocket)
+    caller_session_id = extract_caller_session_id(websocket, required=False)
+    is_su = is_request_superuser(websocket)
+
+    # 3. Caller Role & Scope Verification
+    if not is_su:
+        if caller_role in ("viewer", "4") and lease.scope != "view":
+            log.warning(
+                "Rejecting remote input WS: viewer role not allowed for scope %s",
+                lease.scope,
+            )
+            await websocket.close(code=4403)
+            return
 
     # 4. Tenant & User Verification
     raw_org = (
@@ -291,12 +514,20 @@ async def remote_input_ws(
             await websocket.close(code=4403)
             return
 
-        caller_user_id = extract_caller_user_id(websocket)
         if caller_user_id and caller_user_id != lease.owner_user_id:
             log.warning(
                 "Rejecting remote input WS: user mismatch caller=%s owner=%s",
                 caller_user_id,
                 lease.owner_user_id,
+            )
+            await websocket.close(code=4403)
+            return
+
+        if caller_session_id and caller_session_id != lease.owner_session_id:
+            log.warning(
+                "Rejecting remote input WS: session mismatch caller=%s owner=%s",
+                caller_session_id,
+                lease.owner_session_id,
             )
             await websocket.close(code=4403)
             return
@@ -318,6 +549,7 @@ async def remote_input_ws(
     move_queue: asyncio.Queue[WsPointerMove] = asyncio.Queue(maxsize=1)
 
     presence_queue = await presence_registry.subscribe(lease.sn)
+    stream_queue = await presence_registry.subscribe_stream(lease.sn)
     revocation_queue = await lease_registry.subscribe_revocation(lease_id)
 
     async def sender_worker() -> None:
@@ -328,90 +560,89 @@ async def remote_input_ws(
                 break
             try:
                 await websocket.send_json(item)
-            except Exception as e:
-                log.debug("WS send_json error: %s", e)
+            except Exception as exc:
+                log.debug("Sender worker failed to send WS message: %s", exc)
                 outgoing_queue.task_done()
                 break
-            outgoing_queue.task_done()
+            finally:
+                outgoing_queue.task_done()
 
-    async def move_worker() -> None:
+    async def pointer_move_worker() -> None:
         while True:
-            cmd = await move_queue.get()
+            msg = await move_queue.get()
             try:
                 await remote_input_service.pointer_move(
-                    lease_id=lease.lease_id,
+                    lease_id=lease_id,
                     org_id=lease.org_id,
-                    x=cmd.x,
-                    y=cmd.y,
+                    x=msg.x,
+                    y=msg.y,
+                    desktop_id=msg.desktop_id,
+                    stream_instance_id=msg.stream_instance_id,
+                    caller_user_id=lease.owner_user_id,
+                    caller_session_id=lease.owner_session_id,
                     is_superuser=True,
-                    skip_rate_limit=True,
+                    skip_rate_limit=False,
+                )
+            except HTTPException as exc:
+                code_str = (
+                    "rate_limited"
+                    if exc.status_code == 429
+                    else str(exc.detail) if isinstance(exc.detail, str) else "error"
+                )
+                await outgoing_queue.put(
+                    WsError(
+                        code=code_str,
+                        message=str(exc.detail),
+                    ).model_dump(mode="json")
                 )
             except Exception as exc:
-                log.debug("WS move_worker send error: %s", exc)
-            move_queue.task_done()
+                log.warning("Pointer move worker error: %s", exc)
+            finally:
+                move_queue.task_done()
 
     async def presence_worker() -> None:
         while True:
-            agent_view = await presence_queue.get()
-            msg = WsPresence(
-                online=agent_view.online,
-                desktop_available=agent_view.desktop_available,
-                screen=agent_view.screen,
-                last_seen_at=agent_view.last_seen_at,
-                stale=agent_view.stale,
-            ).model_dump(mode="json")
-            await outgoing_queue.put(msg)
-            presence_queue.task_done()
+            view = await presence_queue.get()
+            try:
+                ws_presence = WsPresence(
+                    online=view.online,
+                    desktop_available=view.desktop_available,
+                    session_id=view.session_id,
+                    screen=view.screen,
+                    inventory=view.inventory,
+                    stream=view.stream,
+                    last_seen_at=view.last_seen_at,
+                    stale=view.stale,
+                )
+                await outgoing_queue.put(ws_presence.model_dump(mode="json"))
+            finally:
+                presence_queue.task_done()
+
+    async def stream_worker() -> None:
+        while True:
+            st_evt = await stream_queue.get()
+            try:
+                await outgoing_queue.put(st_evt.model_dump(mode="json"))
+            finally:
+                stream_queue.task_done()
 
     async def revocation_worker() -> None:
-        if revocation_queue is None:
-            return
         reason = await revocation_queue.get()
-        msg = WsLeaseRevoked(reason=reason).model_dump(mode="json")
-        await outgoing_queue.put(msg)
-        revocation_queue.task_done()
-        # Wait a moment for sender to deliver and close WS
-        await asyncio.sleep(0.05)
         try:
-            await websocket.close(code=1000)
-        except Exception:
-            pass
+            await outgoing_queue.put(
+                WsLeaseRevoked(reason=reason).model_dump(mode="json")
+            )
+            await outgoing_queue.put(None)
+        finally:
+            revocation_queue.task_done()
 
-    async def execute_ws_click(click_cmd: WsMouseClick) -> None:
-        allowed = await rate_limiter.check_rate_limit(
-            lease_id, "mouse_click", settings.remote_input.click_rate_per_sec
-        )
-        if not allowed:
-            err = WsError(
-                code="rate_limited",
-                message="Click rate limit exceeded",
-                client_ref=click_cmd.client_ref,
-            ).model_dump(mode="json")
-            await outgoing_queue.put(err)
-            return
+    sender_task = asyncio.create_task(sender_worker())
+    move_task = asyncio.create_task(pointer_move_worker())
+    presence_task = asyncio.create_task(presence_worker())
+    stream_task = asyncio.create_task(stream_worker())
+    revocation_task = asyncio.create_task(revocation_worker())
 
-        res = await remote_input_service.mouse_click(
-            lease_id=lease.lease_id,
-            org_id=lease.org_id,
-            x=click_cmd.x,
-            y=click_cmd.y,
-            button=click_cmd.button,
-            client_ref=click_cmd.client_ref,
-            is_superuser=True,
-            skip_rate_limit=True,
-        )
-
-        out_msg = WsClickResult(
-            command_id=res.command_id,
-            client_ref=click_cmd.client_ref,
-            result=res.result,
-            code=res.code,
-            message=res.message,
-            latency_ms=res.latency_ms,
-        ).model_dump(mode="json")
-        await outgoing_queue.put(out_msg)
-
-    # 6. Send Initial hello and presence
+    # Send WsHello initial message
     hello = WsHello(
         lease_id=lease.lease_id,
         sn=lease.sn,
@@ -421,115 +652,273 @@ async def remote_input_ws(
             move_per_sec=settings.remote_input.move_rate_per_sec,
             click_per_sec=settings.remote_input.click_rate_per_sec,
         ),
-    ).model_dump(mode="json")
-    await outgoing_queue.put(hello)
+    )
+    await outgoing_queue.put(hello.model_dump(mode="json"))
 
     initial_presence = await presence_registry.get(lease.sn)
     pres_msg = WsPresence(
         online=initial_presence.online,
         desktop_available=initial_presence.desktop_available,
+        session_id=initial_presence.session_id,
         screen=initial_presence.screen,
+        inventory=initial_presence.inventory,
+        stream=initial_presence.stream,
         last_seen_at=initial_presence.last_seen_at,
         stale=initial_presence.stale,
-    ).model_dump(mode="json")
-    await outgoing_queue.put(pres_msg)
-
-    tasks = [
-        asyncio.create_task(sender_worker(), name="ws-sender"),
-        asyncio.create_task(move_worker(), name="ws-move"),
-        asyncio.create_task(presence_worker(), name="ws-presence"),
-        asyncio.create_task(revocation_worker(), name="ws-revocation"),
-    ]
+    )
+    await outgoing_queue.put(pres_msg.model_dump(mode="json"))
 
     try:
         while True:
-            message_text = await websocket.receive_text()
-            if (
-                len(message_text.encode("utf-8"))
-                > settings.remote_input.max_inbound_payload_bytes
-            ):
+            raw_text = await websocket.receive_text()
+            if len(raw_text) > settings.remote_input.max_command_payload_bytes:
                 await outgoing_queue.put(
                     WsError(
                         code="payload_too_large",
-                        message="Payload size exceeds limit",
+                        message="Payload exceeds maximum allowed size",
                     ).model_dump(mode="json")
                 )
                 continue
 
-            # Any incoming message is implicit keepalive
-            await lease_registry.touch(lease_id, settings.remote_input.lease_ttl_sec)
-
             try:
-                cmd = WsInboundAdapter.validate_json(message_text)
-            except (ValidationError, ValueError) as err:
+                msg = WsInboundAdapter.validate_json(raw_text)
+            except ValidationError as exc:
                 await outgoing_queue.put(
                     WsError(
                         code="invalid_message",
-                        message=str(err),
+                        message=f"Validation failed: {exc}",
                     ).model_dump(mode="json")
                 )
                 continue
 
-            if isinstance(cmd, WsPointerMove):
-                allowed = await rate_limiter.check_rate_limit(
-                    lease_id,
-                    "pointer_move",
-                    settings.remote_input.move_rate_per_sec,
-                )
-                if not allowed:
+            # Scope view check: view is read-only
+            if lease.scope == "view":
+                if isinstance(msg, WsKeepalive):
+                    await remote_input_service.keepalive(
+                        lease_id=lease_id,
+                        org_id=lease.org_id,
+                        caller_user_id=lease.owner_user_id,
+                        caller_session_id=lease.owner_session_id,
+                        is_superuser=True,
+                    )
+                elif isinstance(msg, WsRelease):
+                    await remote_input_service.release(
+                        lease_id=lease_id,
+                        org_id=lease.org_id,
+                        caller_user_id=lease.owner_user_id,
+                        caller_session_id=lease.owner_session_id,
+                        is_superuser=True,
+                    )
+                    break
+                else:
                     await outgoing_queue.put(
                         WsError(
-                            code="rate_limited",
-                            message="Pointer move rate limit exceeded",
+                            code="scope_not_allowed",
+                            message="Input commands not allowed in view scope",
+                        ).model_dump(mode="json")
+                    )
+                continue
+
+            if isinstance(msg, WsPointerMove):
+                if lease.scope != "input":
+                    await outgoing_queue.put(
+                        WsError(
+                            code="scope_not_allowed",
+                            message="Pointer move not allowed for non-input scope",
                         ).model_dump(mode="json")
                     )
                     continue
 
-                # Latest-wins: if queue is full, drop previous move
+                if lease.stream_mode != "desktop":
+                    await outgoing_queue.put(
+                        WsError(
+                            code="input_not_allowed_in_camera_mode",
+                            message="Pointer move only allowed in desktop mode",
+                        ).model_dump(mode="json")
+                    )
+                    continue
+
                 if move_queue.full():
                     try:
                         move_queue.get_nowait()
                         move_queue.task_done()
-                    except asyncio.QueueEmpty, ValueError:
+                    except asyncio.QueueEmpty:
                         pass
-                move_queue.put_nowait(cmd)
+                await move_queue.put(msg)
 
-            elif isinstance(cmd, WsMouseClick):
-                # Run concurrently so clicks don't block pointer moves
-                asyncio.create_task(execute_ws_click(cmd))
+            elif isinstance(msg, WsMouseClick):
+                if lease.scope != "input":
+                    await outgoing_queue.put(
+                        WsError(
+                            code="scope_not_allowed",
+                            message="Mouse click not allowed for non-input scope",
+                            client_ref=msg.client_ref,
+                        ).model_dump(mode="json")
+                    )
+                    continue
 
-            elif isinstance(cmd, WsKeepalive):
-                pass  # Already touched above
+                if lease.stream_mode != "desktop":
+                    await outgoing_queue.put(
+                        WsError(
+                            code="input_not_allowed_in_camera_mode",
+                            message="Mouse click only allowed in desktop mode",
+                            client_ref=msg.client_ref,
+                        ).model_dump(mode="json")
+                    )
+                    continue
 
-            elif isinstance(cmd, WsRelease):
-                await remote_input_service.release(
-                    lease_id=lease.lease_id,
+                try:
+                    click_res = await remote_input_service.mouse_click(
+                        lease_id=lease_id,
+                        org_id=lease.org_id,
+                        x=msg.x,
+                        y=msg.y,
+                        button=msg.button,
+                        client_ref=msg.client_ref,
+                        desktop_id=msg.desktop_id,
+                        stream_instance_id=msg.stream_instance_id,
+                        caller_user_id=lease.owner_user_id,
+                        caller_session_id=lease.owner_session_id,
+                        is_superuser=True,
+                        skip_rate_limit=False,
+                    )
+                    ws_res = WsClickResult(
+                        command_id=click_res.command_id,
+                        client_ref=click_res.client_ref,
+                        result=click_res.result,
+                        code=click_res.code,
+                        message=click_res.message,
+                        latency_ms=click_res.latency_ms,
+                    )
+                    await outgoing_queue.put(ws_res.model_dump(mode="json"))
+                except HTTPException as exc:
+                    code_str = (
+                        "rate_limited"
+                        if exc.status_code == 429
+                        else str(exc.detail) if isinstance(exc.detail, str) else "error"
+                    )
+                    await outgoing_queue.put(
+                        WsError(
+                            code=code_str,
+                            message=str(exc.detail),
+                            client_ref=msg.client_ref,
+                        ).model_dump(mode="json")
+                    )
+
+            elif isinstance(msg, WsKeyEvent):
+                if lease.scope != "input":
+                    await outgoing_queue.put(
+                        WsError(
+                            code="scope_not_allowed",
+                            message="Key event not allowed for non-input scope",
+                            client_ref=msg.client_ref,
+                        ).model_dump(mode="json")
+                    )
+                    continue
+
+                if lease.stream_mode != "desktop":
+                    await outgoing_queue.put(
+                        WsError(
+                            code="input_not_allowed_in_camera_mode",
+                            message="Key event only allowed in desktop mode",
+                            client_ref=msg.client_ref,
+                        ).model_dump(mode="json")
+                    )
+                    continue
+
+                if msg.vk not in ALLOWED_VK_CODES:
+                    await outgoing_queue.put(
+                        WsError(
+                            code="vk_not_allowed",
+                            message=f"Virtual key code {msg.vk} is not in whitelist",
+                            client_ref=msg.client_ref,
+                        ).model_dump(mode="json")
+                    )
+                    continue
+
+                try:
+                    key_res = await remote_input_service.key_event(
+                        lease_id=lease_id,
+                        org_id=lease.org_id,
+                        kind=msg.kind,
+                        vk=msg.vk,
+                        text=msg.text,
+                        client_ref=msg.client_ref,
+                        desktop_id=msg.desktop_id,
+                        stream_instance_id=msg.stream_instance_id,
+                        caller_user_id=lease.owner_user_id,
+                        caller_session_id=lease.owner_session_id,
+                        is_superuser=True,
+                        skip_rate_limit=False,
+                    )
+                    ws_k_res = WsKeyResult(
+                        command_id=key_res.command_id,
+                        client_ref=key_res.client_ref,
+                        result=key_res.result,
+                        code=key_res.code,
+                        message=key_res.message,
+                        latency_ms=key_res.latency_ms,
+                    )
+                    await outgoing_queue.put(ws_k_res.model_dump(mode="json"))
+                except HTTPException as exc:
+                    code_str = (
+                        "rate_limited"
+                        if exc.status_code == 429
+                        else str(exc.detail) if isinstance(exc.detail, str) else "error"
+                    )
+                    await outgoing_queue.put(
+                        WsError(
+                            code=code_str,
+                            message=str(exc.detail),
+                            client_ref=msg.client_ref,
+                        ).model_dump(mode="json")
+                    )
+
+            elif isinstance(msg, WsKeepalive):
+                await remote_input_service.keepalive(
+                    lease_id=lease_id,
                     org_id=lease.org_id,
+                    caller_user_id=lease.owner_user_id,
+                    caller_session_id=lease.owner_session_id,
+                    is_superuser=True,
+                )
+
+            elif isinstance(msg, WsRelease):
+                await remote_input_service.release(
+                    lease_id=lease_id,
+                    org_id=lease.org_id,
+                    caller_user_id=lease.owner_user_id,
+                    caller_session_id=lease.owner_session_id,
                     is_superuser=True,
                 )
                 break
 
     except WebSocketDisconnect:
-        log.info("Remote input WS disconnected for lease=%s", lease_id)
+        log.info("Remote input WS disconnected: lease_id=%s", lease_id)
     except Exception as exc:
-        log.warning("Remote input WS exception for lease=%s: %s", lease_id, exc)
+        log.warning("Remote input WS error for lease_id=%s: %s", lease_id, exc)
     finally:
-        # Allow sender worker to flush outgoing queue
+        # Give pending outgoing messages a moment to dispatch
         try:
-            await asyncio.wait_for(outgoing_queue.join(), timeout=0.5)
+            await asyncio.sleep(0.01)
         except Exception:
             pass
 
-        for t in tasks:
+        for t in (
+            sender_task,
+            move_task,
+            presence_task,
+            stream_task,
+            revocation_task,
+        ):
             t.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
 
-        await lease_registry.mark_ws_disconnected(lease_id)
+        await presence_registry.unsubscribe_stream(lease.sn, stream_queue)
         await presence_registry.unsubscribe(lease.sn, presence_queue)
-        if revocation_queue is not None:
-            await lease_registry.unsubscribe_revocation(lease_id, revocation_queue)
+        await lease_registry.unsubscribe_revocation(lease_id, revocation_queue)
+        await lease_registry.mark_ws_disconnected(lease_id)
 
-        # On WS disconnect: release lease and cancel pending
-        await lease_registry.revoke(lease_id, reason="released")
-        await pending_registry.cancel_for_lease(lease_id, reason="released")
-        await rate_limiter.cleanup_lease(lease_id)
+        try:
+            await websocket.close()
+        except Exception:
+            pass

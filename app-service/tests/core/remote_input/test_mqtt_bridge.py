@@ -58,6 +58,99 @@ async def test_handle_device_ctl_message_presence():
 
 
 @pytest.mark.asyncio
+async def test_handle_device_ctl_message_presence_with_inventory_and_stream():
+    p_reg = PresenceRegistry()
+    cmd_reg = PendingCommandRegistry()
+
+    payload = json.dumps(
+        {
+            "v": 1,
+            "type": "presence",
+            "agent": "l4desk",
+            "status": "online",
+            "desktop_available": True,
+            "session_id": 1,
+            "timestamp": "2026-09-09T00:00:00Z",
+            "inventory": {
+                "displays": [
+                    {
+                        "desktop_id": "disp:1",
+                        "name": r"\\.\DISPLAY1",
+                        "primary": True,
+                        "x": 0,
+                        "y": 0,
+                        "width": 1920,
+                        "height": 1080,
+                        "session_id": 1,
+                        "policy": "input",
+                    }
+                ],
+                "cameras": [
+                    {
+                        "camera_id": "cam:1",
+                        "name": "USB Camera",
+                        "available": True,
+                    }
+                ],
+            },
+            "stream": {
+                "state": "running",
+                "mode": "desktop",
+                "source_id": "disp:1",
+                "profile": "default",
+                "restart_count": 0,
+            },
+        }
+    ).encode("utf-8")
+
+    res = await handle_device_ctl_message(
+        routing_key="dev.SNTEST1.ctl",
+        payload=payload,
+        p_registry=p_reg,
+        cmd_registry=cmd_reg,
+    )
+    assert res is True
+
+    view = await p_reg.get("SNTEST1")
+    assert view.online is True
+    assert view.inventory is not None
+    assert len(view.inventory.displays) == 1
+    assert view.inventory.displays[0].desktop_id == "disp:1"
+    assert view.stream is not None
+    assert view.stream.state == "running"
+
+
+@pytest.mark.asyncio
+async def test_handle_device_ctl_message_stream_event():
+    p_reg = PresenceRegistry()
+    cmd_reg = PendingCommandRegistry()
+
+    stream_id = uuid4()
+    payload = json.dumps(
+        {
+            "v": 1,
+            "type": "stream_event",
+            "stream_instance_id": str(stream_id),
+            "state": "running",
+            "reason": None,
+            "timestamp": "2026-09-09T00:00:05Z",
+        }
+    ).encode("utf-8")
+
+    res = await handle_device_ctl_message(
+        routing_key="dev.SNTEST1.ctl",
+        payload=payload,
+        p_registry=p_reg,
+        cmd_registry=cmd_reg,
+    )
+    assert res is True
+
+    stream_info = await p_reg.get_stream("SNTEST1")
+    assert stream_info.state == "running"
+    assert stream_info.stream_instance_id == stream_id
+
+
+@pytest.mark.asyncio
 async def test_handle_device_ctl_message_ack_resolves_pending():
     p_reg = PresenceRegistry()
     cmd_reg = PendingCommandRegistry()
@@ -139,8 +232,8 @@ async def test_handle_device_ctl_message_oversized_payload():
     p_reg = PresenceRegistry()
     cmd_reg = PendingCommandRegistry()
 
-    # Max inbound payload is 2048 bytes
-    oversized = b"{" + b"a" * 2500 + b"}"
+    # Max inbound payload is 65536 bytes
+    oversized = b"{" + b"a" * 70000 + b"}"
     handled = await handle_device_ctl_message(
         routing_key="dev.SN1.ctl",
         payload=oversized,

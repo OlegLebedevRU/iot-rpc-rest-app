@@ -109,3 +109,4 @@ class DiagnosticsSessionRegistry:
 
 
 registry = DiagnosticsSessionRegistry()
+diagnostics_session_registry = registry
