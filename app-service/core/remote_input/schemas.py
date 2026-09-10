@@ -65,6 +65,8 @@ AckResult = Literal[
     "switched",
     "stopped",
     "already_stopped",
+    "inventory",
+    "nack",
 ]
 
 
@@ -107,13 +109,13 @@ class InventoryInfo(StrictBaseModel):
 
 class StreamInfo(StrictBaseModel):
     state: StreamState = "stopped"
-    mode: StreamMode = "stopped"
+    mode: StreamMode | Literal[""] = "stopped"
     source_id: str | None = None
-    stream_instance_id: UUID | None = None
+    stream_instance_id: UUID | Literal[""] | None = None
     profile: str = "default"
     reason: str | None = None
     ffmpeg_pid: int | None = None
-    started_at: str | None = None
+    started_at: str | int | None = None
     restart_count: int = 0
 
 
@@ -209,6 +211,8 @@ class CtlAck(StrictBaseModel):
     lease_id: UUID | None = None
     sn: str
     result: AckResult = "injected"
+    code: NackCode | str | None = None
+    message: str | None = None
     terminal_time_ms: int | None = None
     stream_instance_id: UUID | None = None
     state: StreamState | None = None

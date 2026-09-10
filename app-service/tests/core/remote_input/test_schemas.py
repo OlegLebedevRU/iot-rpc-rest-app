@@ -19,6 +19,7 @@ from core.remote_input.schemas import (
     PointerMoveCommand,
     StreamStartCommand,
     StreamStopCommand,
+    StreamInfo,
     WsInboundAdapter,
     WsKeyEvent,
     WsMouseClick,
@@ -396,3 +397,96 @@ def test_ws_inbound_adapter():
     # Unsupported type
     with pytest.raises(ValidationError):
         WsInboundAdapter.validate_json(b'{"type": "invalid_type"}')
+
+
+def test_ctl_ack_with_nack_result_compatibility():
+    # Terminal l4desk sends nack as type="ack", result="nack"
+    raw = {
+        "v": 1,
+        "type": "ack",
+        "command_id": str(uuid4()),
+        "lease_id": str(uuid4()),
+        "sn": "a4b0000773c82116d210826",
+        "result": "nack",
+        "code": "unsupported",
+        "message": "Unsupported command type",
+        "terminal_time_ms": 1726000000000,
+    }
+    ack = CtlInboundAdapter.validate_json(json.dumps(raw).encode("utf-8"))
+    assert isinstance(ack, CtlAck)
+    assert ack.result == "nack"
+    assert ack.code == "unsupported"
+    assert ack.message == "Unsupported command type"
+
+
+def test_ctl_ack_with_inventory_result():
+    raw = {
+        "v": 1,
+        "type": "ack",
+        "command_id": str(uuid4()),
+        "lease_id": str(uuid4()),
+        "sn": "a4b0000773c82116d210826",
+        "result": "inventory",
+        "inventory": {
+            "displays": [
+                {
+                    "desktop_id": "0",
+                    "name": "Screen 1",
+                    "primary": True,
+                    "x": 0,
+                    "y": 0,
+                    "width": 1920,
+                    "height": 1080,
+                }
+            ],
+            "cameras": [],
+        },
+    }
+    ack = CtlInboundAdapter.validate_json(json.dumps(raw).encode("utf-8"))
+    assert isinstance(ack, CtlAck)
+    assert ack.result == "inventory"
+    assert ack.inventory is not None
+    assert len(ack.inventory.displays) == 1
+
+
+def test_stream_info_flexibility_empty_values_and_int_timestamp():
+    # Empty mode and empty stream_instance_id, integer started_at
+    info = StreamInfo(
+        state="stopped",
+        mode="",
+        stream_instance_id="",
+        started_at=1726000000,
+    )
+    assert info.mode == ""
+    assert info.stream_instance_id == ""
+    assert info.started_at == 1726000000
+
+    # Also test parsing from JSON / presence with empty strings and int started_at
+    raw_presence = {
+        "v": 1,
+        "type": "presence",
+        "status": "online",
+        "desktop_available": True,
+        "timestamp": "2026-09-10T12:00:00Z",
+        "stream": {
+            "state": "stopped",
+            "mode": "",
+            "source_id": None,
+            "stream_instance_id": "",
+            "profile": "default",
+            "reason": None,
+            "ffmpeg_pid": None,
+            "started_at": 1726000000,
+            "restart_count": 0,
+        },
+    }
+    presence = CtlInboundAdapter.validate_json(json.dumps(raw_presence).encode("utf-8"))
+    assert isinstance(presence, CtlPresence)
+    assert presence.stream is not None
+    assert presence.stream.mode == ""
+    assert presence.stream.stream_instance_id == ""
+    assert presence.stream.started_at == 1726000000
+
+    # Test with string started_at
+    info_str = StreamInfo(started_at="2026-09-10T12:00:00Z")
+    assert info_str.started_at == "2026-09-10T12:00:00Z"

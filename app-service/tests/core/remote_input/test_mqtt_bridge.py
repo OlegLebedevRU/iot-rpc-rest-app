@@ -241,3 +241,86 @@ async def test_handle_device_ctl_message_oversized_payload():
         cmd_registry=cmd_reg,
     )
     assert handled is False
+
+
+@pytest.mark.asyncio
+async def test_handle_device_ctl_message_ack_nack_resolves_pending():
+    p_reg = PresenceRegistry()
+    cmd_reg = PendingCommandRegistry()
+
+    cid = uuid4()
+    lid = uuid4()
+    sn = "SNTEST1"
+
+    fut = await cmd_reg.register(
+        command_id=cid, lease_id=lid, sn=sn, cmd_type="stream_start"
+    )
+
+    payload = json.dumps(
+        {
+            "v": 1,
+            "type": "ack",
+            "command_id": str(cid),
+            "lease_id": str(lid),
+            "sn": sn,
+            "result": "nack",
+            "code": "unsupported",
+            "message": "Unsupported command type",
+            "terminal_time_ms": 1234567,
+        }
+    ).encode("utf-8")
+
+    res = await handle_device_ctl_message(
+        routing_key=f"dev.{sn}.ctl",
+        payload=payload,
+        p_registry=p_reg,
+        cmd_registry=cmd_reg,
+    )
+    assert res is True
+    assert fut.done()
+    p_res = fut.result()
+    assert p_res.result == "nack"
+    assert p_res.code == "unsupported"
+    assert p_res.message == "Unsupported command type"
+
+
+@pytest.mark.asyncio
+async def test_presence_fallback_inventory_from_screen():
+    p_reg = PresenceRegistry()
+    sn = "SNTEST_SCREEN"
+
+    payload = json.dumps(
+        {
+            "v": 1,
+            "type": "presence",
+            "status": "online",
+            "desktop_available": True,
+            "timestamp": "2026-09-10T12:00:00Z",
+            "screen": {
+                "virtual_x": 0,
+                "virtual_y": 0,
+                "virtual_width": 4920,
+                "virtual_height": 1080,
+            },
+        }
+    ).encode("utf-8")
+
+    res = await handle_device_ctl_message(
+        routing_key=f"dev.{sn}.ctl",
+        payload=payload,
+        p_registry=p_reg,
+        cmd_registry=PendingCommandRegistry(),
+    )
+    assert res is True
+
+    inv = await p_reg.get_inventory(sn)
+    assert len(inv.displays) == 1
+    assert inv.displays[0].desktop_id == "0"
+    assert inv.displays[0].width == 4920
+    assert inv.displays[0].height == 1080
+    assert inv.displays[0].primary is True
+
+    status_view = await p_reg.get(sn)
+    assert status_view.inventory is not None
+    assert len(status_view.inventory.displays) == 1
+    assert status_view.inventory.displays[0].desktop_id == "0"

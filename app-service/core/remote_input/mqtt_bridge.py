@@ -85,6 +85,32 @@ async def handle_device_ctl_message(
                 return False
 
             if isinstance(envelope, CtlAck):
+                if envelope.result == "nack":
+                    res = PendingResult(
+                        result="nack",
+                        code=str(envelope.code) if envelope.code else "unknown_error",
+                        message=envelope.message or "",
+                        terminal_time_ms=envelope.terminal_time_ms,
+                    )
+                    resolved = await cmd_registry.resolve(envelope.command_id, res)
+                    if not resolved:
+                        log.debug(
+                            "Duplicate or unknown NACK for command_id=%s sn=%s code=%s",
+                            envelope.command_id,
+                            sn,
+                            envelope.code,
+                        )
+                    else:
+                        log.warning(
+                            "NACK resolved for command_id=%s lease_id=%s sn=%s code=%s message=%s",
+                            envelope.command_id,
+                            envelope.lease_id,
+                            sn,
+                            envelope.code,
+                            envelope.message,
+                        )
+                    return resolved
+
                 if envelope.inventory is not None:
                     await p_registry.update_inventory(sn, envelope.inventory)
 

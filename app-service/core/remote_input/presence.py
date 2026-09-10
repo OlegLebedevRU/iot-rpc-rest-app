@@ -10,6 +10,7 @@ from core.remote_input.schemas import (
     AgentStatusView,
     CtlPresence,
     CtlStreamEvent,
+    DisplayInfo,
     InventoryInfo,
     StreamInfo,
     WsStreamState,
@@ -69,6 +70,28 @@ class PresenceRegistry:
         inventory = (
             (presence.inventory or self._last_inventory.get(sn)) if online else None
         )
+        if online and (inventory is None or (not inventory.displays and not inventory.cameras)):
+            if presence.screen or presence.desktop_available:
+                w = presence.screen.virtual_width if presence.screen else 1920
+                h = presence.screen.virtual_height if presence.screen else 1080
+                x = presence.screen.virtual_x if presence.screen else 0
+                y = presence.screen.virtual_y if presence.screen else 0
+                inventory = InventoryInfo(
+                    displays=[
+                        DisplayInfo(
+                            desktop_id="0",
+                            name="Основной экран",
+                            primary=True,
+                            x=x,
+                            y=y,
+                            width=w,
+                            height=h,
+                            session_id=presence.session_id,
+                            policy="input",
+                        )
+                    ],
+                    cameras=[],
+                )
         stream = (presence.stream or self._last_stream.get(sn)) if online else None
 
         return AgentStatusView(
@@ -229,7 +252,34 @@ class PresenceRegistry:
 
     async def get_inventory(self, sn: str) -> InventoryInfo:
         async with self._lock:
-            return self._last_inventory.get(sn) or InventoryInfo()
+            inv = self._last_inventory.get(sn)
+            if inv is not None and (inv.displays or inv.cameras):
+                return inv
+            record = self._presence.get(sn)
+            if record is not None:
+                presence, _ = record
+                if presence.screen or presence.desktop_available:
+                    w = presence.screen.virtual_width if presence.screen else 1920
+                    h = presence.screen.virtual_height if presence.screen else 1080
+                    x = presence.screen.virtual_x if presence.screen else 0
+                    y = presence.screen.virtual_y if presence.screen else 0
+                    return InventoryInfo(
+                        displays=[
+                            DisplayInfo(
+                                desktop_id="0",
+                                name="Основной экран",
+                                primary=True,
+                                x=x,
+                                y=y,
+                                width=w,
+                                height=h,
+                                session_id=presence.session_id,
+                                policy="input",
+                            )
+                        ],
+                        cameras=[],
+                    )
+            return inv or InventoryInfo()
 
     async def get_stream(self, sn: str) -> StreamInfo:
         async with self._lock:
