@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -490,3 +490,36 @@ def test_stream_info_flexibility_empty_values_and_int_timestamp():
     # Test with string started_at
     info_str = StreamInfo(started_at="2026-09-10T12:00:00Z")
     assert info_str.started_at == "2026-09-10T12:00:00Z"
+
+
+def test_ctl_ack_tolerance_to_empty_stream_instance_id():
+    cid = uuid4()
+    lid = uuid4()
+    raw = {
+        "v": 1,
+        "type": "ack",
+        "command_id": str(cid),
+        "lease_id": str(lid),
+        "sn": "SN123",
+        "result": "stopped",
+        "stream_instance_id": "",
+    }
+    # Direct model instantiation with empty string
+    ack = CtlAck(**raw)
+    assert ack.stream_instance_id is None
+
+    # Via CtlInboundAdapter (JSON bytes)
+    parsed = CtlInboundAdapter.validate_json(json.dumps(raw).encode("utf-8"))
+    assert isinstance(parsed, CtlAck)
+    assert parsed.stream_instance_id is None
+
+    # Via CtlInboundAdapter (Python dict)
+    parsed_dict = CtlInboundAdapter.validate_python(raw)
+    assert isinstance(parsed_dict, CtlAck)
+    assert parsed_dict.stream_instance_id is None
+
+    # Valid UUID string remains parsed as UUID
+    valid_uuid_str = "e2d83e20-3ca2-4ff5-b9aa-78d15ba40939"
+    raw["stream_instance_id"] = valid_uuid_str
+    ack_valid = CtlAck(**raw)
+    assert ack_valid.stream_instance_id == UUID(valid_uuid_str)

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Literal, Union
+from typing import Annotated, Any, Literal, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 
 NackCode = Literal[
     "interactive_desktop_unavailable",
@@ -217,6 +217,13 @@ class CtlAck(StrictBaseModel):
     stream_instance_id: UUID | None = None
     state: StreamState | None = None
     inventory: InventoryInfo | None = None
+
+    @field_validator("stream_instance_id", mode="before")
+    @classmethod
+    def empty_stream_instance_id_to_none(cls, v: Any) -> Any:
+        if v == "" or (isinstance(v, str) and not v.strip()):
+            return None
+        return v
 
 
 class CtlNack(StrictBaseModel):
