@@ -253,6 +253,7 @@ class CtlPresence(StrictBaseModel):
 class CtlStreamEvent(StrictBaseModel):
     v: Literal[1] = 1
     type: Literal["stream_event"] = "stream_event"
+    sn: str | None = None
     stream_instance_id: UUID | None = None
     state: StreamState
     reason: str | None = None
@@ -415,7 +416,7 @@ class WsMouseClick(StrictBaseModel):
 
 
 class WsKeyEvent(StrictBaseModel):
-    type: Literal["key_event"] = "key_event"
+    type: Literal["key_event", "key"] = "key_event"
     kind: Literal["down", "up", "press"]
     vk: int = Field(..., ge=0, le=255)
     text: str | None = Field(default=None, max_length=32)

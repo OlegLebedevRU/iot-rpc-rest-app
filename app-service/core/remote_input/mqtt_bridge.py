@@ -168,6 +168,12 @@ async def handle_device_ctl_message(
             return True
 
         elif isinstance(envelope, CtlStreamEvent):
+            if envelope.sn is not None and envelope.sn != sn:
+                log.warning(
+                    "CtlStreamEvent SN mismatch: topic_sn=%s payload_sn=%s. Using topic_sn.",
+                    sn,
+                    envelope.sn,
+                )
             await p_registry.update_stream_event(sn, envelope)
             return True
 
