@@ -5,22 +5,33 @@
 Стек: Python 3.14, FastAPI, FastStream, SQLAlchemy/asyncpg, Alembic, RabbitMQ (MQTT 5), nginx, Docker Compose.
 Сборка зависимостей — **uv** (`uv.lock`), не pip/poetry. Ветка по умолчанию — `master`.
 
-## Структура монорепо
+## Структура монорепо и контекст агента
+
+### Обязательный контекст агента
 - `app-service/`        — основной сервис (FastAPI + FastStream). Тесты: `app-service/tests`.
+- `docs/`               — каноническая документация протоколов и интеграций.
+- `docker-files/`       — Dockerfile и контексты сборки сервисов приложения.
+- `rmq/`                — конфигурация брокера RabbitMQ (`rabbitmq.conf`, `definitions.json`).
+- `docs/exceptions/`    — служебные/исторические документы-исключения (не хранить в корне репозитория).
+
+### Исключено из обязательного контекста агентов
+Следующие директории **не входят в обязательный контекст** и не должны инспектироваться/модифицироваться без явного запроса пользователя:
 - `device-emulator/`    — эмулятор IoT‑устройства (paho‑mqtt). См. `device-emulator/README.md`.
 - `mcp/`                — MCP‑сервер LEO4 для AI‑ассистентов. Своё `pyproject.toml`, Python ≥ 3.11.
 - `examples/`           — примеры клиентов (Python, C#, C/Win, FreeRTOS).
 - `robotics/`           — материалы по роботизированному стеку.
-- `docker-files/`, `nginx/`, `nginx-configs/`, `rmq/` — инфраструктура для compose.
-- `docs/`               — каноническая документация протоколов и интеграций.
-- `docs/exceptions/`    — служебные/исторические документы-исключения (не хранить в корне репозитория).
+
+### Nginx и инфраструктура Compose
+- **Контейнеры и конфиги Nginx не управляются данным проектом:** любые конфиги в репозитории (`nginx/`, `nginx-configs/`) нужно считать **неавторитетными**.
+- `nginx/` и `nginx-configs/` в данном проекте **исключаются из инфраструктуры для compose**.
+- **Запрет на прямое изменение конфигов Nginx на сервере:** при любом решении проблем и отладке прямое изменение конфигов на сервере не допускается — необходимо уведомить владельца и получить ручную инструкцию о порядке действий.
 
 ## Обязательно к прочтению перед изменениями
 1. `docs/mqtt-rpc-protocol.md` — топики, correlation data, polling/trigger.
 2. `docs/1-task-workflow-doc.md` — REST workflow задач (touch_task, статусы).
 3. `docs/task_states.md` — машина состояний задачи (READY→PENDING→LOCK→DONE/FAILED).
 4. `docs/event-protocol-mqtt.md` + `docs/2-events-api-format-description.md` — события.
-5. `docs/method-codes-reference.md` — реестр method_code.
+5. `docs/method-codes-reference.md` — реестр method_code (реестр по факту не полный, динамически расширяется и может отставать; не должен блокировать работу, но при наличии мутаций новых/старых кодов желательно уточнять их статус у владельца/пользователя).
 6. `docs/event-property-tags.md` — числовые теги payload.
 7. `docs/3-webhooks.md` — push‑уведомления.
 8. `docs/correlation-data-guide.md` — обязательная correlation data в RPC.
@@ -35,18 +46,18 @@ uv run pytest                            # тесты (testpaths = app-service/t
 uv run pytest -m anyio                   # async‑тесты
 uv run ruff check . && uv run black .    # линт/формат
 
-# инфраструктура
-docker compose up -d --build             # поднять всё (rmq, nginx, app-service, ...)
-docker compose logs -f app-service
+# сервис приложения
+docker compose up -d --build app1        # собрать и запустить только сервис app1 (или docker compose up -d --no-deps app1)
+docker compose logs -f app1
 ```
 
-Подпроект `mcp/` живёт своей жизнью:
+Подпроект `mcp/` (вне обязательного контекста) живёт своей жизнью:
 ```bash
 cd mcp && pip install -e ".[dev]" && pytest -v
 LEO4_DRY_RUN=1 python -m leo4_mcp        # без реальной сети
 ```
 
-## Ручной деплой `app1`
+## Ручной деплой `app1` и защита инфраструктуры
 - Основной и фактический сценарий деплоя `app1` — сборка напрямую на целевом хосте
   через `docker compose build app1` и перезапуск `docker compose up -d --no-deps app1`.
 - Вариант деплоя готовых образов из GHCR (`docker compose pull app1`) используется
@@ -54,8 +65,9 @@ LEO4_DRY_RUN=1 python -m leo4_mcp        # без реальной сети
 - Если пользователь просит «только app», выполнять runbook
   `docs/manual-app1-deploy-runbook.md`: сделать backup `.env`, выполнить
   `docker compose up -d --no-deps app1`, затем проверить `ps`, логи и HTTP `200`.
-- Не пересоздавать `pg`, `rabbitmq`, `nginx`, `nginx-mutual`, `pgadmin`, `certbot`,
-  если запрос был «только app».
+- **Критическое правило: никогда не пересоздавать `pg`, `rabbitmq`, `nginx`, `nginx-mutual`, `pgadmin`, `certbot` без прямого указания.**
+- Все конфиги и сами контейнеры Nginx **не управляются данным проектом**, любые конфиги Nginx в репозитории (`nginx/`, `nginx-configs/`) считаются **неавторитетными** и исключаются из инфраструктуры для compose.
+- **Прямое изменение конфигов Nginx на сервере не допускается**: при любом решении проблем и отладке необходимо уведомить владельца и получить ручную инструкцию о порядке действий.
 
 ## Конвенции кода
 - Python 3.14, type hints обязательны, `from __future__ import annotations` где уместно.
@@ -64,13 +76,28 @@ LEO4_DRY_RUN=1 python -m leo4_mcp        # без реальной сети
 - Миграции — только Alembic (`alembic revision --autogenerate`).
 - Логи — `logging` (см. `LOG_LEVEL` env), без `print`.
 - Секреты — только через env / `.env` (см. `.gitignore`), никогда в коде или тестах.
-- Сертификаты (mTLS) — bind‑mount, не запекать в образ (см. `device-emulator/README.md`).
+- Сертификаты (mTLS) — bind‑mount, не запекать в образ.
 
 ## Доменные правила, которые часто ломают
-- **`status=3 (DONE)` ≠ физическое выполнение.** Подтверждение — только через события (`event_type_code` 13/14 и т.п.). См. `mcp/README.md` → "DONE ≠ Physically Executed".
+- **`status=3 (DONE)` ≠ физическое выполнение.** Подтверждение — только через события (`event_type_code` 13/14 и т.п.). См. `docs/1-task-workflow-doc.md` / `docs/task_states.md`.
 - TTL декрементируется по правилам из `docs/TTL.md`; при TTL=0 задача EXPIRED.
-- Топики MQTT строго по `docs/mqtt_topic_rules.md`: `srv/<SN>/{tsk,rsp,cmt,eva}`, `dev/<SN>/{res,evt,...}`, где `<SN>` = CN сертификата.
-- correlation data — обязательна для сопоставления req/resp.
+- **Топики MQTT** по актуальному состоянию расширены и строго следуют `docs/mqtt_topic_rules.md`:
+  - Server → Device (`srv/<SN>/...`): `srv/<SN>/{tsk,rsp,cmt,eva,ctl}`
+    - `tsk` — анонс/триггер задачи
+    - `rsp` — параметры задачи (RPC response/payload)
+    - `cmt` — подтверждение сервером приёма результата (commit в RPC)
+    - `eva` — подтверждение сервером получения события
+    - `ctl` — команды плоскости управления удалённым вводом (`l4desk` remote input)
+  - Device → Server (`dev/<SN>/...`): `dev/<SN>/{req,ack,res,evt,out,ctl}` (а также зарезервированные очереди `app`, `svc`)
+    - `req` — запрос задачи из очереди (RPC polling / trigger request)
+    - `ack` — подтверждение получения команды устройством
+    - `res` — результат выполнения задачи (RPC result)
+    - `evt` — асинхронное событие от устройства (DeviceEvent)
+    - `out` — volatile потоковый вывод (live logs, remote diagnostics stdout/stderr)
+    - `ctl` — presence и ACK/NACK агента удалённого ввода (`l4desk`)
+  где `<SN>` = CN клиентского сертификата.
+- **Реестр `method_code`** (`docs/method-codes-reference.md`) не полный, динамически расширяется и может отставать. Это не должно блокировать работу; при обнаружении мутаций (новых или старых кодов) желательно уточнять их статус у владельца/пользователя.
+- correlation data — обязательна для сопоставления req/resp во всех RPC-запросах.
 
 ## Pull request чек‑лист для агента
 - [ ] `uv run pytest` зелёный.
@@ -81,8 +108,13 @@ LEO4_DRY_RUN=1 python -m leo4_mcp        # без реальной сети
 - [ ] PR ссылается на issue и кратко описывает контракт изменений.
 
 ## Чего НЕ делать
+- **Никогда не пересоздавать `pg`, `rabbitmq`, `nginx`, `nginx-mutual`, `pgadmin`, `certbot` без прямого указания.**
+- **Не менять конфиги Nginx напрямую на сервере** при решении проблем или отладке — необходимо уведомить владельца и получить ручную инструкцию о порядке действий.
+- **Не считать конфиги `nginx/` и `nginx-configs/` авторитетными** (они не управляются проектом и исключаются из compose-инфраструктуры данного проекта).
+- **Не блокироваться из-за отсутствия `method_code` в реестре** (реестр динамический; при мутациях уточнять).
+- Не включать `device-emulator/`, `mcp/`, `examples/`, `robotics/` в обязательный контекст без прямого запроса.
 - Не менять `uv.lock` руками — только через `uv add` / `uv lock`.
 - Не коммитить `*.pem`, `*.key`, `*.pfx`, `.env`.
-- Не переименовывать топики MQTT и method_code без обновления `docs/method-codes-reference.md`.
+- Не переименовывать топики MQTT и method_code без обновления документации протокола.
 - Не делать sync‑вызовы в async‑коде; не использовать `requests` (есть `httpx`).
 - Не ломать обратную совместимость REST без бампа версии и записи в `docs/`.

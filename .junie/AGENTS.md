@@ -12,7 +12,7 @@ This guide contains project-specific architecture, configuration, testing, and d
 - **Core Frameworks**: FastAPI (REST & WebSockets) + FastStream (RabbitMQ / MQTT 5 broker integration).
 - **Persistence & ORM**: PostgreSQL via SQLAlchemy 2.0 (asyncio + `asyncpg`), migrations managed by Alembic.
 - **Message Broker & Transport**: RabbitMQ 4 (with `rabbitmq_mqtt` & `rabbitmq_management` plugins enabled), MQTT 5 transport with PKI / mTLS authentication.
-- **Reverse Proxy & Security**: Nginx (mTLS device gateway, JWT auth for REST/WS).
+- **Reverse Proxy & Security**: Nginx (external; containers and configs are not managed by this project, repo configs in `nginx/` and `nginx-configs/` are non-authoritative).
 - **Containerization**: Docker Compose (`compose.yaml`).
 
 ### Environment & Dependency Setup
@@ -56,11 +56,13 @@ Configuration is managed via Pydantic `BaseSettings` (`pydantic-settings`).
 
 ### Running Infrastructure via Docker Compose
 ```bash
-docker compose up -d --build
+docker compose up -d --build app1
 docker compose logs -f app1
 ```
+- **Infrastructure Protection**: NEVER recreate `pg`, `rabbitmq`, `nginx`, `nginx-mutual`, `pgadmin`, or `certbot` containers without explicit instructions.
+- **Nginx & Gateway Status**: Nginx containers and all nginx configurations are NOT managed by this project. Any nginx configs in `nginx/` or `nginx-configs/` must be treated as non-authoritative and are excluded from the compose infrastructure of this project. Direct editing of nginx configs on the server is strictly prohibited during debugging or troubleshooting; notify the owner and request manual instructions.
 - **Certificates & mTLS**: Certificate files (`*.crt`, `*.pem`, `*.key`) are bind-mounted at runtime from `./crt/` and are never baked into container images.
-- **Manual `app1` deployment**: When deploying only the application service, follow `docs/manual-app1-deploy-runbook.md`. Use immutable tags (`IMAGE_TAG=sha-*`), backup `.env`, and execute `docker compose pull app1 && docker compose up -d --no-deps app1` without recreating database or broker containers.
+- **Manual `app1` deployment**: When deploying only the application service, follow `docs/manual-app1-deploy-runbook.md`. Host build (`docker compose build app1 && docker compose up -d --no-deps app1`) is default; GHCR pull only on explicit request. Do not recreate database, broker, or proxy containers.
 
 ---
 
@@ -135,7 +137,9 @@ async def test_async_sample_execution():
 ## 3. Project Rules & Development Guidelines
 
 ### Repository Navigation & Scope Exclusion
-- **Directory Exclusion Guardrail**: When reviewing, exploring, or analyzing repository code, **never** inspect `certbot`, `device-emulator`, `examples`, `mcp`, or `robotics` folders unless explicitly requested in the prompt. Focus strictly on `app-service`, `docs`, `docker-files`, `nginx`, `rmq`, and root configs.
+- **Directory Exclusion Guardrail**: When reviewing, exploring, or analyzing repository code, **never** inspect `certbot`, `device-emulator`, `examples`, `mcp`, or `robotics` folders unless explicitly requested in the prompt. Focus strictly on `app-service`, `docs`, `docker-files`, `rmq`, and root configs.
+- **Excluded Agent Context**: `device-emulator/`, `mcp/`, `examples/`, and `robotics/` are excluded from mandatory agent context.
+- **Nginx Infrastructure Exclusion**: `nginx/` and `nginx-configs/` are non-authoritative and excluded from compose infrastructure.
 
 ### Code Hygiene & Bloat Prevention
 - **Package Modernization**: Strive to keep dependencies updated to modern, secure, and maintained versions via `uv`.
@@ -159,8 +163,23 @@ async def test_async_sample_execution():
 ### Domain Rules & Protocol Invariants
 - **`status=3 (DONE)` Invariant**: A task status of `DONE` indicates that the command was successfully acknowledged / accepted by the device transport; it does **not** signify physical hardware execution. Physical completion is confirmed exclusively via device event reports (`event_type_code` 13/14, etc.).
 - **TTL Semantics**: Task TTL decrements according to `docs/TTL.md`. When `TTL=0`, the task is marked `EXPIRED`, not `DONE`.
-- **MQTT Topic Structure**: Follow `docs/mqtt_topic_rules.md`:
-  - Broker/Server topics: `srv/<SN>/{tsk,rsp,cmt,eva}`
-  - Device topics: `dev/<SN>/{res,evt,req,ack,out}` (where `<SN>` is the client certificate Common Name).
+- **MQTT Topic Structure**: Follow `docs/mqtt_topic_rules.md` (topics are extended):
+  - Broker/Server topics: `srv/<SN>/{tsk,rsp,cmt,eva,ctl}`
+    - `tsk`: task trigger/announcement
+    - `rsp`: task payload/parameters (RPC response)
+    - `cmt`: server delivery commit
+    - `eva`: event acknowledgement
+    - `ctl`: remote input control plane commands (`l4desk`)
+  - Device topics: `dev/<SN>/{req,ack,res,evt,out,ctl}` (plus reserved `app`, `svc` queues)
+    - `req`: task request (RPC poll/trigger request)
+    - `ack`: command acknowledgement
+    - `res`: task execution result (RPC result)
+    - `evt`: asynchronous device events
+    - `out`: volatile streaming output (live logs, remote diagnostics stdout/stderr)
+    - `ctl`: remote input presence and ACK/NACK (`l4desk`)
+    (where `<SN>` is the client certificate Common Name).
 - **Correlation Data**: Correlation data (`correlation_id`) is mandatory on all RPC requests and responses for message mapping.
+- **Method Codes & Registry**: The registry in `docs/method-codes-reference.md` is incomplete in practice, dynamically expands, and may lag behind actual usage. This must NOT block agent work; however, if mutations (new or deprecated `method_code`s) are encountered, it is recommended to clarify them with the owner/user.
 - **Error Codes**: Use standard error codes from `docs/method-codes-reference.md` (e.g., `65535` / `0xFFFF` for `CMD_INVALID_JSON`).
+- **Container Protection Invariant**: Never recreate `pg`, `rabbitmq`, `nginx`, `nginx-mutual`, `pgadmin`, `certbot` containers without explicit instructions.
+- **Server Nginx Invariant**: Direct modification of nginx configs on the server is strictly forbidden during debugging or troubleshooting; notify the owner and obtain manual instructions.

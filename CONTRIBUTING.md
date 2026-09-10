@@ -19,11 +19,11 @@ cd iot-rpc-rest-app
 # 2. Установить зависимости через uv
 uv sync
 
-# 3. Поднять инфраструктуру (RabbitMQ, PostgreSQL, nginx)
-docker compose up -d --build
+# 3. Поднять сервис приложения
+docker compose up -d --build app1
 
 # 4. Проверить логи сервиса
-docker compose logs -f app-service
+docker compose logs -f app1
 ```
 
 > **Важно:** никогда не используйте `pip install` напрямую для основного монорепо. Только `uv sync` / `uv add`.
@@ -118,7 +118,10 @@ chore: update uv.lock dependencies
 
 PR, открытые AI‑агентами (GitHub Copilot coding agent, Codex, Claude Code, Cursor и т.п.), должны:
 
-- Следовать всем правилам из [`.github/copilot-instructions.md`](.github/copilot-instructions.md).
+- Следовать всем правилам из [`.github/copilot-instructions.md`](.github/copilot-instructions.md) и [`AGENTS.md`](AGENTS.md).
+- Не включать `device-emulator/`, `mcp/`, `examples/`, `robotics/` в обязательный контекст без прямого запроса.
+- Учитывать, что контейнеры и конфиги Nginx не управляются данным проектом, а прямое изменение конфигов Nginx на сервере строго запрещено.
+- Никогда не пересоздавать контейнеры `pg`, `rabbitmq`, `nginx`, `nginx-mutual`, `pgadmin`, `certbot` без прямого указания.
 - Использовать тот же чек‑лист и шаблон PR, что и человеческие PR.
 - Не изменять `uv.lock` вручную — только через `uv add` / `uv lock`.
 - Не коммитить сертификаты, приватные ключи или `.env`‑файлы.
