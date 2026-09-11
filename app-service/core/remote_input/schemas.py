@@ -349,6 +349,7 @@ class StreamStartResponse(BaseModel):
 
 class StreamStopResponse(BaseModel):
     result: str
+    state: str | None = None
 
 
 class MoveRequest(StrictBaseModel):

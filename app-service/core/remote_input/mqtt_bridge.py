@@ -4,6 +4,10 @@ from typing import Any
 
 from core.config import settings
 from core.logging_config import setup_module_logger
+from core.remote_input.leases import (
+    LeaseRegistryProtocol,
+    lease_registry,
+)
 from core.remote_input.pending import (
     PendingCommandRegistryProtocol,
     PendingResult,
@@ -61,6 +65,7 @@ async def handle_device_ctl_message(
     payload: bytes | str | dict[str, Any],
     p_registry: PresenceRegistryProtocol = presence_registry,
     cmd_registry: PendingCommandRegistryProtocol = pending_registry,
+    l_registry: LeaseRegistryProtocol = lease_registry,
 ) -> bool:
     try:
         sn = extract_sn_from_ctl_routing_key(routing_key)
@@ -174,6 +179,22 @@ async def handle_device_ctl_message(
                     sn,
                     envelope.sn,
                 )
+            if envelope.state in (
+                "stopped",
+                "failed",
+                "source_unavailable",
+                "session_unavailable",
+            ):
+                active_lease = await l_registry.get_active_by_sn(sn)
+                if active_lease and (
+                    envelope.stream_instance_id is None
+                    or active_lease.stream_instance_id == envelope.stream_instance_id
+                ):
+                    active_lease.stream_instance_id = None
+                    active_lease.stream_mode = None
+                    active_lease.selected_desktop_id = None
+                    active_lease.selected_session_id = None
+                    active_lease.selected_camera_id = None
             await p_registry.update_stream_event(sn, envelope)
             return True
 

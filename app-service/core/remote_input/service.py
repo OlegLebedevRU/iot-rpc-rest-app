@@ -488,6 +488,25 @@ class RemoteInputService:
         if lease.scope not in ("stream", "input"):
             raise HTTPException(status_code=403, detail="scope_not_allowed")
 
+        if lease.stream_instance_id is not None and lease.stream_mode == mode:
+            # Если источник совпадает с текущим работающим источником:
+            current_source = (
+                lease.selected_desktop_id
+                if mode == "desktop"
+                else getattr(lease, "selected_camera_id", None)
+            )
+            if current_source == source_id or not source_id:
+                log.info(
+                    "stream_start idempotent: stream already running for lease %s (instance %s)",
+                    lease_id,
+                    lease.stream_instance_id,
+                )
+                return StreamStartResponse(
+                    stream_instance_id=lease.stream_instance_id,
+                    result="already_running",
+                    state="running",
+                )
+
         stream_instance_id = uuid4()
         cmd_id = uuid4()
         now_ms = int(time.time() * 1000)
@@ -527,7 +546,15 @@ class RemoteInputService:
             )
 
         if res.result in ("started", "already_running", "switched"):
-            lease.stream_instance_id = stream_instance_id
+            final_instance_id = (
+                lease.stream_instance_id
+                if (
+                    res.result == "already_running"
+                    and lease.stream_instance_id is not None
+                )
+                else (res.stream_instance_id or stream_instance_id)
+            )
+            lease.stream_instance_id = final_instance_id
             lease.stream_mode = mode
             if mode == "desktop":
                 inv = await self.presence.get_inventory(lease.sn)
@@ -538,12 +565,14 @@ class RemoteInputService:
                 lease.selected_session_id = (
                     matched_disp.session_id if matched_disp else None
                 )
+                lease.selected_camera_id = None
             else:
                 lease.selected_desktop_id = None
                 lease.selected_session_id = None
+                lease.selected_camera_id = source_id
 
         return StreamStartResponse(
-            stream_instance_id=stream_instance_id,
+            stream_instance_id=final_instance_id,
             result=res.result,
             state=res.state or "running",
         )
@@ -573,6 +602,13 @@ class RemoteInputService:
 
         if lease.scope not in ("stream", "input"):
             raise HTTPException(status_code=403, detail="scope_not_allowed")
+
+        if lease.stream_instance_id is None:
+            log.info("stream_stop idempotent: no active stream for lease %s", lease_id)
+            return StreamStopResponse(
+                result="already_stopped",
+                state="stopped",
+            )
 
         cmd_id = uuid4()
         now_ms = int(time.time() * 1000)
@@ -604,6 +640,25 @@ class RemoteInputService:
             raise HTTPException(status_code=504, detail="terminal_timeout")
 
         if res.result == "nack":
+            if res.code in (
+                "already_stopped",
+                "stream_not_running",
+                "stream_not_found",
+            ):
+                log.info(
+                    "stream_stop nack handled idempotently: lease=%s code=%s",
+                    lease_id,
+                    res.code,
+                )
+                lease.stream_instance_id = None
+                lease.stream_mode = None
+                lease.selected_desktop_id = None
+                lease.selected_session_id = None
+                lease.selected_camera_id = None
+                return StreamStopResponse(
+                    result="already_stopped",
+                    state="stopped",
+                )
             raise HTTPException(
                 status_code=409, detail=res.code or "stream_stop_failed"
             )
@@ -613,8 +668,12 @@ class RemoteInputService:
         lease.stream_mode = None
         lease.selected_desktop_id = None
         lease.selected_session_id = None
+        lease.selected_camera_id = None
 
-        return StreamStopResponse(result=res.result or "stopped")
+        return StreamStopResponse(
+            result=res.result or "stopped",
+            state=res.state or "stopped",
+        )
 
     def _validate_input_command(
         self,

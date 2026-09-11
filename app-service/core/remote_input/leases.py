@@ -44,6 +44,7 @@ class Lease:
     ws_connected: bool = False
     ws_disconnected_at: datetime | None = None
     listeners: list[asyncio.Queue[str]] = field(default_factory=list)
+    selected_camera_id: str | None = None
 
     @property
     def issued_at(self) -> datetime:
@@ -117,6 +118,8 @@ class LeaseRegistryProtocol(Protocol):
     async def get(self, lease_id: UUID) -> Lease | None: ...
 
     async def get_active(self, sn: str) -> Lease | None: ...
+
+    async def get_active_by_sn(self, sn: str) -> Lease | None: ...
 
     async def cleanup_expired(self) -> list[tuple[Lease, str]]: ...
 
@@ -341,6 +344,9 @@ class LeaseRegistry:
             if lease is None or not lease.is_active(now):
                 return None
             return lease
+
+    async def get_active_by_sn(self, sn: str) -> Lease | None:
+        return await self.get_active(sn)
 
     async def cleanup_expired(self) -> list[tuple[Lease, str]]:
         now = datetime.now(UTC)

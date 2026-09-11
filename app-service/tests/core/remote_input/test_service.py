@@ -404,3 +404,265 @@ async def test_publisher_send_ctl_command():
         }
         # Verify no retain is passed or requested
         assert "retain" not in kwargs or kwargs["retain"] is False
+
+
+@pytest.mark.asyncio
+async def test_stream_start_idempotent_when_already_running(service_env):
+    srv, leases, pending, presence = service_env
+
+    await presence.update_inventory(
+        "SN123",
+        InventoryInfo(
+            displays=[
+                DisplayInfo(
+                    desktop_id="disp:1",
+                    name=r"\\.\DISPLAY1",
+                    primary=True,
+                    width=1920,
+                    height=1080,
+                    session_id=42,
+                )
+            ]
+        ),
+    )
+
+    lease = await leases.acquire(
+        org_id=1,
+        device_id=10,
+        sn="SN123",
+        owner_user_id="user1",
+        owner_role="admin",
+        ttl_sec=60,
+        scope="stream",
+        owner_session_id="sess_1",
+    )
+
+    # 1. Первый вызов stream_start запускает стрим и сохраняет stream_instance_id
+    with patch(
+        "core.remote_input.service.send_ctl_command", new_callable=AsyncMock
+    ) as mock_send:
+
+        async def delayed_start_ack():
+            await asyncio.sleep(0.01)
+            async with pending._lock:
+                cmd_id = next(iter(pending._pending.keys()))
+            await pending.resolve(
+                cmd_id,
+                PendingResult(result="started", state="running"),
+            )
+
+        asyncio.create_task(delayed_start_ack())
+
+        resp1 = await srv.stream_start(
+            lease_id=lease.lease_id,
+            org_id=1,
+            mode="desktop",
+            source_id="disp:1",
+            caller_user_id="user1",
+            caller_session_id="sess_1",
+        )
+
+        assert resp1.result == "started"
+        assert resp1.state == "running"
+        assert lease.stream_instance_id == resp1.stream_instance_id
+        assert lease.stream_mode == "desktop"
+        assert lease.selected_desktop_id == "disp:1"
+        assert mock_send.call_count == 1
+
+    # 2. Второй вызов с теми же параметрами возвращает result="already_running"
+    #    и тот же stream_instance_id без отправки повторной команды в MQTT
+    with patch(
+        "core.remote_input.service.send_ctl_command", new_callable=AsyncMock
+    ) as mock_send_second:
+        resp2 = await srv.stream_start(
+            lease_id=lease.lease_id,
+            org_id=1,
+            mode="desktop",
+            source_id="disp:1",
+            caller_user_id="user1",
+            caller_session_id="sess_1",
+        )
+
+        assert resp2.result == "already_running"
+        assert resp2.state == "running"
+        assert resp2.stream_instance_id == resp1.stream_instance_id
+        assert lease.stream_instance_id == resp1.stream_instance_id
+        assert mock_send_second.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_stream_stop_idempotent_when_already_stopped(service_env):
+    srv, leases, _, _ = service_env
+
+    lease = await leases.acquire(
+        org_id=1,
+        device_id=10,
+        sn="SN123",
+        owner_user_id="user1",
+        owner_role="admin",
+        ttl_sec=60,
+        scope="stream",
+        owner_session_id="sess_1",
+    )
+    assert lease.stream_instance_id is None
+
+    with patch(
+        "core.remote_input.service.send_ctl_command", new_callable=AsyncMock
+    ) as mock_send:
+        stop_resp = await srv.stream_stop(
+            lease_id=lease.lease_id,
+            org_id=1,
+            caller_user_id="user1",
+            caller_session_id="sess_1",
+        )
+
+        assert stop_resp.result == "already_stopped"
+        assert stop_resp.state == "stopped"
+        assert lease.stream_instance_id is None
+        assert mock_send.call_count == 0
+
+
+@pytest.mark.asyncio
+async def test_stream_event_clears_lease_stream_instance(service_env):
+    from core.remote_input.mqtt_bridge import handle_device_ctl_message
+
+    _, leases, pending, presence = service_env
+
+    sid = uuid4()
+    lease = await leases.acquire(
+        org_id=1,
+        device_id=10,
+        sn="SN123",
+        owner_user_id="user1",
+        owner_role="admin",
+        ttl_sec=60,
+        scope="stream",
+        owner_session_id="sess_1",
+    )
+    lease.stream_instance_id = sid
+    lease.stream_mode = "desktop"
+    lease.selected_desktop_id = "disp:1"
+
+    # Terminal sends stream_event with state="failed"
+    event_payload = {
+        "v": 1,
+        "type": "stream_event",
+        "stream_instance_id": str(sid),
+        "state": "failed",
+        "reason": "encoder_error",
+        "timestamp": "2026-09-11T00:00:00Z",
+    }
+
+    handled = await handle_device_ctl_message(
+        routing_key="dev.SN123.ctl",
+        payload=event_payload,
+        p_registry=presence,
+        cmd_registry=pending,
+        l_registry=leases,
+    )
+
+    assert handled is True
+    # lease stream fields must be cleared
+    assert lease.stream_instance_id is None
+    assert lease.stream_mode is None
+    assert lease.selected_desktop_id is None
+
+    # presence must also reflect failed stream
+    stream_info = await presence.get_stream("SN123")
+    assert stream_info.state == "failed"
+    assert stream_info.reason == "encoder_error"
+
+
+@pytest.mark.asyncio
+async def test_stream_start_sequential_switch(service_env):
+    srv, leases, pending, presence = service_env
+
+    await presence.update_inventory(
+        "SN123",
+        InventoryInfo(
+            displays=[
+                DisplayInfo(
+                    desktop_id="disp:1",
+                    name=r"\\.\DISPLAY1",
+                    primary=True,
+                    width=1920,
+                    height=1080,
+                    session_id=42,
+                ),
+                DisplayInfo(
+                    desktop_id="disp:2",
+                    name=r"\\.\DISPLAY2",
+                    primary=False,
+                    width=1920,
+                    height=1080,
+                    session_id=42,
+                ),
+            ]
+        ),
+    )
+
+    lease = await leases.acquire(
+        org_id=1,
+        device_id=10,
+        sn="SN123",
+        owner_user_id="user1",
+        owner_role="admin",
+        ttl_sec=60,
+        scope="stream",
+        owner_session_id="sess_1",
+    )
+
+    # 1. Start on disp:1
+    with patch("core.remote_input.service.send_ctl_command", new_callable=AsyncMock):
+
+        async def ack_start():
+            await asyncio.sleep(0.01)
+            async with pending._lock:
+                cmd_id = next(iter(pending._pending.keys()))
+            await pending.resolve(
+                cmd_id,
+                PendingResult(result="started", state="running"),
+            )
+
+        asyncio.create_task(ack_start())
+
+        resp1 = await srv.stream_start(
+            lease_id=lease.lease_id,
+            org_id=1,
+            mode="desktop",
+            source_id="disp:1",
+            caller_user_id="user1",
+            caller_session_id="sess_1",
+        )
+        assert resp1.result == "started"
+
+    # 2. Sequential switch to disp:2 should send new command to terminal
+    with patch(
+        "core.remote_input.service.send_ctl_command", new_callable=AsyncMock
+    ) as mock_send_switch:
+
+        async def ack_switch():
+            await asyncio.sleep(0.01)
+            async with pending._lock:
+                cmd_id = next(iter(pending._pending.keys()))
+            await pending.resolve(
+                cmd_id,
+                PendingResult(result="switched", state="running"),
+            )
+
+        asyncio.create_task(ack_switch())
+
+        resp2 = await srv.stream_start(
+            lease_id=lease.lease_id,
+            org_id=1,
+            mode="desktop",
+            source_id="disp:2",
+            caller_user_id="user1",
+            caller_session_id="sess_1",
+        )
+
+        assert resp2.result == "switched"
+        assert resp2.stream_instance_id != resp1.stream_instance_id
+        assert lease.stream_instance_id == resp2.stream_instance_id
+        assert lease.selected_desktop_id == "disp:2"
+        assert mock_send_switch.call_count == 1
