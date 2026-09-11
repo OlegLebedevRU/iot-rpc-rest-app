@@ -251,11 +251,15 @@ async def test_rest_happy_path_and_conflict(monkeypatch):
         assert status_data["lease"]["scope"] == "input"
 
         # 5. Keepalive -> 200
-        res_ka = await client.post(
-            f"/api/internal/v1/remote-input/lease/{lease_id}/keepalive",
-            headers=headers,
-        )
-        assert res_ka.status_code == 200
+        with patch(
+            "core.remote_input.service.send_ctl_command", new_callable=AsyncMock
+        ) as mock_send_ka:
+            res_ka = await client.post(
+                f"/api/internal/v1/remote-input/lease/{lease_id}/keepalive",
+                headers=headers,
+            )
+            assert res_ka.status_code == 200
+            assert mock_send_ka.call_count == 1
 
         # 6. Pointer move -> 202
         with patch(

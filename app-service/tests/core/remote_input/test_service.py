@@ -666,3 +666,76 @@ async def test_stream_start_sequential_switch(service_env):
         assert lease.stream_instance_id == resp2.stream_instance_id
         assert lease.selected_desktop_id == "disp:2"
         assert mock_send_switch.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_keepalive_publishes_ctl_lease_renew(service_env):
+    srv, leases, _, _ = service_env
+
+    lease = await leases.acquire(
+        org_id=1,
+        device_id=10,
+        sn="SN_KEEPALIVE",
+        owner_user_id="user1",
+        owner_role="admin",
+        ttl_sec=60,
+        scope="input",
+        owner_session_id="sess_1",
+    )
+
+    with patch(
+        "core.remote_input.publisher.topic_publisher.publish",
+        new_callable=AsyncMock,
+    ) as mock_pub:
+        resp = await srv.keepalive(
+            lease_id=lease.lease_id,
+            org_id=1,
+            caller_user_id="user1",
+            caller_session_id="sess_1",
+        )
+
+        assert resp.lease_id == lease.lease_id
+        assert mock_pub.call_count == 1
+
+        call_kwargs = mock_pub.call_args[1]
+        assert call_kwargs["routing_key"] == "srv.SN_KEEPALIVE.ctl"
+
+        payload = call_kwargs["message"]
+        assert payload["type"] == "lease_renew"
+        assert payload["v"] == 1
+        assert payload["lease_id"] == str(lease.lease_id)
+        assert payload["ttl_sec"] == 60
+        assert payload["expires_at_ms"] > 0
+        assert "timestamp" in payload
+
+
+@pytest.mark.asyncio
+async def test_keepalive_lease_with_custom_publisher(service_env):
+    _, leases, presence, pending = service_env
+    mock_publisher = AsyncMock()
+    custom_srv = RemoteInputService(
+        leases=leases,
+        presence=presence,
+        pending=pending,
+        publisher=mock_publisher,
+    )
+
+    lease = await leases.acquire(
+        org_id=1,
+        device_id=10,
+        sn="SN_PUB_TEST",
+        owner_user_id="user1",
+        owner_role="admin",
+        ttl_sec=45,
+        scope="input",
+    )
+
+    resp = await custom_srv.keepalive_lease(lease.lease_id)
+    assert resp.lease_id == lease.lease_id
+    assert mock_publisher.publish_control_command.call_count == 1
+    call_args = mock_publisher.publish_control_command.call_args[0]
+    assert call_args[0] == "SN_PUB_TEST"
+    cmd = call_args[1]
+    assert cmd.type == "lease_renew"
+    assert cmd.lease_id == lease.lease_id
+    assert cmd.ttl_sec == 45

@@ -45,6 +45,8 @@ class Lease:
     ws_disconnected_at: datetime | None = None
     listeners: list[asyncio.Queue[str]] = field(default_factory=list)
     selected_camera_id: str | None = None
+    ttl_sec: int = 60
+    stream_state: str | None = None
 
     @property
     def issued_at(self) -> datetime:
@@ -164,15 +166,20 @@ class LeaseRegistry:
                     same_session = existing.owner_session_id == owner_session_id
                     if same_user and same_session:
                         # Idempotent re-acquire
+                        existing.ttl_sec = ttl_sec
                         if existing.scope == scope:
                             existing.last_keepalive_at = now
                             existing.expires_at = now + timedelta(seconds=ttl_sec)
+                            if scope in ("stream", "input"):
+                                existing.stream_mode = "desktop"
                             return existing
                         else:
                             # Upgrade scope
                             existing.scope = scope
                             existing.last_keepalive_at = now
                             existing.expires_at = now + timedelta(seconds=ttl_sec)
+                            if scope in ("stream", "input"):
+                                existing.stream_mode = "desktop"
                             return existing
                     else:
                         raise LeaseConflictError(existing)
@@ -181,6 +188,7 @@ class LeaseRegistry:
 
             lease_id = uuid4()
             expires_at = now + timedelta(seconds=ttl_sec)
+            stream_mode = "desktop" if scope in ("stream", "input") else None
             lease = Lease(
                 lease_id=lease_id,
                 org_id=org_id,
@@ -190,10 +198,11 @@ class LeaseRegistry:
                 owner_role=owner_role,
                 scope=scope,
                 owner_session_id=owner_session_id,
-                stream_mode="desktop" if scope == "input" else None,
+                stream_mode=stream_mode,
                 created_at=now,
                 expires_at=expires_at,
                 last_keepalive_at=now,
+                ttl_sec=ttl_sec,
             )
             self._leases_by_id[lease_id] = lease
             self._active_by_sn[sn] = lease_id
@@ -218,6 +227,7 @@ class LeaseRegistry:
                 return None
             lease.last_keepalive_at = now
             lease.expires_at = now + timedelta(seconds=ttl_sec)
+            lease.ttl_sec = ttl_sec
             return lease
 
     async def upgrade_scope(
@@ -229,6 +239,8 @@ class LeaseRegistry:
             if lease is None or not lease.is_active(now):
                 return None
             lease.scope = new_scope
+            if new_scope in ("stream", "input"):
+                lease.stream_mode = "desktop"
             return lease
 
     async def revoke(self, lease_id: UUID, reason: str = "released") -> Lease | None:

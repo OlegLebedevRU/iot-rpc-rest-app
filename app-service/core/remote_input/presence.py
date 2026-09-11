@@ -49,6 +49,15 @@ class PresenceRegistryProtocol(Protocol):
     ) -> None: ...
 
 
+def _parse_timestamp(ts: str | None) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
 class PresenceRegistry:
     def __init__(self) -> None:
         self._presence: dict[str, tuple[CtlPresence, datetime]] = {}
@@ -63,14 +72,19 @@ class PresenceRegistry:
     ) -> AgentStatusView:
         age_sec = (now - received_at).total_seconds()
         stale = age_sec >= settings.remote_input.presence_stale_sec
-        online = (presence.status == "online") and (not stale)
+        is_online = (presence.status == "online") or (
+            getattr(presence, "online", None) is True
+        )
+        online = is_online and (not stale)
         desktop_available = presence.desktop_available if online else False
         session_id = presence.session_id if online else None
         screen = presence.screen if online else None
         inventory = (
             (presence.inventory or self._last_inventory.get(sn)) if online else None
         )
-        if online and (inventory is None or (not inventory.displays and not inventory.cameras)):
+        if online and (
+            inventory is None or (not inventory.displays and not inventory.cameras)
+        ):
             if presence.screen or presence.desktop_available:
                 w = presence.screen.virtual_width if presence.screen else 1920
                 h = presence.screen.virtual_height if presence.screen else 1080
@@ -112,6 +126,35 @@ class PresenceRegistry:
         stream_event_to_dispatch: WsStreamState | None = None
 
         async with self._lock:
+            prev = self._presence.get(sn)
+            prev_status = prev[0].status if prev else None
+            prev_desktop = prev[0].desktop_available if prev else None
+
+            # LWT race protection: ignore stale offline if prev was online with newer timestamp
+            is_incoming_online = (presence.status == "online") or (
+                getattr(presence, "online", None) is True
+            )
+            if not is_incoming_online and prev is not None:
+                prev_p, prev_at = prev
+                prev_is_online = (prev_p.status == "online") or (
+                    getattr(prev_p, "online", None) is True
+                )
+                if prev_is_online:
+                    prev_dt = _parse_timestamp(prev_p.timestamp)
+                    curr_dt = _parse_timestamp(presence.timestamp)
+                    if (
+                        prev_dt is not None
+                        and curr_dt is not None
+                        and curr_dt <= prev_dt
+                    ):
+                        log.warning(
+                            "Ignoring stale LWT offline presence for sn=%s (curr_ts=%s <= prev_ts=%s)",
+                            sn,
+                            presence.timestamp,
+                            prev_p.timestamp,
+                        )
+                        return False, self._build_view(sn, prev_p, prev_at, now)
+
             if presence.inventory is not None:
                 self._last_inventory[sn] = presence.inventory
             if presence.stream is not None:
@@ -124,10 +167,6 @@ class PresenceRegistry:
                         reason=presence.stream.reason,
                         timestamp=presence.timestamp,
                     )
-
-            prev = self._presence.get(sn)
-            prev_status = prev[0].status if prev else None
-            prev_desktop = prev[0].desktop_available if prev else None
 
             self._presence[sn] = (presence, now)
             view = self._build_view(sn, presence, now, now)

@@ -10,16 +10,20 @@ from core.remote_input.schemas import (
     ALLOWED_VK_CODES,
     CtlAck,
     CtlInboundAdapter,
+    CtlLeaseRenew,
     CtlNack,
     CtlPresence,
     CtlStreamEvent,
     InventoryGetCommand,
     KeyEventCommand,
+    LeaseResponse,
+    LeaseStatusView,
     MouseClickCommand,
     PointerMoveCommand,
     StreamStartCommand,
     StreamStopCommand,
     StreamInfo,
+    WsError,
     WsInboundAdapter,
     WsKeyEvent,
     WsMouseClick,
@@ -523,3 +527,89 @@ def test_ctl_ack_tolerance_to_empty_stream_instance_id():
     raw["stream_instance_id"] = valid_uuid_str
     ack_valid = CtlAck(**raw)
     assert ack_valid.stream_instance_id == UUID(valid_uuid_str)
+
+
+def test_ctl_lease_renew_schema():
+    lid = uuid4()
+    cid = uuid4()
+    renew = CtlLeaseRenew(
+        cmd_id=cid,
+        lease_id=lid,
+        ttl_sec=60,
+        expires_at_ms=1726000060000,
+        timestamp="2026-09-11T12:00:00Z",
+    )
+    assert renew.v == 1
+    assert renew.type == "lease_renew"
+    assert renew.cmd_id == cid
+    assert renew.command_id == cid
+    assert renew.lease_id == lid
+    assert renew.ttl_sec == 60
+    assert renew.expires_at_ms == 1726000060000
+    assert renew.timestamp == "2026-09-11T12:00:00Z"
+
+    dumped = renew.model_dump(mode="json")
+    assert dumped["type"] == "lease_renew"
+    assert dumped["cmd_id"] == str(cid)
+    assert dumped["lease_id"] == str(lid)
+    assert dumped["ttl_sec"] == 60
+    assert dumped["expires_at_ms"] == 1726000060000
+
+
+def test_ctl_presence_online_field_flexibility():
+    raw_with_online = {
+        "v": 1,
+        "type": "presence",
+        "agent": "l4desk",
+        "status": "online",
+        "online": True,
+        "desktop_available": True,
+        "timestamp": "2026-09-11T12:00:00Z",
+    }
+    presence = CtlInboundAdapter.validate_json(
+        json.dumps(raw_with_online).encode("utf-8")
+    )
+    assert isinstance(presence, CtlPresence)
+    assert presence.online is True
+    assert presence.status == "online"
+
+
+def test_ws_error_mode_conflict():
+    err = WsError(
+        code="mode_conflict",
+        message="Pointer move only allowed in desktop mode",
+    )
+    assert err.code == "mode_conflict"
+    assert err.message == "Pointer move only allowed in desktop mode"
+
+
+def test_lease_status_view_and_response_stream_state():
+    view = LeaseStatusView(
+        active=True,
+        stream_state="stopped",
+        stream_mode="desktop",
+    )
+    assert view.stream_state == "stopped"
+    assert view.stream_mode == "desktop"
+
+    from datetime import datetime, UTC
+
+    now = datetime.now(UTC)
+    resp = LeaseResponse(
+        lease_id=uuid4(),
+        sn="SNTEST1",
+        device_id=1,
+        org_id=1,
+        owner_user_id="u1",
+        owner_role="admin",
+        scope="input",
+        owner_session_id="s1",
+        created_at=now,
+        expires_at=now,
+        keepalive_sec=15,
+        ws_path="/ws",
+        stream_state="stopped",
+        stream_mode="desktop",
+    )
+    assert resp.stream_state == "stopped"
+    assert resp.stream_mode == "desktop"

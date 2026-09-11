@@ -430,3 +430,64 @@ async def test_lease_mark_ws_connected_prevent_duplicate():
     await registry.mark_ws_disconnected(lease.lease_id)
     conn3 = await registry.mark_ws_connected(lease.lease_id)
     assert conn3 is True
+
+
+@pytest.mark.asyncio
+async def test_lease_stream_mode_desktop_on_acquire_and_upgrade():
+    registry = LeaseRegistry()
+
+    # 1. Acquire with scope="stream" sets stream_mode="desktop"
+    lease_stream = await registry.acquire(
+        org_id=1,
+        device_id=10,
+        sn="SN_DESKTOP_1",
+        owner_user_id="user_1",
+        owner_role="admin",
+        ttl_sec=60,
+        scope="stream",
+    )
+    assert lease_stream.stream_mode == "desktop"
+    assert lease_stream.ttl_sec == 60
+
+    # 2. Upgrade scope to input keeps/sets stream_mode="desktop"
+    upgraded = await registry.upgrade_scope(lease_stream.lease_id, "input")
+    assert upgraded is not None
+    assert upgraded.scope == "input"
+    assert upgraded.stream_mode == "desktop"
+
+    # 3. Touch updates ttl_sec
+    touched = await registry.touch(lease_stream.lease_id, 90)
+    assert touched is not None
+    assert touched.ttl_sec == 90
+
+    # 4. Stream state can be set and read
+    touched.stream_state = "stopped"
+    assert touched.stream_state == "stopped"
+
+    # 5. Idempotent reacquire with scope upgrade to input sets stream_mode="desktop"
+    lease_view = await registry.acquire(
+        org_id=1,
+        device_id=11,
+        sn="SN_DESKTOP_2",
+        owner_user_id="user_2",
+        owner_role="admin",
+        ttl_sec=60,
+        scope="view",
+        owner_session_id="sess_1",
+    )
+    assert lease_view.stream_mode is None
+
+    reacquired = await registry.acquire(
+        org_id=1,
+        device_id=11,
+        sn="SN_DESKTOP_2",
+        owner_user_id="user_2",
+        owner_role="admin",
+        ttl_sec=120,
+        scope="input",
+        owner_session_id="sess_1",
+    )
+    assert reacquired.lease_id == lease_view.lease_id
+    assert reacquired.scope == "input"
+    assert reacquired.stream_mode == "desktop"
+    assert reacquired.ttl_sec == 120

@@ -6,6 +6,7 @@ from typing import Any
 from core.config import settings
 from core.logging_config import setup_module_logger
 from core.remote_input.schemas import (
+    CtlLeaseRenew,
     InventoryGetCommand,
     KeyEventCommand,
     MouseClickCommand,
@@ -24,8 +25,25 @@ CtlCommand = (
     | StreamStartCommand
     | StreamStopCommand
     | KeyEventCommand
+    | CtlLeaseRenew
     | Any
 )
+
+
+class DefaultControlPublisher:
+    async def publish_control_command(
+        self,
+        sn: str,
+        cmd: Any,
+        ttl_ms: int | None = None,
+    ) -> None:
+        if ttl_ms is None:
+            ttl_sec = getattr(cmd, "ttl_sec", 60)
+            ttl_ms = int(ttl_sec * 1000)
+        await send_ctl_command(sn, cmd, ttl_ms=ttl_ms)
+
+
+default_control_publisher = DefaultControlPublisher()
 
 
 async def send_ctl_command(
@@ -43,16 +61,18 @@ async def send_ctl_command(
             f"{settings.remote_input.max_command_payload_bytes} bytes"
         )
 
+    corr_id = getattr(command, "command_id", getattr(command, "cmd_id", None))
+
     routing_key = f"{settings.rmq.prefix_srv}.{sn}.{settings.rmq.suffix_control}"
     headers = {
-        "correlationData": str(command.command_id),
+        "correlationData": str(corr_id),
         "ctl_type": command.type,
     }
 
     log.debug(
         "Publishing ctl command: routing_key=%s command_id=%s type=%s expiration=%s",
         routing_key,
-        command.command_id,
+        corr_id,
         command.type,
         ttl_ms,
     )
@@ -60,7 +80,7 @@ async def send_ctl_command(
     await topic_publisher.publish(
         routing_key=routing_key,
         message=message_dict,
-        correlation_id=command.command_id,
+        correlation_id=corr_id,
         expiration=ttl_ms,
         headers=headers,
     )

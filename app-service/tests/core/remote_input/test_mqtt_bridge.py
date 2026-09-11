@@ -5,12 +5,15 @@ from uuid import uuid4
 
 import pytest
 
+from core.remote_input.leases import LeaseRegistry
 from core.remote_input.mqtt_bridge import (
+    _SN_STATUS,
     extract_sn_from_ctl_routing_key,
     handle_device_ctl_message,
 )
 from core.remote_input.pending import PendingCommandRegistry, PendingResult
 from core.remote_input.presence import PresenceRegistry
+from core.remote_input.schemas import WsStreamState
 
 
 def test_extract_sn_from_ctl_routing_key():
@@ -324,3 +327,137 @@ async def test_presence_fallback_inventory_from_screen():
     assert status_view.inventory is not None
     assert len(status_view.inventory.displays) == 1
     assert status_view.inventory.displays[0].desktop_id == "0"
+
+
+@pytest.mark.asyncio
+async def test_presence_updates_sn_status_and_protects_against_lwt_race():
+    p_reg = PresenceRegistry()
+    sn = "SN_RACE_TEST"
+
+    # 1. New process publishes online presence at 12:00:05
+    online_payload = json.dumps(
+        {
+            "v": 1,
+            "type": "presence",
+            "status": "online",
+            "desktop_available": True,
+            "timestamp": "2026-09-11T12:00:05Z",
+        }
+    ).encode("utf-8")
+
+    res1 = await handle_device_ctl_message(
+        routing_key=f"dev.{sn}.ctl",
+        payload=online_payload,
+        p_registry=p_reg,
+        cmd_registry=PendingCommandRegistry(),
+    )
+    assert res1 is True
+    assert sn in _SN_STATUS
+    assert _SN_STATUS[sn].agent.online is True
+
+    # 2. Broker delivers delayed LWT offline packet from old crashed connection at 12:00:01
+    lwt_offline_payload = json.dumps(
+        {
+            "v": 1,
+            "type": "presence",
+            "status": "offline",
+            "desktop_available": False,
+            "timestamp": "2026-09-11T12:00:01Z",
+        }
+    ).encode("utf-8")
+
+    res2 = await handle_device_ctl_message(
+        routing_key=f"dev.{sn}.ctl",
+        payload=lwt_offline_payload,
+        p_registry=p_reg,
+        cmd_registry=PendingCommandRegistry(),
+    )
+    assert res2 is True
+    # Stale offline must NOT turn agent offline!
+    assert _SN_STATUS[sn].agent.online is True
+    view = await p_reg.get(sn)
+    assert view.online is True
+
+    # 3. Genuine offline packet arrives with newer timestamp (12:00:10)
+    genuine_offline_payload = json.dumps(
+        {
+            "v": 1,
+            "type": "presence",
+            "status": "offline",
+            "desktop_available": False,
+            "timestamp": "2026-09-11T12:00:10Z",
+        }
+    ).encode("utf-8")
+
+    res3 = await handle_device_ctl_message(
+        routing_key=f"dev.{sn}.ctl",
+        payload=genuine_offline_payload,
+        p_registry=p_reg,
+        cmd_registry=PendingCommandRegistry(),
+    )
+    assert res3 is True
+    assert _SN_STATUS[sn].agent.online is False
+    view3 = await p_reg.get(sn)
+    assert view3.online is False
+
+
+@pytest.mark.asyncio
+async def test_stream_event_stopped_resets_lease_stream_state():
+    p_reg = PresenceRegistry()
+    l_reg = LeaseRegistry()
+    sn = "SN_STREAM_RESET"
+
+    lease = await l_reg.acquire(
+        org_id=1,
+        device_id=1,
+        sn=sn,
+        owner_user_id="u1",
+        owner_role="admin",
+        ttl_sec=60,
+        scope="input",
+    )
+    sid = uuid4()
+    lease.stream_instance_id = sid
+    lease.stream_state = "running"
+    lease.stream_mode = "desktop"
+    lease.selected_desktop_id = "0"
+
+    stream_q = await p_reg.subscribe_stream(sn)
+
+    try:
+        stopped_payload = json.dumps(
+            {
+                "v": 1,
+                "type": "stream_event",
+                "sn": sn,
+                "stream_instance_id": str(sid),
+                "state": "stopped",
+                "reason": "lease_expired",
+                "timestamp": "2026-09-11T12:01:00Z",
+            }
+        ).encode("utf-8")
+
+        handled = await handle_device_ctl_message(
+            routing_key=f"dev.{sn}.ctl",
+            payload=stopped_payload,
+            p_registry=p_reg,
+            cmd_registry=PendingCommandRegistry(),
+            l_registry=l_reg,
+        )
+        assert handled is True
+
+        # Active lease stream state must be reset
+        assert lease.stream_state == "stopped"
+        assert lease.stream_instance_id is None
+        assert lease.stream_mode is None
+        assert lease.selected_desktop_id is None
+
+        # WebSocket listener must have received stream_state stopped
+        ws_msg: WsStreamState = stream_q.get_nowait()
+        assert isinstance(ws_msg, WsStreamState)
+        assert ws_msg.type == "stream_state"
+        assert ws_msg.state == "stopped"
+        assert ws_msg.reason == "lease_expired"
+
+    finally:
+        await p_reg.unsubscribe_stream(sn, stream_q)

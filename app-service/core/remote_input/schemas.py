@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Annotated, Any, Literal, Union
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 
@@ -201,6 +201,20 @@ class KeyEventCommand(StrictBaseModel):
     expires_at_ms: int
 
 
+class CtlLeaseRenew(StrictBaseModel):
+    v: Literal[1] = 1
+    type: Literal["lease_renew"] = "lease_renew"
+    cmd_id: UUID = Field(default_factory=uuid4)
+    lease_id: UUID
+    ttl_sec: int
+    expires_at_ms: int
+    timestamp: str
+
+    @property
+    def command_id(self) -> UUID:
+        return self.cmd_id
+
+
 # ── Terminal → Server Inbound Envelopes ──────────────────────────────────────
 
 
@@ -240,8 +254,9 @@ class CtlNack(StrictBaseModel):
 class CtlPresence(StrictBaseModel):
     v: Literal[1] = 1
     type: Literal["presence"] = "presence"
-    agent: Literal["l4desk"] = "l4desk"
-    status: Literal["online", "offline"]
+    agent: Literal["l4desk"] | str = "l4desk"
+    status: Literal["online", "offline"] | str = "online"
+    online: bool | None = None
     desktop_available: bool = False
     session_id: int | None = None
     screen: ScreenInfo | None = None
@@ -292,6 +307,8 @@ class LeaseStatusView(BaseModel):
     expires_at: str | None = None
     stream_instance_id: UUID | None = None
     selected_desktop_id: str | None = None
+    stream_state: str | None = None
+    stream_mode: str | None = None
 
 
 class StatusResponse(BaseModel):
@@ -324,6 +341,7 @@ class LeaseResponse(BaseModel):
     selected_desktop_id: str | None = None
     selected_session_id: int | None = None
     stream_mode: str | None = None
+    stream_state: str | None = None
 
 
 class ScopeUpgradeRequest(StrictBaseModel):
@@ -509,6 +527,7 @@ class WsError(BaseModel):
             "desktop_mismatch",
             "stream_mismatch",
             "vk_not_allowed",
+            "mode_conflict",
         ]
         | str
     )

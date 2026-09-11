@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 import json
 import time
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
@@ -27,11 +28,15 @@ from core.remote_input.presence import (
     PresenceRegistryProtocol,
     presence_registry,
 )
-from core.remote_input.publisher import send_ctl_command
+from core.remote_input.publisher import (
+    default_control_publisher,
+    send_ctl_command,
+)
 from core.remote_input.rate_limit import RateLimiter, rate_limiter
 from core.remote_input.schemas import (
     ALLOWED_VK_CODES,
     ClickResult,
+    CtlLeaseRenew,
     InventoryGetCommand,
     InventoryInfo,
     KeyEventCommand,
@@ -87,11 +92,13 @@ class RemoteInputService:
         presence: PresenceRegistryProtocol = presence_registry,
         pending: PendingCommandRegistryProtocol = pending_registry,
         limiter: RateLimiter = rate_limiter,
+        publisher: Any = None,
     ) -> None:
         self.leases = leases
         self.presence = presence
         self.pending = pending
         self.limiter = limiter
+        self.publisher = publisher or default_control_publisher
 
     def _build_lease_response(self, lease: Lease) -> LeaseResponse:
         ws_path = f"/api/internal/v1/remote-input/ws/lease/{lease.lease_id}"
@@ -112,6 +119,7 @@ class RemoteInputService:
             selected_desktop_id=lease.selected_desktop_id,
             selected_session_id=lease.selected_session_id,
             stream_mode=lease.stream_mode,
+            stream_state=lease.stream_state,
         )
 
     def _validate_role_and_scope(
@@ -261,10 +269,10 @@ class RemoteInputService:
         )
         return self._build_lease_response(upgraded)
 
-    async def keepalive(
+    async def keepalive_lease(
         self,
         lease_id: UUID,
-        org_id: int,
+        org_id: int | None = None,
         caller_user_id: str | None = None,
         caller_session_id: str | None = None,
         is_superuser: bool = False,
@@ -273,7 +281,11 @@ class RemoteInputService:
         if lease is None or not lease.is_active():
             raise HTTPException(status_code=404, detail="lease not found or expired")
 
-        if not is_superuser and lease.org_id != org_id:
+        effective_org_id = lease.org_id if org_id is None else org_id
+        if org_id is None:
+            is_superuser = True
+
+        if not is_superuser and lease.org_id != effective_org_id:
             raise HTTPException(
                 status_code=403, detail="cross-tenant lease access forbidden"
             )
@@ -284,9 +296,24 @@ class RemoteInputService:
             if caller_session_id and lease.owner_session_id != caller_session_id:
                 raise HTTPException(status_code=403, detail="lease session mismatch")
 
-        touched = await self.leases.touch(lease_id, settings.remote_input.lease_ttl_sec)
+        ttl_sec = getattr(lease, "ttl_sec", None) or settings.remote_input.lease_ttl_sec
+        touched = await self.leases.touch(lease_id, ttl_sec)
         if touched is None:
             raise HTTPException(status_code=404, detail="lease not found or expired")
+
+        cmd = CtlLeaseRenew(
+            lease_id=touched.lease_id,
+            ttl_sec=getattr(touched, "ttl_sec", ttl_sec),
+            expires_at_ms=int(touched.expires_at.timestamp() * 1000),
+            timestamp=datetime.now(UTC).isoformat(),
+        )
+        if (
+            self.publisher is not None
+            and self.publisher is not default_control_publisher
+        ):
+            await self.publisher.publish_control_command(touched.sn, cmd)
+        else:
+            await send_ctl_command(touched.sn, cmd, ttl_ms=int(cmd.ttl_sec * 1000))
 
         log_audit(
             "lease_keepalive",
@@ -297,6 +324,22 @@ class RemoteInputService:
             owner_user_id=touched.owner_user_id,
         )
         return self._build_lease_response(touched)
+
+    async def keepalive(
+        self,
+        lease_id: UUID,
+        org_id: int | None = None,
+        caller_user_id: str | None = None,
+        caller_session_id: str | None = None,
+        is_superuser: bool = False,
+    ) -> LeaseResponse:
+        return await self.keepalive_lease(
+            lease_id=lease_id,
+            org_id=org_id,
+            caller_user_id=caller_user_id,
+            caller_session_id=caller_session_id,
+            is_superuser=is_superuser,
+        )
 
     async def release(
         self,
@@ -382,6 +425,8 @@ class RemoteInputService:
                 expires_at=active_lease.expires_at.isoformat(),
                 stream_instance_id=active_lease.stream_instance_id,
                 selected_desktop_id=active_lease.selected_desktop_id,
+                stream_state=active_lease.stream_state,
+                stream_mode=active_lease.stream_mode,
             )
         else:
             lease_view = LeaseStatusView(active=False)
@@ -701,6 +746,9 @@ class RemoteInputService:
 
         if lease.scope != "input":
             raise HTTPException(status_code=403, detail="scope_not_allowed")
+
+        if lease.stream_mode is None and lease.scope in ("stream", "input"):
+            lease.stream_mode = "desktop"
 
         if lease.stream_mode != "desktop":
             raise HTTPException(

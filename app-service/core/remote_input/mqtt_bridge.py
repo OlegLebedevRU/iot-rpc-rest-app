@@ -29,6 +29,37 @@ from core.remote_input.schemas import (
 log = setup_module_logger(__name__, "remote_input.log")
 
 
+class AgentOnlineStatus:
+    def __init__(self, online: bool = False) -> None:
+        self.online = online
+
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
+
+    def __setitem__(self, item: str, value: Any) -> None:
+        setattr(self, item, value)
+
+    def __repr__(self) -> str:
+        return f"AgentOnlineStatus(online={self.online})"
+
+
+class SnStatus:
+    def __init__(self, online: bool = False) -> None:
+        self.agent = AgentOnlineStatus(online=online)
+
+    def __getitem__(self, item: str) -> Any:
+        return getattr(self, item)
+
+    def __setitem__(self, item: str, value: Any) -> None:
+        setattr(self, item, value)
+
+    def __repr__(self) -> str:
+        return f"SnStatus(agent={self.agent})"
+
+
+_SN_STATUS: dict[str, SnStatus] = {}
+
+
 def extract_sn_from_ctl_routing_key(routing_key: str) -> str | None:
     normalized = routing_key.replace("/", ".")
     parts = normalized.split(".")
@@ -169,7 +200,20 @@ async def handle_device_ctl_message(
                 return resolved
 
         elif isinstance(envelope, CtlPresence):
-            await p_registry.update(sn, envelope)
+            is_online = (envelope.status == "online") or (
+                getattr(envelope, "online", None) is True
+            )
+            if is_online:
+                if sn not in _SN_STATUS:
+                    _SN_STATUS[sn] = SnStatus(online=True)
+                else:
+                    _SN_STATUS[sn].agent.online = True
+
+            changed, view = await p_registry.update(sn, envelope)
+            if sn not in _SN_STATUS:
+                _SN_STATUS[sn] = SnStatus(online=view.online)
+            else:
+                _SN_STATUS[sn].agent.online = view.online
             return True
 
         elif isinstance(envelope, CtlStreamEvent):
@@ -186,15 +230,19 @@ async def handle_device_ctl_message(
                 "session_unavailable",
             ):
                 active_lease = await l_registry.get_active_by_sn(sn)
-                if active_lease and (
-                    envelope.stream_instance_id is None
-                    or active_lease.stream_instance_id == envelope.stream_instance_id
-                ):
+                if active_lease:
+                    active_lease.stream_state = "stopped"
                     active_lease.stream_instance_id = None
                     active_lease.stream_mode = None
                     active_lease.selected_desktop_id = None
                     active_lease.selected_session_id = None
                     active_lease.selected_camera_id = None
+            elif envelope.state == "running":
+                active_lease = await l_registry.get_active_by_sn(sn)
+                if active_lease:
+                    active_lease.stream_state = "running"
+                    if envelope.stream_instance_id is not None:
+                        active_lease.stream_instance_id = envelope.stream_instance_id
             await p_registry.update_stream_event(sn, envelope)
             return True
 

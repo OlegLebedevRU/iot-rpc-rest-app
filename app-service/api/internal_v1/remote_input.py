@@ -729,10 +729,13 @@ async def remote_input_ws(
                     )
                     continue
 
+                if lease.stream_mode is None and lease.scope in ("stream", "input"):
+                    lease.stream_mode = "desktop"
+
                 if lease.stream_mode != "desktop":
                     await outgoing_queue.put(
                         WsError(
-                            code="input_not_allowed_in_camera_mode",
+                            code="mode_conflict",
                             message="Pointer move only allowed in desktop mode",
                         ).model_dump(mode="json")
                     )
@@ -757,10 +760,13 @@ async def remote_input_ws(
                     )
                     continue
 
+                if lease.stream_mode is None and lease.scope in ("stream", "input"):
+                    lease.stream_mode = "desktop"
+
                 if lease.stream_mode != "desktop":
                     await outgoing_queue.put(
                         WsError(
-                            code="input_not_allowed_in_camera_mode",
+                            code="mode_conflict",
                             message="Mouse click only allowed in desktop mode",
                             client_ref=msg.client_ref,
                         ).model_dump(mode="json")
@@ -816,10 +822,13 @@ async def remote_input_ws(
                     )
                     continue
 
+                if lease.stream_mode is None and lease.scope in ("stream", "input"):
+                    lease.stream_mode = "desktop"
+
                 if lease.stream_mode != "desktop":
                     await outgoing_queue.put(
                         WsError(
-                            code="input_not_allowed_in_camera_mode",
+                            code="mode_conflict",
                             message="Key event only allowed in desktop mode",
                             client_ref=msg.client_ref,
                         ).model_dump(mode="json")
