@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -161,7 +161,9 @@ def test_l4desk_inbound_ack_results(result: str):
     state = (
         "running"
         if result in ("started", "switched")
-        else "stopped" if result == "stopped" else None
+        else "stopped"
+        if result == "stopped"
+        else None
     )
 
     raw = {
@@ -511,3 +513,75 @@ async def test_mqtt_bridge_e2e_stream_event_with_sn():
 
     finally:
         await p_reg.unsubscribe_stream(sn, stream_q)
+
+
+# ── Тест 4: Золотые фикстуры контракта lease_renew и ACK/NACK (F1/F2) ──────────
+
+
+def test_golden_lease_renew_wire_fixture():
+    """Золотая фикстура wire-формата lease_renew: канонический command_id, без cmd_id."""
+    from core.remote_input.schemas import CtlLeaseRenew
+
+    cid = UUID("e2d83e20-3ca2-4ff5-b9aa-78d15ba40939")
+    lid = UUID("11111111-2222-3333-4444-555555555555")
+    renew = CtlLeaseRenew(
+        command_id=cid,
+        lease_id=lid,
+        ttl_sec=60,
+        expires_at_ms=1726059600000,
+        timestamp="2026-09-11T14:57:00Z",
+    )
+    raw = renew.model_dump(mode="json")
+    expected = {
+        "v": 1,
+        "type": "lease_renew",
+        "command_id": "e2d83e20-3ca2-4ff5-b9aa-78d15ba40939",
+        "lease_id": "11111111-2222-3333-4444-555555555555",
+        "ttl_sec": 60,
+        "expires_at_ms": 1726059600000,
+        "timestamp": "2026-09-11T14:57:00Z",
+    }
+    assert raw == expected
+    assert "cmd_id" not in raw
+
+
+@pytest.mark.asyncio
+async def test_golden_ctl_ack_with_applied_deadline_wire_fixture():
+    """Золотая фикстура входящего ACK продления от terminal/l4desk с applied_deadline_ms."""
+    from core.remote_input.mqtt_bridge import handle_device_ctl_message
+    from core.remote_input.pending import PendingCommandRegistry
+
+    cmd_reg = PendingCommandRegistry()
+    cid = UUID("e2d83e20-3ca2-4ff5-b9aa-78d15ba40939")
+    lid = UUID("11111111-2222-3333-4444-555555555555")
+
+    future = await cmd_reg.register(
+        command_id=cid,
+        lease_id=lid,
+        sn="SN773",
+        cmd_type="lease_renew",
+        timeout_sec=5.0,
+    )
+
+    incoming_ack = {
+        "v": 1,
+        "type": "ack",
+        "command_id": "e2d83e20-3ca2-4ff5-b9aa-78d15ba40939",
+        "lease_id": "11111111-2222-3333-4444-555555555555",
+        "sn": "SN773",
+        "result": "renewed",
+        "applied_deadline_ms": 1726059600000,
+        "terminal_time_ms": 1726059540000,
+    }
+
+    handled = await handle_device_ctl_message(
+        routing_key="dev.SN773.ctl",
+        payload=incoming_ack,
+        cmd_registry=cmd_reg,
+    )
+    assert handled is True
+    assert future.done()
+    res = future.result()
+    assert res.result == "renewed"
+    assert res.applied_deadline_ms == 1726059600000
+    assert res.terminal_time_ms == 1726059540000

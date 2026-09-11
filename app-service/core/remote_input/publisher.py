@@ -62,17 +62,18 @@ async def send_ctl_command(
         )
 
     corr_id = getattr(command, "command_id", getattr(command, "cmd_id", None))
+    corr_id_str = str(corr_id) if corr_id is not None else None
 
     routing_key = f"{settings.rmq.prefix_srv}.{sn}.{settings.rmq.suffix_control}"
     headers = {
-        "correlationData": str(corr_id),
+        "correlationData": corr_id_str or "",
         "ctl_type": command.type,
     }
 
     log.debug(
         "Publishing ctl command: routing_key=%s command_id=%s type=%s expiration=%s",
         routing_key,
-        corr_id,
+        corr_id_str,
         command.type,
         ttl_ms,
     )

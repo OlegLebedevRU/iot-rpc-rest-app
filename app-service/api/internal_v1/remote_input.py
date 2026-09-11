@@ -45,6 +45,7 @@ from core.remote_input.schemas import (
     WsHello,
     WsInboundAdapter,
     WsKeepalive,
+    WsKeepaliveResult,
     WsKeyEvent,
     WsKeyResult,
     WsLeaseRevoked,
@@ -239,6 +240,7 @@ async def keepalive_lease(
     org_id: Internal_Org_dep,
     _: Internal_Auth_dep,
     request: Request,
+    wait_ack: bool = False,
 ) -> LeaseResponse:
     session_id = extract_caller_session_id(request)
     caller_user_id = extract_caller_user_id(request)
@@ -249,6 +251,7 @@ async def keepalive_lease(
         caller_user_id=caller_user_id,
         caller_session_id=session_id,
         is_superuser=is_request_superuser(request),
+        wait_ack=wait_ack,
     )
 
 
@@ -264,6 +267,7 @@ async def release_lease(
 ) -> Response:
     session_id = extract_caller_session_id(request)
     caller_user_id = extract_caller_user_id(request)
+    request_id = request.headers.get("x-request-id")
 
     await remote_input_service.release(
         lease_id=lease_id,
@@ -271,6 +275,8 @@ async def release_lease(
         caller_user_id=caller_user_id,
         caller_session_id=session_id,
         is_superuser=is_request_superuser(request),
+        channel="http",
+        request_id=request_id,
     )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -587,7 +593,9 @@ async def remote_input_ws(
                 code_str = (
                     "rate_limited"
                     if exc.status_code == 429
-                    else str(exc.detail) if isinstance(exc.detail, str) else "error"
+                    else str(exc.detail)
+                    if isinstance(exc.detail, str)
+                    else "error"
                 )
                 await outgoing_queue.put(
                     WsError(
@@ -694,12 +702,21 @@ async def remote_input_ws(
             # Scope view check: view is read-only
             if lease.scope == "view":
                 if isinstance(msg, WsKeepalive):
-                    await remote_input_service.keepalive(
+                    resp = await remote_input_service.keepalive(
                         lease_id=lease_id,
                         org_id=lease.org_id,
                         caller_user_id=lease.owner_user_id,
                         caller_session_id=lease.owner_session_id,
                         is_superuser=True,
+                    )
+                    await outgoing_queue.put(
+                        WsKeepaliveResult(
+                            lease_id=resp.lease_id,
+                            expires_at=resp.expires_at,
+                            renew_status=resp.renew_status,
+                            terminal_healthy=resp.terminal_healthy,
+                            applied_deadline_ms=resp.applied_deadline_ms,
+                        ).model_dump(mode="json")
                     )
                 elif isinstance(msg, WsRelease):
                     await remote_input_service.release(
@@ -708,6 +725,7 @@ async def remote_input_ws(
                         caller_user_id=lease.owner_user_id,
                         caller_session_id=lease.owner_session_id,
                         is_superuser=True,
+                        channel="ws",
                     )
                     break
                 else:
@@ -801,7 +819,9 @@ async def remote_input_ws(
                     code_str = (
                         "rate_limited"
                         if exc.status_code == 429
-                        else str(exc.detail) if isinstance(exc.detail, str) else "error"
+                        else str(exc.detail)
+                        if isinstance(exc.detail, str)
+                        else "error"
                     )
                     await outgoing_queue.put(
                         WsError(
@@ -873,7 +893,9 @@ async def remote_input_ws(
                     code_str = (
                         "rate_limited"
                         if exc.status_code == 429
-                        else str(exc.detail) if isinstance(exc.detail, str) else "error"
+                        else str(exc.detail)
+                        if isinstance(exc.detail, str)
+                        else "error"
                     )
                     await outgoing_queue.put(
                         WsError(
@@ -884,12 +906,21 @@ async def remote_input_ws(
                     )
 
             elif isinstance(msg, WsKeepalive):
-                await remote_input_service.keepalive(
+                resp = await remote_input_service.keepalive(
                     lease_id=lease_id,
                     org_id=lease.org_id,
                     caller_user_id=lease.owner_user_id,
                     caller_session_id=lease.owner_session_id,
                     is_superuser=True,
+                )
+                await outgoing_queue.put(
+                    WsKeepaliveResult(
+                        lease_id=resp.lease_id,
+                        expires_at=resp.expires_at,
+                        renew_status=resp.renew_status,
+                        terminal_healthy=resp.terminal_healthy,
+                        applied_deadline_ms=resp.applied_deadline_ms,
+                    ).model_dump(mode="json")
                 )
 
             elif isinstance(msg, WsRelease):
@@ -899,6 +930,7 @@ async def remote_input_ws(
                     caller_user_id=lease.owner_user_id,
                     caller_session_id=lease.owner_session_id,
                     is_superuser=True,
+                    channel="ws",
                 )
                 break
 

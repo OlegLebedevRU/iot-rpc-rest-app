@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from core.config import settings
@@ -71,6 +72,45 @@ def extract_sn_from_ctl_routing_key(routing_key: str) -> str | None:
     return sn
 
 
+def _extract_malformed_ctl_diagnostics(
+    payload: bytes | str | dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        raw_dict: dict[str, Any] | None = None
+        if isinstance(payload, dict):
+            raw_dict = payload
+        elif isinstance(payload, bytes):
+            raw_dict = json.loads(payload.decode("utf-8", errors="replace"))
+        elif isinstance(payload, str):
+            raw_dict = json.loads(payload)
+        if isinstance(raw_dict, dict):
+            cmd_type = raw_dict.get("type")
+            cmd_id = raw_dict.get("command_id")
+            terminal_time = raw_dict.get("terminal_time_ms")
+            reason = "invalid_payload"
+            if cmd_type in ("ack", "nack"):
+                if cmd_id is None or (isinstance(cmd_id, str) and not cmd_id.strip()):
+                    reason = "empty_command_id"
+                else:
+                    reason = "invalid_command_id_uuid"
+            return {
+                "type": cmd_type or "unknown",
+                "command_id": str(cmd_id)[:64] if cmd_id is not None else "<none>",
+                "terminal_time_ms": terminal_time
+                if isinstance(terminal_time, int)
+                else None,
+                "reason": reason,
+            }
+    except Exception:
+        pass
+    return {
+        "reason": "unparseable_json",
+        "type": "unknown",
+        "command_id": "<none>",
+        "terminal_time_ms": None,
+    }
+
+
 def decode_ctl_payload(payload: bytes | str | dict[str, Any]) -> CtlInboundMessage:
     if isinstance(payload, bytes):
         if len(payload) > settings.remote_input.max_inbound_payload_bytes:
@@ -107,7 +147,16 @@ async def handle_device_ctl_message(
         try:
             envelope = decode_ctl_payload(payload)
         except Exception as exc:
-            log.warning("Drop invalid ctl payload from sn=%s: %s", sn, exc)
+            diag = _extract_malformed_ctl_diagnostics(payload)
+            log.warning(
+                "Drop invalid ctl payload from sn=%s: reason=%s command_type=%s command_id=%s latency_ms=%s transport=mqtt error=%s",
+                sn,
+                diag.get("reason"),
+                diag.get("type"),
+                diag.get("command_id"),
+                diag.get("terminal_time_ms"),
+                exc,
+            )
             return False
 
         if isinstance(envelope, (CtlAck, CtlNack)):
@@ -156,6 +205,8 @@ async def handle_device_ctl_message(
                     stream_instance_id=envelope.stream_instance_id,
                     state=envelope.state,
                     inventory=envelope.inventory,
+                    applied_deadline_ms=envelope.applied_deadline_ms,
+                    expires_at_ms=envelope.expires_at_ms,
                 )
                 resolved = await cmd_registry.resolve(envelope.command_id, res)
                 if not resolved:
@@ -231,12 +282,34 @@ async def handle_device_ctl_message(
             ):
                 active_lease = await l_registry.get_active_by_sn(sn)
                 if active_lease:
-                    active_lease.stream_state = "stopped"
-                    active_lease.stream_instance_id = None
-                    active_lease.stream_mode = None
-                    active_lease.selected_desktop_id = None
-                    active_lease.selected_session_id = None
-                    active_lease.selected_camera_id = None
+                    if (
+                        active_lease.stream_instance_id is None
+                        or envelope.stream_instance_id is None
+                        or active_lease.stream_instance_id
+                        == envelope.stream_instance_id
+                    ):
+                        active_lease.stream_state = "stopped"
+                        active_lease.stream_instance_id = None
+                        active_lease.stream_mode = None
+                        active_lease.selected_desktop_id = None
+                        active_lease.selected_session_id = None
+                        active_lease.selected_camera_id = None
+                        log.info(
+                            "Cleared lease stream state on %s event: sn=%s lease_id=%s stream_instance_id=%s reason=%s",
+                            envelope.state,
+                            sn,
+                            active_lease.lease_id,
+                            envelope.stream_instance_id,
+                            envelope.reason,
+                        )
+                    else:
+                        log.info(
+                            "Ignored stale %s stream_event for sn=%s (event_instance=%s != active_lease_instance=%s)",
+                            envelope.state,
+                            sn,
+                            envelope.stream_instance_id,
+                            active_lease.stream_instance_id,
+                        )
             elif envelope.state == "running":
                 active_lease = await l_registry.get_active_by_sn(sn)
                 if active_lease:

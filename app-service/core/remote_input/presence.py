@@ -159,14 +159,35 @@ class PresenceRegistry:
                 self._last_inventory[sn] = presence.inventory
             if presence.stream is not None:
                 prev_stream = self._last_stream.get(sn)
-                self._last_stream[sn] = presence.stream
-                if prev_stream is None or prev_stream.state != presence.stream.state:
-                    stream_event_to_dispatch = WsStreamState(
-                        stream_instance_id=presence.stream.stream_instance_id,
-                        state=presence.stream.state,
-                        reason=presence.stream.reason,
-                        timestamp=presence.timestamp,
-                    )
+                stale_running = False
+                if prev_stream is not None and prev_stream.state in (
+                    "stopped",
+                    "failed",
+                ):
+                    if presence.stream.state == "running":
+                        if (
+                            presence.stream.stream_instance_id is not None
+                            and prev_stream.stream_instance_id
+                            == presence.stream.stream_instance_id
+                        ):
+                            stale_running = True
+                            log.warning(
+                                "Ignoring stale presence stream running for sn=%s on already stopped stream_instance_id=%s",
+                                sn,
+                                prev_stream.stream_instance_id,
+                            )
+                if not stale_running:
+                    self._last_stream[sn] = presence.stream
+                    if (
+                        prev_stream is None
+                        or prev_stream.state != presence.stream.state
+                    ):
+                        stream_event_to_dispatch = WsStreamState(
+                            stream_instance_id=presence.stream.stream_instance_id,
+                            state=presence.stream.state,
+                            reason=presence.stream.reason,
+                            timestamp=presence.timestamp,
+                        )
 
             self._presence[sn] = (presence, now)
             view = self._build_view(sn, presence, now, now)
@@ -212,6 +233,29 @@ class PresenceRegistry:
         now = datetime.now(UTC)
         async with self._lock:
             current_stream = self._last_stream.get(sn) or StreamInfo()
+
+            # Epoch check: if current stream is running and event is for an older/different instance, ignore stopped/failed
+            if (
+                event.state in ("stopped", "failed")
+                and current_stream.state == "running"
+                and current_stream.stream_instance_id is not None
+                and event.stream_instance_id is not None
+                and event.stream_instance_id != current_stream.stream_instance_id
+            ):
+                log.info(
+                    "Ignoring stale stream_event %s for sn=%s (event_instance=%s != current_instance=%s)",
+                    event.state,
+                    sn,
+                    event.stream_instance_id,
+                    current_stream.stream_instance_id,
+                )
+                return WsStreamState(
+                    stream_instance_id=current_stream.stream_instance_id,
+                    state=current_stream.state,
+                    reason=current_stream.reason,
+                    timestamp=now.isoformat(),
+                )
+
             current_stream.state = event.state
             if event.stream_instance_id is not None:
                 current_stream.stream_instance_id = event.stream_instance_id

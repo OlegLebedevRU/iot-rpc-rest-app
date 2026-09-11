@@ -22,6 +22,7 @@ from core.remote_input.leases import (
 )
 from core.remote_input.pending import (
     PendingCommandRegistryProtocol,
+    PendingResult,
     pending_registry,
 )
 from core.remote_input.presence import (
@@ -68,8 +69,14 @@ def log_audit(
     code: str | None = None,
     latency_ms: int | None = None,
     owner_user_id: str | None = None,
+    channel: str | None = None,
+    reason: str | None = None,
+    request_id: str | None = None,
+    command_id: str | None = None,
+    renew_status: str | None = None,
+    **kwargs: Any,
 ) -> None:
-    data = {
+    data: dict[str, Any] = {
         "event": event,
         "ts": time.time(),
         "lease_id": str(lease_id) if lease_id else None,
@@ -81,6 +88,12 @@ def log_audit(
         "code": code,
         "latency_ms": latency_ms,
         "owner_user_id": owner_user_id,
+        "channel": channel,
+        "reason": reason,
+        "request_id": request_id,
+        "command_id": command_id,
+        "renew_status": renew_status,
+        **kwargs,
     }
     log.info("AUDIT: %s", json.dumps(data, ensure_ascii=False))
 
@@ -100,7 +113,13 @@ class RemoteInputService:
         self.limiter = limiter
         self.publisher = publisher or default_control_publisher
 
-    def _build_lease_response(self, lease: Lease) -> LeaseResponse:
+    def _build_lease_response(
+        self,
+        lease: Lease,
+        renew_status: str | None = None,
+        terminal_healthy: bool | None = None,
+        applied_deadline_ms: int | None = None,
+    ) -> LeaseResponse:
         ws_path = f"/api/internal/v1/remote-input/ws/lease/{lease.lease_id}"
         return LeaseResponse(
             lease_id=lease.lease_id,
@@ -120,6 +139,9 @@ class RemoteInputService:
             selected_session_id=lease.selected_session_id,
             stream_mode=lease.stream_mode,
             stream_state=lease.stream_state,
+            renew_status=renew_status,
+            terminal_healthy=terminal_healthy,
+            applied_deadline_ms=applied_deadline_ms,
         )
 
     def _validate_role_and_scope(
@@ -276,6 +298,8 @@ class RemoteInputService:
         caller_user_id: str | None = None,
         caller_session_id: str | None = None,
         is_superuser: bool = False,
+        wait_ack: bool = False,
+        timeout_sec: float | None = None,
     ) -> LeaseResponse:
         lease = await self.leases.get(lease_id)
         if lease is None or not lease.is_active():
@@ -297,23 +321,81 @@ class RemoteInputService:
                 raise HTTPException(status_code=403, detail="lease session mismatch")
 
         ttl_sec = getattr(lease, "ttl_sec", None) or settings.remote_input.lease_ttl_sec
+        old_expires_at = lease.expires_at
         touched = await self.leases.touch(lease_id, ttl_sec)
         if touched is None:
             raise HTTPException(status_code=404, detail="lease not found or expired")
 
         cmd = CtlLeaseRenew(
+            command_id=uuid4(),
             lease_id=touched.lease_id,
             ttl_sec=getattr(touched, "ttl_sec", ttl_sec),
             expires_at_ms=int(touched.expires_at.timestamp() * 1000),
-            timestamp=datetime.now(UTC).isoformat(),
+            timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
-        if (
-            self.publisher is not None
-            and self.publisher is not default_control_publisher
-        ):
-            await self.publisher.publish_control_command(touched.sn, cmd)
-        else:
-            await send_ctl_command(touched.sn, cmd, ttl_ms=int(cmd.ttl_sec * 1000))
+
+        future = await self.pending.register(
+            command_id=cmd.command_id,
+            lease_id=touched.lease_id,
+            sn=touched.sn,
+            cmd_type="lease_renew",
+            timeout_sec=timeout_sec or 5.0,
+        )
+
+        try:
+            if (
+                self.publisher is not None
+                and self.publisher is not default_control_publisher
+            ):
+                await self.publisher.publish_control_command(touched.sn, cmd)
+            else:
+                await send_ctl_command(touched.sn, cmd, ttl_ms=int(cmd.ttl_sec * 1000))
+        except Exception as exc:
+            log.warning(
+                "Failed to publish ctl lease_renew for sn=%s: %s", touched.sn, exc
+            )
+            touched.expires_at = old_expires_at
+            await self.pending.resolve(
+                cmd.command_id,
+                PendingResult(
+                    result="unconfirmed", code="publish_error", message=str(exc)
+                ),
+            )
+            raise HTTPException(status_code=503, detail="broker publish failed")
+
+        # Check race with concurrent release
+        current = await self.leases.get(lease_id)
+        if current is None or current.revoked_reason is not None:
+            raise HTTPException(status_code=404, detail="lease not found or expired")
+
+        renew_status = "server_accepted"
+        terminal_healthy: bool | None = None
+        applied_deadline_ms: int | None = None
+
+        if wait_ack:
+            ack_wait = timeout_sec or 2.0
+            try:
+                res = await asyncio.wait_for(asyncio.shield(future), timeout=ack_wait)
+                if res.result in (
+                    "renewed",
+                    "accepted",
+                    "injected",
+                    "started",
+                    "already_running",
+                ):
+                    renew_status = "terminal_applied"
+                    terminal_healthy = True
+                    applied_deadline_ms = (
+                        res.applied_deadline_ms
+                        or res.expires_at_ms
+                        or cmd.expires_at_ms
+                    )
+                elif res.result == "nack":
+                    renew_status = "terminal_nack"
+                    terminal_healthy = False
+            except TimeoutError:
+                renew_status = "terminal_timeout"
+                terminal_healthy = False
 
         log_audit(
             "lease_keepalive",
@@ -322,8 +404,15 @@ class RemoteInputService:
             device_id=touched.device_id,
             sn=touched.sn,
             owner_user_id=touched.owner_user_id,
+            command_id=str(cmd.command_id),
+            renew_status=renew_status,
         )
-        return self._build_lease_response(touched)
+        return self._build_lease_response(
+            touched,
+            renew_status=renew_status,
+            terminal_healthy=terminal_healthy,
+            applied_deadline_ms=applied_deadline_ms,
+        )
 
     async def keepalive(
         self,
@@ -332,6 +421,8 @@ class RemoteInputService:
         caller_user_id: str | None = None,
         caller_session_id: str | None = None,
         is_superuser: bool = False,
+        wait_ack: bool = False,
+        timeout_sec: float | None = None,
     ) -> LeaseResponse:
         return await self.keepalive_lease(
             lease_id=lease_id,
@@ -339,6 +430,8 @@ class RemoteInputService:
             caller_user_id=caller_user_id,
             caller_session_id=caller_session_id,
             is_superuser=is_superuser,
+            wait_ack=wait_ack,
+            timeout_sec=timeout_sec,
         )
 
     async def release(
@@ -348,6 +441,8 @@ class RemoteInputService:
         caller_user_id: str | None = None,
         caller_session_id: str | None = None,
         is_superuser: bool = False,
+        channel: str = "http",
+        request_id: str | None = None,
     ) -> None:
         lease = await self.leases.get(lease_id)
         if lease is None:
@@ -364,6 +459,21 @@ class RemoteInputService:
             if caller_session_id and lease.owner_session_id != caller_session_id:
                 raise HTTPException(status_code=403, detail="lease session mismatch")
 
+        if lease.revoked_reason is not None:
+            log_audit(
+                "lease_release_duplicate",
+                lease_id=lease.lease_id,
+                org_id=lease.org_id,
+                device_id=lease.device_id,
+                sn=lease.sn,
+                owner_user_id=lease.owner_user_id,
+                channel=channel,
+                reason=lease.revoked_reason,
+                request_id=request_id,
+                code="noop_already_released",
+            )
+            return
+
         await self.leases.revoke(lease_id, reason="released")
         await self.pending.cancel_for_lease(lease_id, reason="released")
         await self.limiter.cleanup_lease(lease_id)
@@ -375,6 +485,9 @@ class RemoteInputService:
             device_id=lease.device_id,
             sn=lease.sn,
             owner_user_id=lease.owner_user_id,
+            channel=channel,
+            reason="released",
+            request_id=request_id,
         )
 
     async def release_by_owner(
@@ -928,7 +1041,9 @@ class RemoteInputService:
         res_type: Literal["injected", "nack", "unconfirmed"] = (
             "injected"
             if pending_res.result == "injected"
-            else "nack" if pending_res.result == "nack" else "unconfirmed"
+            else "nack"
+            if pending_res.result == "nack"
+            else "unconfirmed"
         )
 
         return ClickResult(
@@ -1057,7 +1172,9 @@ class RemoteInputService:
         res_type: Literal["injected", "nack", "unconfirmed"] = (
             "injected"
             if pending_res.result == "injected"
-            else "nack" if pending_res.result == "nack" else "unconfirmed"
+            else "nack"
+            if pending_res.result == "nack"
+            else "unconfirmed"
         )
 
         return KeyResult(

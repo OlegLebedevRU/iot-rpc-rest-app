@@ -550,7 +550,8 @@ def test_ctl_lease_renew_schema():
 
     dumped = renew.model_dump(mode="json")
     assert dumped["type"] == "lease_renew"
-    assert dumped["cmd_id"] == str(cid)
+    assert dumped["command_id"] == str(cid)
+    assert "cmd_id" not in dumped
     assert dumped["lease_id"] == str(lid)
     assert dumped["ttl_sec"] == 60
     assert dumped["expires_at_ms"] == 1726000060000

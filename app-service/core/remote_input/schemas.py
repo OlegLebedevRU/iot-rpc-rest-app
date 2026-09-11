@@ -4,7 +4,14 @@ from datetime import datetime
 from typing import Annotated, Any, Literal, Union
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    field_validator,
+    model_validator,
+)
 
 NackCode = Literal[
     "interactive_desktop_unavailable",
@@ -66,6 +73,8 @@ AckResult = Literal[
     "stopped",
     "already_stopped",
     "inventory",
+    "renewed",
+    "accepted",
     "nack",
 ]
 
@@ -204,15 +213,24 @@ class KeyEventCommand(StrictBaseModel):
 class CtlLeaseRenew(StrictBaseModel):
     v: Literal[1] = 1
     type: Literal["lease_renew"] = "lease_renew"
-    cmd_id: UUID = Field(default_factory=uuid4)
+    command_id: UUID = Field(default_factory=uuid4)
     lease_id: UUID
     ttl_sec: int
     expires_at_ms: int
     timestamp: str
 
     @property
-    def command_id(self) -> UUID:
-        return self.cmd_id
+    def cmd_id(self) -> UUID:
+        return self.command_id
+
+    @model_validator(mode="before")
+    @classmethod
+    def _map_legacy_cmd_id(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "cmd_id" in data and "command_id" not in data:
+                data = dict(data)
+                data["command_id"] = data.pop("cmd_id")
+        return data
 
 
 # ── Terminal → Server Inbound Envelopes ──────────────────────────────────────
@@ -228,6 +246,8 @@ class CtlAck(StrictBaseModel):
     code: NackCode | str | None = None
     message: str | None = None
     terminal_time_ms: int | None = None
+    applied_deadline_ms: int | None = None
+    expires_at_ms: int | None = None
     stream_instance_id: UUID | None = None
     state: StreamState | None = None
     inventory: InventoryInfo | None = None
@@ -342,6 +362,9 @@ class LeaseResponse(BaseModel):
     selected_session_id: int | None = None
     stream_mode: str | None = None
     stream_state: str | None = None
+    renew_status: str | None = None
+    terminal_healthy: bool | None = None
+    applied_deadline_ms: int | None = None
 
 
 class ScopeUpgradeRequest(StrictBaseModel):
@@ -538,3 +561,12 @@ class WsError(BaseModel):
 class WsLeaseRevoked(BaseModel):
     type: Literal["lease_revoked"] = "lease_revoked"
     reason: str
+
+
+class WsKeepaliveResult(BaseModel):
+    type: Literal["keepalive_result"] = "keepalive_result"
+    lease_id: UUID
+    expires_at: datetime
+    renew_status: str | None = None
+    terminal_healthy: bool | None = None
+    applied_deadline_ms: int | None = None

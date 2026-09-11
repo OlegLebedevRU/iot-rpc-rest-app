@@ -21,6 +21,8 @@ class PendingResult:
     stream_instance_id: UUID | None = None
     state: str | None = None
     inventory: Any | None = None
+    applied_deadline_ms: int | None = None
+    expires_at_ms: int | None = None
 
 
 @dataclass(slots=True)

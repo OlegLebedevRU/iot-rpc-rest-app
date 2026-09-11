@@ -703,6 +703,8 @@ async def test_keepalive_publishes_ctl_lease_renew(service_env):
         payload = call_kwargs["message"]
         assert payload["type"] == "lease_renew"
         assert payload["v"] == 1
+        assert "command_id" in payload
+        assert "cmd_id" not in payload
         assert payload["lease_id"] == str(lease.lease_id)
         assert payload["ttl_sec"] == 60
         assert payload["expires_at_ms"] > 0
@@ -711,7 +713,7 @@ async def test_keepalive_publishes_ctl_lease_renew(service_env):
 
 @pytest.mark.asyncio
 async def test_keepalive_lease_with_custom_publisher(service_env):
-    _, leases, presence, pending = service_env
+    _, leases, pending, presence = service_env
     mock_publisher = AsyncMock()
     custom_srv = RemoteInputService(
         leases=leases,

@@ -170,7 +170,10 @@ class LeaseRegistry:
                         if existing.scope == scope:
                             existing.last_keepalive_at = now
                             existing.expires_at = now + timedelta(seconds=ttl_sec)
-                            if scope in ("stream", "input"):
+                            if existing.stream_mode is None and scope in (
+                                "stream",
+                                "input",
+                            ):
                                 existing.stream_mode = "desktop"
                             return existing
                         else:
@@ -178,7 +181,10 @@ class LeaseRegistry:
                             existing.scope = scope
                             existing.last_keepalive_at = now
                             existing.expires_at = now + timedelta(seconds=ttl_sec)
-                            if scope in ("stream", "input"):
+                            if existing.stream_mode is None and scope in (
+                                "stream",
+                                "input",
+                            ):
                                 existing.stream_mode = "desktop"
                             return existing
                     else:
@@ -239,7 +245,7 @@ class LeaseRegistry:
             if lease is None or not lease.is_active(now):
                 return None
             lease.scope = new_scope
-            if new_scope in ("stream", "input"):
+            if lease.stream_mode is None and new_scope in ("stream", "input"):
                 lease.stream_mode = "desktop"
             return lease
 
@@ -248,8 +254,9 @@ class LeaseRegistry:
             lease = self._leases_by_id.get(lease_id)
             if lease is None:
                 return None
-            if lease.revoked_reason is None:
-                lease.revoked_reason = reason
+            if lease.revoked_reason is not None:
+                return lease
+            lease.revoked_reason = reason
             if self._active_by_sn.get(lease.sn) == lease_id:
                 self._active_by_sn.pop(lease.sn, None)
             self._active_ws_leases.discard(lease_id)

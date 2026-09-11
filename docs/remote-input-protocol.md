@@ -215,6 +215,20 @@ stateDiagram-v2
 }
 ```
 
+#### `lease_renew`:
+```json
+{
+  "v": 1,
+  "type": "lease_renew",
+  "command_id": "831028de-8f1a-42b9-986a-6a2ee4e5e578",
+  "lease_id": "52857e4e-2895-46c0-b2be-5f80b27feea7",
+  "ttl_sec": 60,
+  "expires_at_ms": 1788806038123,
+  "timestamp": "2026-09-11T14:57:00Z"
+}
+```
+*Примечание:* Поле `command_id` — обязательное wire-поле UUID. Поле `expires_at_ms` обозначает крайний срок действия аренды (lease expiration deadline) на сервере и терминале.
+
 **Белый список Virtual Key (`vk`):**
 - `0x08`: Backspace
 - `0x09`: Tab
@@ -291,14 +305,15 @@ stateDiagram-v2
   "command_id": "018f2195-20d0-4bf6-b51c-8b89412f84b1",
   "lease_id": "52857e4e-2895-46c0-b2be-5f80b27feea7",
   "sn": "a4b0000773c82116d210826",
-  "result": "started",
+  "result": "renewed",
+  "applied_deadline_ms": 1788806038123,
   "stream_instance_id": "426bc0b9-5df1-4ff2-8d75-beae2f1cae5e",
   "state": "running",
   "terminal_time_ms": 1788805978301
 }
 ```
 
-Допустимые значения `result`: `"injected"`, `"started"`, `"already_running"`, `"switched"`, `"stopped"`, `"already_stopped"`.
+Допустимые значения `result`: `"injected"`, `"started"`, `"already_running"`, `"switched"`, `"stopped"`, `"already_stopped"`, `"inventory"`, `"renewed"`, `"accepted"`. Невалидный ACK с пустым или некорректным `command_id` отбрасывается с записью в диагностический лог (не генерируя фиктивный UUID).
 
 #### `nack`:
 ```json
@@ -365,7 +380,7 @@ stateDiagram-v2
 | `GET` | `/devices/{sn}/status` | Получить статус терминала, инвентарь, состояние потока и аренды |
 | `POST`| `/devices/{sn}/lease` | Захват аренды (`scope`, `ttl_sec`) |
 | `POST`| `/lease/{lease_id}/scope` | Смена scope владельцем (`console`, `view`, `stream`, `input`) |
-| `POST`| `/lease/{lease_id}/keepalive` | Продление аренды |
+| `POST`| `/lease/{lease_id}/keepalive` | Продление аренды (`wait_ack=0\|1`) |
 | `DELETE`| `/lease/{lease_id}` | Освобождение аренды |
 | `DELETE`| `/leases/by-owner` | Массовое освобождение аренд пользователя при логауте (`user_id`, `session_id`) |
 | `GET` | `/devices/{sn}/inventory?refresh=0\|1` | Инвентарь дисплеев и камер (при `refresh=1` запрашивает терминал через `inventory_get`) |
@@ -375,6 +390,24 @@ stateDiagram-v2
 | `POST`| `/lease/{lease_id}/mouse/click` | Клик мыши |
 | `POST`| `/lease/{lease_id}/key` | Ввод клавиши (`kind`, `vk`, `text`) |
 | `WS`  | `/ws/lease/{lease_id}` | Двусторонний WebSocket ввода и подписки на события |
+
+### 5.3. Семантика keepalive и release
+
+#### Keepalive (`POST /lease/{lease_id}/keepalive` и WS `keepalive`):
+- Сервер продлевает аренду и публикует `CtlLeaseRenew` с уникальным `command_id` UUID.
+- Возвращает `LeaseResponse` со статусом `renew_status`:
+  - `server_accepted`: аренда на сервере продлена, команда отправлена терминалу.
+  - `terminal_applied`: получено подтверждение ACK от терминала с подтвержденным `applied_deadline_ms`.
+  - `terminal_pending`: команда отправлена, подтверждение от терминала еще в пути.
+  - `terminal_timeout`: истекло время ожидания подтверждения.
+  - `terminal_nack`: терминал отклонил продление.
+- При сбое публикации брокера продление на сервере откатывается, возвращается `503 Service Unavailable`.
+- По WebSocket клиенту отправляется `keepalive_result` (`WsKeepaliveResult`) с актуальным дедлайном и статусом терминала.
+
+#### Release (`DELETE /lease/{lease_id}` и WS `release`):
+- Повторный вызов для уже завершенной своей аренды безопасен и идемпотентен (`204 No Content`).
+- Исключены повторные побочные эффекты (дублирование `StreamStopCommand`, повторная очистка).
+- Межтенантный или чужой вызов строго возвращает `403 Forbidden`.
 
 ---
 
