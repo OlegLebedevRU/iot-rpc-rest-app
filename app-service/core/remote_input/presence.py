@@ -111,6 +111,8 @@ class PresenceRegistry:
         return AgentStatusView(
             online=online,
             desktop_available=desktop_available,
+            version=presence.version if online else None,
+            capabilities=presence.capabilities if online else None,
             session_id=session_id,
             screen=screen,
             inventory=inventory,

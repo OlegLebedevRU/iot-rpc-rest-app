@@ -47,6 +47,9 @@ from core.remote_input.schemas import (
     LeaseStatusView,
     MouseClickCommand,
     PointerMoveCommand,
+    ShortcutActionCommand,
+    ShortcutActionType,
+    ShortcutResult,
     StatusResponse,
     StreamStartCommand,
     StreamStartResponse,
@@ -55,6 +58,16 @@ from core.remote_input.schemas import (
 )
 
 log = setup_module_logger(__name__, "remote_input.log")
+
+
+def _parse_semver(v: str | None) -> tuple[int, ...]:
+    if not v:
+        return (0, 0, 0)
+    parts: list[int] = []
+    for part in v.strip().split("."):
+        digits = "".join(filter(str.isdigit, part))
+        parts.append(int(digits) if digits else 0)
+    return tuple(parts)
 
 
 def log_audit(
@@ -833,14 +846,59 @@ class RemoteInputService:
             state=res.state or "stopped",
         )
 
+    async def check_consumer_compatibility(self, sn: str, action: str) -> None:
+        agent_status = await self.presence.get(sn)
+        min_ver = _parse_semver(settings.remote_input.min_quick_actions_agent_version)
+        agent_ver = _parse_semver(agent_status.version)
+        capabilities = agent_status.capabilities or []
+
+        has_capability = (
+            "quick_actions" in capabilities
+            or "shortcut_action" in capabilities
+            or (action == "right_click" and "right_click" in capabilities)
+        )
+
+        if not (has_capability or (agent_status.version and agent_ver >= min_ver)):
+            raise HTTPException(
+                status_code=409,
+                detail="consumer_version_unsupported",
+            )
+
+    def _check_shortcut_policy(self, lease: Lease, action: str) -> None:
+        if action == "f12":
+            allowed = (
+                settings.remote_input.allow_f12
+                or settings.remote_input.app_profile
+                or getattr(lease, "profile", None)
+                in ("app", "developer", "diagnostics")
+            )
+            if not allowed:
+                raise HTTPException(
+                    status_code=403,
+                    detail="action_blocked_policy",
+                )
+        elif action in ("alt_f4", "win_d"):
+            allowed = (
+                (action == "alt_f4" and settings.remote_input.allow_alt_f4)
+                or (action == "win_d" and settings.remote_input.allow_win_d)
+                or settings.remote_input.maintenance_profile
+                or getattr(lease, "profile", None) == "maintenance"
+            )
+            if not allowed:
+                raise HTTPException(
+                    status_code=403,
+                    detail="action_blocked_policy",
+                )
+
     def _validate_input_command(
         self,
         lease: Lease,
         org_id: int,
         caller_user_id: str | None,
         caller_session_id: str | None,
-        desktop_id: str | None,
-        stream_instance_id: UUID | None,
+        desktop_id: str | None = None,
+        source_id: str | None = None,
+        stream_instance_id: UUID | None = None,
         is_superuser: bool = False,
     ) -> None:
         if not lease.is_active():
@@ -868,7 +926,8 @@ class RemoteInputService:
                 status_code=409, detail="input_not_allowed_in_camera_mode"
             )
 
-        if desktop_id is not None and desktop_id != lease.selected_desktop_id:
+        chosen_source = desktop_id or source_id
+        if chosen_source is not None and chosen_source != lease.selected_desktop_id:
             raise HTTPException(status_code=409, detail="desktop_mismatch")
 
         if (
@@ -884,6 +943,7 @@ class RemoteInputService:
         x: int,
         y: int,
         desktop_id: str | None = None,
+        source_id: str | None = None,
         stream_instance_id: UUID | None = None,
         caller_user_id: str | None = None,
         caller_session_id: str | None = None,
@@ -899,8 +959,9 @@ class RemoteInputService:
             org_id,
             caller_user_id,
             caller_session_id,
-            desktop_id,
-            stream_instance_id,
+            desktop_id=desktop_id,
+            source_id=source_id,
+            stream_instance_id=stream_instance_id,
             is_superuser=is_superuser,
         )
 
@@ -922,6 +983,7 @@ class RemoteInputService:
             x=x,
             y=y,
             desktop_id=lease.selected_desktop_id,
+            source_id=lease.selected_desktop_id,
             stream_instance_id=lease.stream_instance_id,
             issued_at_ms=now_ms,
             expires_at_ms=now_ms + settings.remote_input.move_ttl_ms,
@@ -936,9 +998,10 @@ class RemoteInputService:
         org_id: int,
         x: int,
         y: int,
-        button: Literal["left"] = "left",
+        button: Literal["left", "right"] = "left",
         client_ref: str | None = None,
         desktop_id: str | None = None,
+        source_id: str | None = None,
         stream_instance_id: UUID | None = None,
         caller_user_id: str | None = None,
         caller_session_id: str | None = None,
@@ -954,10 +1017,14 @@ class RemoteInputService:
             org_id,
             caller_user_id,
             caller_session_id,
-            desktop_id,
-            stream_instance_id,
+            desktop_id=desktop_id,
+            source_id=source_id,
+            stream_instance_id=stream_instance_id,
             is_superuser=is_superuser,
         )
+
+        if button == "right":
+            await self.check_consumer_compatibility(lease.sn, "right_click")
 
         if not skip_rate_limit:
             allowed = await self.limiter.check_rate_limit(
@@ -980,6 +1047,7 @@ class RemoteInputService:
             y=y,
             button=button,
             desktop_id=lease.selected_desktop_id,
+            source_id=lease.selected_desktop_id,
             stream_instance_id=lease.stream_instance_id,
             issued_at_ms=now_ms,
             expires_at_ms=now_ms + settings.remote_input.click_ttl_ms,
@@ -1055,6 +1123,133 @@ class RemoteInputService:
             latency_ms=latency_ms,
         )
 
+    async def shortcut_action(
+        self,
+        lease_id: UUID,
+        org_id: int,
+        action: ShortcutActionType,
+        client_ref: str | None = None,
+        desktop_id: str | None = None,
+        source_id: str | None = None,
+        stream_instance_id: UUID | None = None,
+        caller_user_id: str | None = None,
+        caller_session_id: str | None = None,
+        is_superuser: bool = False,
+        skip_rate_limit: bool = False,
+    ) -> ShortcutResult:
+        lease = await self.leases.get(lease_id)
+        if lease is None:
+            raise HTTPException(status_code=409, detail="lease inactive")
+
+        self._validate_input_command(
+            lease,
+            org_id,
+            caller_user_id,
+            caller_session_id,
+            desktop_id=desktop_id,
+            source_id=source_id,
+            stream_instance_id=stream_instance_id,
+            is_superuser=is_superuser,
+        )
+
+        await self.check_consumer_compatibility(lease.sn, "shortcut_action")
+        self._check_shortcut_policy(lease, action)
+
+        if not skip_rate_limit:
+            allowed = await self.limiter.check_rate_limit(
+                lease_id,
+                "shortcut_action",
+                settings.remote_input.click_rate_per_sec,
+            )
+            if not allowed:
+                raise HTTPException(status_code=429, detail="rate limited")
+
+        command_id = uuid4()
+        now_ms = int(time.time() * 1000)
+        t_start = time.monotonic()
+
+        cmd = ShortcutActionCommand(
+            command_id=command_id,
+            lease_id=lease.lease_id,
+            sn=lease.sn,
+            action=action,
+            desktop_id=lease.selected_desktop_id,
+            source_id=lease.selected_desktop_id,
+            stream_instance_id=lease.stream_instance_id,
+            issued_at_ms=now_ms,
+            expires_at_ms=now_ms + settings.remote_input.click_ttl_ms,
+        )
+
+        future = await self.pending.register(
+            command_id=command_id,
+            lease_id=lease.lease_id,
+            sn=lease.sn,
+            cmd_type="shortcut_action",
+            timeout_sec=settings.remote_input.click_ack_timeout_ms / 1000.0,
+        )
+
+        await send_ctl_command(lease.sn, cmd, settings.remote_input.click_ttl_ms)
+
+        timeout_sec = settings.remote_input.click_ack_timeout_ms / 1000.0
+        try:
+            pending_res = await asyncio.wait_for(future, timeout=timeout_sec)
+        except TimeoutError, asyncio.TimeoutError:
+            pending_res = None
+
+        latency_ms = int((time.monotonic() - t_start) * 1000)
+
+        if pending_res is None:
+            log_audit(
+                "command_dispatch",
+                lease_id=lease.lease_id,
+                org_id=lease.org_id,
+                device_id=lease.device_id,
+                sn=lease.sn,
+                cmd_type="shortcut_action",
+                result="unconfirmed",
+                code="ack_timeout",
+                latency_ms=latency_ms,
+                owner_user_id=lease.owner_user_id,
+            )
+            return ShortcutResult(
+                command_id=command_id,
+                client_ref=client_ref,
+                result="unconfirmed",
+                code="ack_timeout",
+                message="Shortcut action dispatch timeout (no ACK/NACK received)",
+                latency_ms=latency_ms,
+            )
+
+        log_audit(
+            "command_dispatch",
+            lease_id=lease.lease_id,
+            org_id=lease.org_id,
+            device_id=lease.device_id,
+            sn=lease.sn,
+            cmd_type="shortcut_action",
+            result=pending_res.result,
+            code=pending_res.code,
+            latency_ms=latency_ms,
+            owner_user_id=lease.owner_user_id,
+        )
+
+        res_type: Literal["injected", "nack", "unconfirmed"] = (
+            "injected"
+            if pending_res.result == "injected"
+            else "nack"
+            if pending_res.result == "nack"
+            else "unconfirmed"
+        )
+
+        return ShortcutResult(
+            command_id=command_id,
+            client_ref=client_ref,
+            result=res_type,
+            code=pending_res.code,
+            message=pending_res.message,
+            latency_ms=latency_ms,
+        )
+
     async def key_event(
         self,
         lease_id: UUID,
@@ -1064,6 +1259,7 @@ class RemoteInputService:
         text: str | None = None,
         client_ref: str | None = None,
         desktop_id: str | None = None,
+        source_id: str | None = None,
         stream_instance_id: UUID | None = None,
         caller_user_id: str | None = None,
         caller_session_id: str | None = None,
@@ -1085,10 +1281,14 @@ class RemoteInputService:
             org_id,
             caller_user_id,
             caller_session_id,
-            desktop_id,
-            stream_instance_id,
+            desktop_id=desktop_id,
+            source_id=source_id,
+            stream_instance_id=stream_instance_id,
             is_superuser=is_superuser,
         )
+
+        if vk == 0x7B:  # VK_F12
+            self._check_shortcut_policy(lease, "f12")
 
         if not skip_rate_limit:
             allowed = await self.limiter.check_rate_limit(

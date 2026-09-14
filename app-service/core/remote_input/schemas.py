@@ -33,6 +33,11 @@ NackCode = Literal[
     "ffmpeg_integrity",
     "input_not_allowed_in_camera_mode",
     "invalid_profile",
+    "desktop_locked",
+    "action_blocked_policy",
+    "action_blocked_winlogon_guard",
+    "insufficient_integrity",
+    "input_injection_failed",
 ]
 
 ALLOWED_VK_CODES: frozenset[int] = frozenset(
@@ -131,15 +136,19 @@ class StreamInfo(StrictBaseModel):
 # ── Server → Terminal Commands ───────────────────────────────────────────────
 
 
+ShortcutActionType = Literal["f12", "alt_f4", "win_d"]
+
+
 class PointerMoveCommand(StrictBaseModel):
     v: Literal[1] = 1
     type: Literal["pointer_move"] = "pointer_move"
     command_id: UUID
     lease_id: UUID
     sn: str
-    x: int = Field(..., ge=0, le=65535)
-    y: int = Field(..., ge=0, le=65535)
+    x: int = Field(..., ge=0, le=65535, strict=True)
+    y: int = Field(..., ge=0, le=65535, strict=True)
     desktop_id: str | None = None
+    source_id: str | None = None
     stream_instance_id: UUID | None = None
     issued_at_ms: int
     expires_at_ms: int
@@ -151,10 +160,25 @@ class MouseClickCommand(StrictBaseModel):
     command_id: UUID
     lease_id: UUID
     sn: str
-    x: int = Field(..., ge=0, le=65535)
-    y: int = Field(..., ge=0, le=65535)
-    button: Literal["left"] = "left"
+    x: int = Field(..., ge=0, le=65535, strict=True)
+    y: int = Field(..., ge=0, le=65535, strict=True)
+    button: Literal["left", "right"] = "left"
     desktop_id: str | None = None
+    source_id: str | None = None
+    stream_instance_id: UUID | None = None
+    issued_at_ms: int
+    expires_at_ms: int
+
+
+class ShortcutActionCommand(StrictBaseModel):
+    v: Literal[1] = 1
+    type: Literal["shortcut_action"] = "shortcut_action"
+    command_id: UUID
+    lease_id: UUID
+    sn: str
+    action: ShortcutActionType
+    desktop_id: str | None = None
+    source_id: str | None = None
     stream_instance_id: UUID | None = None
     issued_at_ms: int
     expires_at_ms: int
@@ -275,6 +299,8 @@ class CtlPresence(StrictBaseModel):
     v: Literal[1] = 1
     type: Literal["presence"] = "presence"
     agent: Literal["l4desk"] | str = "l4desk"
+    version: str | None = None
+    capabilities: list[str] | None = None
     status: Literal["online", "offline"] | str = "online"
     online: bool | None = None
     desktop_available: bool = False
@@ -309,6 +335,8 @@ CtlInboundAdapter: TypeAdapter[CtlInboundMessage] = TypeAdapter(CtlInboundMessag
 class AgentStatusView(BaseModel):
     online: bool
     desktop_available: bool
+    version: str | None = None
+    capabilities: list[str] | None = None
     session_id: int | None = None
     screen: ScreenInfo | None = None
     inventory: InventoryInfo | None = None
@@ -394,22 +422,41 @@ class StreamStopResponse(BaseModel):
 
 
 class MoveRequest(StrictBaseModel):
-    x: int = Field(..., ge=0, le=65535)
-    y: int = Field(..., ge=0, le=65535)
+    x: int = Field(..., ge=0, le=65535, strict=True)
+    y: int = Field(..., ge=0, le=65535, strict=True)
     desktop_id: str | None = None
+    source_id: str | None = None
     stream_instance_id: UUID | None = None
 
 
 class ClickRequest(StrictBaseModel):
-    x: int = Field(..., ge=0, le=65535)
-    y: int = Field(..., ge=0, le=65535)
-    button: Literal["left"] = "left"
+    x: int = Field(..., ge=0, le=65535, strict=True)
+    y: int = Field(..., ge=0, le=65535, strict=True)
+    button: Literal["left", "right"] = "left"
     client_ref: str | None = Field(default=None, max_length=64)
     desktop_id: str | None = None
+    source_id: str | None = None
     stream_instance_id: UUID | None = None
 
 
 class ClickResult(BaseModel):
+    command_id: UUID
+    client_ref: str | None = None
+    result: Literal["injected", "nack", "unconfirmed"]
+    code: str | None = None
+    message: str | None = None
+    latency_ms: int | None = None
+
+
+class ShortcutRequest(StrictBaseModel):
+    action: ShortcutActionType
+    client_ref: str | None = Field(default=None, max_length=64)
+    desktop_id: str | None = None
+    source_id: str | None = None
+    stream_instance_id: UUID | None = None
+
+
+class ShortcutResult(BaseModel):
     command_id: UUID
     client_ref: str | None = None
     result: Literal["injected", "nack", "unconfirmed"]
@@ -423,6 +470,7 @@ class KeyRequest(StrictBaseModel):
     vk: int = Field(..., ge=0, le=255)
     text: str | None = Field(default=None, max_length=32)
     desktop_id: str | None = None
+    source_id: str | None = None
     stream_instance_id: UUID | None = None
     client_ref: str | None = Field(default=None, max_length=64)
 
@@ -441,19 +489,30 @@ class KeyResult(BaseModel):
 
 class WsPointerMove(StrictBaseModel):
     type: Literal["pointer_move"] = "pointer_move"
-    x: int = Field(..., ge=0, le=65535)
-    y: int = Field(..., ge=0, le=65535)
+    x: int = Field(..., ge=0, le=65535, strict=True)
+    y: int = Field(..., ge=0, le=65535, strict=True)
     desktop_id: str | None = None
+    source_id: str | None = None
     stream_instance_id: UUID | None = None
 
 
 class WsMouseClick(StrictBaseModel):
     type: Literal["mouse_click"] = "mouse_click"
-    x: int = Field(..., ge=0, le=65535)
-    y: int = Field(..., ge=0, le=65535)
-    button: Literal["left"] = "left"
+    x: int = Field(..., ge=0, le=65535, strict=True)
+    y: int = Field(..., ge=0, le=65535, strict=True)
+    button: Literal["left", "right"] = "left"
     client_ref: str | None = Field(default=None, max_length=64)
     desktop_id: str | None = None
+    source_id: str | None = None
+    stream_instance_id: UUID | None = None
+
+
+class WsShortcutAction(StrictBaseModel):
+    type: Literal["shortcut_action"] = "shortcut_action"
+    action: ShortcutActionType
+    client_ref: str | None = Field(default=None, max_length=64)
+    desktop_id: str | None = None
+    source_id: str | None = None
     stream_instance_id: UUID | None = None
 
 
@@ -463,6 +522,7 @@ class WsKeyEvent(StrictBaseModel):
     vk: int = Field(..., ge=0, le=255)
     text: str | None = Field(default=None, max_length=32)
     desktop_id: str | None = None
+    source_id: str | None = None
     stream_instance_id: UUID | None = None
     client_ref: str | None = Field(default=None, max_length=64)
 
@@ -476,7 +536,14 @@ class WsRelease(StrictBaseModel):
 
 
 WsInboundMessage = Annotated[
-    Union[WsPointerMove, WsMouseClick, WsKeyEvent, WsKeepalive, WsRelease],
+    Union[
+        WsPointerMove,
+        WsMouseClick,
+        WsShortcutAction,
+        WsKeyEvent,
+        WsKeepalive,
+        WsRelease,
+    ],
     Field(discriminator="type"),
 ]
 
@@ -519,6 +586,16 @@ class WsStreamState(BaseModel):
 
 class WsClickResult(BaseModel):
     type: Literal["click_result"] = "click_result"
+    command_id: UUID
+    client_ref: str | None = None
+    result: Literal["injected", "nack", "unconfirmed"]
+    code: str | None = None
+    message: str | None = None
+    latency_ms: int | None = None
+
+
+class WsShortcutResult(BaseModel):
+    type: Literal["shortcut_result"] = "shortcut_result"
     command_id: UUID
     client_ref: str | None = None
     result: Literal["injected", "nack", "unconfirmed"]

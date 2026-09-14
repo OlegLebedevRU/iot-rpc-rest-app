@@ -46,7 +46,12 @@ class PendingCommandRegistryProtocol(Protocol):
         timeout_sec: float | None = None,
     ) -> asyncio.Future[PendingResult]: ...
 
-    async def resolve(self, command_id: UUID, result: PendingResult) -> bool: ...
+    async def resolve(
+        self,
+        command_id: UUID,
+        result: PendingResult,
+        lease_id: UUID | None = None,
+    ) -> bool: ...
 
     async def cancel_for_lease(
         self, lease_id: UUID, reason: str = "lease_revoked"
@@ -92,11 +97,29 @@ class PendingCommandRegistry:
             )
             return future
 
-    async def resolve(self, command_id: UUID, result: PendingResult) -> bool:
+    async def resolve(
+        self,
+        command_id: UUID,
+        result: PendingResult,
+        lease_id: UUID | None = None,
+    ) -> bool:
         async with self._lock:
-            cmd = self._pending.pop(command_id, None)
+            cmd = self._pending.get(command_id)
             if cmd is None:
                 return False
+            if (
+                lease_id is not None
+                and cmd.lease_id is not None
+                and lease_id != cmd.lease_id
+            ):
+                log.warning(
+                    "Dropping late response for command_id=%s: lease mismatch incoming=%s registered=%s",
+                    command_id,
+                    lease_id,
+                    cmd.lease_id,
+                )
+                return False
+            self._pending.pop(command_id, None)
             if not cmd.future.done():
                 cmd.future.set_result(result)
             return True

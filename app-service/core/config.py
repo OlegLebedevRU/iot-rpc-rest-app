@@ -416,6 +416,12 @@ class RemoteInputConfig(BaseModel):
     ws_disconnect_grace_sec: int = 10
     stream_start_timeout_sec: int = 15
     inventory_timeout_sec: int = 5
+    allow_f12: bool = False
+    allow_alt_f4: bool = False
+    allow_win_d: bool = False
+    maintenance_profile: bool = False
+    app_profile: bool = False
+    min_quick_actions_agent_version: str = "1.7.2"
 
 
 class DiagnosticsConfig(BaseModel):

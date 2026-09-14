@@ -302,11 +302,20 @@ def test_ws_inbound_mouse_click():
     assert msg.button == "left"
     assert msg.client_ref == "client_req_001"
 
-    # Неподдерживаемая кнопка мыши
+    # Правая кнопка мыши поддерживается в Шаге 6
+    msg_right = WsInboundAdapter.validate_json(
+        json.dumps({"type": "mouse_click", "x": 10, "y": 10, "button": "right"}).encode(
+            "utf-8"
+        )
+    )
+    assert isinstance(msg_right, WsMouseClick)
+    assert msg_right.button == "right"
+
+    # Неподдерживаемая кнопка мыши (middle)
     with pytest.raises(ValidationError):
         WsInboundAdapter.validate_json(
             json.dumps(
-                {"type": "mouse_click", "x": 10, "y": 10, "button": "right"}
+                {"type": "mouse_click", "x": 10, "y": 10, "button": "middle"}
             ).encode("utf-8")
         )
 

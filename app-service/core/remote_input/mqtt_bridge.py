@@ -177,7 +177,9 @@ async def handle_device_ctl_message(
                         message=envelope.message or "",
                         terminal_time_ms=envelope.terminal_time_ms,
                     )
-                    resolved = await cmd_registry.resolve(envelope.command_id, res)
+                    resolved = await cmd_registry.resolve(
+                        envelope.command_id, res, lease_id=envelope.lease_id
+                    )
                     if not resolved:
                         log.debug(
                             "Duplicate or unknown NACK for command_id=%s sn=%s code=%s",
@@ -208,7 +210,9 @@ async def handle_device_ctl_message(
                     applied_deadline_ms=envelope.applied_deadline_ms,
                     expires_at_ms=envelope.expires_at_ms,
                 )
-                resolved = await cmd_registry.resolve(envelope.command_id, res)
+                resolved = await cmd_registry.resolve(
+                    envelope.command_id, res, lease_id=envelope.lease_id
+                )
                 if not resolved:
                     log.debug(
                         "Duplicate or unknown ACK for command_id=%s sn=%s",
@@ -231,7 +235,9 @@ async def handle_device_ctl_message(
                     message=envelope.message,
                     terminal_time_ms=envelope.terminal_time_ms,
                 )
-                resolved = await cmd_registry.resolve(envelope.command_id, res)
+                resolved = await cmd_registry.resolve(
+                    envelope.command_id, res, lease_id=envelope.lease_id
+                )
                 if not resolved:
                     log.debug(
                         "Duplicate or unknown NACK for command_id=%s sn=%s code=%s",

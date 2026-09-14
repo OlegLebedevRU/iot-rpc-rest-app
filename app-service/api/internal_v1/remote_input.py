@@ -36,6 +36,8 @@ from core.remote_input.schemas import (
     LeaseResponse,
     MoveRequest,
     ScopeUpgradeRequest,
+    ShortcutRequest,
+    ShortcutResult,
     StatusResponse,
     StreamStartRequest,
     StreamStartResponse,
@@ -54,6 +56,8 @@ from core.remote_input.schemas import (
     WsPointerMove,
     WsPresence,
     WsRelease,
+    WsShortcutAction,
+    WsShortcutResult,
 )
 from core.remote_input.service import remote_input_service
 
@@ -425,6 +429,39 @@ async def post_mouse_click(
         button=body.button,
         client_ref=body.client_ref,
         desktop_id=body.desktop_id,
+        source_id=body.source_id,
+        stream_instance_id=body.stream_instance_id,
+        caller_user_id=caller_user_id,
+        caller_session_id=session_id,
+        is_superuser=is_request_superuser(request),
+    )
+
+
+@router.post(
+    "/lease/{lease_id}/shortcut",
+    response_model=ShortcutResult,
+)
+@router.post(
+    "/lease/{lease_id}/shortcut-action",
+    response_model=ShortcutResult,
+)
+async def post_shortcut_action(
+    lease_id: UUID,
+    body: ShortcutRequest,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    request: Request,
+) -> ShortcutResult:
+    session_id = extract_caller_session_id(request)
+    caller_user_id = extract_caller_user_id(request)
+
+    return await remote_input_service.shortcut_action(
+        lease_id=lease_id,
+        org_id=org_id,
+        action=body.action,
+        client_ref=body.client_ref,
+        desktop_id=body.desktop_id,
+        source_id=body.source_id,
         stream_instance_id=body.stream_instance_id,
         caller_user_id=caller_user_id,
         caller_session_id=session_id,
@@ -454,6 +491,7 @@ async def post_key_event(
         text=body.text,
         client_ref=body.client_ref,
         desktop_id=body.desktop_id,
+        source_id=body.source_id,
         stream_instance_id=body.stream_instance_id,
         caller_user_id=caller_user_id,
         caller_session_id=session_id,
@@ -583,6 +621,7 @@ async def remote_input_ws(
                     x=msg.x,
                     y=msg.y,
                     desktop_id=msg.desktop_id,
+                    source_id=msg.source_id,
                     stream_instance_id=msg.stream_instance_id,
                     caller_user_id=lease.owner_user_id,
                     caller_session_id=lease.owner_session_id,
@@ -800,6 +839,7 @@ async def remote_input_ws(
                         button=msg.button,
                         client_ref=msg.client_ref,
                         desktop_id=msg.desktop_id,
+                        source_id=msg.source_id,
                         stream_instance_id=msg.stream_instance_id,
                         caller_user_id=lease.owner_user_id,
                         caller_session_id=lease.owner_session_id,
@@ -815,6 +855,69 @@ async def remote_input_ws(
                         latency_ms=click_res.latency_ms,
                     )
                     await outgoing_queue.put(ws_res.model_dump(mode="json"))
+                except HTTPException as exc:
+                    code_str = (
+                        "rate_limited"
+                        if exc.status_code == 429
+                        else str(exc.detail)
+                        if isinstance(exc.detail, str)
+                        else "error"
+                    )
+                    await outgoing_queue.put(
+                        WsError(
+                            code=code_str,
+                            message=str(exc.detail),
+                            client_ref=msg.client_ref,
+                        ).model_dump(mode="json")
+                    )
+
+            elif isinstance(msg, WsShortcutAction):
+                if lease.scope != "input":
+                    await outgoing_queue.put(
+                        WsError(
+                            code="scope_not_allowed",
+                            message="Shortcut action not allowed for non-input scope",
+                            client_ref=msg.client_ref,
+                        ).model_dump(mode="json")
+                    )
+                    continue
+
+                if lease.stream_mode is None and lease.scope in ("stream", "input"):
+                    lease.stream_mode = "desktop"
+
+                if lease.stream_mode != "desktop":
+                    await outgoing_queue.put(
+                        WsError(
+                            code="mode_conflict",
+                            message="Shortcut action only allowed in desktop mode",
+                            client_ref=msg.client_ref,
+                        ).model_dump(mode="json")
+                    )
+                    continue
+
+                try:
+                    sc_res = await remote_input_service.shortcut_action(
+                        lease_id=lease_id,
+                        org_id=lease.org_id,
+                        action=msg.action,
+                        client_ref=msg.client_ref,
+                        desktop_id=msg.desktop_id,
+                        source_id=msg.source_id,
+                        stream_instance_id=msg.stream_instance_id,
+                        caller_user_id=lease.owner_user_id,
+                        caller_session_id=lease.owner_session_id,
+                        is_superuser=True,
+                        skip_rate_limit=False,
+                    )
+                    ws_sc_res = WsShortcutResult(
+                        command_id=sc_res.command_id,
+                        client_ref=sc_res.client_ref,
+                        result=sc_res.result,
+                        code=sc_res.code,
+                        message=sc_res.message,
+                        latency_ms=sc_res.latency_ms,
+                    )
+                    await outgoing_queue.put(ws_sc_res.model_dump(mode="json"))
                 except HTTPException as exc:
                     code_str = (
                         "rate_limited"
@@ -874,6 +977,7 @@ async def remote_input_ws(
                         text=msg.text,
                         client_ref=msg.client_ref,
                         desktop_id=msg.desktop_id,
+                        source_id=msg.source_id,
                         stream_instance_id=msg.stream_instance_id,
                         caller_user_id=lease.owner_user_id,
                         caller_session_id=lease.owner_session_id,

@@ -11,6 +11,7 @@ from core.remote_input.schemas import (
     KeyEventCommand,
     MouseClickCommand,
     PointerMoveCommand,
+    ShortcutActionCommand,
     StreamStartCommand,
     StreamStopCommand,
 )
@@ -21,6 +22,7 @@ log = setup_module_logger(__name__, "remote_input.log")
 CtlCommand = (
     PointerMoveCommand
     | MouseClickCommand
+    | ShortcutActionCommand
     | InventoryGetCommand
     | StreamStartCommand
     | StreamStopCommand

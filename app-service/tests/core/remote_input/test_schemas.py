@@ -106,6 +106,20 @@ def test_mouse_click_command_valid():
     assert cmd.button == "left"
 
 
+def test_mouse_click_right_button_valid():
+    cmd = MouseClickCommand(
+        command_id=uuid4(),
+        lease_id=uuid4(),
+        sn="SN12345",
+        x=0,
+        y=0,
+        button="right",
+        issued_at_ms=1000,
+        expires_at_ms=6000,
+    )
+    assert cmd.button == "right"
+
+
 def test_mouse_click_invalid_button():
     with pytest.raises(ValidationError):
         MouseClickCommand(
@@ -114,7 +128,7 @@ def test_mouse_click_invalid_button():
             sn="SN12345",
             x=0,
             y=0,
-            button="right",  # Only left supported in alpha
+            button="middle",  # middle is not supported
             issued_at_ms=1000,
             expires_at_ms=6000,
         )
