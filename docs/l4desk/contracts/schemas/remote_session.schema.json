@@ -1,0 +1,294 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RemoteSessionSchemas",
+  "definitions": {
+    "RemoteSessionCreate": {
+      "$defs": {
+        "RemoteSessionType": {
+          "enum": [
+            "console",
+            "video"
+          ],
+          "title": "RemoteSessionType",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "operation_id": {
+          "description": "UUID for idempotency",
+          "title": "Operation Id",
+          "type": "string"
+        },
+        "contract_version": {
+          "default": "1.0.0",
+          "description": "Contract version",
+          "title": "Contract Version",
+          "type": "string"
+        },
+        "tenant_id": {
+          "description": "Tenant / Organization ID",
+          "title": "Tenant Id",
+          "type": "integer"
+        },
+        "terminal_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Terminal identifier",
+          "title": "Terminal Id"
+        },
+        "sn": {
+          "description": "Device serial number",
+          "minLength": 1,
+          "title": "Sn",
+          "type": "string"
+        },
+        "session_type": {
+          "$ref": "#/$defs/RemoteSessionType",
+          "description": "console or video"
+        },
+        "requested_by_user_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Requesting user ID",
+          "title": "Requested By User Id"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "End-to-end correlation ID",
+          "title": "Correlation Id"
+        },
+        "session_metadata": {
+          "additionalProperties": true,
+          "description": "Session attributes",
+          "title": "Session Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "operation_id",
+        "tenant_id",
+        "sn",
+        "session_type"
+      ],
+      "title": "RemoteSessionCreate",
+      "type": "object"
+    },
+    "RemoteSessionResponse": {
+      "properties": {
+        "session_id": {
+          "title": "Session Id",
+          "type": "string"
+        },
+        "tenant_id": {
+          "title": "Tenant Id",
+          "type": "integer"
+        },
+        "terminal_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Terminal Id"
+        },
+        "device_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Device Id"
+        },
+        "sn": {
+          "title": "Sn",
+          "type": "string"
+        },
+        "session_type": {
+          "title": "Session Type",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "requested_by_user_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Requested By User Id"
+        },
+        "operation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Operation Id"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "closed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Closed At"
+        },
+        "last_heartbeat_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Last Heartbeat At"
+        },
+        "close_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Close Reason"
+        },
+        "session_metadata": {
+          "additionalProperties": true,
+          "title": "Session Metadata",
+          "type": "object"
+        }
+      },
+      "required": [
+        "session_id",
+        "tenant_id",
+        "sn",
+        "session_type",
+        "status",
+        "created_at"
+      ],
+      "title": "RemoteSessionResponse",
+      "type": "object"
+    },
+    "RemoteSessionStop": {
+      "additionalProperties": false,
+      "properties": {
+        "operation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "UUID for idempotency",
+          "title": "Operation Id"
+        },
+        "reason": {
+          "default": "user_requested",
+          "description": "Stop reason",
+          "title": "Reason",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "End-to-end correlation ID",
+          "title": "Correlation Id"
+        }
+      },
+      "title": "RemoteSessionStop",
+      "type": "object"
+    }
+  }
+}

@@ -87,6 +87,8 @@ class ApiInternalV1Prefix(BaseModel):
     gauges: str = "/gauges"
     webhooks: str = "/webhooks"
     remote_input: str = "/remote-input"
+    remote_sessions: str = "/remote-sessions"
+    remote_session_events: str = "/remote-session-events"
 
 
 class ApiPrefix(BaseModel):

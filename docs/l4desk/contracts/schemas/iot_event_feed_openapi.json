@@ -1,0 +1,1042 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "L4Desk IoT Event Feed & Remote Sessions Internal API",
+    "description": "Versioned internal REST contract for durable session facts and cursor event feed",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/internal/v1/remote-session-events": {
+      "get": {
+        "tags": [
+          "Internal Remote Sessions & Events"
+        ],
+        "summary": "Query durable remote session event feed with monotonic cursor",
+        "operationId": "get_remote_session_events_api_internal_v1_remote_session_events_get",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Return events strictly after this cursor",
+              "default": 0,
+              "title": "After"
+            },
+            "description": "Return events strictly after this cursor"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 1000,
+              "minimum": 1,
+              "description": "Maximum number of events to return",
+              "default": 100,
+              "title": "Limit"
+            },
+            "description": "Maximum number of events to return"
+          },
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by tenant / organization ID",
+              "title": "Tenant Id"
+            },
+            "description": "Filter by tenant / organization ID"
+          },
+          {
+            "name": "sn",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by device serial number",
+              "title": "Sn"
+            },
+            "description": "Filter by device serial number"
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by session ID",
+              "title": "Session Id"
+            },
+            "description": "Filter by session ID"
+          },
+          {
+            "name": "event_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by event type",
+              "title": "Event Type"
+            },
+            "description": "Filter by event type"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteSessionEventFeedResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/v1/remote-session-events/reconciliation": {
+      "get": {
+        "tags": [
+          "Internal Remote Sessions & Events"
+        ],
+        "summary": "Reconciliation summary and cryptographic SHA-256 digest of event feed facts",
+        "operationId": "get_remote_session_events_reconciliation_api_internal_v1_remote_session_events_reconciliation_get",
+        "parameters": [
+          {
+            "name": "tenant_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by tenant ID",
+              "title": "Tenant Id"
+            },
+            "description": "Filter by tenant ID"
+          },
+          {
+            "name": "from_cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start cursor (inclusive)",
+              "title": "From Cursor"
+            },
+            "description": "Start cursor (inclusive)"
+          },
+          {
+            "name": "to_cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End cursor (inclusive)",
+              "title": "To Cursor"
+            },
+            "description": "End cursor (inclusive)"
+          },
+          {
+            "name": "from_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Start time UTC",
+              "title": "From Time"
+            },
+            "description": "Start time UTC"
+          },
+          {
+            "name": "to_time",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "End time UTC",
+              "title": "To Time"
+            },
+            "description": "End time UTC"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteSessionReconciliationResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/v1/remote-sessions": {
+      "post": {
+        "tags": [
+          "Internal Remote Sessions & Events"
+        ],
+        "summary": "Create a remote session with idempotency on operation_id",
+        "operationId": "create_remote_session_api_internal_v1_remote_sessions_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteSessionCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/v1/remote-sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "Internal Remote Sessions & Events"
+        ],
+        "summary": "Get durable facts for a remote session",
+        "operationId": "get_remote_session_api_internal_v1_remote_sessions__session_id__get",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/v1/remote-sessions/{session_id}/stop": {
+      "post": {
+        "tags": [
+          "Internal Remote Sessions & Events"
+        ],
+        "summary": "Stop a remote session idempotently",
+        "operationId": "stop_remote_session_api_internal_v1_remote_sessions__session_id__stop_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteSessionStop",
+                "default": {
+                  "reason": "user_requested"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "RemoteSessionCreate": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id",
+            "description": "UUID for idempotency"
+          },
+          "contract_version": {
+            "type": "string",
+            "title": "Contract Version",
+            "description": "Contract version",
+            "default": "1.0.0"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id",
+            "description": "Tenant / Organization ID"
+          },
+          "terminal_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Id",
+            "description": "Terminal identifier"
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Sn",
+            "description": "Device serial number"
+          },
+          "session_type": {
+            "$ref": "#/components/schemas/RemoteSessionType",
+            "description": "console or video"
+          },
+          "requested_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By User Id",
+            "description": "Requesting user ID"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id",
+            "description": "End-to-end correlation ID"
+          },
+          "session_metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Session Metadata",
+            "description": "Session attributes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "operation_id",
+          "tenant_id",
+          "sn",
+          "session_type"
+        ],
+        "title": "RemoteSessionCreate"
+      },
+      "RemoteSessionEventFeedResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RemoteSessionEventItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "type": "integer",
+            "title": "Next Cursor",
+            "description": "Cursor to use for subsequent 'after' query"
+          },
+          "has_more": {
+            "type": "boolean",
+            "title": "Has More",
+            "description": "Whether more events are available beyond this page"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count",
+            "description": "Number of items returned in this page"
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Time",
+            "description": "Current server UTC timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next_cursor",
+          "has_more",
+          "total_count",
+          "server_time"
+        ],
+        "title": "RemoteSessionEventFeedResponse"
+      },
+      "RemoteSessionEventItem": {
+        "properties": {
+          "cursor": {
+            "type": "integer",
+            "title": "Cursor",
+            "description": "Monotonically increasing sequence cursor"
+          },
+          "event_id": {
+            "type": "string",
+            "title": "Event Id",
+            "description": "Unique event identifier"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At",
+            "description": "UTC timestamp of occurrence"
+          },
+          "event_type": {
+            "type": "string",
+            "title": "Event Type",
+            "description": "Event type name"
+          },
+          "event_version": {
+            "type": "string",
+            "title": "Event Version",
+            "description": "Event contract version",
+            "default": "1.0.0"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id",
+            "description": "Tenant / Organization ID"
+          },
+          "terminal_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Id",
+            "description": "Terminal identifier"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id",
+            "description": "Device internal ID"
+          },
+          "sn": {
+            "type": "string",
+            "title": "Sn",
+            "description": "Device serial number"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id",
+            "description": "Session ID if applicable"
+          },
+          "session_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Type",
+            "description": "console or video"
+          },
+          "lifecycle_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lifecycle State",
+            "description": "Lifecycle state of session"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason",
+            "description": "Reason or status code"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Id",
+            "description": "Operation ID for idempotency"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id",
+            "description": "End-to-end correlation ID"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload",
+            "description": "Immutable event payload"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Database record creation timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "cursor",
+          "event_id",
+          "occurred_at",
+          "event_type",
+          "sn",
+          "created_at"
+        ],
+        "title": "RemoteSessionEventItem"
+      },
+      "RemoteSessionReconciliationResponse": {
+        "properties": {
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          },
+          "from_cursor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Cursor"
+          },
+          "to_cursor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Cursor"
+          },
+          "total_events": {
+            "type": "integer",
+            "title": "Total Events",
+            "default": 0
+          },
+          "min_cursor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Cursor"
+          },
+          "max_cursor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Cursor"
+          },
+          "events_by_type": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Events By Type"
+          },
+          "active_sessions_count": {
+            "type": "integer",
+            "title": "Active Sessions Count",
+            "default": 0
+          },
+          "sessions_by_status": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Sessions By Status"
+          },
+          "feed_sha256": {
+            "type": "string",
+            "title": "Feed Sha256",
+            "description": "SHA-256 digest of feed facts for verification"
+          },
+          "server_time": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Server Time",
+            "description": "Current server UTC timestamp"
+          }
+        },
+        "type": "object",
+        "required": [
+          "feed_sha256",
+          "server_time"
+        ],
+        "title": "RemoteSessionReconciliationResponse"
+      },
+      "RemoteSessionResponse": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id"
+          },
+          "terminal_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Terminal Id"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id"
+          },
+          "sn": {
+            "type": "string",
+            "title": "Sn"
+          },
+          "session_type": {
+            "type": "string",
+            "title": "Session Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "requested_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By User Id"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Id"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "last_heartbeat_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Heartbeat At"
+          },
+          "close_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Reason"
+          },
+          "session_metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Session Metadata"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "tenant_id",
+          "sn",
+          "session_type",
+          "status",
+          "created_at"
+        ],
+        "title": "RemoteSessionResponse"
+      },
+      "RemoteSessionStop": {
+        "properties": {
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Id",
+            "description": "UUID for idempotency"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason",
+            "description": "Stop reason",
+            "default": "user_requested"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id",
+            "description": "End-to-end correlation ID"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RemoteSessionStop"
+      },
+      "RemoteSessionType": {
+        "type": "string",
+        "enum": [
+          "console",
+          "video"
+        ],
+        "title": "RemoteSessionType"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

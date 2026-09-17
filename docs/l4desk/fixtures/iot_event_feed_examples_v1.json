@@ -1,0 +1,277 @@
+{
+  "contract_version": "1.0.0",
+  "schema_revision": "2026-09-17-v1",
+  "events": {
+    "device_online": {
+      "cursor": 1,
+      "event_id": "evt_example_001",
+      "occurred_at": "2026-09-17T22:00:01+00:00",
+      "event_type": "device_online",
+      "event_version": "1.0.0",
+      "tenant_id": 1,
+      "terminal_id": "term-test-01",
+      "device_id": 1001,
+      "sn": "SNTEST01",
+      "session_id": null,
+      "session_type": null,
+      "lifecycle_state": "online",
+      "reason": null,
+      "operation_id": "op-onl-001",
+      "correlation_id": "corr-001",
+      "payload": {
+        "channel": "app",
+        "qos": 1,
+        "retain": true
+      },
+      "created_at": "2026-09-17T22:00:01+00:00"
+    },
+    "remote_session_start_requested": {
+      "cursor": 2,
+      "event_id": "evt_example_002",
+      "occurred_at": "2026-09-17T22:00:02+00:00",
+      "event_type": "remote_session_start_requested",
+      "event_version": "1.0.0",
+      "tenant_id": 1,
+      "terminal_id": "term-test-01",
+      "device_id": 1001,
+      "sn": "SNTEST01",
+      "session_id": "sess-console-9001",
+      "session_type": "console",
+      "lifecycle_state": "requested",
+      "reason": null,
+      "operation_id": "018f3a5b-0001-7001-8000-000000000001",
+      "correlation_id": "corr-002",
+      "payload": {
+        "requested_by_user_id": "user-42"
+      },
+      "created_at": "2026-09-17T22:00:02+00:00"
+    },
+    "remote_session_active": {
+      "cursor": 3,
+      "event_id": "evt_example_003",
+      "occurred_at": "2026-09-17T22:00:03+00:00",
+      "event_type": "remote_session_active",
+      "event_version": "1.0.0",
+      "tenant_id": 1,
+      "terminal_id": "term-test-01",
+      "device_id": 1001,
+      "sn": "SNTEST01",
+      "session_id": "sess-console-9001",
+      "session_type": "console",
+      "lifecycle_state": "active",
+      "reason": null,
+      "operation_id": "018f3a5b-0001-7001-8000-000000000001",
+      "correlation_id": "corr-002",
+      "payload": {
+        "stream_state": "running"
+      },
+      "created_at": "2026-09-17T22:00:03+00:00"
+    },
+    "console_command_started": {
+      "cursor": 4,
+      "event_id": "evt_example_004",
+      "occurred_at": "2026-09-17T22:00:04+00:00",
+      "event_type": "console_command_started",
+      "event_version": "1.0.0",
+      "tenant_id": 1,
+      "terminal_id": "term-test-01",
+      "device_id": 1001,
+      "sn": "SNTEST01",
+      "session_id": "sess-console-9001",
+      "session_type": "console",
+      "lifecycle_state": "executing",
+      "reason": null,
+      "operation_id": "op-cmd-001",
+      "correlation_id": "corr-003",
+      "payload": {
+        "command_id": "system_info",
+        "shell": "cmd"
+      },
+      "created_at": "2026-09-17T22:00:04+00:00"
+    },
+    "console_command_completed": {
+      "cursor": 5,
+      "event_id": "evt_example_005",
+      "occurred_at": "2026-09-17T22:00:05+00:00",
+      "event_type": "console_command_completed",
+      "event_version": "1.0.0",
+      "tenant_id": 1,
+      "terminal_id": "term-test-01",
+      "device_id": 1001,
+      "sn": "SNTEST01",
+      "session_id": "sess-console-9001",
+      "session_type": "console",
+      "lifecycle_state": "completed",
+      "reason": "exit_code_0",
+      "operation_id": "op-cmd-001",
+      "correlation_id": "corr-003",
+      "payload": {
+        "command_id": "system_info",
+        "exit_code": 0,
+        "bytes_emitted": 256
+      },
+      "created_at": "2026-09-17T22:00:05+00:00"
+    },
+    "console_command_timed_out": {
+      "cursor": 6,
+      "event_id": "evt_example_006",
+      "occurred_at": "2026-09-17T22:00:06+00:00",
+      "event_type": "console_command_timed_out",
+      "event_version": "1.0.0",
+      "tenant_id": 1,
+      "terminal_id": "term-test-01",
+      "device_id": 1001,
+      "sn": "SNTEST01",
+      "session_id": "sess-console-9001",
+      "session_type": "console",
+      "lifecycle_state": "timed_out",
+      "reason": "timeout",
+      "operation_id": "op-cmd-002",
+      "correlation_id": "corr-004",
+      "payload": {
+        "command_id": "ping_infinite",
+        "timeout": true
+      },
+      "created_at": "2026-09-17T22:00:06+00:00"
+    },
+    "remote_session_stop_requested": {
+      "cursor": 7,
+      "event_id": "evt_example_007",
+      "occurred_at": "2026-09-17T22:00:07+00:00",
+      "event_type": "remote_session_stop_requested",
+      "event_version": "1.0.0",
+      "tenant_id": 1,
+      "terminal_id": "term-test-01",
+      "device_id": 1001,
+      "sn": "SNTEST01",
+      "session_id": "sess-console-9001",
+      "session_type": "console",
+      "lifecycle_state": "stopping",
+      "reason": "user_requested",
+      "operation_id": "op-stop-001",
+      "correlation_id": "corr-005",
+      "payload": {},
+      "created_at": "2026-09-17T22:00:07+00:00"
+    },
+    "remote_session_closed": {
+      "cursor": 8,
+      "event_id": "evt_example_008",
+      "occurred_at": "2026-09-17T22:00:08+00:00",
+      "event_type": "remote_session_closed",
+      "event_version": "1.0.0",
+      "tenant_id": 1,
+      "terminal_id": "term-test-01",
+      "device_id": 1001,
+      "sn": "SNTEST01",
+      "session_id": "sess-console-9001",
+      "session_type": "console",
+      "lifecycle_state": "closed",
+      "reason": "normal_exit",
+      "operation_id": "op-stop-001",
+      "correlation_id": "corr-005",
+      "payload": {
+        "duration_sec": 7
+      },
+      "created_at": "2026-09-17T22:00:08+00:00"
+    },
+    "remote_session_failed": {
+      "cursor": 9,
+      "event_id": "evt_example_009",
+      "occurred_at": "2026-09-17T22:00:09+00:00",
+      "event_type": "remote_session_failed",
+      "event_version": "1.0.0",
+      "tenant_id": 1,
+      "terminal_id": "term-test-01",
+      "device_id": 1001,
+      "sn": "SNTEST01",
+      "session_id": "sess-video-9002",
+      "session_type": "video",
+      "lifecycle_state": "failed",
+      "reason": "agent_offline",
+      "operation_id": "op-fail-001",
+      "correlation_id": "corr-006",
+      "payload": {
+        "error": "agent_unreachable"
+      },
+      "created_at": "2026-09-17T22:00:09+00:00"
+    }
+  },
+  "feed_page_example": {
+    "items": [
+      {
+        "cursor": 1,
+        "event_id": "evt_example_001",
+        "occurred_at": "2026-09-17T22:00:01+00:00",
+        "event_type": "device_online",
+        "event_version": "1.0.0",
+        "tenant_id": 1,
+        "terminal_id": "term-test-01",
+        "device_id": 1001,
+        "sn": "SNTEST01",
+        "session_id": null,
+        "session_type": null,
+        "lifecycle_state": "online",
+        "reason": null,
+        "operation_id": "op-onl-001",
+        "correlation_id": "corr-001",
+        "payload": {
+          "channel": "app",
+          "qos": 1,
+          "retain": true
+        },
+        "created_at": "2026-09-17T22:00:01+00:00"
+      },
+      {
+        "cursor": 2,
+        "event_id": "evt_example_002",
+        "occurred_at": "2026-09-17T22:00:02+00:00",
+        "event_type": "remote_session_start_requested",
+        "event_version": "1.0.0",
+        "tenant_id": 1,
+        "terminal_id": "term-test-01",
+        "device_id": 1001,
+        "sn": "SNTEST01",
+        "session_id": "sess-console-9001",
+        "session_type": "console",
+        "lifecycle_state": "requested",
+        "reason": null,
+        "operation_id": "018f3a5b-0001-7001-8000-000000000001",
+        "correlation_id": "corr-002",
+        "payload": {
+          "requested_by_user_id": "user-42"
+        },
+        "created_at": "2026-09-17T22:00:02+00:00"
+      }
+    ],
+    "next_cursor": 2,
+    "has_more": true,
+    "total_count": 2,
+    "server_time": "2026-09-17T22:00:10+00:00"
+  },
+  "reconciliation_example": {
+    "tenant_id": 1,
+    "from_cursor": 1,
+    "to_cursor": 9,
+    "total_events": 9,
+    "min_cursor": 1,
+    "max_cursor": 9,
+    "events_by_type": {
+      "device_online": 1,
+      "remote_session_start_requested": 1,
+      "remote_session_active": 1,
+      "console_command_started": 1,
+      "console_command_completed": 1,
+      "console_command_timed_out": 1,
+      "remote_session_stop_requested": 1,
+      "remote_session_closed": 1,
+      "remote_session_failed": 1
+    },
+    "active_sessions_count": 0,
+    "sessions_by_status": {
+      "closed": 1,
+      "failed": 1
+    },
+    "feed_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "server_time": "2026-09-17T22:00:10+00:00"
+  }
+}

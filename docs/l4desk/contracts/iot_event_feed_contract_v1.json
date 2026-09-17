@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "contract_id": "iot_event_feed_contract_v1",
+  "contract_version": "1.0.0",
+  "schema_revision": "2026-09-17-v1",
+  "producer_prompt_id": "L4D-02-IOT",
+  "producer_scope_project": "iot-rpc-rest-app",
+  "consumer_prompt_id": "L4D-03-MB",
+  "consumer_scope_project": "MenuBuilder",
+  "transport": "internal_rest_json",
+  "authentication": {
+    "type": "internal_service_auth",
+    "headers": [
+      "X-Internal-Service-Key",
+      "Authorization: Bearer <key>"
+    ],
+    "unauthorized_status": 403
+  },
+  "endpoints": {
+    "event_feed": {
+      "path": "/api/internal/v1/remote-session-events",
+      "method": "GET",
+      "query_params": {
+        "after": {
+          "type": "integer",
+          "default": 0,
+          "minimum": 0,
+          "description": "Return events strictly after this cursor value"
+        },
+        "limit": {
+          "type": "integer",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Maximum number of events per page"
+        },
+        "tenant_id": {
+          "type": "integer",
+          "required": false,
+          "description": "Optional tenant / organization ID filter"
+        },
+        "sn": {
+          "type": "string",
+          "required": false,
+          "description": "Optional device serial number filter"
+        },
+        "session_id": {
+          "type": "string",
+          "required": false,
+          "description": "Optional session ID filter"
+        },
+        "event_type": {
+          "type": "string",
+          "required": false,
+          "description": "Optional event type filter"
+        }
+      },
+      "ordering": "cursor ASC (deterministic)",
+      "response": {
+        "items": "array of RemoteSessionEventItem",
+        "next_cursor": "integer",
+        "has_more": "boolean",
+        "total_count": "integer",
+        "server_time": "datetime (UTC ISO 8601)"
+      }
+    },
+    "reconciliation": {
+      "path": "/api/internal/v1/remote-session-events/reconciliation",
+      "method": "GET",
+      "query_params": {
+        "tenant_id": {
+          "type": "integer",
+          "required": false
+        },
+        "from_cursor": {
+          "type": "integer",
+          "minimum": 0,
+          "required": false
+        },
+        "to_cursor": {
+          "type": "integer",
+          "minimum": 0,
+          "required": false
+        },
+        "from_time": {
+          "type": "string",
+          "format": "date-time",
+          "required": false
+        },
+        "to_time": {
+          "type": "string",
+          "format": "date-time",
+          "required": false
+        }
+      },
+      "response": {
+        "total_events": "integer",
+        "min_cursor": "integer or null",
+        "max_cursor": "integer or null",
+        "events_by_type": "object (type -> count)",
+        "active_sessions_count": "integer",
+        "sessions_by_status": "object (status -> count)",
+        "feed_sha256": "string (64-char hex SHA-256 digest of feed facts)",
+        "server_time": "datetime (UTC ISO 8601)"
+      }
+    },
+    "create_remote_session": {
+      "path": "/api/internal/v1/remote-sessions",
+      "method": "POST",
+      "idempotency": "Enforced by operation_id. Duplicate operation_id returns existing session.",
+      "request_body": {
+        "operation_id": "UUID string",
+        "contract_version": "1.0.0",
+        "tenant_id": "integer",
+        "terminal_id": "string or null",
+        "sn": "string (Device SN)",
+        "session_type": "console | video",
+        "requested_by_user_id": "string or null",
+        "correlation_id": "string or null",
+        "session_metadata": "object (clean metadata, zero commercial fields)"
+      },
+      "response_status": 201
+    },
+    "get_remote_session": {
+      "path": "/api/internal/v1/remote-sessions/{session_id}",
+      "method": "GET",
+      "response_status": 200,
+      "not_found_status": 404
+    },
+    "stop_remote_session": {
+      "path": "/api/internal/v1/remote-sessions/{session_id}/stop",
+      "method": "POST",
+      "idempotency": "Idempotent. Repeated stop calls return closed session state.",
+      "request_body": {
+        "operation_id": "UUID string or null",
+        "reason": "string (default: 'user_requested')",
+        "correlation_id": "string or null"
+      },
+      "response_status": 200,
+      "not_found_status": 404
+    }
+  },
+  "mandatory_event_types": [
+    "device_online",
+    "remote_session_start_requested",
+    "remote_session_active",
+    "remote_session_stop_requested",
+    "remote_session_closed",
+    "remote_session_failed",
+    "console_command_started",
+    "console_command_completed",
+    "console_command_timed_out"
+  ],
+  "invariants": [
+    "Cursor is strictly monotonically increasing (BigInteger autoincrement sequence)",
+    "Event feed is append-only and deterministic in cursor ASC order",
+    "Duplicate deliveries by event_id or (operation_id + event_type) are idempotently deduped",
+    "occurred_at and created_at timestamps are strictly UTC ISO 8601",
+    "Payloads are validated against commercial field injection (no financial data in IoT feed)",
+    "Agent MQTT protocol remains completely unchanged and binary backward-compatible"
+  ]
+}

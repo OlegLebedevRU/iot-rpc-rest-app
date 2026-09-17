@@ -1,0 +1,175 @@
+{
+  "properties": {
+    "cursor": {
+      "description": "Monotonically increasing sequence cursor",
+      "title": "Cursor",
+      "type": "integer"
+    },
+    "event_id": {
+      "description": "Unique event identifier",
+      "title": "Event Id",
+      "type": "string"
+    },
+    "occurred_at": {
+      "description": "UTC timestamp of occurrence",
+      "format": "date-time",
+      "title": "Occurred At",
+      "type": "string"
+    },
+    "event_type": {
+      "description": "Event type name",
+      "title": "Event Type",
+      "type": "string"
+    },
+    "event_version": {
+      "default": "1.0.0",
+      "description": "Event contract version",
+      "title": "Event Version",
+      "type": "string"
+    },
+    "tenant_id": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Tenant / Organization ID",
+      "title": "Tenant Id"
+    },
+    "terminal_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Terminal identifier",
+      "title": "Terminal Id"
+    },
+    "device_id": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Device internal ID",
+      "title": "Device Id"
+    },
+    "sn": {
+      "description": "Device serial number",
+      "title": "Sn",
+      "type": "string"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Session ID if applicable",
+      "title": "Session Id"
+    },
+    "session_type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "console or video",
+      "title": "Session Type"
+    },
+    "lifecycle_state": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Lifecycle state of session",
+      "title": "Lifecycle State"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Reason or status code",
+      "title": "Reason"
+    },
+    "operation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Operation ID for idempotency",
+      "title": "Operation Id"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "End-to-end correlation ID",
+      "title": "Correlation Id"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "description": "Immutable event payload",
+      "title": "Payload",
+      "type": "object"
+    },
+    "created_at": {
+      "description": "Database record creation timestamp",
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "cursor",
+    "event_id",
+    "occurred_at",
+    "event_type",
+    "sn",
+    "created_at"
+  ],
+  "title": "RemoteSessionEventItem",
+  "type": "object"
+}

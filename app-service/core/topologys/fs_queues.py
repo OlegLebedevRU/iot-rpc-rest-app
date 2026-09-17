@@ -24,6 +24,7 @@ from core.remote_input.mqtt_bridge import handle_device_ctl_message
 
 from core.services.devices import DeviceService
 from core.services.device_tasks import DeviceTasksService
+from core.services.remote_session_event_service import remote_session_event_service
 
 log = setup_module_logger(__name__, "topology_queues.log")
 
@@ -218,6 +219,12 @@ if _REGISTER_SUBSCRIBERS:
             return
 
         await DeviceRepo.update_connect_flag(session, sn, "app_connect", value)
+        if value is True:
+            await remote_session_event_service.record_device_online(
+                session,
+                sn=sn,
+                correlation_id=getattr(msg, "correlation_id", None),
+            )
         await session.commit()
 
     @fs_router.subscriber(q_svc)
@@ -261,6 +268,12 @@ if _REGISTER_SUBSCRIBERS:
             return
 
         await DeviceRepo.update_connect_flag(session, sn, "svc_connect", value)
+        if value is True:
+            await remote_session_event_service.record_device_online(
+                session,
+                sn=sn,
+                correlation_id=getattr(msg, "correlation_id", None),
+            )
         await session.commit()
 
     @fs_router.subscriber(q_device_conn_events)

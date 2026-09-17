@@ -69,3 +69,35 @@ def test_alembic_org_api_keys_migration_upgrade_and_downgrade(monkeypatch):
     mod.downgrade()
     assert mock_drop_index.call_count == 1
     assert mock_drop_table.call_count == 1
+
+
+def test_alembic_remote_session_events_migration_upgrade_and_downgrade(monkeypatch):
+    migration_path = (
+        pathlib.Path(__file__).parent.parent.parent
+        / "alembic"
+        / "versions"
+        / "2026_09_17_0004_add_remote_session_events_and_facts.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_remote_session_events", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    mock_create_table = MagicMock()
+    mock_create_index = MagicMock()
+    mock_drop_index = MagicMock()
+    mock_drop_table = MagicMock()
+
+    monkeypatch.setattr(op, "create_table", mock_create_table)
+    monkeypatch.setattr(op, "create_index", mock_create_index)
+    monkeypatch.setattr(op, "drop_index", mock_drop_index)
+    monkeypatch.setattr(op, "drop_table", mock_drop_table)
+
+    mod.upgrade()
+    assert mock_create_table.call_count == 2
+    assert mock_create_index.call_count == 13
+
+    mod.downgrade()
+    assert mock_drop_index.call_count == 13
+    assert mock_drop_table.call_count == 2
