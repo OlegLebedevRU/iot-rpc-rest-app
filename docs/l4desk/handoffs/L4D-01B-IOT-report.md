@@ -163,7 +163,7 @@ prompt_id: L4D-01B-IOT
 status: VERIFIED
 scope_project: iot-rpc-rest-app
 branch: l4desk/l4d-01b-iot
-commit: 7c1a186
+commit: 0307dd7
 deploy_target: "etranprocessing (87.242.100.34)"
 deployed_image: user1-app1
 verification_summary: "Provider adapter AgentContractV1Adapter implemented; zero commercial fields transmitted; 25/25 golden vectors verified; 357 tests passed; smoke verified"
@@ -174,7 +174,7 @@ artifacts:
   - path: app-service/tests/core/test_l4d_01b_agent_contract_v1.py
     sha256: 0c5005d42935736030c793af7b4e3c9e08ba382523750d742d5a2d169e768a7f
   - path: docs/l4desk/handoffs/L4D-01B-IOT-report.md
-    sha256: a0223714c28492331401ce03ec8171ac3c87700971e2e55158113620c5256f80
+    sha256: df921490a646d2a4003ea083b020e48a0822083c428d2920e83ad1e7dd737cde
 supersedes:
   - H-L4D-00B-IOT-v1
 known_risks:
