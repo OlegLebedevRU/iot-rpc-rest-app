@@ -2,6 +2,7 @@ import logging
 from typing import Any
 from uuid import UUID
 
+from core.adapters.agent_contract_v1 import assert_no_commercial_fields
 from core.config import RoutingKey, settings
 from core.logging_config import setup_module_logger, log_rpc_debug
 from core.schemas.device_tasks import TaskCreate, TaskResponse, TaskNotify
@@ -96,6 +97,8 @@ async def send_rsp(
     expiration: int,
     method_code: str,
 ):
+    if isinstance(t_resp, dict):
+        assert_no_commercial_fields(t_resp)
     routing_key: str = str(
         RoutingKey(prefix=topology.prefix_srv, sn=sn, suffix=topology.suffix_response)
     )

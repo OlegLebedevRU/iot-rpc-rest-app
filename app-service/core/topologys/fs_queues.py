@@ -156,6 +156,14 @@ if _REGISTER_SUBSCRIBERS:
                 session, sn, "res", payload_bytes=payload_bytes
             )
 
+        if msg.body:
+            try:
+                raw_json = json.loads(msg.body.decode("utf-8", errors="replace"))
+                if isinstance(raw_json, dict) and ("command_id" in raw_json or "status" in raw_json):
+                    await handle_device_ctl_message(routing_key=f"dev.{sn}.res", payload=raw_json)
+            except Exception:
+                pass
+
     @fs_router.subscriber(q_out)
     async def diagnostics_output(
         msg: RabbitMessage,

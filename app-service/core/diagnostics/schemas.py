@@ -4,7 +4,7 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
 
 from core.diagnostics.commands import (
     CMD_DIAG_CANCEL,
@@ -37,19 +37,52 @@ class DiagnosticSessionKind(StrEnum):
 
 
 class DeviceOutputEnvelope(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore")
 
     v: int = Field(default=1, ge=1)
-    session_id: UUID
+    session_id: UUID | str
     seq: int = Field(ge=0)
     ts: str | None = None
-    kind: OutputKind
-    stream: str = Field(min_length=1, max_length=64)
+    kind: OutputKind = OutputKind.STDOUT
+    stream: str = Field(default="stdout", min_length=1, max_length=64)
     encoding: OutputEncoding = OutputEncoding.UTF8
-    data: str
+    data: str = ""
     eof: bool = False
     exit_code: int | None = None
     truncated: bool = False
+
+    @field_validator("session_id", mode="before")
+    @classmethod
+    def _parse_session_id(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            try:
+                return UUID(v)
+            except (ValueError, TypeError):
+                return v
+        return v
+
+    @model_validator(mode="before")
+    @classmethod
+    def _adapt_contract_v1(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            data = dict(data)
+            stream = data.get("stream")
+            eof = data.get("eof", False)
+            if "kind" not in data or data["kind"] is None:
+                if eof and data.get("exit_code") is not None:
+                    data["kind"] = OutputKind.RESULT
+                elif stream == "stderr":
+                    data["kind"] = OutputKind.STDERR
+                else:
+                    data["kind"] = OutputKind.STDOUT
+            if "stream" not in data or not data["stream"]:
+                if data.get("kind") == OutputKind.STDERR:
+                    data["stream"] = "stderr"
+                else:
+                    data["stream"] = "stdout"
+            if "data" not in data or data["data"] is None:
+                data["data"] = ""
+        return data
 
 
 class BrowserMessageType(StrEnum):
@@ -75,7 +108,7 @@ class StartLogMessage(BrowserBaseMessage):
 
 class StopLogMessage(BrowserBaseMessage):
     type: Literal[BrowserMessageType.STOP_LOG] = BrowserMessageType.STOP_LOG
-    session_id: UUID
+    session_id: UUID | str
     stream: str = Field(default="esp32-log", min_length=1, max_length=64)
 
 
@@ -84,7 +117,7 @@ class ExecDiagnosticMessage(BrowserBaseMessage):
     command_id: str = Field(default="raw_cmd", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.:-]+$")
     command_line: str | None = Field(default=None, max_length=4096)
     shell: str | None = Field(default="cmd", max_length=32)
-    session_id: UUID | None = Field(default=None)
+    session_id: UUID | str | None = Field(default=None)
     sn: str | None = Field(default=None, max_length=64)
     args: dict[str, Any] = Field(default_factory=dict)
     ttl_sec: int = Field(default=DEFAULT_DIAG_EXEC_TTL_SEC, ge=1, le=3600)
@@ -93,7 +126,7 @@ class ExecDiagnosticMessage(BrowserBaseMessage):
 
 class CancelDiagnosticMessage(BrowserBaseMessage):
     type: Literal[BrowserMessageType.CANCEL] = BrowserMessageType.CANCEL
-    session_id: UUID
+    session_id: UUID | str
     sn: str | None = Field(default=None, max_length=64)
     reason: str | None = Field(default=None, max_length=128)
 
@@ -114,7 +147,7 @@ class DiagStreamControlPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     action: StreamControlAction
-    session_id: UUID
+    session_id: UUID | str
     stream: str = Field(default="esp32-log", min_length=1, max_length=64)
     level: str | None = Field(default=None, min_length=1, max_length=16)
     ttl_sec: int | None = Field(default=None, ge=1, le=3600)
@@ -125,7 +158,7 @@ class DiagStreamControlPayload(BaseModel):
 class DiagExecPayload(BaseModel):
     model_config = ConfigDict(extra="allow")
 
-    session_id: UUID
+    session_id: UUID | str
     command_id: str = Field(default="raw_cmd", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.:-]+$")
     command_line: str | None = None
     shell: str | None = "cmd"
@@ -138,7 +171,7 @@ class DiagExecPayload(BaseModel):
 class DiagCancelPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    session_id: UUID
+    session_id: UUID | str
     reason: str | None = Field(default=None, max_length=128)
 
 
@@ -164,7 +197,7 @@ class BackendMessageType(StrEnum):
 class BackendOutputMessage(BaseModel):
     type: Literal[BackendMessageType.OUTPUT] = BackendMessageType.OUTPUT
     sn: str
-    session_id: UUID
+    session_id: UUID | str
     seq: int
     ts: str | None = None
     kind: OutputKind
@@ -178,13 +211,13 @@ class BackendOutputMessage(BaseModel):
 
 class BackendStatusMessage(BaseModel):
     type: Literal[BackendMessageType.STATUS] = BackendMessageType.STATUS
-    session_id: UUID
+    session_id: UUID | str
     status: str
 
 
 class BackendErrorMessage(BaseModel):
     type: Literal[BackendMessageType.ERROR] = BackendMessageType.ERROR
-    session_id: UUID | None = None
+    session_id: UUID | str | None = None
     error: str
 
 

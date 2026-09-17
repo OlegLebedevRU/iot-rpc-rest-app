@@ -16,7 +16,7 @@ from core.diagnostics.schemas import (
 @dataclass(slots=True)
 class DiagnosticSession:
     sn: str
-    session_id: UUID
+    session_id: UUID | str
     kind: DiagnosticSessionKind
     ttl_sec: int
     queue: asyncio.Queue = field(default_factory=asyncio.Queue)
@@ -25,6 +25,7 @@ class DiagnosticSession:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     closing: bool = False
     bytes_sent: int = 0
+    seen_seqs: set[int] = field(default_factory=set)
 
     @property
     def expires_at(self) -> datetime:
@@ -36,12 +37,12 @@ class DiagnosticSession:
 
 class DiagnosticsSessionRegistry:
     def __init__(self) -> None:
-        self._sessions: dict[tuple[str, UUID], DiagnosticSession] = {}
+        self._sessions: dict[tuple[str, str], DiagnosticSession] = {}
         self._lock = asyncio.Lock()
 
     @staticmethod
-    def _key(sn: str, session_id: UUID) -> tuple[str, UUID]:
-        return sn, session_id
+    def _key(sn: str, session_id: UUID | str) -> tuple[str, str]:
+        return sn, str(session_id)
 
     async def register(self, session: DiagnosticSession) -> DiagnosticSession:
         async with self._lock:
@@ -51,7 +52,7 @@ class DiagnosticsSessionRegistry:
         )
         return session
 
-    async def get(self, sn: str, session_id: UUID) -> DiagnosticSession | None:
+    async def get(self, sn: str, session_id: UUID | str) -> DiagnosticSession | None:
         async with self._lock:
             session = self._sessions.get(self._key(sn, session_id))
             if session is None:
@@ -60,14 +61,14 @@ class DiagnosticsSessionRegistry:
                 return None
             return session
 
-    async def mark_closing(self, sn: str, session_id: UUID) -> DiagnosticSession | None:
+    async def mark_closing(self, sn: str, session_id: UUID | str) -> DiagnosticSession | None:
         async with self._lock:
             session = self._sessions.get(self._key(sn, session_id))
             if session is not None:
                 session.closing = True
             return session
 
-    async def remove(self, sn: str, session_id: UUID) -> DiagnosticSession | None:
+    async def remove(self, sn: str, session_id: UUID | str) -> DiagnosticSession | None:
         async with self._lock:
             return self._sessions.pop(self._key(sn, session_id), None)
 
@@ -84,6 +85,10 @@ class DiagnosticsSessionRegistry:
         if session is None:
             return False
 
+        if envelope.seq in session.seen_seqs:
+            return True
+
+        session.seen_seqs.add(envelope.seq)
         message = output_to_backend_message(sn, envelope)
         session.bytes_sent += len(envelope.data.encode("utf-8"))
         await session.queue.put(message)

@@ -112,7 +112,7 @@ def _try_extract_corr_id_from_body(body: object) -> uuid.UUID | None:
     if not isinstance(payload, dict):
         return None
 
-    for key in ("correlationData", "CorrelationData", "correlation_data", "corr_data", "corr_id"):
+    for key in ("correlationData", "CorrelationData", "correlation_data", "corr_data", "corr_id", "id", "command_id", "target_task_id"):
         if key not in payload:
             continue
 
