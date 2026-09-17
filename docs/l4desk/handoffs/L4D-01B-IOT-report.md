@@ -17,7 +17,7 @@ supported_agent_versions:
   - 1.7.7
 created_at: 2026-09-17T21:15:00Z
 architecture_sections: [3, 4, 5, 11, 12, 16, 17]
-status: VERIFIED
+status: ACCEPTED
 ```
 
 ---
@@ -156,25 +156,77 @@ status: VERIFIED
 
 ## 7. Candidate-блок для handoff-журнала
 
-<!-- HANDOFF:H-L4D-01B-IOT-v1:START -->
+<!-- HANDOFF:H-L4D-01B-IOT-v1:BEGIN -->
 ```yaml
 handoff_id: H-L4D-01B-IOT-v1
-prompt_id: L4D-01B-IOT
-status: VERIFIED
-scope_project: iot-rpc-rest-app
-branch: l4desk/l4d-01b-iot
-commit: 0307dd7
-deploy_target: "etranprocessing (87.242.100.34)"
-deployed_image: user1-app1
-verification_summary: "Provider adapter AgentContractV1Adapter implemented; zero commercial fields transmitted; 25/25 golden vectors verified; 357 tests passed; smoke verified"
-rollback_instructions: "git checkout 2488395 && docker compose build app1 && docker compose up -d --no-deps app1"
-artifacts:
-  - path: app-service/core/adapters/agent_contract_v1.py
-    sha256: 4c22174762d570dd70cbcbea28fc419748184a9a65ae9296f3f7577d7fa584e8
-  - path: app-service/tests/core/test_l4d_01b_agent_contract_v1.py
-    sha256: 0c5005d42935736030c793af7b4e3c9e08ba382523750d742d5a2d169e768a7f
-  - path: docs/l4desk/handoffs/L4D-01B-IOT-report.md
-    sha256: df921490a646d2a4003ea083b020e48a0822083c428d2920e83ad1e7dd737cde
+status: ACCEPTED
+contract_kinds:
+  - DEPLOYMENT
+  - FIXTURES
+producer_prompt_id: L4D-01B-IOT
+producer_scope_project: iot-rpc-rest-app
+producer_report_path: docs/l4desk/handoffs/L4D-01B-IOT-report.md
+producer_branch: l4desk/l4d-01b-iot
+producer_commit: 0307dd7953b339ee48c3068a490732c82ea4e401
+accepted_at_utc: 2026-09-17T21:15:00Z
+contract_version: 1.0.0
+schema_revision: 2026-09-17-v1
+artifact_version: 1.7.7
+artifact_paths:
+  - app-service/core/adapters/agent_contract_v1.py
+  - app-service/tests/core/test_l4d_01b_agent_contract_v1.py
+artifact_sha256:
+  - 4c22174762d570dd70cbcbea28fc419748184a9a65ae9296f3f7577d7fa584e8
+  - 0c5005d42935736030c793af7b4e3c9e08ba382523750d742d5a2d169e768a7f
+compatibility:
+  backward_compatible_with:
+    - 0.2.1
+  breaking_changes: false
+  notes: Provider adapter AgentContractV1Adapter strictly implements Agent Compatibility Contract v1 (agents 1.7.6, 1.7.7) without modifying agent topics, method codes or required payloads. Zero commercial fields transmitted to Agent. Full backward compatibility with existing IoT platform baseline 0.2.1 preserved.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  agent_contract_v1_adapter: enabled
+  commercial_guard: enabled
+contract_payload:
+  identifiers:
+    sn_pattern: "^[0-9A-Za-z_-]{6,32}$"
+    cert_dn_pattern: "CN={SN}"
+    task_id_pattern: "^task-[a-z0-9-]+$"
+    session_id_pattern: "^sess-[a-z0-9-]+$"
+    command_id_pattern: "^[a-z0-9_-]+$"
+  operations_events:
+    presence_topics:
+      - "dev/{SN}/app"
+      - "dev/{SN}/svc"
+    rpc_topics:
+      - "srv/{SN}/tsk"
+      - "srv/{SN}/rsp"
+      - "srv/{SN}/ctl"
+      - "dev/{SN}/out"
+      - "dev/{SN}/res"
+      - "dev/{SN}/ctl"
+    methods:
+      - code: 7000
+        name: "STREAM_CONTROL"
+        actions: ["inventory_get", "stream_start", "lease_renew", "stream_stop", "mouse_click", "key_event", "shortcut_action"]
+      - code: 7001
+        name: "EXEC_COMMAND"
+        shells: ["cmd", "powershell"]
+      - code: 7002
+        name: "CANCEL_TASK"
+        statuses: ["cancelled", "not_found", "already_finished"]
+  errors:
+    stream_errors: ["desktop_locked", "session_unavailable", "already_running", "invalid_button", "forbidden_key", "unsupported_action", "device_not_found", "encoder_failure"]
+    exec_errors: ["timed_out", "failed", "cancelled"]
+    validation_errors: ["commercial_field_detected", "invalid_qos", "invalid_retain", "unknown_capability"]
+  invariants:
+    - "Zero commercial, billing, price, fee, tariff, cost, or organization fields transmitted to Agent"
+    - "No new MQTT client created; existing FastStream topology and subscriptions preserved"
+    - "Presence messages require QoS 1 and retain=true"
+    - "Streaming output chunks over dev/{SN}/out have monotonic sequence numbering and boolean eof"
+    - "Mouse coordinates automatically normalized between 0.0..1.0 and 0..65535"
+    - "Duplicate streaming chunks and completion responses deduplicated idempotently"
 supersedes:
   - H-L4D-00B-IOT-v1
 known_risks:
