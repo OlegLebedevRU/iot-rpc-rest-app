@@ -184,7 +184,7 @@ producer_prompt_id: L4D-02-IOT
 producer_scope_project: iot-rpc-rest-app
 producer_report_path: docs/l4desk/handoffs/L4D-02-IOT-report.md
 producer_branch: l4desk/l4d-02-iot
-producer_commit: 7a579965241c1f0107d26ffbed1c7a29fcd75a0e
+producer_commit: a5524d356dda343eca96010d16535d9f37ff4ece
 accepted_at_utc: 2026-09-17T23:30:00Z
 contract_version: 1.0.0
 schema_revision: 2026-09-17-v1
