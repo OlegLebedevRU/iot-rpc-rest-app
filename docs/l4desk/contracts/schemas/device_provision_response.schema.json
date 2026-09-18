@@ -1,0 +1,127 @@
+{
+  "$defs": {
+    "DeviceProvisionStatus": {
+      "enum": [
+        "requested",
+        "provisioned",
+        "failed"
+      ],
+      "title": "DeviceProvisionStatus",
+      "type": "string"
+    }
+  },
+  "properties": {
+    "operation_id": {
+      "description": "UUID for idempotency",
+      "title": "Operation Id",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/DeviceProvisionStatus",
+      "description": "requested, provisioned, or failed"
+    },
+    "tenant_id": {
+      "description": "Tenant / Organization ID",
+      "title": "Tenant Id",
+      "type": "integer"
+    },
+    "terminal_id": {
+      "description": "Terminal identifier",
+      "title": "Terminal Id",
+      "type": "integer"
+    },
+    "device_id": {
+      "description": "Device internal ID",
+      "title": "Device Id",
+      "type": "integer"
+    },
+    "sn": {
+      "description": "Device serial number",
+      "title": "Sn",
+      "type": "string"
+    },
+    "contract_version": {
+      "default": "1.0.0",
+      "description": "Contract version",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "End-to-end correlation ID",
+      "title": "Correlation Id"
+    },
+    "replayed_flag": {
+      "default": false,
+      "description": "True if response is an idempotent replay",
+      "title": "Replayed Flag",
+      "type": "boolean"
+    },
+    "created_at": {
+      "description": "Creation UTC timestamp",
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "provisioned_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Provisioning completion UTC timestamp",
+      "title": "Provisioned At"
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Error code if status is failed",
+      "title": "Error Code"
+    },
+    "error_message": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Error description if status is failed",
+      "title": "Error Message"
+    }
+  },
+  "required": [
+    "operation_id",
+    "status",
+    "tenant_id",
+    "terminal_id",
+    "device_id",
+    "sn",
+    "created_at"
+  ],
+  "title": "DeviceProvisionResponse",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

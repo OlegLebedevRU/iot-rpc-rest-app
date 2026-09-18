@@ -22,6 +22,7 @@ __all__ = (
     "BillingActiveDevice",
     "RemoteSession",
     "RemoteSessionEvent",
+    "DeviceProvisioning",
 )
 
 
@@ -43,3 +44,4 @@ from .postamat import Postamat
 from .cell import Cell
 from .billing import BillingCoefficient, BillingCounter, BillingActiveDevice
 from .remote_sessions import RemoteSession, RemoteSessionEvent
+from .device_provisioning import DeviceProvisioning

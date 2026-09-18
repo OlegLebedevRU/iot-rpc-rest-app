@@ -10,6 +10,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class RemoteSessionEventType(StrEnum):
     DEVICE_ONLINE = "device_online"
+    DEVICE_PROVISION_REQUESTED = "device_provision_requested"
+    DEVICE_PROVISIONED = "device_provisioned"
+    DEVICE_PROVISION_FAILED = "device_provision_failed"
     REMOTE_SESSION_START_REQUESTED = "remote_session_start_requested"
     REMOTE_SESSION_ACTIVE = "remote_session_active"
     REMOTE_SESSION_STOP_REQUESTED = "remote_session_stop_requested"

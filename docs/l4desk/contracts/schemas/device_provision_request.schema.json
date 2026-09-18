@@ -1,0 +1,88 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "operation_id": {
+      "description": "UUID for idempotency",
+      "title": "Operation Id",
+      "type": "string"
+    },
+    "contract_version": {
+      "default": "1.0.0",
+      "description": "Contract version",
+      "title": "Contract Version",
+      "type": "string"
+    },
+    "tenant_id": {
+      "description": "Tenant / Organization ID",
+      "minimum": 1,
+      "title": "Tenant Id",
+      "type": "integer"
+    },
+    "terminal_id": {
+      "description": "Terminal identifier",
+      "minimum": 1,
+      "title": "Terminal Id",
+      "type": "integer"
+    },
+    "sn": {
+      "description": "Device serial number",
+      "title": "Sn",
+      "type": "string"
+    },
+    "device_id": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Optional explicit internal device ID",
+      "title": "Device Id"
+    },
+    "correlation_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "End-to-end correlation ID",
+      "title": "Correlation Id"
+    },
+    "requested_by_user_id": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Requesting user ID",
+      "title": "Requested By User Id"
+    },
+    "metadata": {
+      "additionalProperties": true,
+      "description": "Additional device metadata",
+      "title": "Metadata",
+      "type": "object"
+    }
+  },
+  "required": [
+    "operation_id",
+    "tenant_id",
+    "terminal_id",
+    "sn"
+  ],
+  "title": "DeviceProvisionRequest",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

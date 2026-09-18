@@ -1,0 +1,515 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "L4Desk Device Provisioning Internal API",
+    "description": "Versioned internal REST contract for idempotent device and terminal provisioning",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/internal/v1/devices/provision": {
+      "post": {
+        "tags": [
+          "Internal Device Provisioning"
+        ],
+        "summary": "Provision a device and terminal idempotently",
+        "description": "Versioned idempotent device provisioning. Replay of identical operation_id returns HTTP 200 with replayed_flag=True. Reused operation_id with differing parameters or conflicting identity returns HTTP 409 Conflict.",
+        "operationId": "provision_device_api_internal_v1_devices_provision_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceProvisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Device successfully provisioned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceProvisionResponse"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Idempotent replay of previously completed provisioning",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceProvisionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid payload or validation failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceProvisionErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized / authentication credentials missing"
+          },
+          "403": {
+            "description": "Forbidden / invalid service key"
+          },
+          "409": {
+            "description": "Operation ID conflict or identity/tenant mismatch",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceProvisionErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/v1/devices/provision/by-operation/{operation_id}": {
+      "get": {
+        "tags": [
+          "Internal Device Provisioning"
+        ],
+        "summary": "Get provisioning record by operation_id",
+        "operationId": "get_provisioning_by_operation_api_internal_v1_devices_provision_by_operation__operation_id__get",
+        "parameters": [
+          {
+            "name": "operation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Operation Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provisioning record found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceProvisionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Operation ID not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceProvisionErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/v1/devices/provision/by-sn/{sn}": {
+      "get": {
+        "tags": [
+          "Internal Device Provisioning"
+        ],
+        "summary": "Get latest provisioning record by device SN",
+        "operationId": "get_provisioning_by_sn_api_internal_v1_devices_provision_by_sn__sn__get",
+        "parameters": [
+          {
+            "name": "sn",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sn"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Provisioning record found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceProvisionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Device SN not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceProvisionErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "DeviceProvisionErrorDetail": {
+        "properties": {
+          "error_code": {
+            "type": "string",
+            "title": "Error Code",
+            "description": "Structured error code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Human-readable error explanation"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Id",
+            "description": "Operation ID associated with error"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp",
+            "description": "Error timestamp UTC"
+          }
+        },
+        "type": "object",
+        "required": [
+          "error_code",
+          "message"
+        ],
+        "title": "DeviceProvisionErrorDetail"
+      },
+      "DeviceProvisionErrorResponse": {
+        "properties": {
+          "detail": {
+            "$ref": "#/components/schemas/DeviceProvisionErrorDetail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail"
+        ],
+        "title": "DeviceProvisionErrorResponse"
+      },
+      "DeviceProvisionRequest": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id",
+            "description": "UUID for idempotency"
+          },
+          "contract_version": {
+            "type": "string",
+            "title": "Contract Version",
+            "description": "Contract version",
+            "default": "1.0.0"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Tenant Id",
+            "description": "Tenant / Organization ID"
+          },
+          "terminal_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Terminal Id",
+            "description": "Terminal identifier"
+          },
+          "sn": {
+            "type": "string",
+            "title": "Sn",
+            "description": "Device serial number"
+          },
+          "device_id": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Id",
+            "description": "Optional explicit internal device ID"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id",
+            "description": "End-to-end correlation ID"
+          },
+          "requested_by_user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested By User Id",
+            "description": "Requesting user ID"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "description": "Additional device metadata"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "operation_id",
+          "tenant_id",
+          "terminal_id",
+          "sn"
+        ],
+        "title": "DeviceProvisionRequest"
+      },
+      "DeviceProvisionResponse": {
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id",
+            "description": "UUID for idempotency"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DeviceProvisionStatus",
+            "description": "requested, provisioned, or failed"
+          },
+          "tenant_id": {
+            "type": "integer",
+            "title": "Tenant Id",
+            "description": "Tenant / Organization ID"
+          },
+          "terminal_id": {
+            "type": "integer",
+            "title": "Terminal Id",
+            "description": "Terminal identifier"
+          },
+          "device_id": {
+            "type": "integer",
+            "title": "Device Id",
+            "description": "Device internal ID"
+          },
+          "sn": {
+            "type": "string",
+            "title": "Sn",
+            "description": "Device serial number"
+          },
+          "contract_version": {
+            "type": "string",
+            "title": "Contract Version",
+            "description": "Contract version",
+            "default": "1.0.0"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id",
+            "description": "End-to-end correlation ID"
+          },
+          "replayed_flag": {
+            "type": "boolean",
+            "title": "Replayed Flag",
+            "description": "True if response is an idempotent replay",
+            "default": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At",
+            "description": "Creation UTC timestamp"
+          },
+          "provisioned_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provisioned At",
+            "description": "Provisioning completion UTC timestamp"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code",
+            "description": "Error code if status is failed"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message",
+            "description": "Error description if status is failed"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operation_id",
+          "status",
+          "tenant_id",
+          "terminal_id",
+          "device_id",
+          "sn",
+          "created_at"
+        ],
+        "title": "DeviceProvisionResponse"
+      },
+      "DeviceProvisionStatus": {
+        "type": "string",
+        "enum": [
+          "requested",
+          "provisioned",
+          "failed"
+        ],
+        "title": "DeviceProvisionStatus"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}

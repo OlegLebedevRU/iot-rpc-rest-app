@@ -203,6 +203,86 @@ class RemoteSessionEventService:
             payload=payload,
         )
 
+    async def record_device_provisioned(
+        self,
+        session: AsyncSession,
+        *,
+        sn: str,
+        tenant_id: int,
+        terminal_id: int | str,
+        device_id: int,
+        operation_id: str,
+        correlation_id: str | None = None,
+        occurred_at: datetime | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> RemoteSessionEvent:
+        event_payload = {
+            "operation_id": operation_id,
+            "tenant_id": tenant_id,
+            "terminal_id": int(terminal_id),
+            "device_id": device_id,
+            "sn": sn,
+            "status": "provisioned",
+        }
+        if payload:
+            event_payload.update(payload)
+        return await self.record_event(
+            session,
+            event_type=RemoteSessionEventType.DEVICE_PROVISIONED,
+            sn=sn,
+            tenant_id=tenant_id,
+            terminal_id=str(terminal_id),
+            device_id=device_id,
+            lifecycle_state="provisioned",
+            reason="provisioned_successfully",
+            operation_id=operation_id,
+            correlation_id=correlation_id,
+            occurred_at=occurred_at,
+            payload=event_payload,
+        )
+
+    async def record_device_provision_failed(
+        self,
+        session: AsyncSession,
+        *,
+        sn: str,
+        tenant_id: int,
+        terminal_id: int | str,
+        device_id: int | None = None,
+        operation_id: str,
+        correlation_id: str | None = None,
+        error_code: str | None = None,
+        error_message: str | None = None,
+        occurred_at: datetime | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> RemoteSessionEvent:
+        event_payload = {
+            "operation_id": operation_id,
+            "tenant_id": tenant_id,
+            "terminal_id": int(terminal_id),
+            "device_id": device_id,
+            "sn": sn,
+            "status": "failed",
+            "error_code": error_code,
+            "error_message": error_message,
+        }
+        if payload:
+            event_payload.update(payload)
+        return await self.record_event(
+            session,
+            event_type=RemoteSessionEventType.DEVICE_PROVISION_FAILED,
+            sn=sn,
+            tenant_id=tenant_id,
+            terminal_id=str(terminal_id),
+            device_id=device_id,
+            lifecycle_state="failed",
+            reason=error_code or "provisioning_failed",
+            operation_id=operation_id,
+            correlation_id=correlation_id,
+            occurred_at=occurred_at,
+            payload=event_payload,
+        )
+
     async def record_session_start_requested(
         self,
         session: AsyncSession,

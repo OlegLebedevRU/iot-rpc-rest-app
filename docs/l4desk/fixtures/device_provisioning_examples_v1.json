@@ -1,0 +1,95 @@
+{
+  "contract_version": "1.0.0",
+  "schema_revision": "2026-09-18-v1",
+  "examples": {
+    "provision_request_initial": {
+      "operation_id": "018f3a5b-0006-7001-8000-000000000001",
+      "contract_version": "1.0.0",
+      "tenant_id": 1,
+      "terminal_id": 101,
+      "sn": "SNPROV001",
+      "device_id": null,
+      "correlation_id": "corr-prov-001",
+      "requested_by_user_id": "user-42",
+      "metadata": {
+        "model": "edge-terminal",
+        "env": "production"
+      }
+    },
+    "provision_response_created_201": {
+      "operation_id": "018f3a5b-0006-7001-8000-000000000001",
+      "status": "provisioned",
+      "tenant_id": 1,
+      "terminal_id": 101,
+      "device_id": 1001,
+      "sn": "SNPROV001",
+      "contract_version": "1.0.0",
+      "correlation_id": "corr-prov-001",
+      "replayed_flag": false,
+      "created_at": "2026-09-18T19:00:00+00:00",
+      "provisioned_at": "2026-09-18T19:00:00+00:00",
+      "error_code": null,
+      "error_message": null
+    },
+    "provision_response_replayed_200": {
+      "operation_id": "018f3a5b-0006-7001-8000-000000000001",
+      "status": "provisioned",
+      "tenant_id": 1,
+      "terminal_id": 101,
+      "device_id": 1001,
+      "sn": "SNPROV001",
+      "contract_version": "1.0.0",
+      "correlation_id": "corr-prov-001",
+      "replayed_flag": true,
+      "created_at": "2026-09-18T19:00:00+00:00",
+      "provisioned_at": "2026-09-18T19:00:00+00:00",
+      "error_code": null,
+      "error_message": null
+    },
+    "provision_error_operation_id_conflict_409": {
+      "detail": {
+        "error_code": "OPERATION_ID_CONFLICT",
+        "message": "Operation ID '018f3a5b-0006-7001-8000-000000000001' was previously executed with different parameters",
+        "operation_id": "018f3a5b-0006-7001-8000-000000000001"
+      }
+    },
+    "provision_error_identity_conflict_409": {
+      "detail": {
+        "error_code": "IDENTITY_CONFLICT",
+        "message": "Device SN 'SNPROV001' is already registered to a different tenant (2)",
+        "operation_id": "018f3a5b-0006-7001-8000-000000000002"
+      }
+    },
+    "provision_error_auth_failed_403": {
+      "detail": "Missing or invalid authentication credentials"
+    },
+    "provision_event_feed_fact": {
+      "cursor": 1,
+      "event_id": "evt_prov_001",
+      "occurred_at": "2026-09-18T19:00:00+00:00",
+      "event_type": "device_provisioned",
+      "event_version": "1.0.0",
+      "tenant_id": 1,
+      "terminal_id": "101",
+      "device_id": 1001,
+      "sn": "SNPROV001",
+      "session_id": null,
+      "session_type": null,
+      "lifecycle_state": "provisioned",
+      "reason": "provisioned_successfully",
+      "operation_id": "018f3a5b-0006-7001-8000-000000000001",
+      "correlation_id": "corr-prov-001",
+      "payload": {
+        "operation_id": "018f3a5b-0006-7001-8000-000000000001",
+        "tenant_id": 1,
+        "terminal_id": 101,
+        "device_id": 1001,
+        "sn": "SNPROV001",
+        "status": "provisioned",
+        "model": "edge-terminal",
+        "env": "production"
+      },
+      "created_at": "2026-09-18T19:00:00+00:00"
+    }
+  }
+}
