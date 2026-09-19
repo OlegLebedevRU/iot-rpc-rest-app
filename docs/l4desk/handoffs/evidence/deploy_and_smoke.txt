@@ -1,0 +1,205 @@
+================================================================================
+DEPLOYMENT, REVISION MIGRATION, CONTAINER RUNNING BYTES AND SMOKE EVIDENCE
+Target Host: 87.242.100.34 (user: user1, key: d:\.ssh\id_ed25519)
+Service: app1 (orchestrator: /home/user1/compose.yaml, repo: /home/user1/iot-rpc-rest-app)
+Timestamp UTC: 2026-09-18T23:50:00Z
+================================================================================
+
+1. Host Resource & Readiness Pre-Check:
+- Load average: 0.22, 0.19, 0.12 (< 2.0 -> OK)
+- Available Memory: 2271 MiB (> 300 MiB -> OK)
+- Root filesystem utilization: 53% (< 90% -> OK)
+- Host Status: READY
+
+2. Alembic Revision Status:
+- Before Deploy / Migration: 0004_remote_session_events (head)
+- Applied Migration: 0004_remote_session_events -> 0005_device_provisioning (add device provisioning operations)
+- After Deploy / Migration: 0005_device_provisioning
+- tb_device_provisionings exists: True
+
+3. Container & Image Identity:
+- Container Name: app1
+- Container ID: 44add06a41e5
+- Image Name: user1-app1:latest
+- Image ID: sha256:6974b17234cbe8d078a52fafe07ffec98959f8ab12c7e7f996dd0ee287db2909
+- Config Hash: 1732bc6dd03e28c7e314b05d9f3cd323739111259c920104d1e9e6b26d15db05
+- Host Repository Git HEAD: 4a0f9d4b218e96273eed605e9edd0f9ab3564b68
+
+4. Verified Running Bytes Inside Container vs Host Checkout:
+/app/core/services/device_provisioning_service.py:
+  Container SHA-256: 20423563917a99692a7c2fcd2c2077c364b6351b004ef55446ea6e7d19bf7c16
+  Host Repo SHA-256: 20423563917a99692a7c2fcd2c2077c364b6351b004ef55446ea6e7d19bf7c16
+  MATCH: EXACT (IDENTICAL)
+
+/app/api/internal_v1/device_provisioning.py:
+  Container SHA-256: 50a7ead40aa4e1af9d3881a9d472cc2eecac92f306b827c634e6df60890265ad
+  Host Repo SHA-256: 50a7ead40aa4e1af9d3881a9d472cc2eecac92f306b827c634e6df60890265ad
+  MATCH: EXACT (IDENTICAL)
+
+/app/core/models/device_provisioning.py:
+  Container SHA-256: be7a8b31780d1ff1bd40f674a4c6fd79a21c7139e6fc37b2b29a84a684bb40ef
+  Host Repo SHA-256: be7a8b31780d1ff1bd40f674a4c6fd79a21c7139e6fc37b2b29a84a684bb40ef
+  MATCH: EXACT (IDENTICAL)
+
+/app/alembic/versions/2026_09_18_0005_add_device_provisioning_operations.py:
+  Container SHA-256: 7ef7eaa725b76fe40ca3bc14aae78acc85c89eb7d3cb4de7efd21da28ce6cac8
+  Host Repo SHA-256: 7ef7eaa725b76fe40ca3bc14aae78acc85c89eb7d3cb4de7efd21da28ce6cac8
+  MATCH: EXACT (IDENTICAL)
+
+5. Actual Smoke Test Outputs:
+
+--- TEST 1: ABSENCE OF AUTH ---
+Request: POST /api/internal/v1/devices/provision (No auth header)
+HTTP Status: 403 Forbidden
+Response Body:
+{"detail":"Invalid internal service credentials"}
+
+--- TEST 2: UNKNOWN OPERATION ---
+Request: GET /api/internal/v1/devices/provision/by-operation/b0000002-0006-7001-8000-000000000002
+HTTP Status: 404 Not Found
+Response Body:
+{"detail":{"error_code":"OPERATION_NOT_FOUND","message":"Provisioning operation 'b0000002-0006-7001-8000-000000000002' not found","operation_id":"b0000002-0006-7001-8000-000000000002"}}
+
+--- TEST 3: PRIMARY CREATION ---
+Request: POST /api/internal/v1/devices/provision
+Payload:
+{
+  "operation_id": "a0000001-0006-7001-8000-000000000001",
+  "contract_version": "1.0.0",
+  "tenant_id": 9999,
+  "terminal_id": 99901,
+  "sn": "TEST-FIX01-SN99901",
+  "correlation_id": "corr-fix01-smoke-001",
+  "requested_by_user_id": "usr-smoke-fix01",
+  "metadata": {"installer": "smoke_tester", "env": "smoke"}
+}
+HTTP Status: 201 Created
+Response Body:
+{
+  "operation_id": "a0000001-0006-7001-8000-000000000001",
+  "status": "provisioned",
+  "tenant_id": 9999,
+  "terminal_id": 99901,
+  "device_id": 10000000,
+  "sn": "TEST-FIX01-SN99901",
+  "contract_version": "1.0.0",
+  "correlation_id": "corr-fix01-smoke-001",
+  "replayed_flag": false,
+  "created_at": "2026-09-18T23:49:23.978467Z",
+  "provisioned_at": "2026-09-18T23:49:23.978467Z",
+  "error_code": null,
+  "error_message": null
+}
+
+--- TEST 4: IDENTICAL REPLAY ---
+Request: POST /api/internal/v1/devices/provision (identical payload)
+HTTP Status: 200 OK
+Response Body:
+{
+  "operation_id": "a0000001-0006-7001-8000-000000000001",
+  "status": "provisioned",
+  "tenant_id": 9999,
+  "terminal_id": 99901,
+  "device_id": 10000000,
+  "sn": "TEST-FIX01-SN99901",
+  "contract_version": "1.0.0",
+  "correlation_id": "corr-fix01-smoke-001",
+  "replayed_flag": true,
+  "created_at": "2026-09-18T23:49:23.978467Z",
+  "provisioned_at": "2026-09-18T23:49:23.978467Z",
+  "error_code": null,
+  "error_message": null
+}
+
+--- TEST 5: CONFLICT ON MODIFIED PAYLOAD WITH SAME OPERATION_ID ---
+Request: POST /api/internal/v1/devices/provision (same operation_id, modified terminal_id=99902)
+HTTP Status: 409 Conflict
+Response Body:
+{
+  "detail": {
+    "error_code": "OPERATION_ID_CONFLICT",
+    "message": "Operation ID 'a0000001-0006-7001-8000-000000000001' was previously executed with different parameters",
+    "operation_id": "a0000001-0006-7001-8000-000000000001"
+  }
+}
+
+--- TEST 6: STATUS READING ---
+Request: GET /api/internal/v1/devices/provision/by-operation/a0000001-0006-7001-8000-000000000001
+HTTP Status: 200 OK
+Response Body:
+{
+  "operation_id": "a0000001-0006-7001-8000-000000000001",
+  "status": "provisioned",
+  "tenant_id": 9999,
+  "terminal_id": 99901,
+  "device_id": 10000000,
+  "sn": "TEST-FIX01-SN99901",
+  "contract_version": "1.0.0",
+  "correlation_id": "corr-fix01-smoke-001",
+  "replayed_flag": true,
+  "created_at": "2026-09-18T23:49:23.978467Z",
+  "provisioned_at": "2026-09-18T23:49:23.978467Z",
+  "error_code": null,
+  "error_message": null
+}
+
+Request: GET /api/internal/v1/devices/provision/by-sn/TEST-FIX01-SN99901
+HTTP Status: 200 OK
+Response Body:
+{
+  "operation_id": "a0000001-0006-7001-8000-000000000001",
+  "status": "provisioned",
+  "tenant_id": 9999,
+  "terminal_id": 99901,
+  "device_id": 10000000,
+  "sn": "TEST-FIX01-SN99901",
+  "contract_version": "1.0.0",
+  "correlation_id": "corr-fix01-smoke-001",
+  "replayed_flag": true,
+  "created_at": "2026-09-18T23:49:23.978467Z",
+  "provisioned_at": "2026-09-18T23:49:23.978467Z",
+  "error_code": null,
+  "error_message": null
+}
+
+--- TEST 7: DURABLE FEED VERIFICATION (NO DUPLICATE EVENT UPON REPLAY) ---
+Request: GET /api/internal/v1/remote-session-events?sn=TEST-FIX01-SN99901
+HTTP Status: 200 OK
+Response Body:
+{
+  "items": [
+    {
+      "cursor": 8,
+      "event_id": "evt_36c7a7d194eb4716a15d6b03603fba56",
+      "occurred_at": "2026-09-18T23:49:24.034701Z",
+      "event_type": "device_provisioned",
+      "event_version": "1.0.0",
+      "tenant_id": 9999,
+      "terminal_id": "99901",
+      "device_id": 10000000,
+      "sn": "TEST-FIX01-SN99901",
+      "session_id": null,
+      "session_type": null,
+      "lifecycle_state": "provisioned",
+      "reason": "provisioned_successfully",
+      "operation_id": "a0000001-0006-7001-8000-000000000001",
+      "correlation_id": "corr-fix01-smoke-001",
+      "payload": {
+        "sn": "TEST-FIX01-SN99901",
+        "env": "smoke",
+        "status": "provisioned",
+        "device_id": 10000000,
+        "installer": "smoke_tester",
+        "tenant_id": 9999,
+        "terminal_id": 99901,
+        "operation_id": "a0000001-0006-7001-8000-000000000001"
+      },
+      "created_at": "2026-09-18T23:49:24.035785Z"
+    }
+  ],
+  "next_cursor": 8,
+  "has_more": false,
+  "total_count": 1,
+  "server_time": "2026-09-18T23:52:27.714714Z"
+}
+INVARIANT CONFIRMED: Exactly 1 event published in durable feed across initial create and replay requests (no duplicate provisioning events).

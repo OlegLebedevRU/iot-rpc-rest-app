@@ -1,0 +1,70 @@
+================================================================================
+PYTEST SUITE EXECUTION EVIDENCE
+Timestamp UTC: 2026-09-18T23:55:00Z
+Command: uv run pytest
+Environment: Windows (PowerShell), Python: 3.14.0, pytest: 9.1.1, pluggy: 1.6.0
+Async Backend Plugin: anyio-4.14.2
+================================================================================
+
+============================= test session starts =============================
+platform win32 -- Python 3.14.0, pytest-9.1.1, pluggy-1.6.0
+rootdir: D:\work\iot.leo4.ru\iot-rpc-rest-app
+configfile: pyproject.toml
+testpaths: app-service/tests
+plugins: anyio-4.14.2
+collected 384 items
+
+app-service\tests\api\v1\test_auth_api_keys.py ...............           [  3%]
+app-service\tests\api\v1\test_devices_pagination_and_filters.py ........ [  5%]
+..                                                                       [  6%]
+app-service\tests\api\v1\test_diagnostics_ws_auth.py ..........          [  9%]
+app-service\tests\api\v1\test_internal_api.py ......                     [ 10%]
+app-service\tests\api\v1\test_openapi_schema_and_docs.py ..              [ 11%]
+app-service\tests\api\v1\test_provisioning_api.py .                      [ 11%]
+app-service\tests\api\v1\test_remote_input_api.py ......                 [ 13%]
+app-service\tests\core\diagnostics\test_mqtt_bridge.py ....              [ 14%]
+app-service\tests\core\diagnostics\test_schemas.py ...........           [ 16%]
+app-service\tests\core\diagnostics\test_service.py ........              [ 19%]
+app-service\tests\core\diagnostics\test_sessions.py ....                 [ 20%]
+app-service\tests\core\integrations\test_rmq_admin_api.py .....          [ 21%]
+app-service\tests\core\remote_input\test_contract_fixtures.py .......... [ 23%]
+.................                                                        [ 28%]
+app-service\tests\core\remote_input\test_leases.py ..............        [ 32%]
+app-service\tests\core\remote_input\test_mqtt_bridge.py ...........      [ 34%]
+app-service\tests\core\remote_input\test_schemas.py .................... [ 40%]
+..                                                                       [ 40%]
+app-service\tests\core\remote_input\test_service.py ..............       [ 44%]
+app-service\tests\core\remote_input\test_step4_reproduce_and_contracts.py . [ 44%]
+.......                                                                  [ 46%]
+app-service\tests\core\remote_input\test_step6_quick_actions.py ........ [ 48%]
+.....                                                                    [ 49%]
+app-service\tests\core\schemas\test_device_tasks_schema.py ...           [ 50%]
+app-service\tests\core\services\test_billing.py ........................ [ 56%]
+...                                                                      [ 57%]
+app-service\tests\core\services\test_device_collision_detection.py ..... [ 58%]
+..                                                                       [ 59%]
+app-service\tests\core\services\test_device_connection_status.py ....... [ 61%]
+...                                                                      [ 61%]
+app-service\tests\core\services\test_device_tasks_select.py ............ [ 65%]
+....                                                                     [ 66%]
+app-service\tests\core\services\test_provisioning.py ..                  [ 66%]
+app-service\tests\core\services\test_rmq_admin.py ...                    [ 67%]
+app-service\tests\core\services\test_service_identity_and_reconcile.py . [ 67%]
+....                                                                     [ 68%]
+app-service\tests\core\test_alembic_migration.py ....                    [ 69%]
+app-service\tests\core\test_faststream_config.py ....................... [ 75%]
+.                                                                        [ 76%]
+app-service\tests\core\test_l4d_00b_baseline_fixtures.py ............    [ 79%]
+app-service\tests\core\test_l4d_01b_agent_contract_v1.py ............... [ 83%]
+.........                                                                [ 85%]
+app-service\tests\core\test_l4d_02_event_feed_full.py ...........        [ 88%]
+app-service\tests\core\test_l4d_02_event_feed_reproduce.py ...           [ 89%]
+app-service\tests\core\test_l4d_06b_device_provisioning_contract.py .... [ 90%]
+.....                                                                    [ 91%]
+app-service\tests\core\test_l4d_06b_fix_evidence_completeness.py ..      [ 91%]
+app-service\tests\core\test_rmq_infra_config.py ...                      [ 92%]
+app-service\tests\core\topologys\test_lwt_subscribers.py ...........     [ 95%]
+app-service\tests\core\topologys\test_remote_input_topology.py ...       [ 96%]
+app-service\tests\core\topologys\test_webhook_dispatch.py .............. [100%]
+
+============================== 384 passed in 20.85s ===============================

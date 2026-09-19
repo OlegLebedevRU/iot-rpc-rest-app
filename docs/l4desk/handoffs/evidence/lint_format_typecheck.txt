@@ -1,0 +1,35 @@
+================================================================================
+STATIC ANALYSIS, FORMATTING AND TYPE CHECK EVIDENCE
+Generated at: 2026-09-18T23:55:00Z
+Environment: Windows (PowerShell), Python: Python 3.14.0
+================================================================================
+
+1. Formatter: black
+Tool Version: black, 26.5.1 (compiled: yes)
+Command: uv run black --check app-service/alembic/versions/2026_09_18_0005_add_device_provisioning_operations.py app-service/api/internal_v1/device_provisioning.py app-service/core/models/device_provisioning.py app-service/core/schemas/device_provisioning.py app-service/core/services/device_provisioning_service.py app-service/tests/core/test_l4d_06b_device_provisioning_contract.py app-service/tests/core/test_l4d_06b_fix_evidence_completeness.py
+Working Directory: D:\work\iot.leo4.ru\iot-rpc-rest-app
+Exit Code: 0
+Result:
+All done! ✨ 🍰 ✨
+7 files would be left unchanged.
+
+--------------------------------------------------------------------------------
+
+2. Linter: ruff
+Tool Version: ruff 0.15.0
+Command: uv run ruff check app-service/alembic/versions/2026_09_18_0005_add_device_provisioning_operations.py app-service/api/internal_v1/device_provisioning.py app-service/core/models/device_provisioning.py app-service/core/schemas/device_provisioning.py app-service/core/services/device_provisioning_service.py app-service/tests/core/test_l4d_06b_device_provisioning_contract.py app-service/tests/core/test_l4d_06b_fix_evidence_completeness.py
+Working Directory: D:\work\iot.leo4.ru\iot-rpc-rest-app
+Exit Code: 0
+Result:
+All checks passed!
+
+--------------------------------------------------------------------------------
+
+3. Type Checker: pyright
+Tool Version: pyright 1.1.408
+Command: uv run --with pyright pyright app-service/alembic/versions/2026_09_18_0005_add_device_provisioning_operations.py app-service/api/internal_v1/device_provisioning.py app-service/core/models/device_provisioning.py app-service/core/schemas/device_provisioning.py app-service/core/services/device_provisioning_service.py app-service/tests/core/test_l4d_06b_device_provisioning_contract.py app-service/tests/core/test_l4d_06b_fix_evidence_completeness.py
+Working Directory: D:\work\iot.leo4.ru\iot-rpc-rest-app
+Exit Code: 0
+Result:
+0 errors, 0 warnings, 0 informations
+Completed in 2.62sec
