@@ -7,7 +7,7 @@ prompt_type: implementation-provider
 target_repository: iot-rpc-rest-app
 scope_root: D:\work\iot.leo4.ru\iot-rpc-rest-app
 git_branch: l4desk/l4d-07-iot
-producer_commit: 906093d78d59b36aa8d3ca2d0e17968555119ca8
+producer_commit: c4e892f4c1dbf8f967109e8a06c3f63b0c9bd483
 contract_version: 1.0.0
 schema_revision: 2026-09-19-v1
 contract_kinds:
@@ -153,7 +153,6 @@ pytest
 
 ## 6. Кандидатный Handoff-блок
 
-````text
 <!-- HANDOFF:H-L4D-07-IOT-v1:BEGIN -->
 ```yaml
 handoff_id: H-L4D-07-IOT-v1
@@ -166,7 +165,7 @@ producer_prompt_id: L4D-07-IOT
 producer_scope_project: iot-rpc-rest-app
 producer_report_path: docs/l4desk/handoffs/L4D-07-IOT-report.md
 producer_branch: l4desk/l4d-07-iot
-producer_commit: 906093d78d59b36aa8d3ca2d0e17968555119ca8
+producer_commit: c4e892f4c1dbf8f967109e8a06c3f63b0c9bd483
 accepted_at_utc: 2026-09-19T14:30:00Z
 contract_version: 1.0.0
 schema_revision: 2026-09-19-v1
@@ -195,6 +194,24 @@ artifact_paths:
   - docs/l4desk/contracts/schemas/iot_event_feed_openapi.json
   - app-service/alembic/versions/2026_09_19_0006_add_remote_session_lock.py
   - app-service/tests/core/test_l4d_07_session_lock_and_graceful_stop.py
+artifact_sha256:
+  - d72324f4a468e5b94569a6f390d122ce38364581705c90b9fb4a241b56fb68bc
+  - 230a22727a493b2980ba85cb2735e50d5ac42ac9b110cf3a6f3ba03ea0ebb12b
+  - 621e2ed32a7c82237a44627e2768ba15b1689b5b53ddb51ab9af48a98f08af94
+  - 7de502480a352e113fa7959384b40457f70994ae721a4aa6f46840f739022b4d
+  - c691b7bfdd6e3bb63c8584fb90f3a00b2df7931a2ebf9e5cdeb69e7d521053e8
+compatibility:
+  backward_compatible_with:
+    - H-L4D-02-IOT-v1
+    - H-L4D-06B-IOT-v1
+    - H-L4D-06C-MB-v1
+  breaking_changes: false
+  notes: "Unified session lock and mutual exclusion per device (sn) for console and video remote sessions. Command-aware graceful stop with bounded timeout for console sessions and media flow teardown for video sessions. Strict lifecycle states (requested, starting, active, stopping, closed, failed) published to durable event feed 02. Agent Contract v1 protocol, MQTT topics, and payloads are 100% binary backward-compatible and untouched."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  session_lock_enabled: true
+  graceful_stop_enabled: true
 contract_payload:
   session_lock:
     ownership: "iot-rpc-rest-app"
@@ -221,6 +238,17 @@ contract_payload:
     topics_modified: false
     methods_modified: false
     payloads_modified: false
+  alembic_revision: "0006_remote_session_lock"
+  tests_passed: 396
+  verification_status: VERIFIED_READY
+supersedes: []
+known_risks:
+  - "WEB_CONCURRENCY=1 invariant required for in-memory session tracking consistency"
+  - "In-flight commands without terminal response are terminated after bounded timeout_sec (default 5.0s, max 60.0s)"
+consumers:
+  - L4D-08A-MEDIA
+  - L4D-08B-MB
+  - L4D-12-MB
+next_prompt_id: L4D-08A-MEDIA
 ```
 <!-- HANDOFF:H-L4D-07-IOT-v1:END -->
-````
