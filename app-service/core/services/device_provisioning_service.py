@@ -14,7 +14,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.logging_config import setup_module_logger
 from core.models.device_provisioning import DeviceProvisioning
-from core.models.devices import Device, DeviceAuditLog, DeviceConnection, DeviceOrgBind, Org
+from core.models.devices import (
+    Device,
+    DeviceAuditLog,
+    DeviceConnection,
+    DeviceOrgBind,
+    Org,
+)
 from core.schemas.device_provisioning import (
     DeviceProvisionRequest,
     DeviceProvisionStatus,
@@ -38,7 +44,9 @@ def compute_provision_payload_hash(
         "terminal_id": int(terminal_id),
         "sn": str(sn).strip(),
         "device_id": int(device_id) if device_id is not None else None,
-        "requested_by_user_id": str(requested_by_user_id).strip() if requested_by_user_id else None,
+        "requested_by_user_id": (
+            str(requested_by_user_id).strip() if requested_by_user_id else None
+        ),
         "metadata": metadata or {},
     }
     raw = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
@@ -55,7 +63,9 @@ class DeviceProvisioningService:
         """Allocate a new monotonically safe device_id."""
         max_dev = 0
         try:
-            res_dev = await session.scalar(select(func.coalesce(func.max(Device.device_id), 0)))
+            res_dev = await session.scalar(
+                select(func.coalesce(func.max(Device.device_id), 0))
+            )
             if res_dev is not None:
                 max_dev = max(max_dev, int(res_dev))
         except Exception as e:
@@ -93,7 +103,9 @@ class DeviceProvisioningService:
 
         async with self._lock:
             # 1. Check idempotency on operation_id
-            existing_by_op = await self.get_provisioning_by_operation(session, request.operation_id)
+            existing_by_op = await self.get_provisioning_by_operation(
+                session, request.operation_id
+            )
             if existing_by_op is not None:
                 if existing_by_op.payload_hash == payload_hash:
                     log.info(
@@ -124,7 +136,9 @@ class DeviceProvisioningService:
             try:
                 stmt = (
                     select(Device, DeviceOrgBind.org_id)
-                    .outerjoin(DeviceOrgBind, Device.device_id == DeviceOrgBind.device_id)
+                    .outerjoin(
+                        DeviceOrgBind, Device.device_id == DeviceOrgBind.device_id
+                    )
                     .where(Device.sn == request.sn)
                     .limit(1)
                 )
@@ -152,7 +166,10 @@ class DeviceProvisioningService:
                         },
                     )
 
-                if request.device_id is not None and request.device_id != existing_dev.device_id:
+                if (
+                    request.device_id is not None
+                    and request.device_id != existing_dev.device_id
+                ):
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
                         detail={
@@ -191,7 +208,8 @@ class DeviceProvisioningService:
                         prov_by_dev_id = await session.scalar(
                             select(DeviceProvisioning).where(
                                 DeviceProvisioning.device_id == request.device_id,
-                                DeviceProvisioning.status == DeviceProvisionStatus.PROVISIONED.value,
+                                DeviceProvisioning.status
+                                == DeviceProvisionStatus.PROVISIONED.value,
                             )
                         )
                     except Exception:
@@ -219,7 +237,8 @@ class DeviceProvisioningService:
                     select(DeviceProvisioning).where(
                         DeviceProvisioning.tenant_id == request.tenant_id,
                         DeviceProvisioning.terminal_id == request.terminal_id,
-                        DeviceProvisioning.status == DeviceProvisionStatus.PROVISIONED.value,
+                        DeviceProvisioning.status
+                        == DeviceProvisionStatus.PROVISIONED.value,
                     )
                 )
             except Exception:
@@ -243,13 +262,17 @@ class DeviceProvisioningService:
                 existing_prov_sn = await session.scalar(
                     select(DeviceProvisioning).where(
                         DeviceProvisioning.sn == request.sn,
-                        DeviceProvisioning.status == DeviceProvisionStatus.PROVISIONED.value,
+                        DeviceProvisioning.status
+                        == DeviceProvisionStatus.PROVISIONED.value,
                     )
                 )
             except Exception:
                 existing_prov_sn = None
 
-            if existing_prov_sn is not None and existing_prov_sn.tenant_id != request.tenant_id:
+            if (
+                existing_prov_sn is not None
+                and existing_prov_sn.tenant_id != request.tenant_id
+            ):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail={
@@ -262,34 +285,62 @@ class DeviceProvisioningService:
                     },
                 )
 
+            assert target_device_id is not None
+
             # 3. Synchronize core DB entities (Org, Device, DeviceOrgBind, DeviceConnection, DeviceAuditLog)
             now_utc = datetime.now(timezone.utc)
             try:
                 is_mock = getattr(session, "is_mock", False)
                 if is_mock:
-                    org_exists = await session.scalar(select(Org).where(Org.org_id == request.tenant_id))
+                    org_exists = await session.scalar(
+                        select(Org).where(Org.org_id == request.tenant_id)
+                    )
                     if not org_exists:
-                        session.add(Org(org_id=request.tenant_id, name=f"Org {request.tenant_id}"))
-                    session.add(Device(device_id=target_device_id, sn=request.sn, is_deleted=False))
-                    session.add(DeviceOrgBind(device_id=target_device_id, org_id=request.tenant_id))
-                    session.add(DeviceConnection(device_id=target_device_id, client_id=request.sn))
+                        session.add(
+                            Org(
+                                org_id=request.tenant_id,
+                                name=f"Org {request.tenant_id}",
+                            )
+                        )
+                    session.add(
+                        Device(
+                            device_id=target_device_id, sn=request.sn, is_deleted=False
+                        )
+                    )
+                    session.add(
+                        DeviceOrgBind(
+                            device_id=target_device_id, org_id=request.tenant_id
+                        )
+                    )
+                    session.add(
+                        DeviceConnection(
+                            device_id=target_device_id, client_id=request.sn
+                        )
+                    )
                 else:
                     # 3a. Ensure Org exists
                     await session.execute(
                         pg_insert(Org)
-                        .values({"org_id": request.tenant_id, "name": f"Org {request.tenant_id}"})
+                        .values(
+                            {
+                                "org_id": request.tenant_id,
+                                "name": f"Org {request.tenant_id}",
+                            }
+                        )
                         .on_conflict_do_nothing(index_elements=["org_id"])
                     )
 
                     # 3b. Ensure Device exists
                     await session.execute(
                         pg_insert(Device)
-                        .values({
-                            "device_id": target_device_id,
-                            "sn": request.sn,
-                            "is_deleted": False,
-                            "deleted_at": None,
-                        })
+                        .values(
+                            {
+                                "device_id": target_device_id,
+                                "sn": request.sn,
+                                "is_deleted": False,
+                                "deleted_at": None,
+                            }
+                        )
                         .on_conflict_do_update(
                             index_elements=["device_id"],
                             set_=dict(
@@ -303,7 +354,9 @@ class DeviceProvisioningService:
                     # 3c. Ensure DeviceOrgBind exists
                     await session.execute(
                         pg_insert(DeviceOrgBind)
-                        .values({"device_id": target_device_id, "org_id": request.tenant_id})
+                        .values(
+                            {"device_id": target_device_id, "org_id": request.tenant_id}
+                        )
                         .on_conflict_do_update(
                             index_elements=["device_id"],
                             set_=dict(org_id=request.tenant_id),
@@ -313,7 +366,9 @@ class DeviceProvisioningService:
                     # 3d. Ensure DeviceConnection exists
                     await session.execute(
                         pg_insert(DeviceConnection)
-                        .values({"device_id": target_device_id, "client_id": request.sn})
+                        .values(
+                            {"device_id": target_device_id, "client_id": request.sn}
+                        )
                         .on_conflict_do_update(
                             index_elements=["device_id"],
                             set_=dict(
@@ -387,7 +442,9 @@ class DeviceProvisioningService:
             except IntegrityError as exc:
                 await session.rollback()
                 # Check if concurrent request with same operation_id just succeeded
-                existing_after_race = await self.get_provisioning_by_operation(session, request.operation_id)
+                existing_after_race = await self.get_provisioning_by_operation(
+                    session, request.operation_id
+                )
                 if existing_after_race is not None:
                     if existing_after_race.payload_hash == payload_hash:
                         return existing_after_race, True
@@ -403,7 +460,9 @@ class DeviceProvisioningService:
                         },
                     ) from exc
 
-                log.error("Integrity error during provisioning for sn=%s: %s", request.sn, exc)
+                log.error(
+                    "Integrity error during provisioning for sn=%s: %s", request.sn, exc
+                )
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail={
@@ -421,10 +480,16 @@ class DeviceProvisioningService:
         """Fetch device provisioning record by operation_id."""
         try:
             return await session.scalar(
-                select(DeviceProvisioning).where(DeviceProvisioning.operation_id == operation_id)
+                select(DeviceProvisioning).where(
+                    DeviceProvisioning.operation_id == operation_id
+                )
             )
         except Exception as e:
-            log.debug("get_provisioning_by_operation error for operation_id=%s: %s", operation_id, e)
+            log.debug(
+                "get_provisioning_by_operation error for operation_id=%s: %s",
+                operation_id,
+                e,
+            )
             return None
 
     async def get_provisioning_by_sn(

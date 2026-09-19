@@ -15,14 +15,23 @@ from api.internal_v1.device_provisioning import router as device_provisioning_ro
 from core.config import settings
 from core.models import db_helper
 from core.models.device_provisioning import DeviceProvisioning
-from core.models.devices import Device, DeviceAuditLog, DeviceConnection, DeviceOrgBind, Org
+from core.models.devices import (
+    Device,
+    DeviceAuditLog,
+    DeviceConnection,
+    DeviceOrgBind,
+    Org,
+)
 from core.models.remote_sessions import RemoteSession, RemoteSessionEvent
 from core.schemas.device_provisioning import (
     DeviceProvisionRequest,
     DeviceProvisionResponse,
     DeviceProvisionStatus,
 )
-from core.schemas.remote_sessions import RemoteSessionEventType, validate_no_commercial_fields
+from core.schemas.remote_sessions import (
+    RemoteSessionEventType,
+    validate_no_commercial_fields,
+)
 from core.services.device_provisioning_service import (
     DeviceProvisioningService,
 )
@@ -37,7 +46,9 @@ class InMemoryAsyncSession:
         self.devices: dict[str, Device] = {}  # sn -> Device
         self.orgs: dict[int, Org] = {}  # org_id -> Org
         self.binds: dict[int, DeviceOrgBind] = {}  # device_id -> DeviceOrgBind
-        self.connections: dict[int, DeviceConnection] = {}  # device_id -> DeviceConnection
+        self.connections: dict[int, DeviceConnection] = (
+            {}
+        )  # device_id -> DeviceConnection
         self.audit_logs: list[DeviceAuditLog] = []
         self.events: list[RemoteSessionEvent] = []
         self.sessions: dict[str, RemoteSession] = {}
@@ -91,8 +102,13 @@ class InMemoryAsyncSession:
 
         # 1. max(Device.device_id) or max(DeviceProvisioning.device_id)
         if "max" in stmt_str:
-            if "tb_device_provisionings" in stmt_str or "deviceprovisioning" in stmt_str:
-                return max((p.device_id for p in self.provisionings.values()), default=0)
+            if (
+                "tb_device_provisionings" in stmt_str
+                or "deviceprovisioning" in stmt_str
+            ):
+                return max(
+                    (p.device_id for p in self.provisionings.values()), default=0
+                )
             if "tb_devices" in stmt_str or "device" in stmt_str:
                 return max((d.device_id for d in self.devices.values()), default=0)
 
@@ -110,7 +126,14 @@ class InMemoryAsyncSession:
             compiled_params = stmt.compile().params
             for k, v in compiled_params.items():
                 if isinstance(v, (str, int)):
-                    for field in ("operation_id", "sn", "tenant_id", "terminal_id", "device_id", "org_id"):
+                    for field in (
+                        "operation_id",
+                        "sn",
+                        "tenant_id",
+                        "terminal_id",
+                        "device_id",
+                        "org_id",
+                    ):
                         if field in k.lower():
                             params[field] = v
         except Exception:
@@ -238,7 +261,10 @@ class InMemoryAsyncSession:
             max_c = max((e.cursor for e in self.events), default=None)
             return ExecResult([(count, min_c, max_c)])
 
-        if "group by tb_remote_session_events.event_type" in stmt_str or "group_by" in stmt_str:
+        if (
+            "group by tb_remote_session_events.event_type" in stmt_str
+            or "group_by" in stmt_str
+        ):
             counts: dict[str, int] = {}
             for ev in self.events:
                 counts[ev.event_type] = counts.get(ev.event_type, 0) + 1
@@ -290,9 +316,13 @@ async def test_duplicate_request_idempotency_flow(app_with_in_memory_db, monkeyp
         "metadata": {"zone": "east", "model": "edge-v1"},
     }
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         # 1. First call: new provisioning -> 201 Created
-        resp1 = await ac.post("/api/internal/v1/devices/provision", json=req_payload, headers=headers)
+        resp1 = await ac.post(
+            "/api/internal/v1/devices/provision", json=req_payload, headers=headers
+        )
         assert resp1.status_code == 201
         data1 = resp1.json()
         assert data1["operation_id"] == req_payload["operation_id"]
@@ -305,7 +335,9 @@ async def test_duplicate_request_idempotency_flow(app_with_in_memory_db, monkeyp
         first_device_id = data1["device_id"]
 
         # 2. Second call: exact same payload and operation_id -> 200 OK (replayed_flag=True)
-        resp2 = await ac.post("/api/internal/v1/devices/provision", json=req_payload, headers=headers)
+        resp2 = await ac.post(
+            "/api/internal/v1/devices/provision", json=req_payload, headers=headers
+        )
         assert resp2.status_code == 200
         data2 = resp2.json()
         assert data2["operation_id"] == req_payload["operation_id"]
@@ -345,7 +377,9 @@ async def test_duplicate_request_idempotency_flow(app_with_in_memory_db, monkeyp
 
 
 @pytest.mark.asyncio
-async def test_reused_operation_id_different_payload_conflict(app_with_in_memory_db, monkeypatch):
+async def test_reused_operation_id_different_payload_conflict(
+    app_with_in_memory_db, monkeypatch
+):
     """Reusing operation_id with differing parameters raises 409 Conflict (OPERATION_ID_CONFLICT)."""
     app, _ = app_with_in_memory_db
     monkeypatch.setattr(settings.auth, "internal_service_key", "sec-prov-key")
@@ -361,27 +395,43 @@ async def test_reused_operation_id_different_payload_conflict(app_with_in_memory
         "metadata": {"firmware": "1.0"},
     }
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         # Initial provisioning succeeds
-        resp1 = await ac.post("/api/internal/v1/devices/provision", json=base_payload, headers=headers)
+        resp1 = await ac.post(
+            "/api/internal/v1/devices/provision", json=base_payload, headers=headers
+        )
         assert resp1.status_code == 201
 
         # Conflict 1: change terminal_id with same operation_id
         mutated_payload_1 = dict(base_payload, terminal_id=999)
-        resp_conf1 = await ac.post("/api/internal/v1/devices/provision", json=mutated_payload_1, headers=headers)
+        resp_conf1 = await ac.post(
+            "/api/internal/v1/devices/provision",
+            json=mutated_payload_1,
+            headers=headers,
+        )
         assert resp_conf1.status_code == 409
         err1 = resp_conf1.json()["detail"]
         assert err1["error_code"] == "OPERATION_ID_CONFLICT"
 
         # Conflict 2: change tenant_id with same operation_id
         mutated_payload_2 = dict(base_payload, tenant_id=20)
-        resp_conf2 = await ac.post("/api/internal/v1/devices/provision", json=mutated_payload_2, headers=headers)
+        resp_conf2 = await ac.post(
+            "/api/internal/v1/devices/provision",
+            json=mutated_payload_2,
+            headers=headers,
+        )
         assert resp_conf2.status_code == 409
         assert resp_conf2.json()["detail"]["error_code"] == "OPERATION_ID_CONFLICT"
 
         # Conflict 3: change sn with same operation_id
         mutated_payload_3 = dict(base_payload, sn="SN-DIFF-999")
-        resp_conf3 = await ac.post("/api/internal/v1/devices/provision", json=mutated_payload_3, headers=headers)
+        resp_conf3 = await ac.post(
+            "/api/internal/v1/devices/provision",
+            json=mutated_payload_3,
+            headers=headers,
+        )
         assert resp_conf3.status_code == 409
         assert resp_conf3.json()["detail"]["error_code"] == "OPERATION_ID_CONFLICT"
 
@@ -398,7 +448,9 @@ async def test_identity_conflicts(app_with_in_memory_db, monkeypatch):
     monkeypatch.setattr(settings.auth, "internal_service_key", "sec-prov-key")
     headers = {"X-Internal-Service-Key": "sec-prov-key"}
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         # 1. Provision SN-TENANT-A for tenant 1
         resp_a = await ac.post(
             "/api/internal/v1/devices/provision",
@@ -426,7 +478,10 @@ async def test_identity_conflicts(app_with_in_memory_db, monkeypatch):
         assert resp_hijack.status_code == 409
         err_hijack = resp_hijack.json()["detail"]
         assert err_hijack["error_code"] == "IDENTITY_CONFLICT"
-        assert "different tenant" in err_hijack["message"] or "already provisioned" in err_hijack["message"]
+        assert (
+            "different tenant" in err_hijack["message"]
+            or "already provisioned" in err_hijack["message"]
+        )
 
         # Attempt 2: Tenant 1 tries to provision terminal 100 with a DIFFERENT serial number
         resp_term_clash = await ac.post(
@@ -468,7 +523,9 @@ async def test_tenant_isolation(app_with_in_memory_db, monkeypatch):
     monkeypatch.setattr(settings.auth, "internal_service_key", "sec-prov-key")
     headers = {"X-Internal-Service-Key": "sec-prov-key"}
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         # Tenant 100 has terminal 1
         resp_t100 = await ac.post(
             "/api/internal/v1/devices/provision",
@@ -517,9 +574,13 @@ async def test_concurrent_requests_handling(app_with_in_memory_db, monkeypatch):
         "sn": "SN-CONCURRENT-01",
     }
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         tasks = [
-            ac.post("/api/internal/v1/devices/provision", json=req_payload, headers=headers)
+            ac.post(
+                "/api/internal/v1/devices/provision", json=req_payload, headers=headers
+            )
             for _ in range(5)
         ]
         responses = await asyncio.gather(*tasks)
@@ -548,18 +609,28 @@ async def test_restart_persistence_and_replay(app_with_in_memory_db, monkeypatch
     }
 
     # 1. Provision before restart
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        r1 = await ac.post("/api/internal/v1/devices/provision", json=payload, headers=headers)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
+        r1 = await ac.post(
+            "/api/internal/v1/devices/provision", json=payload, headers=headers
+        )
         assert r1.status_code == 201
         assigned_dev_id = r1.json()["device_id"]
 
     # 2. Simulate restart: create new service instance, but pointing to the same persistent DB session
     new_service = DeviceProvisioningService()
-    monkeypatch.setattr("api.internal_v1.device_provisioning.device_provisioning_service", new_service)
+    monkeypatch.setattr(
+        "api.internal_v1.device_provisioning.device_provisioning_service", new_service
+    )
 
     # 3. Request after restart with same operation_id -> must return 200 OK with replayed_flag=True
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        r2 = await ac.post("/api/internal/v1/devices/provision", json=payload, headers=headers)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
+        r2 = await ac.post(
+            "/api/internal/v1/devices/provision", json=payload, headers=headers
+        )
         assert r2.status_code == 200
         data2 = r2.json()
         assert data2["replayed_flag"] is True
@@ -567,7 +638,9 @@ async def test_restart_persistence_and_replay(app_with_in_memory_db, monkeypatch
         assert data2["operation_id"] == op_id
 
         # Query after restart
-        r_get = await ac.get(f"/api/internal/v1/devices/provision/by-operation/{op_id}", headers=headers)
+        r_get = await ac.get(
+            f"/api/internal/v1/devices/provision/by-operation/{op_id}", headers=headers
+        )
         assert r_get.status_code == 200
         assert r_get.json()["device_id"] == assigned_dev_id
 
@@ -589,8 +662,12 @@ async def test_event_emission_and_feed_integration(app_with_in_memory_db, monkey
         "metadata": {"firmware": "2.1.0"},
     }
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        resp = await ac.post("/api/internal/v1/devices/provision", json=payload, headers=headers)
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
+        resp = await ac.post(
+            "/api/internal/v1/devices/provision", json=payload, headers=headers
+        )
         assert resp.status_code == 201
         dev_id = resp.json()["device_id"]
 
@@ -627,7 +704,9 @@ async def test_auth_and_error_schema(app_with_in_memory_db, monkeypatch):
         "sn": "SN-AUTH-01",
     }
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as ac:
         # 1. Missing credentials -> 403 Forbidden
         r_no_auth = await ac.post("/api/internal/v1/devices/provision", json=payload)
         assert r_no_auth.status_code == 403
@@ -651,7 +730,11 @@ async def test_auth_and_error_schema(app_with_in_memory_db, monkeypatch):
         # 4. Invalid SN pattern -> 422 Unprocessable Entity
         r_bad_sn = await ac.post(
             "/api/internal/v1/devices/provision",
-            json=dict(payload, operation_id="018f3a5b-0006-7001-8000-000000000601", sn="bad!sn@#$"),
+            json=dict(
+                payload,
+                operation_id="018f3a5b-0006-7001-8000-000000000601",
+                sn="bad!sn@#$",
+            ),
             headers={"Authorization": "Bearer sec-prov-key"},
         )
         assert r_bad_sn.status_code == 422
@@ -708,7 +791,10 @@ async def test_generate_and_verify_contract_artifacts():
         json.dump(openapi_spec, f, indent=2, ensure_ascii=False)
     assert openapi_path.exists() and openapi_path.stat().st_size > 0
     assert "/api/internal/v1/devices/provision" in openapi_spec["paths"]
-    assert "/api/internal/v1/devices/provision/by-operation/{operation_id}" in openapi_spec["paths"]
+    assert (
+        "/api/internal/v1/devices/provision/by-operation/{operation_id}"
+        in openapi_spec["paths"]
+    )
 
     # 2. Generate JSON Schema for DeviceProvisionRequest
     req_schema_path = schemas_dir / "device_provision_request.schema.json"
@@ -733,15 +819,21 @@ async def test_generate_and_verify_contract_artifacts():
         fixtures_data = json.load(f)
 
     examples = fixtures_data["examples"]
-    req_example = DeviceProvisionRequest.model_validate(examples["provision_request_initial"])
+    req_example = DeviceProvisionRequest.model_validate(
+        examples["provision_request_initial"]
+    )
     assert req_example.operation_id == "018f3a5b-0006-7001-8000-000000000001"
     assert req_example.sn == "SNPROV001"
 
-    resp_created = DeviceProvisionResponse.model_validate(examples["provision_response_created_201"])
+    resp_created = DeviceProvisionResponse.model_validate(
+        examples["provision_response_created_201"]
+    )
     assert resp_created.status == DeviceProvisionStatus.PROVISIONED
     assert resp_created.replayed_flag is False
 
-    resp_replayed = DeviceProvisionResponse.model_validate(examples["provision_response_replayed_200"])
+    resp_replayed = DeviceProvisionResponse.model_validate(
+        examples["provision_response_replayed_200"]
+    )
     assert resp_replayed.status == DeviceProvisionStatus.PROVISIONED
     assert resp_replayed.replayed_flag is True
 

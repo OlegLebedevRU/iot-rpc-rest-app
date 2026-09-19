@@ -28,10 +28,14 @@ class DeviceProvisionRequest(BaseModel):
     tenant_id: int = Field(..., ge=1, description="Tenant / Organization ID")
     terminal_id: int = Field(..., ge=1, description="Terminal identifier")
     sn: str = Field(..., description="Device serial number")
-    device_id: int | None = Field(None, ge=1, description="Optional explicit internal device ID")
+    device_id: int | None = Field(
+        None, ge=1, description="Optional explicit internal device ID"
+    )
     correlation_id: str | None = Field(None, description="End-to-end correlation ID")
     requested_by_user_id: str | None = Field(None, description="Requesting user ID")
-    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional device metadata")
+    metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Additional device metadata"
+    )
 
     @field_validator("operation_id")
     @classmethod
@@ -50,7 +54,9 @@ class DeviceProvisionRequest(BaseModel):
         if not val:
             raise ValueError("sn cannot be empty")
         if not SN_PATTERN.match(val):
-            raise ValueError(f"sn '{val}' does not match pattern '^[0-9A-Za-z_-]{{6,32}}$'")
+            raise ValueError(
+                f"sn '{val}' does not match pattern '^[0-9A-Za-z_-]{{6,32}}$'"
+            )
         return val
 
     @field_validator("correlation_id")
@@ -72,25 +78,37 @@ class DeviceProvisionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     operation_id: str = Field(..., description="UUID for idempotency")
-    status: DeviceProvisionStatus = Field(..., description="requested, provisioned, or failed")
+    status: DeviceProvisionStatus = Field(
+        ..., description="requested, provisioned, or failed"
+    )
     tenant_id: int = Field(..., description="Tenant / Organization ID")
     terminal_id: int = Field(..., description="Terminal identifier")
     device_id: int = Field(..., description="Device internal ID")
     sn: str = Field(..., description="Device serial number")
     contract_version: str = Field("1.0.0", description="Contract version")
     correlation_id: str | None = Field(None, description="End-to-end correlation ID")
-    replayed_flag: bool = Field(False, description="True if response is an idempotent replay")
+    replayed_flag: bool = Field(
+        False, description="True if response is an idempotent replay"
+    )
     created_at: datetime = Field(..., description="Creation UTC timestamp")
-    provisioned_at: datetime | None = Field(None, description="Provisioning completion UTC timestamp")
+    provisioned_at: datetime | None = Field(
+        None, description="Provisioning completion UTC timestamp"
+    )
     error_code: str | None = Field(None, description="Error code if status is failed")
-    error_message: str | None = Field(None, description="Error description if status is failed")
+    error_message: str | None = Field(
+        None, description="Error description if status is failed"
+    )
 
 
 class DeviceProvisionErrorDetail(BaseModel):
     error_code: str = Field(..., description="Structured error code")
     message: str = Field(..., description="Human-readable error explanation")
-    operation_id: str | None = Field(None, description="Operation ID associated with error")
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC), description="Error timestamp UTC")
+    operation_id: str | None = Field(
+        None, description="Operation ID associated with error"
+    )
+    timestamp: datetime = Field(
+        default_factory=lambda: datetime.now(UTC), description="Error timestamp UTC"
+    )
 
 
 class DeviceProvisionErrorResponse(BaseModel):

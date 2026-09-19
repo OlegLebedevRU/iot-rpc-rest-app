@@ -51,12 +51,24 @@ def _build_response(record: Any, is_replayed: bool) -> DeviceProvisionResponse:
         "parameters or conflicting identity returns HTTP 409 Conflict."
     ),
     responses={
-        201: {"description": "Device successfully provisioned", "model": DeviceProvisionResponse},
-        200: {"description": "Idempotent replay of previously completed provisioning", "model": DeviceProvisionResponse},
-        400: {"description": "Invalid payload or validation failure", "model": DeviceProvisionErrorResponse},
+        201: {
+            "description": "Device successfully provisioned",
+            "model": DeviceProvisionResponse,
+        },
+        200: {
+            "description": "Idempotent replay of previously completed provisioning",
+            "model": DeviceProvisionResponse,
+        },
+        400: {
+            "description": "Invalid payload or validation failure",
+            "model": DeviceProvisionErrorResponse,
+        },
         401: {"description": "Unauthorized / authentication credentials missing"},
         403: {"description": "Forbidden / invalid service key"},
-        409: {"description": "Operation ID conflict or identity/tenant mismatch", "model": DeviceProvisionErrorResponse},
+        409: {
+            "description": "Operation ID conflict or identity/tenant mismatch",
+            "model": DeviceProvisionErrorResponse,
+        },
     },
 )
 @router.post(
@@ -86,10 +98,16 @@ async def provision_device(
     response_model=DeviceProvisionResponse,
     summary="Get provisioning record by operation_id",
     responses={
-        200: {"description": "Provisioning record found", "model": DeviceProvisionResponse},
+        200: {
+            "description": "Provisioning record found",
+            "model": DeviceProvisionResponse,
+        },
         401: {"description": "Unauthorized"},
         403: {"description": "Forbidden"},
-        404: {"description": "Operation ID not found", "model": DeviceProvisionErrorResponse},
+        404: {
+            "description": "Operation ID not found",
+            "model": DeviceProvisionErrorResponse,
+        },
     },
 )
 async def get_provisioning_by_operation(
@@ -97,7 +115,9 @@ async def get_provisioning_by_operation(
     session: Session_dep,
     _: Internal_Auth_dep,
 ) -> DeviceProvisionResponse:
-    rec = await device_provisioning_service.get_provisioning_by_operation(session, operation_id)
+    rec = await device_provisioning_service.get_provisioning_by_operation(
+        session, operation_id
+    )
     if rec is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -115,10 +135,16 @@ async def get_provisioning_by_operation(
     response_model=DeviceProvisionResponse,
     summary="Get latest provisioning record by device SN",
     responses={
-        200: {"description": "Provisioning record found", "model": DeviceProvisionResponse},
+        200: {
+            "description": "Provisioning record found",
+            "model": DeviceProvisionResponse,
+        },
         401: {"description": "Unauthorized"},
         403: {"description": "Forbidden"},
-        404: {"description": "Device SN not found", "model": DeviceProvisionErrorResponse},
+        404: {
+            "description": "Device SN not found",
+            "model": DeviceProvisionErrorResponse,
+        },
     },
 )
 async def get_provisioning_by_sn(
