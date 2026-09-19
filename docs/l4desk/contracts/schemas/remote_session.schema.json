@@ -54,6 +54,19 @@
           "$ref": "#/$defs/RemoteSessionType",
           "description": "console or video"
         },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional custom or client-provided session identifier",
+          "title": "Session Id"
+        },
         "requested_by_user_id": {
           "anyOf": [
             {
@@ -79,6 +92,12 @@
           "default": null,
           "description": "End-to-end correlation ID",
           "title": "Correlation Id"
+        },
+        "auto_start": {
+          "default": false,
+          "description": "Automatically transition from requested to active",
+          "title": "Auto Start",
+          "type": "boolean"
         },
         "session_metadata": {
           "additionalProperties": true,
@@ -285,6 +304,21 @@
           "default": null,
           "description": "End-to-end correlation ID",
           "title": "Correlation Id"
+        },
+        "timeout_sec": {
+          "anyOf": [
+            {
+              "maximum": 60.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Graceful stop timeout in seconds",
+          "title": "Timeout Sec"
         }
       },
       "title": "RemoteSessionStop",

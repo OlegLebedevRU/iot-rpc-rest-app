@@ -9,7 +9,7 @@ log = setup_module_logger(__name__, "broker_core.log")
 logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 # Log the (possibly rewritten) URL — password is masked for safety.
 _masked_url = mask_amqp_url(str(settings.faststream.url))
-print(f"🔧 Creating RabbitRouter for {_masked_url}")
+print(f"[broker] Creating RabbitRouter for {_masked_url}")
 log.info("Initializing RabbitRouter with URL: %s", _masked_url)
 
 # FastStream's RabbitRouter uses aio-pika's robust connection internally,

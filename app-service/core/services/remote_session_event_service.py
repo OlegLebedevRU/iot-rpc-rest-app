@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass, field
 import hashlib
 import inspect
 from datetime import UTC, datetime
@@ -16,6 +17,9 @@ from core.models.db_helper import db_helper
 from core.models.devices import Device, DeviceOrgBind
 from core.models.remote_sessions import RemoteSession, RemoteSessionEvent
 from core.schemas.remote_sessions import (
+    ConsoleCommandCompleteRequest,
+    ConsoleCommandStartRequest,
+    ConsoleCommandTimeoutRequest,
     RemoteSessionCreate,
     RemoteSessionEventFeedResponse,
     RemoteSessionEventItem,
@@ -23,15 +27,98 @@ from core.schemas.remote_sessions import (
     RemoteSessionLifecycleState,
     RemoteSessionReconciliationResponse,
     RemoteSessionResponse,
+    RemoteSessionStart,
     RemoteSessionStop,
+    RemoteSessionType,
+    SessionConflictDetail,
     validate_no_commercial_fields,
 )
 
 log = setup_module_logger(__name__, "remote_session_events.log")
 
 
+class RemoteSessionConflictError(Exception):
+    """Raised when an active or starting session blocks a new session request on the device."""
+
+    def __init__(
+        self,
+        *,
+        active_session_id: str,
+        active_session_type: str,
+        active_status: str,
+        sn: str,
+        message: str | None = None,
+    ) -> None:
+        self.code = "session_busy"
+        self.active_session_id = active_session_id
+        self.active_session_type = active_session_type
+        self.active_status = active_status
+        self.sn = sn
+        self.message = (
+            message
+            or f"Device '{sn}' already has an active session '{active_session_id}' (type={active_session_type}, status={active_status})"
+        )
+        super().__init__(self.message)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "message": self.message,
+            "active_session_id": self.active_session_id,
+            "active_session_type": self.active_session_type,
+            "active_status": self.active_status,
+            "sn": self.sn,
+        }
+
+
+class ConsoleCommandForbiddenError(Exception):
+    """Raised when new commands are rejected because session is stopping, closed, or failed."""
+
+    def __init__(self, message: str, session_id: str, status: str) -> None:
+        self.message = message
+        self.session_id = session_id
+        self.status = status
+        super().__init__(self.message)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": "command_forbidden",
+            "message": self.message,
+            "session_id": self.session_id,
+            "status": self.status,
+        }
+
+
+@dataclass
+class InFlightCommand:
+    command_id: str
+    session_id: str
+    started_at: datetime
+    correlation_id: str | None = None
+    done_event: asyncio.Event = field(default_factory=asyncio.Event)
+    exit_code: int | None = None
+    timed_out: bool = False
+
+
 class RemoteSessionEventService:
     """Service for managing durable remote session facts, event feed, and reconciliation."""
+
+    ACTIVE_LIFECYCLE_STATES: tuple[str, ...] = (
+        RemoteSessionLifecycleState.REQUESTED.value,
+        RemoteSessionLifecycleState.STARTING.value,
+        RemoteSessionLifecycleState.ACTIVE.value,
+        RemoteSessionLifecycleState.STOPPING.value,
+    )
+
+    def __init__(self, stale_timeout_sec: float = 60.0) -> None:
+        self.stale_timeout_sec = stale_timeout_sec
+        self._in_flight_commands: dict[str, InFlightCommand] = {}
+        self._sn_locks: dict[str, asyncio.Lock] = {}
+
+    def _get_sn_lock(self, sn: str) -> asyncio.Lock:
+        if sn not in self._sn_locks:
+            self._sn_locks[sn] = asyncio.Lock()
+        return self._sn_locks[sn]
 
     async def resolve_device_and_tenant(
         self,
@@ -319,6 +406,37 @@ class RemoteSessionEventService:
             payload=event_payload,
         )
 
+    async def record_session_starting(
+        self,
+        session: AsyncSession,
+        *,
+        session_id: str,
+        sn: str,
+        session_type: str,
+        tenant_id: int | None = None,
+        terminal_id: str | None = None,
+        device_id: int | None = None,
+        operation_id: str | None = None,
+        correlation_id: str | None = None,
+        occurred_at: datetime | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> RemoteSessionEvent:
+        return await self.record_event(
+            session,
+            event_type=RemoteSessionEventType.REMOTE_SESSION_STARTING,
+            sn=sn,
+            session_id=session_id,
+            session_type=session_type,
+            tenant_id=tenant_id,
+            terminal_id=terminal_id,
+            device_id=device_id,
+            lifecycle_state=RemoteSessionLifecycleState.STARTING,
+            operation_id=operation_id,
+            correlation_id=correlation_id,
+            occurred_at=occurred_at,
+            payload=payload,
+        )
+
     async def record_session_active(
         self,
         session: AsyncSession,
@@ -555,13 +673,90 @@ class RemoteSessionEventService:
 
     # ── Durable Session Facts Management ─────────────────────────────────────────
 
+    async def get_active_session_for_sn(
+        self,
+        session: AsyncSession,
+        sn: str,
+    ) -> RemoteSession | None:
+        """Find any currently active, starting, requested, or stopping session for the device sn."""
+        if hasattr(session, "sessions") and isinstance(session.sessions, dict):
+            for s in session.sessions.values():
+                if s.sn == sn and s.status in self.ACTIVE_LIFECYCLE_STATES:
+                    return s
+
+        stmt = (
+            select(RemoteSession)
+            .where(
+                RemoteSession.sn == sn,
+                RemoteSession.status.in_(self.ACTIVE_LIFECYCLE_STATES),
+            )
+            .order_by(RemoteSession.created_at.desc())
+        )
+        try:
+            return await session.scalar(stmt)
+        except Exception as e:
+            log.debug("Error querying active session for sn=%s: %s", sn, e)
+            return None
+
+    def is_session_stale(
+        self,
+        session_rec: RemoteSession,
+        now: datetime | None = None,
+        stale_timeout_sec: float | None = None,
+    ) -> bool:
+        """Check if a session is stale due to missing heartbeat or abandoned start."""
+        if session_rec.status in (
+            RemoteSessionLifecycleState.CLOSED.value,
+            RemoteSessionLifecycleState.FAILED.value,
+        ):
+            return False
+
+        timeout = stale_timeout_sec if stale_timeout_sec is not None else self.stale_timeout_sec
+        curr = now or datetime.now(UTC)
+        last_act = (
+            session_rec.last_heartbeat_at
+            or session_rec.started_at
+            or session_rec.created_at
+        )
+        if last_act is None:
+            return True
+        if last_act.tzinfo is None:
+            last_act = last_act.replace(tzinfo=UTC)
+        elapsed = (curr - last_act).total_seconds()
+        return elapsed >= timeout
+
+    async def cleanup_stale_sessions(
+        self,
+        session: AsyncSession,
+        stale_timeout_sec: float | None = None,
+    ) -> list[RemoteSession]:
+        """Scan active sessions, evict those that are stale, and emit failed events."""
+        stmt = select(RemoteSession).where(
+            RemoteSession.status.in_(self.ACTIVE_LIFECYCLE_STATES)
+        )
+        active_sessions = list((await session.scalars(stmt)).all())
+        evicted: list[RemoteSession] = []
+        now = datetime.now(UTC)
+        for s in active_sessions:
+            if self.is_session_stale(s, now=now, stale_timeout_sec=stale_timeout_sec):
+                log.warning("Cleaning up stale session %s on sn=%s", s.session_id, s.sn)
+                await self.mark_session_failed(
+                    session,
+                    s.session_id,
+                    reason="stale_session_timeout",
+                    operation_id=s.operation_id,
+                    correlation_id=s.correlation_id,
+                )
+                evicted.append(s)
+        return evicted
+
     async def create_session(
         self,
         session: AsyncSession,
         data: RemoteSessionCreate,
     ) -> RemoteSession:
-        """Create a new durable remote session with idempotency on operation_id."""
-        # Check idempotency on operation_id
+        """Create a new durable remote session with idempotency on operation_id and mutual exclusion on sn."""
+        # 1. Idempotency check on operation_id first
         existing = await session.scalar(
             select(RemoteSession).where(RemoteSession.operation_id == data.operation_id)
         )
@@ -573,44 +768,101 @@ class RemoteSessionEventService:
             )
             return existing
 
-        res_tenant_id, res_device_id = await self.resolve_device_and_tenant(
-            session, sn=data.sn, tenant_id=data.tenant_id
-        )
-        final_tenant_id = res_tenant_id if res_tenant_id is not None else data.tenant_id
-        session_uid = f"sess-{data.session_type.value}-{uuid4().hex[:12]}"
+        # 2. Acquire serialization lock for device sn
+        lock = self._get_sn_lock(data.sn)
+        async with lock:
+            # Re-check idempotency under lock
+            existing = await session.scalar(
+                select(RemoteSession).where(RemoteSession.operation_id == data.operation_id)
+            )
+            if existing is not None:
+                return existing
 
-        new_session = RemoteSession(
-            session_id=session_uid,
-            tenant_id=final_tenant_id,
-            terminal_id=data.terminal_id,
-            device_id=res_device_id,
-            sn=data.sn,
-            session_type=data.session_type.value,
-            status=RemoteSessionLifecycleState.REQUESTED.value,
-            requested_by_user_id=data.requested_by_user_id,
-            operation_id=data.operation_id,
-            correlation_id=data.correlation_id,
-            session_metadata=data.session_metadata,
-        )
-        session.add(new_session)
-        await session.flush()
+            # 3. Check for existing active/starting/requested/stopping session on this device
+            active_existing = await self.get_active_session_for_sn(session, data.sn)
+            if active_existing is not None:
+                if self.is_session_stale(active_existing):
+                    log.warning(
+                        "Evicting stale session %s on sn=%s (status=%s) before creating new session",
+                        active_existing.session_id,
+                        data.sn,
+                        active_existing.status,
+                    )
+                    await self.mark_session_failed(
+                        session,
+                        active_existing.session_id,
+                        reason="stale_session_timeout",
+                        operation_id=active_existing.operation_id,
+                        correlation_id=active_existing.correlation_id,
+                    )
+                else:
+                    log.info(
+                        "Mutual exclusion conflict: sn=%s has active session=%s type=%s status=%s",
+                        data.sn,
+                        active_existing.session_id,
+                        active_existing.session_type,
+                        active_existing.status,
+                    )
+                    raise RemoteSessionConflictError(
+                        active_session_id=active_existing.session_id,
+                        active_session_type=active_existing.session_type,
+                        active_status=active_existing.status,
+                        sn=data.sn,
+                    )
 
-        # Emit start_requested event
-        await self.record_session_start_requested(
-            session,
-            session_id=session_uid,
-            sn=data.sn,
-            session_type=data.session_type.value,
-            tenant_id=final_tenant_id,
-            terminal_id=data.terminal_id,
-            device_id=res_device_id,
-            requested_by_user_id=data.requested_by_user_id,
-            operation_id=data.operation_id,
-            correlation_id=data.correlation_id,
-            payload=data.session_metadata,
-        )
+            res_tenant_id, res_device_id = await self.resolve_device_and_tenant(
+                session, sn=data.sn, tenant_id=data.tenant_id
+            )
+            final_tenant_id = res_tenant_id if res_tenant_id is not None else data.tenant_id
+            session_uid = data.session_id or f"sess-{data.session_type.value}-{uuid4().hex[:12]}"
 
-        return new_session
+            new_session = RemoteSession(
+                session_id=session_uid,
+                tenant_id=final_tenant_id,
+                terminal_id=data.terminal_id,
+                device_id=res_device_id,
+                sn=data.sn,
+                session_type=data.session_type.value,
+                status=RemoteSessionLifecycleState.REQUESTED.value,
+                requested_by_user_id=data.requested_by_user_id,
+                operation_id=data.operation_id,
+                correlation_id=data.correlation_id,
+                created_at=datetime.now(UTC),
+                session_metadata=data.session_metadata,
+            )
+            session.add(new_session)
+            await session.flush()
+
+            # Emit start_requested event (lifecycle_state: requested)
+            await self.record_session_start_requested(
+                session,
+                session_id=session_uid,
+                sn=data.sn,
+                session_type=data.session_type.value,
+                tenant_id=final_tenant_id,
+                terminal_id=data.terminal_id,
+                device_id=res_device_id,
+                requested_by_user_id=data.requested_by_user_id,
+                operation_id=data.operation_id,
+                correlation_id=data.correlation_id,
+                payload=data.session_metadata,
+            )
+
+            if data.auto_start:
+                await self.mark_session_starting(
+                    session,
+                    session_uid,
+                    operation_id=data.operation_id,
+                    correlation_id=data.correlation_id,
+                )
+                await self.mark_session_active(
+                    session,
+                    session_uid,
+                    operation_id=data.operation_id,
+                    correlation_id=data.correlation_id,
+                )
+
+            return new_session
 
     async def get_session(
         self,
@@ -621,28 +873,90 @@ class RemoteSessionEventService:
             select(RemoteSession).where(RemoteSession.session_id == session_id)
         )
 
-    async def stop_session(
+    async def start_session(
         self,
         session: AsyncSession,
         session_id: str,
-        data: RemoteSessionStop,
+        data: RemoteSessionStart | None = None,
+    ) -> RemoteSession:
+        """Advance session lifecycle: requested -> starting -> active."""
+        rec = await self.get_session(session, session_id)
+        if rec is None:
+            raise ValueError(f"Remote session '{session_id}' not found")
+
+        if rec.status in (
+            RemoteSessionLifecycleState.CLOSED.value,
+            RemoteSessionLifecycleState.FAILED.value,
+        ):
+            raise ValueError(f"Cannot start session '{session_id}' in terminal status '{rec.status}'")
+
+        if rec.status == RemoteSessionLifecycleState.ACTIVE.value:
+            return rec
+
+        op_id = (data.operation_id if data else None) or rec.operation_id
+        corr_id = (data.correlation_id if data else None) or rec.correlation_id
+
+        if rec.status == RemoteSessionLifecycleState.REQUESTED.value:
+            rec.status = RemoteSessionLifecycleState.STARTING.value
+            await session.flush()
+            await self.record_session_starting(
+                session,
+                session_id=rec.session_id,
+                sn=rec.sn,
+                session_type=rec.session_type,
+                tenant_id=rec.tenant_id,
+                terminal_id=rec.terminal_id,
+                device_id=rec.device_id,
+                operation_id=op_id,
+                correlation_id=corr_id,
+            )
+
+        # Transition to active
+        rec.status = RemoteSessionLifecycleState.ACTIVE.value
+        now = datetime.now(UTC)
+        rec.started_at = now
+        rec.last_heartbeat_at = now
+        if data and data.session_metadata:
+            rec.session_metadata = {**rec.session_metadata, **data.session_metadata}
+        await session.flush()
+
+        await self.record_session_active(
+            session,
+            session_id=rec.session_id,
+            sn=rec.sn,
+            session_type=rec.session_type,
+            tenant_id=rec.tenant_id,
+            terminal_id=rec.terminal_id,
+            device_id=rec.device_id,
+            operation_id=op_id,
+            correlation_id=corr_id,
+            payload=data.session_metadata if data else None,
+        )
+        return rec
+
+    async def mark_session_starting(
+        self,
+        session: AsyncSession,
+        session_id: str,
+        *,
+        operation_id: str | None = None,
+        correlation_id: str | None = None,
+        payload: dict[str, Any] | None = None,
     ) -> RemoteSession | None:
-        """Stop an active or requested session idempotently."""
         rec = await self.get_session(session, session_id)
         if rec is None:
             return None
-
-        if rec.status in (RemoteSessionLifecycleState.CLOSED.value, RemoteSessionLifecycleState.STOPPING.value):
-            log.info("Session %s already in %s status", session_id, rec.status)
+        if rec.status in (
+            RemoteSessionLifecycleState.STARTING.value,
+            RemoteSessionLifecycleState.ACTIVE.value,
+            RemoteSessionLifecycleState.CLOSED.value,
+            RemoteSessionLifecycleState.FAILED.value,
+        ):
             return rec
 
-        rec.status = RemoteSessionLifecycleState.CLOSED.value
-        rec.closed_at = datetime.now(UTC)
-        rec.close_reason = data.reason
+        rec.status = RemoteSessionLifecycleState.STARTING.value
         await session.flush()
-
-        # Emit stop_requested and closed events
-        await self.record_session_stop_requested(
+        await self.record_session_starting(
             session,
             session_id=rec.session_id,
             sn=rec.sn,
@@ -650,23 +964,10 @@ class RemoteSessionEventService:
             tenant_id=rec.tenant_id,
             terminal_id=rec.terminal_id,
             device_id=rec.device_id,
-            reason=data.reason,
-            operation_id=data.operation_id,
-            correlation_id=data.correlation_id,
+            operation_id=operation_id or rec.operation_id,
+            correlation_id=correlation_id or rec.correlation_id,
+            payload=payload,
         )
-        await self.record_session_closed(
-            session,
-            session_id=rec.session_id,
-            sn=rec.sn,
-            session_type=rec.session_type,
-            tenant_id=rec.tenant_id,
-            terminal_id=rec.terminal_id,
-            device_id=rec.device_id,
-            reason=data.reason,
-            operation_id=data.operation_id,
-            correlation_id=data.correlation_id,
-        )
-
         return rec
 
     async def mark_session_active(
@@ -685,9 +986,18 @@ class RemoteSessionEventService:
         if rec.status == RemoteSessionLifecycleState.ACTIVE.value:
             return rec
 
+        if rec.status == RemoteSessionLifecycleState.REQUESTED.value:
+            await self.mark_session_starting(
+                session,
+                session_id,
+                operation_id=operation_id,
+                correlation_id=correlation_id,
+            )
+
         rec.status = RemoteSessionLifecycleState.ACTIVE.value
-        rec.started_at = datetime.now(UTC)
-        rec.last_heartbeat_at = datetime.now(UTC)
+        now = datetime.now(UTC)
+        rec.started_at = now
+        rec.last_heartbeat_at = now
         await session.flush()
 
         await self.record_session_active(
@@ -736,6 +1046,237 @@ class RemoteSessionEventService:
             correlation_id=correlation_id or rec.correlation_id,
             payload=payload,
         )
+        return rec
+
+    async def stop_session(
+        self,
+        session: AsyncSession,
+        session_id: str,
+        data: RemoteSessionStop,
+    ) -> RemoteSession | None:
+        """Stop an active or requested session with graceful command/media completion."""
+        rec = await self.get_session(session, session_id)
+        if rec is None:
+            return None
+
+        if rec.status in (
+            RemoteSessionLifecycleState.CLOSED.value,
+            RemoteSessionLifecycleState.FAILED.value,
+        ):
+            log.info("Session %s already in terminal status %s", session_id, rec.status)
+            return rec
+
+        # 1. Transition to STOPPING
+        rec.status = RemoteSessionLifecycleState.STOPPING.value
+        await session.flush()
+
+        # Emit stop_requested event with lifecycle_state = STOPPING
+        await self.record_session_stop_requested(
+            session,
+            session_id=rec.session_id,
+            sn=rec.sn,
+            session_type=rec.session_type,
+            tenant_id=rec.tenant_id,
+            terminal_id=rec.terminal_id,
+            device_id=rec.device_id,
+            reason=data.reason,
+            operation_id=data.operation_id,
+            correlation_id=data.correlation_id,
+        )
+
+        # 2. Type-specific graceful stop flow
+        if rec.session_type == RemoteSessionType.CONSOLE.value or rec.session_type == "console":
+            timeout = data.timeout_sec if data.timeout_sec is not None else 5.0
+            await self._await_console_command_or_timeout(session, rec, timeout_sec=timeout)
+        elif rec.session_type == RemoteSessionType.VIDEO.value or rec.session_type == "video":
+            await self._teardown_video_session(rec, reason=data.reason)
+
+        # 3. Transition to CLOSED
+        rec.status = RemoteSessionLifecycleState.CLOSED.value
+        rec.closed_at = datetime.now(UTC)
+        rec.close_reason = data.reason
+        await session.flush()
+
+        # Emit closed event with lifecycle_state = CLOSED
+        await self.record_session_closed(
+            session,
+            session_id=rec.session_id,
+            sn=rec.sn,
+            session_type=rec.session_type,
+            tenant_id=rec.tenant_id,
+            terminal_id=rec.terminal_id,
+            device_id=rec.device_id,
+            reason=data.reason,
+            operation_id=data.operation_id,
+            correlation_id=data.correlation_id,
+        )
+
+        return rec
+
+    async def _await_console_command_or_timeout(
+        self,
+        session: AsyncSession,
+        rec: RemoteSession,
+        timeout_sec: float,
+    ) -> None:
+        cmd = self.get_in_flight_command(rec.session_id)
+        if cmd is None:
+            return
+
+        log.info(
+            "Console session %s has in-flight command %s; waiting up to %.2fs for completion",
+            rec.session_id,
+            cmd.command_id,
+            timeout_sec,
+        )
+        try:
+            await asyncio.wait_for(cmd.done_event.wait(), timeout=timeout_sec)
+            log.info(
+                "In-flight command %s for session %s completed before stop timeout",
+                cmd.command_id,
+                rec.session_id,
+            )
+        except TimeoutError:
+            log.warning(
+                "In-flight command %s for session %s timed out after %.2fs; completing stop flow",
+                cmd.command_id,
+                rec.session_id,
+                timeout_sec,
+            )
+            await self.timeout_console_command(
+                session,
+                session_id=rec.session_id,
+                command_id=cmd.command_id,
+                tenant_id=rec.tenant_id,
+                terminal_id=rec.terminal_id,
+                device_id=rec.device_id,
+                correlation_id=cmd.correlation_id,
+            )
+
+    async def _teardown_video_session(self, rec: RemoteSession, reason: str = "stop") -> None:
+        try:
+            from core.remote_input.leases import lease_registry
+            lease = await lease_registry.get_active(rec.sn)
+            if lease is not None and (lease.owner_session_id == rec.session_id or not lease.owner_session_id):
+                await lease_registry.revoke(lease.lease_id, reason=reason)
+                log.info("Revoked video stream lease %s for sn=%s", lease.lease_id, rec.sn)
+        except Exception as exc:
+            log.debug("Video teardown non-fatal error for session %s: %s", rec.session_id, exc)
+
+    def get_in_flight_command(self, session_id: str) -> InFlightCommand | None:
+        return self._in_flight_commands.get(session_id)
+
+    async def start_console_command(
+        self,
+        session: AsyncSession,
+        *,
+        session_id: str,
+        command_id: str,
+        correlation_id: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> RemoteSessionEvent:
+        rec = await self.get_session(session, session_id)
+        if rec is None:
+            raise ValueError(f"Session '{session_id}' not found")
+
+        if rec.status != RemoteSessionLifecycleState.ACTIVE.value:
+            raise ConsoleCommandForbiddenError(
+                f"Cannot execute new commands: session '{session_id}' is in '{rec.status}' status (must be 'active')",
+                session_id=session_id,
+                status=rec.status,
+            )
+
+        cmd = InFlightCommand(
+            command_id=command_id,
+            session_id=session_id,
+            started_at=datetime.now(UTC),
+            correlation_id=correlation_id,
+        )
+        self._in_flight_commands[session_id] = cmd
+
+        return await self.record_console_command_started(
+            session,
+            sn=rec.sn,
+            command_id=command_id,
+            session_id=rec.session_id,
+            tenant_id=rec.tenant_id,
+            terminal_id=rec.terminal_id,
+            device_id=rec.device_id,
+            correlation_id=correlation_id,
+            payload=payload,
+        )
+
+    async def complete_console_command(
+        self,
+        session: AsyncSession,
+        *,
+        session_id: str,
+        command_id: str,
+        exit_code: int = 0,
+        correlation_id: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> RemoteSessionEvent:
+        rec = await self.get_session(session, session_id)
+        cmd = self._in_flight_commands.pop(session_id, None)
+        if cmd is not None:
+            cmd.exit_code = exit_code
+            cmd.done_event.set()
+
+        sn = rec.sn if rec else ""
+        return await self.record_console_command_completed(
+            session,
+            sn=sn,
+            command_id=command_id,
+            exit_code=exit_code,
+            session_id=session_id,
+            tenant_id=rec.tenant_id if rec else None,
+            terminal_id=rec.terminal_id if rec else None,
+            device_id=rec.device_id if rec else None,
+            correlation_id=correlation_id or (cmd.correlation_id if cmd else None),
+            payload=payload,
+        )
+
+    async def timeout_console_command(
+        self,
+        session: AsyncSession,
+        *,
+        session_id: str,
+        command_id: str,
+        tenant_id: int | None = None,
+        terminal_id: str | None = None,
+        device_id: int | None = None,
+        correlation_id: str | None = None,
+        payload: dict[str, Any] | None = None,
+    ) -> RemoteSessionEvent:
+        rec = await self.get_session(session, session_id) if not terminal_id else None
+        cmd = self._in_flight_commands.pop(session_id, None)
+        if cmd is not None:
+            cmd.timed_out = True
+            cmd.done_event.set()
+
+        sn = rec.sn if rec else ""
+        return await self.record_console_command_timed_out(
+            session,
+            sn=sn,
+            command_id=command_id,
+            session_id=session_id,
+            tenant_id=tenant_id or (rec.tenant_id if rec else None),
+            terminal_id=terminal_id or (rec.terminal_id if rec else None),
+            device_id=device_id or (rec.device_id if rec else None),
+            correlation_id=correlation_id or (cmd.correlation_id if cmd else None),
+            payload=payload,
+        )
+
+    async def heartbeat(
+        self,
+        session: AsyncSession,
+        session_id: str,
+    ) -> RemoteSession | None:
+        rec = await self.get_session(session, session_id)
+        if rec is None:
+            return None
+        rec.last_heartbeat_at = datetime.now(UTC)
+        await session.flush()
         return rec
 
     # ── Event Feed Pagination Query ──────────────────────────────────────────────

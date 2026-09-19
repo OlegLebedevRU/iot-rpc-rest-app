@@ -13,6 +13,16 @@ from .base import Base
 class RemoteSession(Base):
     __tablename__ = "tb_remote_sessions"
 
+    __table_args__ = (
+        sa.Index(
+            "uq_active_remote_session_per_sn",
+            "sn",
+            unique=True,
+            postgresql_where=sa.text("status IN ('requested', 'starting', 'active', 'stopping')"),
+            sqlite_where=sa.text("status IN ('requested', 'starting', 'active', 'stopping')"),
+        ),
+    )
+
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     session_id: Mapped[str] = mapped_column(sa.String(64), unique=True, index=True, nullable=False)
     tenant_id: Mapped[int] = mapped_column(sa.Integer, index=True, nullable=False)

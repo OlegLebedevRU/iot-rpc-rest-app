@@ -14,6 +14,7 @@ class RemoteSessionEventType(StrEnum):
     DEVICE_PROVISIONED = "device_provisioned"
     DEVICE_PROVISION_FAILED = "device_provision_failed"
     REMOTE_SESSION_START_REQUESTED = "remote_session_start_requested"
+    REMOTE_SESSION_STARTING = "remote_session_starting"
     REMOTE_SESSION_ACTIVE = "remote_session_active"
     REMOTE_SESSION_STOP_REQUESTED = "remote_session_stop_requested"
     REMOTE_SESSION_CLOSED = "remote_session_closed"
@@ -25,6 +26,7 @@ class RemoteSessionEventType(StrEnum):
 
 class RemoteSessionLifecycleState(StrEnum):
     REQUESTED = "requested"
+    STARTING = "starting"
     ACTIVE = "active"
     STOPPING = "stopping"
     CLOSED = "closed"
@@ -82,8 +84,10 @@ class RemoteSessionCreate(BaseModel):
     terminal_id: str | None = Field(None, description="Terminal identifier")
     sn: str = Field(..., min_length=1, description="Device serial number")
     session_type: RemoteSessionType = Field(..., description="console or video")
+    session_id: str | None = Field(None, description="Optional custom or client-provided session identifier")
     requested_by_user_id: str | None = Field(None, description="Requesting user ID")
     correlation_id: str | None = Field(None, description="End-to-end correlation ID")
+    auto_start: bool = Field(False, description="Automatically transition from requested to active")
     session_metadata: dict[str, Any] = Field(default_factory=dict, description="Session attributes")
 
     @field_validator("operation_id")
@@ -101,12 +105,79 @@ class RemoteSessionCreate(BaseModel):
         return v
 
 
+class RemoteSessionStart(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    operation_id: str | None = Field(None, description="UUID for idempotency")
+    correlation_id: str | None = Field(None, description="End-to-end correlation ID")
+    session_metadata: dict[str, Any] = Field(default_factory=dict, description="Session attributes")
+
+    @field_validator("session_metadata")
+    @classmethod
+    def validate_metadata(cls, v: dict[str, Any]) -> dict[str, Any]:
+        validate_no_commercial_fields(v)
+        return v
+
+
 class RemoteSessionStop(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     operation_id: str | None = Field(None, description="UUID for idempotency")
     reason: str = Field("user_requested", description="Stop reason")
     correlation_id: str | None = Field(None, description="End-to-end correlation ID")
+    timeout_sec: float | None = Field(None, ge=0.0, le=60.0, description="Graceful stop timeout in seconds")
+
+
+class SessionConflictDetail(BaseModel):
+    code: str = Field("session_busy", description="Error code")
+    message: str = Field(..., description="Conflict error description")
+    active_session_id: str = Field(..., description="Identifier of the currently conflicting session")
+    active_session_type: str = Field(..., description="Type of the active session ('console' or 'video')")
+    active_status: str = Field(..., description="Current status of the active session")
+    sn: str = Field(..., description="Device serial number")
+
+
+class ConsoleCommandStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command_id: str = Field(..., min_length=1, description="Unique command identifier")
+    correlation_id: str | None = Field(None, description="Correlation ID")
+    payload: dict[str, Any] = Field(default_factory=dict, description="Command payload")
+
+    @field_validator("payload")
+    @classmethod
+    def validate_payload(cls, v: dict[str, Any]) -> dict[str, Any]:
+        validate_no_commercial_fields(v)
+        return v
+
+
+class ConsoleCommandCompleteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command_id: str = Field(..., min_length=1, description="Unique command identifier")
+    exit_code: int = Field(0, description="Process exit code")
+    correlation_id: str | None = Field(None, description="Correlation ID")
+    payload: dict[str, Any] = Field(default_factory=dict, description="Command completion payload")
+
+    @field_validator("payload")
+    @classmethod
+    def validate_payload(cls, v: dict[str, Any]) -> dict[str, Any]:
+        validate_no_commercial_fields(v)
+        return v
+
+
+class ConsoleCommandTimeoutRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    command_id: str = Field(..., min_length=1, description="Unique command identifier")
+    correlation_id: str | None = Field(None, description="Correlation ID")
+    payload: dict[str, Any] = Field(default_factory=dict, description="Timeout payload")
+
+    @field_validator("payload")
+    @classmethod
+    def validate_payload(cls, v: dict[str, Any]) -> dict[str, Any]:
+        validate_no_commercial_fields(v)
+        return v
 
 
 class RemoteSessionResponse(BaseModel):

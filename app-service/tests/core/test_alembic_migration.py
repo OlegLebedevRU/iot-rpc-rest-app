@@ -133,3 +133,37 @@ def test_alembic_device_provisioning_migration_upgrade_and_downgrade(monkeypatch
     mod.downgrade()
     assert mock_drop_index.call_count == 7
     assert mock_drop_table.call_count == 1
+
+
+def test_alembic_remote_session_lock_migration_upgrade_and_downgrade(monkeypatch):
+    migration_path = (
+        pathlib.Path(__file__).parent.parent.parent
+        / "alembic"
+        / "versions"
+        / "2026_09_19_0006_add_remote_session_lock.py"
+    )
+    spec = importlib.util.spec_from_file_location("migration_remote_session_lock", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    mock_create_index = MagicMock()
+    mock_drop_index = MagicMock()
+
+    monkeypatch.setattr(op, "create_index", mock_create_index)
+    monkeypatch.setattr(op, "drop_index", mock_drop_index)
+
+    mod.upgrade()
+    assert mock_create_index.call_count == 1
+    args, kwargs = mock_create_index.call_args
+    assert args[0] == "uq_active_remote_session_per_sn"
+    assert args[1] == "tb_remote_sessions"
+    assert args[2] == ["sn"]
+    assert kwargs.get("unique") is True
+
+    mod.downgrade()
+    assert mock_drop_index.call_count == 1
+    d_args, d_kwargs = mock_drop_index.call_args
+    assert d_args[0] == "uq_active_remote_session_per_sn"
+    assert d_kwargs.get("table_name") == "tb_remote_sessions"

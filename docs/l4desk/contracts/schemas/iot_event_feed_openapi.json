@@ -270,7 +270,7 @@
         "tags": [
           "Internal Remote Sessions & Events"
         ],
-        "summary": "Create a remote session with idempotency on operation_id",
+        "summary": "Create a remote session with idempotency on operation_id and mutual exclusion on device",
         "operationId": "create_remote_session_api_internal_v1_remote_sessions_post",
         "requestBody": {
           "content": {
@@ -284,6 +284,70 @@
         },
         "responses": {
           "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteSessionResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Device already has an active or starting session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionConflictDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/v1/remote-sessions/{session_id}/start": {
+      "post": {
+        "tags": [
+          "Internal Remote Sessions & Events"
+        ],
+        "summary": "Advance remote session lifecycle: requested -> starting -> active",
+        "operationId": "start_remote_session_api_internal_v1_remote_sessions__session_id__start_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteSessionStart",
+                "default": {
+                  "session_metadata": {}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
@@ -353,7 +417,7 @@
         "tags": [
           "Internal Remote Sessions & Events"
         ],
-        "summary": "Stop a remote session idempotently",
+        "summary": "Stop a remote session with graceful stop flow",
         "operationId": "stop_remote_session_api_internal_v1_remote_sessions__session_id__stop_post",
         "parameters": [
           {
@@ -401,10 +465,322 @@
           }
         }
       }
+    },
+    "/api/internal/v1/remote-sessions/{session_id}/heartbeat": {
+      "post": {
+        "tags": [
+          "Internal Remote Sessions & Events"
+        ],
+        "summary": "Update last heartbeat timestamp to prevent stale session eviction",
+        "operationId": "heartbeat_remote_session_api_internal_v1_remote_sessions__session_id__heartbeat_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteSessionResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/v1/remote-sessions/{session_id}/commands/start": {
+      "post": {
+        "tags": [
+          "Internal Remote Sessions & Events"
+        ],
+        "summary": "Start a console command in an active console session",
+        "operationId": "start_console_command_api_internal_v1_remote_sessions__session_id__commands_start_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleCommandStartRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Start Console Command Api Internal V1 Remote Sessions  Session Id  Commands Start Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/v1/remote-sessions/{session_id}/commands/complete": {
+      "post": {
+        "tags": [
+          "Internal Remote Sessions & Events"
+        ],
+        "summary": "Complete an in-flight console command",
+        "operationId": "complete_console_command_api_internal_v1_remote_sessions__session_id__commands_complete_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleCommandCompleteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Complete Console Command Api Internal V1 Remote Sessions  Session Id  Commands Complete Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/internal/v1/remote-sessions/{session_id}/commands/timeout": {
+      "post": {
+        "tags": [
+          "Internal Remote Sessions & Events"
+        ],
+        "summary": "Record timeout for an in-flight console command",
+        "operationId": "timeout_console_command_api_internal_v1_remote_sessions__session_id__commands_timeout_post",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsoleCommandTimeoutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Timeout Console Command Api Internal V1 Remote Sessions  Session Id  Commands Timeout Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "ConsoleCommandCompleteRequest": {
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Command Id",
+            "description": "Unique command identifier"
+          },
+          "exit_code": {
+            "type": "integer",
+            "title": "Exit Code",
+            "description": "Process exit code",
+            "default": 0
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id",
+            "description": "Correlation ID"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload",
+            "description": "Command completion payload"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "command_id"
+        ],
+        "title": "ConsoleCommandCompleteRequest"
+      },
+      "ConsoleCommandStartRequest": {
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Command Id",
+            "description": "Unique command identifier"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id",
+            "description": "Correlation ID"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload",
+            "description": "Command payload"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "command_id"
+        ],
+        "title": "ConsoleCommandStartRequest"
+      },
+      "ConsoleCommandTimeoutRequest": {
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Command Id",
+            "description": "Unique command identifier"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id",
+            "description": "Correlation ID"
+          },
+          "payload": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Payload",
+            "description": "Timeout payload"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "command_id"
+        ],
+        "title": "ConsoleCommandTimeoutRequest"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -458,6 +834,18 @@
             "$ref": "#/components/schemas/RemoteSessionType",
             "description": "console or video"
           },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id",
+            "description": "Optional custom or client-provided session identifier"
+          },
           "requested_by_user_id": {
             "anyOf": [
               {
@@ -481,6 +869,12 @@
             ],
             "title": "Correlation Id",
             "description": "End-to-end correlation ID"
+          },
+          "auto_start": {
+            "type": "boolean",
+            "title": "Auto Start",
+            "description": "Automatically transition from requested to active",
+            "default": false
           },
           "session_metadata": {
             "additionalProperties": true,
@@ -952,6 +1346,43 @@
         ],
         "title": "RemoteSessionResponse"
       },
+      "RemoteSessionStart": {
+        "properties": {
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Id",
+            "description": "UUID for idempotency"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id",
+            "description": "End-to-end correlation ID"
+          },
+          "session_metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Session Metadata",
+            "description": "Session attributes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "RemoteSessionStart"
+      },
       "RemoteSessionStop": {
         "properties": {
           "operation_id": {
@@ -983,6 +1414,20 @@
             ],
             "title": "Correlation Id",
             "description": "End-to-end correlation ID"
+          },
+          "timeout_sec": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 60.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout Sec",
+            "description": "Graceful stop timeout in seconds"
           }
         },
         "additionalProperties": false,
@@ -996,6 +1441,50 @@
           "video"
         ],
         "title": "RemoteSessionType"
+      },
+      "SessionConflictDetail": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code",
+            "description": "Error code",
+            "default": "session_busy"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "Conflict error description"
+          },
+          "active_session_id": {
+            "type": "string",
+            "title": "Active Session Id",
+            "description": "Identifier of the currently conflicting session"
+          },
+          "active_session_type": {
+            "type": "string",
+            "title": "Active Session Type",
+            "description": "Type of the active session ('console' or 'video')"
+          },
+          "active_status": {
+            "type": "string",
+            "title": "Active Status",
+            "description": "Current status of the active session"
+          },
+          "sn": {
+            "type": "string",
+            "title": "Sn",
+            "description": "Device serial number"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message",
+          "active_session_id",
+          "active_session_type",
+          "active_status",
+          "sn"
+        ],
+        "title": "SessionConflictDetail"
       },
       "ValidationError": {
         "properties": {
