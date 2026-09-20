@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "L4Desk Archive Contract Schemas 1.0.0",
+  "description": "Consolidated schema definitions for Archive Manifest, File Entries, and JSONL Record Envelopes",
+  "$defs": {
+    "ArchiveManifest": {
+      "type": "object",
+      "required": [
+        "archive_manifest_version",
+        "archive_batch_id",
+        "owner_project",
+        "schema_version",
+        "created_at_utc",
+        "source_month",
+        "time_range",
+        "record_types",
+        "record_counts",
+        "files",
+        "compression",
+        "state",
+        "retention",
+        "storage_layout"
+      ],
+      "properties": {
+        "archive_manifest_version": { "type": "string", "const": "1.0.0" },
+        "archive_batch_id": { "type": "string", "pattern": "^[a-z0-9_-]{8,128}$" },
+        "owner_project": { "type": "string", "enum": ["iot-rpc-rest-app", "l4media", "MenuBuilder"] },
+        "schema_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z0-9.]+)?$" },
+        "created_at_utc": { "type": "string", "format": "date-time" },
+        "source_month": { "type": "string", "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])$" },
+        "time_range": {
+          "type": "object",
+          "required": ["min_occurred_at", "max_occurred_at"],
+          "properties": {
+            "min_occurred_at": { "type": "string", "format": "date-time" },
+            "max_occurred_at": { "type": "string", "format": "date-time" }
+          },
+          "additionalProperties": false
+        },
+        "cursor_bounds": {
+          "type": ["object", "null"],
+          "properties": {
+            "min_cursor": { "type": ["integer", "null"], "minimum": 0 },
+            "max_cursor": { "type": ["integer", "null"], "minimum": 0 },
+            "through_cursor": { "type": ["integer", "null"], "minimum": 0 },
+            "consumers_passed_cursor": { "type": ["integer", "null"], "minimum": 0 }
+          },
+          "additionalProperties": false
+        },
+        "record_types": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "record_counts": {
+          "type": "object",
+          "required": ["total_records"],
+          "properties": {
+            "total_records": { "type": "integer", "minimum": 0 }
+          },
+          "additionalProperties": { "type": "integer", "minimum": 0 }
+        },
+        "files": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/FileEntry" }
+        },
+        "compression": { "type": "string", "enum": ["gzip"] },
+        "state": { "type": "string", "enum": ["prepared", "verified", "purged", "failed"] },
+        "verification": { "$ref": "#/$defs/VerificationResult" },
+        "purge": { "$ref": "#/$defs/PurgeResult" },
+        "error": { "$ref": "#/$defs/ArchiveError" },
+        "retention": { "$ref": "#/$defs/RetentionPolicy" },
+        "storage_layout": { "$ref": "#/$defs/StorageLayout" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "verified" } } },
+          "then": {
+            "properties": {
+              "verification": {
+                "type": "object",
+                "required": ["verified_at_utc", "restore_sample_status", "cursor_guard_passed"],
+                "properties": {
+                  "verified_at_utc": { "type": "string" },
+                  "restore_sample_status": { "const": "passed" },
+                  "cursor_guard_passed": { "const": true }
+                }
+              }
+            },
+            "required": ["verification"]
+          }
+        },
+        {
+          "if": { "properties": { "state": { "const": "purged" } } },
+          "then": {
+            "properties": {
+              "verification": {
+                "type": "object",
+                "required": ["verified_at_utc", "restore_sample_status", "cursor_guard_passed"],
+                "properties": {
+                  "verified_at_utc": { "type": "string" },
+                  "restore_sample_status": { "const": "passed" },
+                  "cursor_guard_passed": { "const": true }
+                }
+              },
+              "purge": {
+                "type": "object",
+                "required": ["purged_at_utc", "purge_status"],
+                "properties": {
+                  "purged_at_utc": { "type": "string" },
+                  "purge_status": { "const": "completed" }
+                }
+              }
+            },
+            "required": ["verification", "purge"]
+          }
+        },
+        {
+          "if": { "properties": { "state": { "const": "failed" } } },
+          "then": {
+            "properties": {
+              "error": {
+                "type": "object",
+                "required": ["code", "message", "occurred_at_utc"]
+              }
+            },
+            "required": ["error"]
+          }
+        }
+      ],
+      "additionalProperties": false
+    },
+    "FileEntry": {
+      "type": "object",
+      "required": ["path", "size_bytes", "sha256", "record_count", "compression"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "maxLength": 256 },
+        "size_bytes": { "type": "integer", "minimum": 0 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "record_count": { "type": "integer", "minimum": 0 },
+        "compression": { "type": "string", "enum": ["gzip", "none"] }
+      },
+      "additionalProperties": false
+    },
+    "VerificationResult": {
+      "type": ["object", "null"],
+      "properties": {
+        "verified_at_utc": { "type": ["string", "null"], "format": "date-time" },
+        "verifier": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "reread_records_count": { "type": "integer", "minimum": 0 },
+        "reread_checksum_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "restore_sample_status": { "type": "string", "enum": ["passed", "failed", "skipped"] },
+        "cursor_guard_passed": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "PurgeResult": {
+      "type": ["object", "null"],
+      "properties": {
+        "purged_at_utc": { "type": ["string", "null"], "format": "date-time" },
+        "purged_records_count": { "type": "integer", "minimum": 0 },
+        "purge_status": { "type": "string", "enum": ["completed", "pending", "failed", "skipped"] }
+      },
+      "additionalProperties": false
+    },
+    "ArchiveError": {
+      "type": ["object", "null"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "CHECKSUM_MISMATCH",
+            "COUNT_MISMATCH",
+            "CURSOR_LAG_DETECTED",
+            "RESTORE_SAMPLE_FAILED",
+            "HOT_RETENTION_VIOLATION",
+            "DISK_SPACE_EXHAUSTED",
+            "VOLUME_UNAVAILABLE",
+            "ACTIVE_RECORDS_DETECTED",
+            "ATOMIC_RENAME_FAILED",
+            "PURGE_OPERATION_FAILED"
+          ]
+        },
+        "message": { "type": "string", "minLength": 1 },
+        "occurred_at_utc": { "type": "string", "format": "date-time" }
+      },
+      "required": ["code", "message", "occurred_at_utc"],
+      "additionalProperties": false
+    },
+    "RetentionPolicy": {
+      "type": "object",
+      "required": ["retain_until_utc", "retention_years", "backup_required"],
+      "properties": {
+        "retain_until_utc": { "type": "string", "format": "date-time" },
+        "retention_years": { "type": "integer", "minimum": 3 },
+        "backup_required": { "type": "boolean", "const": true }
+      },
+      "additionalProperties": false
+    },
+    "StorageLayout": {
+      "type": "object",
+      "required": ["volume_root", "relative_path"],
+      "properties": {
+        "volume_root": { "type": "string", "minLength": 1 },
+        "relative_path": { "type": "string", "pattern": "^[0-9]{4}/(0[1-9]|1[0-2])/[a-zA-Z0-9_-]+/[a-z0-9_-]+$" }
+      },
+      "additionalProperties": false
+    },
+    "RecordEnvelope": {
+      "type": "object",
+      "required": [
+        "record_type",
+        "record_id",
+        "occurred_at_utc",
+        "source_project",
+        "payload"
+      ],
+      "properties": {
+        "record_type": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "record_id": { "type": ["string", "integer"], "description": "Unique event/sample id" },
+        "occurred_at_utc": { "type": "string", "format": "date-time" },
+        "cursor": { "type": ["integer", "null"], "minimum": 0 },
+        "tenant_id": { "type": ["integer", "null"] },
+        "terminal_id": { "type": ["integer", "null"] },
+        "sn": { "type": ["string", "null"] },
+        "session_id": { "type": ["string", "null"] },
+        "source_project": { "type": "string", "enum": ["iot-rpc-rest-app", "l4media", "MenuBuilder"] },
+        "payload": { "type": "object", "description": "Type-specific record details" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -89,6 +89,7 @@ class ApiInternalV1Prefix(BaseModel):
     remote_input: str = "/remote-input"
     remote_sessions: str = "/remote-sessions"
     remote_session_events: str = "/remote-session-events"
+    archive: str = "/archive"
 
 
 class ApiPrefix(BaseModel):
@@ -430,6 +431,18 @@ class DiagnosticsConfig(BaseModel):
     implicit_console_lease: bool = True
 
 
+class ArchiveConfig(BaseModel):
+    enabled: bool = False
+    volume_root: str = "/mnt/l4desk-archive"
+    owner_project: str = "iot-rpc-rest-app"
+    retention_years: int = 3
+    retention_months_threshold: int = 3
+    chunk_size: int = 1000
+    min_free_disk_bytes: int = 100 * 1024 * 1024  # 100MB minimum margin
+    sample_restore_size: int = 10
+    dry_run: bool = False
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(".env.template", ".env"),
@@ -456,6 +469,7 @@ class Settings(BaseSettings):
     billing: BillingConfig = BillingConfig()
     remote_input: RemoteInputConfig = RemoteInputConfig()
     diagnostics: DiagnosticsConfig = DiagnosticsConfig()
+    archive: ArchiveConfig = ArchiveConfig()
 
     @property
     def api_keys(self) -> Dict[str, int]:

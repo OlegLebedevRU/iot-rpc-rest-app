@@ -23,6 +23,7 @@ __all__ = (
     "RemoteSession",
     "RemoteSessionEvent",
     "DeviceProvisioning",
+    "FinArchiveBatch",
 )
 
 
@@ -45,3 +46,4 @@ from .cell import Cell
 from .billing import BillingCoefficient, BillingCounter, BillingActiveDevice
 from .remote_sessions import RemoteSession, RemoteSessionEvent
 from .device_provisioning import DeviceProvisioning
+from .archive import FinArchiveBatch

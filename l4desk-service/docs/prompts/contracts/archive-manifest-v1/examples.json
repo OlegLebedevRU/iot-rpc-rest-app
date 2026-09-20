@@ -1,0 +1,630 @@
+{
+  "contract_version": "1.0.0",
+  "synthetic_only": true,
+  "note": "Canonical golden fixtures and negative acceptance vectors for Archive Manifest Contract v1",
+  "cases": [
+    {
+      "id": "iot-archive-verified",
+      "schema": "ArchiveManifest",
+      "valid": true,
+      "description": "Fully verified IoT session event archive batch ready for bounded purge",
+      "body": {
+        "archive_manifest_version": "1.0.0",
+        "archive_batch_id": "arch-iot-2026-05-b91c84f2",
+        "owner_project": "iot-rpc-rest-app",
+        "schema_version": "1.0.0",
+        "created_at_utc": "2026-09-01T04:00:00Z",
+        "source_month": "2026-05",
+        "time_range": {
+          "min_occurred_at": "2026-05-01T00:00:00Z",
+          "max_occurred_at": "2026-05-31T23:59:59.999999Z"
+        },
+        "cursor_bounds": {
+          "min_cursor": 10001,
+          "max_cursor": 25000,
+          "through_cursor": 25000,
+          "consumers_passed_cursor": 26500
+        },
+        "record_types": [
+          "iot_session_events",
+          "rpc_transitions",
+          "presence_events"
+        ],
+        "record_counts": {
+          "iot_session_events": 10000,
+          "rpc_transitions": 3500,
+          "presence_events": 1500,
+          "total_records": 15000
+        },
+        "files": [
+          {
+            "path": "data.jsonl.gz",
+            "size_bytes": 1048576,
+            "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+            "record_count": 15000,
+            "compression": "gzip"
+          }
+        ],
+        "compression": "gzip",
+        "state": "verified",
+        "verification": {
+          "verified_at_utc": "2026-09-01T04:15:30Z",
+          "verifier": "iot-archive-worker",
+          "reread_records_count": 15000,
+          "reread_checksum_sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+          "restore_sample_status": "passed",
+          "cursor_guard_passed": true
+        },
+        "purge": {
+          "purged_at_utc": null,
+          "purged_records_count": 0,
+          "purge_status": "pending"
+        },
+        "error": null,
+        "retention": {
+          "retain_until_utc": "2029-09-01T04:00:00Z",
+          "retention_years": 3,
+          "backup_required": true
+        },
+        "storage_layout": {
+          "volume_root": "/mnt/l4desk-archive",
+          "relative_path": "2026/05/iot-rpc-rest-app/arch-iot-2026-05-b91c84f2"
+        }
+      }
+    },
+    {
+      "id": "media-archive-purged",
+      "schema": "ArchiveManifest",
+      "valid": true,
+      "description": "Completed and purged media telemetry/quality archive batch",
+      "body": {
+        "archive_manifest_version": "1.0.0",
+        "archive_batch_id": "arch-media-2026-04-e5f6a7b8",
+        "owner_project": "l4media",
+        "schema_version": "1.0.0",
+        "created_at_utc": "2026-08-01T03:00:00Z",
+        "source_month": "2026-04",
+        "time_range": {
+          "min_occurred_at": "2026-04-01T00:00:00Z",
+          "max_occurred_at": "2026-04-30T23:59:59.999999Z"
+        },
+        "cursor_bounds": null,
+        "record_types": [
+          "media_stream_samples",
+          "media_quality_events"
+        ],
+        "record_counts": {
+          "media_stream_samples": 45000,
+          "media_quality_events": 5000,
+          "total_records": 50000
+        },
+        "files": [
+          {
+            "path": "samples.jsonl.gz",
+            "size_bytes": 4194304,
+            "sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4",
+            "record_count": 45000,
+            "compression": "gzip"
+          },
+          {
+            "path": "quality.jsonl.gz",
+            "size_bytes": 524288,
+            "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+            "record_count": 5000,
+            "compression": "gzip"
+          }
+        ],
+        "compression": "gzip",
+        "state": "purged",
+        "verification": {
+          "verified_at_utc": "2026-08-01T03:22:10Z",
+          "verifier": "l4media-archive-worker",
+          "reread_records_count": 50000,
+          "reread_checksum_sha256": "8f434346648f6b96df89dda901c5176b10a6d83961dd3c1ac88b59b2dc327aa4",
+          "restore_sample_status": "passed",
+          "cursor_guard_passed": true
+        },
+        "purge": {
+          "purged_at_utc": "2026-08-01T03:45:00Z",
+          "purged_records_count": 50000,
+          "purge_status": "completed"
+        },
+        "error": null,
+        "retention": {
+          "retain_until_utc": "2029-08-01T03:00:00Z",
+          "retention_years": 3,
+          "backup_required": true
+        },
+        "storage_layout": {
+          "volume_root": "/mnt/l4desk-archive",
+          "relative_path": "2026/04/l4media/arch-media-2026-04-e5f6a7b8"
+        }
+      }
+    },
+    {
+      "id": "menubuilder-audit-prepared",
+      "schema": "ArchiveManifest",
+      "valid": true,
+      "description": "Freshly prepared MenuBuilder audit trail batch in temporary staging before verification",
+      "body": {
+        "archive_manifest_version": "1.0.0",
+        "archive_batch_id": "arch-mb-2026-05-c3d4e5f6",
+        "owner_project": "MenuBuilder",
+        "schema_version": "1.0.0",
+        "created_at_utc": "2026-09-02T05:00:00Z",
+        "source_month": "2026-05",
+        "time_range": {
+          "min_occurred_at": "2026-05-01T00:00:00Z",
+          "max_occurred_at": "2026-05-31T23:59:59.000000Z"
+        },
+        "cursor_bounds": null,
+        "record_types": [
+          "admin_audit_events"
+        ],
+        "record_counts": {
+          "admin_audit_events": 2500,
+          "total_records": 2500
+        },
+        "files": [
+          {
+            "path": "data.jsonl.gz",
+            "size_bytes": 262144,
+            "sha256": "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8",
+            "record_count": 2500,
+            "compression": "gzip"
+          }
+        ],
+        "compression": "gzip",
+        "state": "prepared",
+        "verification": null,
+        "purge": null,
+        "error": null,
+        "retention": {
+          "retain_until_utc": "2029-09-02T05:00:00Z",
+          "retention_years": 3,
+          "backup_required": true
+        },
+        "storage_layout": {
+          "volume_root": "/mnt/l4desk-archive",
+          "relative_path": "2026/05/MenuBuilder/arch-mb-2026-05-c3d4e5f6"
+        }
+      }
+    },
+    {
+      "id": "iot-archive-failed",
+      "schema": "ArchiveManifest",
+      "valid": true,
+      "description": "Failed archive batch where verification detected checksum mismatch",
+      "body": {
+        "archive_manifest_version": "1.0.0",
+        "archive_batch_id": "arch-iot-2026-05-f1a2b3c4",
+        "owner_project": "iot-rpc-rest-app",
+        "schema_version": "1.0.0",
+        "created_at_utc": "2026-09-01T04:00:00Z",
+        "source_month": "2026-05",
+        "time_range": {
+          "min_occurred_at": "2026-05-01T00:00:00Z",
+          "max_occurred_at": "2026-05-31T23:59:59.999999Z"
+        },
+        "cursor_bounds": {
+          "min_cursor": 10001,
+          "max_cursor": 25000,
+          "through_cursor": 25000,
+          "consumers_passed_cursor": 26500
+        },
+        "record_types": [
+          "iot_session_events"
+        ],
+        "record_counts": {
+          "iot_session_events": 15000,
+          "total_records": 15000
+        },
+        "files": [
+          {
+            "path": "data.jsonl.gz",
+            "size_bytes": 1048576,
+            "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+            "record_count": 15000,
+            "compression": "gzip"
+          }
+        ],
+        "compression": "gzip",
+        "state": "failed",
+        "verification": {
+          "verified_at_utc": null,
+          "verifier": "iot-archive-worker",
+          "reread_records_count": 15000,
+          "reread_checksum_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "restore_sample_status": "failed",
+          "cursor_guard_passed": true
+        },
+        "purge": null,
+        "error": {
+          "code": "CHECKSUM_MISMATCH",
+          "message": "Full reread SHA-256 does not match original written file digest",
+          "occurred_at_utc": "2026-09-01T04:16:00Z"
+        },
+        "retention": {
+          "retain_until_utc": "2029-09-01T04:00:00Z",
+          "retention_years": 3,
+          "backup_required": true
+        },
+        "storage_layout": {
+          "volume_root": "/mnt/l4desk-archive",
+          "relative_path": "2026/05/iot-rpc-rest-app/arch-iot-2026-05-f1a2b3c4"
+        }
+      }
+    },
+    {
+      "id": "record-envelope-iot-event",
+      "schema": "RecordEnvelope",
+      "valid": true,
+      "description": "Canonical envelope for individual JSONL line in IoT archive",
+      "body": {
+        "record_type": "iot_session_events",
+        "record_id": "evt-77001",
+        "occurred_at_utc": "2026-05-15T12:34:56.789123Z",
+        "cursor": 12045,
+        "tenant_id": 42,
+        "terminal_id": 107,
+        "sn": "PAX-9000-01",
+        "session_id": "sess-b91c-4001",
+        "source_project": "iot-rpc-rest-app",
+        "payload": {
+          "event_type": "stream_started",
+          "stream_id": "stream-101",
+          "resolution": "1280x1024",
+          "fps": 30
+        }
+      }
+    },
+    {
+      "id": "invalid-missing-file-sha256",
+      "schema": "ArchiveManifest",
+      "valid": false,
+      "description": "Rejects file entry missing mandatory sha256 checksum",
+      "body": {
+        "archive_manifest_version": "1.0.0",
+        "archive_batch_id": "arch-iot-2026-05-b91c84f2",
+        "owner_project": "iot-rpc-rest-app",
+        "schema_version": "1.0.0",
+        "created_at_utc": "2026-09-01T04:00:00Z",
+        "source_month": "2026-05",
+        "time_range": {
+          "min_occurred_at": "2026-05-01T00:00:00Z",
+          "max_occurred_at": "2026-05-31T23:59:59Z"
+        },
+        "record_types": ["iot_session_events"],
+        "record_counts": { "total_records": 100 },
+        "files": [
+          {
+            "path": "data.jsonl.gz",
+            "size_bytes": 1024,
+            "record_count": 100,
+            "compression": "gzip"
+          }
+        ],
+        "compression": "gzip",
+        "state": "prepared",
+        "retention": {
+          "retain_until_utc": "2029-09-01T04:00:00Z",
+          "retention_years": 3,
+          "backup_required": true
+        },
+        "storage_layout": {
+          "volume_root": "/mnt/l4desk-archive",
+          "relative_path": "2026/05/iot-rpc-rest-app/arch-iot-2026-05-b91c84f2"
+        }
+      }
+    },
+    {
+      "id": "invalid-verified-missing-verification",
+      "schema": "ArchiveManifest",
+      "valid": false,
+      "description": "Rejects state verified when verification object is null",
+      "body": {
+        "archive_manifest_version": "1.0.0",
+        "archive_batch_id": "arch-iot-2026-05-b91c84f2",
+        "owner_project": "iot-rpc-rest-app",
+        "schema_version": "1.0.0",
+        "created_at_utc": "2026-09-01T04:00:00Z",
+        "source_month": "2026-05",
+        "time_range": {
+          "min_occurred_at": "2026-05-01T00:00:00Z",
+          "max_occurred_at": "2026-05-31T23:59:59Z"
+        },
+        "record_types": ["iot_session_events"],
+        "record_counts": { "total_records": 100 },
+        "files": [
+          {
+            "path": "data.jsonl.gz",
+            "size_bytes": 1024,
+            "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+            "record_count": 100,
+            "compression": "gzip"
+          }
+        ],
+        "compression": "gzip",
+        "state": "verified",
+        "verification": null,
+        "retention": {
+          "retain_until_utc": "2029-09-01T04:00:00Z",
+          "retention_years": 3,
+          "backup_required": true
+        },
+        "storage_layout": {
+          "volume_root": "/mnt/l4desk-archive",
+          "relative_path": "2026/05/iot-rpc-rest-app/arch-iot-2026-05-b91c84f2"
+        }
+      }
+    },
+    {
+      "id": "invalid-purged-missing-purge",
+      "schema": "ArchiveManifest",
+      "valid": false,
+      "description": "Rejects state purged when purge metadata is null",
+      "body": {
+        "archive_manifest_version": "1.0.0",
+        "archive_batch_id": "arch-iot-2026-05-b91c84f2",
+        "owner_project": "iot-rpc-rest-app",
+        "schema_version": "1.0.0",
+        "created_at_utc": "2026-09-01T04:00:00Z",
+        "source_month": "2026-05",
+        "time_range": {
+          "min_occurred_at": "2026-05-01T00:00:00Z",
+          "max_occurred_at": "2026-05-31T23:59:59Z"
+        },
+        "record_types": ["iot_session_events"],
+        "record_counts": { "total_records": 100 },
+        "files": [
+          {
+            "path": "data.jsonl.gz",
+            "size_bytes": 1024,
+            "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+            "record_count": 100,
+            "compression": "gzip"
+          }
+        ],
+        "compression": "gzip",
+        "state": "purged",
+        "verification": {
+          "verified_at_utc": "2026-09-01T04:15:30Z",
+          "verifier": "iot-archive-worker",
+          "reread_records_count": 100,
+          "reread_checksum_sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+          "restore_sample_status": "passed",
+          "cursor_guard_passed": true
+        },
+        "purge": null,
+        "retention": {
+          "retain_until_utc": "2029-09-01T04:00:00Z",
+          "retention_years": 3,
+          "backup_required": true
+        },
+        "storage_layout": {
+          "volume_root": "/mnt/l4desk-archive",
+          "relative_path": "2026/05/iot-rpc-rest-app/arch-iot-2026-05-b91c84f2"
+        }
+      }
+    },
+    {
+      "id": "invalid-owner-project",
+      "schema": "ArchiveManifest",
+      "valid": false,
+      "description": "Rejects unknown project owner outside declared enum",
+      "body": {
+        "archive_manifest_version": "1.0.0",
+        "archive_batch_id": "arch-unknown-2026-05-b91c84f2",
+        "owner_project": "external-unknown-daemon",
+        "schema_version": "1.0.0",
+        "created_at_utc": "2026-09-01T04:00:00Z",
+        "source_month": "2026-05",
+        "time_range": {
+          "min_occurred_at": "2026-05-01T00:00:00Z",
+          "max_occurred_at": "2026-05-31T23:59:59Z"
+        },
+        "record_types": ["audit_logs"],
+        "record_counts": { "total_records": 100 },
+        "files": [
+          {
+            "path": "data.jsonl.gz",
+            "size_bytes": 1024,
+            "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+            "record_count": 100,
+            "compression": "gzip"
+          }
+        ],
+        "compression": "gzip",
+        "state": "prepared",
+        "retention": {
+          "retain_until_utc": "2029-09-01T04:00:00Z",
+          "retention_years": 3,
+          "backup_required": true
+        },
+        "storage_layout": {
+          "volume_root": "/mnt/l4desk-archive",
+          "relative_path": "2026/05/external-unknown-daemon/arch-unknown-2026-05-b91c84f2"
+        }
+      }
+    },
+    {
+      "id": "invalid-retention-years-less-than-3",
+      "schema": "ArchiveManifest",
+      "valid": false,
+      "description": "Rejects retention period below 3 years minimum architectural requirement",
+      "body": {
+        "archive_manifest_version": "1.0.0",
+        "archive_batch_id": "arch-iot-2026-05-b91c84f2",
+        "owner_project": "iot-rpc-rest-app",
+        "schema_version": "1.0.0",
+        "created_at_utc": "2026-09-01T04:00:00Z",
+        "source_month": "2026-05",
+        "time_range": {
+          "min_occurred_at": "2026-05-01T00:00:00Z",
+          "max_occurred_at": "2026-05-31T23:59:59Z"
+        },
+        "record_types": ["iot_session_events"],
+        "record_counts": { "total_records": 100 },
+        "files": [
+          {
+            "path": "data.jsonl.gz",
+            "size_bytes": 1024,
+            "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+            "record_count": 100,
+            "compression": "gzip"
+          }
+        ],
+        "compression": "gzip",
+        "state": "prepared",
+        "retention": {
+          "retain_until_utc": "2027-09-01T04:00:00Z",
+          "retention_years": 1,
+          "backup_required": true
+        },
+        "storage_layout": {
+          "volume_root": "/mnt/l4desk-archive",
+          "relative_path": "2026/05/iot-rpc-rest-app/arch-iot-2026-05-b91c84f2"
+        }
+      }
+    },
+    {
+      "id": "invalid-sha256-hex-pattern",
+      "schema": "ArchiveManifest",
+      "valid": false,
+      "description": "Rejects invalid non-hexadecimal or wrong length SHA-256 checksum",
+      "body": {
+        "archive_manifest_version": "1.0.0",
+        "archive_batch_id": "arch-iot-2026-05-b91c84f2",
+        "owner_project": "iot-rpc-rest-app",
+        "schema_version": "1.0.0",
+        "created_at_utc": "2026-09-01T04:00:00Z",
+        "source_month": "2026-05",
+        "time_range": {
+          "min_occurred_at": "2026-05-01T00:00:00Z",
+          "max_occurred_at": "2026-05-31T23:59:59Z"
+        },
+        "record_types": ["iot_session_events"],
+        "record_counts": { "total_records": 100 },
+        "files": [
+          {
+            "path": "data.jsonl.gz",
+            "size_bytes": 1024,
+            "sha256": "invalid_not_hex_checksum",
+            "record_count": 100,
+            "compression": "gzip"
+          }
+        ],
+        "compression": "gzip",
+        "state": "prepared",
+        "retention": {
+          "retain_until_utc": "2029-09-01T04:00:00Z",
+          "retention_years": 3,
+          "backup_required": true
+        },
+        "storage_layout": {
+          "volume_root": "/mnt/l4desk-archive",
+          "relative_path": "2026/05/iot-rpc-rest-app/arch-iot-2026-05-b91c84f2"
+        }
+      }
+    },
+    {
+      "id": "invalid-retention-window",
+      "schema": "ArchiveManifest",
+      "valid": false,
+      "description": "Rejects attempt to archive within recent 3 full months hot window (2026-08 when evaluated on 2026-09-21)",
+      "body": {
+        "archive_manifest_version": "1.0.0",
+        "archive_batch_id": "arch-iot-2026-08-b91c84f2",
+        "owner_project": "iot-rpc-rest-app",
+        "schema_version": "1.0.0",
+        "created_at_utc": "2026-09-01T04:00:00Z",
+        "source_month": "2026-08",
+        "time_range": {
+          "min_occurred_at": "2026-08-01T00:00:00Z",
+          "max_occurred_at": "2026-08-31T23:59:59Z"
+        },
+        "record_types": ["iot_session_events"],
+        "record_counts": { "total_records": 100 },
+        "files": [
+          {
+            "path": "data.jsonl.gz",
+            "size_bytes": 1024,
+            "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+            "record_count": 100,
+            "compression": "gzip"
+          }
+        ],
+        "compression": "gzip",
+        "state": "prepared",
+        "retention": {
+          "retain_until_utc": "2029-09-01T04:00:00Z",
+          "retention_years": 3,
+          "backup_required": true
+        },
+        "storage_layout": {
+          "volume_root": "/mnt/l4desk-archive",
+          "relative_path": "2026/08/iot-rpc-rest-app/arch-iot-2026-08-b91c84f2"
+        }
+      }
+    },
+    {
+      "id": "invalid-cursor-lag-purge",
+      "schema": "ArchiveManifest",
+      "valid": false,
+      "description": "Rejects purge state when consumer cursor (19500) lags behind through_cursor (20000)",
+      "body": {
+        "archive_manifest_version": "1.0.0",
+        "archive_batch_id": "arch-iot-2026-05-b91c84f2",
+        "owner_project": "iot-rpc-rest-app",
+        "schema_version": "1.0.0",
+        "created_at_utc": "2026-09-01T04:00:00Z",
+        "source_month": "2026-05",
+        "time_range": {
+          "min_occurred_at": "2026-05-01T00:00:00Z",
+          "max_occurred_at": "2026-05-31T23:59:59Z"
+        },
+        "cursor_bounds": {
+          "min_cursor": 10001,
+          "max_cursor": 20000,
+          "through_cursor": 20000,
+          "consumers_passed_cursor": 19500
+        },
+        "record_types": ["iot_session_events"],
+        "record_counts": { "total_records": 100 },
+        "files": [
+          {
+            "path": "data.jsonl.gz",
+            "size_bytes": 1024,
+            "sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+            "record_count": 100,
+            "compression": "gzip"
+          }
+        ],
+        "compression": "gzip",
+        "state": "purged",
+        "verification": {
+          "verified_at_utc": "2026-09-01T04:15:30Z",
+          "verifier": "iot-archive-worker",
+          "reread_records_count": 100,
+          "reread_checksum_sha256": "4b227777d4dd1fc61c6f884f48641d02b4d121d3fd328cb08b5531fcacdabf8a",
+          "restore_sample_status": "passed",
+          "cursor_guard_passed": false
+        },
+        "purge": {
+          "purged_at_utc": "2026-09-01T04:30:00Z",
+          "purged_records_count": 100,
+          "purge_status": "completed"
+        },
+        "retention": {
+          "retain_until_utc": "2029-09-01T04:00:00Z",
+          "retention_years": 3,
+          "backup_required": true
+        },
+        "storage_layout": {
+          "volume_root": "/mnt/l4desk-archive",
+          "relative_path": "2026/05/iot-rpc-rest-app/arch-iot-2026-05-b91c84f2"
+        }
+      }
+    }
+  ]
+}

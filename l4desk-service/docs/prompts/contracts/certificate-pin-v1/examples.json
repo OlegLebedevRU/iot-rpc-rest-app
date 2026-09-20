@@ -1,0 +1,27 @@
+{
+  "contract_version": "1.0.0",
+  "synthetic_only": true,
+  "note": "Ни один пример не является HTTP smoke или разрешением использовать его ID в production. 012345 — вымышленный PIN.",
+  "cases": [
+    {"id": "minimal-request", "schema": "IssueRequest", "valid": true, "body": {"operation_id": "00000000-0000-4000-8000-000000000001", "tenant_id": 101, "terminal_id": 202, "sn": "EXAMPLE-SN"}},
+    {"id": "full-request", "schema": "IssueRequest", "valid": true, "body": {"operation_id": "00000000-0000-4000-8000-000000000001", "correlation_id": "example-correlation", "tenant_id": 101, "terminal_id": 202, "sn": "EXAMPLE-SN", "ttl_seconds": 60, "actor": "example-service", "ignored_field": true}},
+    {"id": "nullable-request", "schema": "IssueRequest", "valid": true, "body": {"operation_id": "op-example", "correlation_id": null, "tenant_id": 101, "terminal_id": 202, "sn": "EXAMPLE-SN", "ttl_seconds": 2592000, "actor": null}},
+    {"id": "empty-operation", "schema": "IssueRequest", "valid": false, "body": {"operation_id": "", "tenant_id": 101, "terminal_id": 202, "sn": "EXAMPLE-SN"}},
+    {"id": "missing-sn", "schema": "IssueRequest", "valid": false, "body": {"operation_id": "op-example", "tenant_id": 101, "terminal_id": 202}},
+    {"id": "short-ttl", "schema": "IssueRequest", "valid": false, "body": {"operation_id": "op-example", "tenant_id": 101, "terminal_id": 202, "sn": "EXAMPLE-SN", "ttl_seconds": 59}},
+    {"id": "null-ttl", "schema": "IssueRequest", "valid": false, "body": {"operation_id": "op-example", "tenant_id": 101, "terminal_id": 202, "sn": "EXAMPLE-SN", "ttl_seconds": null}},
+    {"id": "created", "schema": "IssueResponse", "valid": true, "http_status": 201, "body": {"operation_id": "op-example", "correlation_id": null, "tenant_id": 101, "terminal_id": 202, "sn": "EXAMPLE-SN", "pin": "012345", "pin_masked": "***345", "status": "issued", "expires_at": "2026-09-19T12:00:00Z", "created_at": "2026-09-18T12:00:00Z", "replayed": false}},
+    {"id": "active-replay-or-get", "schema": "IssueResponse", "valid": true, "http_status": 200, "body": {"operation_id": "op-example", "correlation_id": "op-example", "tenant_id": 101, "terminal_id": 202, "sn": "EXAMPLE-SN", "pin": "012345", "pin_masked": "***345", "status": "issued", "expires_at": "2026-09-19T12:00:00+00:00", "created_at": "2026-09-18T12:00:00+00:00", "replayed": true}},
+    {"id": "consumed-replay", "schema": "IssueResponse", "valid": true, "http_status": 200, "body": {"operation_id": "op-example", "correlation_id": "op-example", "tenant_id": 101, "terminal_id": 202, "sn": "EXAMPLE-SN", "pin": null, "pin_masked": "***345", "status": "consumed", "expires_at": "2026-09-19T12:00:00Z", "created_at": "2026-09-18T12:00:00Z", "replayed": true}},
+    {"id": "expired-replay", "schema": "IssueResponse", "valid": true, "http_status": 200, "body": {"operation_id": "op-example", "correlation_id": "op-example", "tenant_id": 101, "terminal_id": 202, "sn": "EXAMPLE-SN", "pin": null, "pin_masked": "***345", "status": "expired", "expires_at": "2026-09-19T12:00:00Z", "created_at": "2026-09-18T12:00:00Z", "replayed": true}},
+    {"id": "auth-error", "schema": "ErrorResponse", "valid": true, "http_status": 401, "body": {"detail": {"error": "unauthorized", "message": "Invalid or missing service authentication token", "error_code": "SERVICE_AUTH_FAILED"}}},
+    {"id": "terminal-missing", "schema": "ErrorResponse", "valid": true, "http_status": 404, "body": {"detail": {"error": "terminal_not_found", "message": "Terminal 202 not found", "error_code": "TERMINAL_NOT_FOUND", "operation_id": "op-example"}}},
+    {"id": "tenant-mismatch", "schema": "ErrorResponse", "valid": true, "http_status": 403, "body": {"detail": {"error": "tenant_ownership_mismatch", "message": "Terminal 202 does not belong to tenant 101", "error_code": "TENANT_OWNERSHIP_MISMATCH", "operation_id": "op-example"}}},
+    {"id": "serial-mismatch", "schema": "ErrorResponse", "valid": true, "http_status": 400, "body": {"detail": {"error": "serial_number_mismatch", "message": "Provided SN 'OTHER-SN' does not match terminal SN 'EXAMPLE-SN'", "error_code": "SERIAL_NUMBER_MISMATCH", "operation_id": "op-example"}}},
+    {"id": "operation-conflict", "schema": "ErrorResponse", "valid": true, "http_status": 409, "body": {"detail": {"error": "operation_id_conflict", "message": "operation_id 'op-example' was already executed with different parameters", "error_code": "OPERATION_ID_CONFLICT", "operation_id": "op-example"}}},
+    {"id": "operation-missing", "schema": "ErrorResponse", "valid": true, "http_status": 404, "body": {"detail": {"error": "operation_not_found", "message": "Operation 'op-example' not found", "error_code": "OPERATION_NOT_FOUND", "operation_id": "op-example"}}},
+    {"id": "validation-error", "schema": "ValidationErrorResponse", "valid": true, "http_status": 422, "body": {"detail": [{"loc": ["body", "sn"], "msg": "Field required", "type": "missing", "input": {}}]}},
+    {"id": "flat-error-rejected", "schema": "ErrorResponse", "valid": false, "body": {"error": "operation_not_found", "message": "missing", "error_code": "OPERATION_NOT_FOUND", "operation_id": "op-example"}},
+    {"id": "wrong-error-pair", "schema": "ErrorResponse", "valid": false, "body": {"detail": {"error": "operation_not_found", "message": "missing", "error_code": "TERMINAL_NOT_FOUND", "operation_id": "op-example"}}}
+  ]
+}
