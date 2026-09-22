@@ -224,10 +224,15 @@ async def test_shortcut_action_allowed_with_policy_profile(test_env, monkeypatch
     ) as mock_send:
         # Simulate terminal sending ACK
         async def delayed_ack():
-            await asyncio.sleep(0.01)
-            async with pending._lock:
-                cmd_id = next(iter(pending._pending.keys()))
-            await pending.resolve(cmd_id, PendingResult(result="injected"))
+            cmd_id = None
+            for _ in range(100):
+                await asyncio.sleep(0.01)
+                async with pending._lock:
+                    if pending._pending:
+                        cmd_id = next(iter(pending._pending.keys()))
+                if cmd_id is not None:
+                    await pending.resolve(cmd_id, PendingResult(result="injected"))
+                    return
 
         asyncio.create_task(delayed_ack())
 
@@ -480,10 +485,15 @@ async def test_rest_shortcut_endpoints_and_validation(monkeypatch):
         ):
 
             async def delayed_ack():
-                await asyncio.sleep(0.01)
-                async with pending_registry._lock:
-                    cmd_id = next(iter(pending_registry._pending.keys()))
-                await pending_registry.resolve(cmd_id, PendingResult(result="injected"))
+                cmd_id = None
+                for _ in range(100):
+                    await asyncio.sleep(0.01)
+                    async with pending_registry._lock:
+                        if pending_registry._pending:
+                            cmd_id = next(iter(pending_registry._pending.keys()))
+                    if cmd_id is not None:
+                        await pending_registry.resolve(cmd_id, PendingResult(result="injected"))
+                        return
 
             asyncio.create_task(delayed_ack())
 
