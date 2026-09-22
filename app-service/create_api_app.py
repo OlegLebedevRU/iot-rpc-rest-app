@@ -78,7 +78,7 @@ try:
     _RETRYABLE_EXCEPTIONS = _RETRYABLE_EXCEPTIONS + (
         aio_pika.exceptions.AMQPConnectionError,
     )
-except ImportError, AttributeError:
+except (ImportError, AttributeError):
     pass
 try:
     import aiormq.exceptions  # type: ignore[import]
@@ -86,7 +86,7 @@ try:
     _RETRYABLE_EXCEPTIONS = _RETRYABLE_EXCEPTIONS + (
         aiormq.exceptions.AMQPConnectionError,
     )
-except ImportError, AttributeError:
+except (ImportError, AttributeError):
     pass
 
 
@@ -346,23 +346,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     if not cold_boot_task.done():
         cold_boot_task.cancel()
-        with suppress(asyncio.CancelledError):
+        with suppress(asyncio.CancelledError, Exception):
             await cold_boot_task
     if not remote_input_cleanup_task.done():
         remote_input_cleanup_task.cancel()
-        with suppress(asyncio.CancelledError):
+        with suppress(asyncio.CancelledError, Exception):
             await remote_input_cleanup_task
     if topology_watchdog_task is not None:
         topology_watchdog_task.cancel()
-        with suppress(asyncio.CancelledError):
+        with suppress(asyncio.CancelledError, Exception):
             await topology_watchdog_task
-    await db_helper.dispose()
-    scheduler.shutdown()
-    # Wrap close() so a broker that is already gone doesn't raise on shutdown.
+
     try:
-        await fs_router.broker.close()
-    except (OSError, ConnectionError, RuntimeError) as exc:
-        log.warning("Ignoring error while closing broker: %s", exc)
+        await db_helper.dispose()
+    except Exception as exc:
+        log.warning("Ignoring error while disposing DB helper: %s", exc)
+
+    if scheduler.running:
+        with suppress(Exception):
+            scheduler.shutdown()
+
+    # FastStream RabbitBroker uses stop() for graceful shutdown, not close().
+    # Fallback to close() if broker is wrapped or mocked with close().
+    try:
+        if hasattr(fs_router.broker, "stop") and callable(fs_router.broker.stop):
+            await fs_router.broker.stop()
+        elif hasattr(fs_router.broker, "close") and callable(fs_router.broker.close):
+            await fs_router.broker.close()
+    except Exception as exc:
+        log.warning("Ignoring error while stopping broker: %s", exc)
 
 
 async def _billing_monthly_job() -> None:
