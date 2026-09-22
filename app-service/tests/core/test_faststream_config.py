@@ -321,3 +321,99 @@ async def test_delay_bounded_by_max_delay():
 
     for d in sleep_calls:
         assert d <= 3.0
+
+
+# ===========================================================================
+# Lifespan shutdown / cleanup logic
+# ===========================================================================
+
+
+@pytest.mark.anyio
+async def test_lifespan_shutdown_calls_broker_stop():
+    """Verify lifespan shutdown calls broker.stop() instead of broker.close()."""
+    from create_api_app import lifespan
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    mock_broker = AsyncMock()
+    mock_broker.stop = AsyncMock()
+    # Ensure broker has NO close attribute (mirroring FastStream RabbitBroker)
+    if hasattr(mock_broker, "close"):
+        del mock_broker.close
+
+    with (
+        patch("create_api_app._start_broker_with_retry", new_callable=AsyncMock),
+        patch("create_api_app.declare_x_q", new_callable=AsyncMock),
+        patch("create_api_app._sync_rmq_device_definitions_on_startup", new_callable=AsyncMock),
+        patch("create_api_app.fs_router") as mock_router,
+        patch("create_api_app.db_helper") as mock_db,
+    ):
+        mock_router.broker = mock_broker
+        mock_db.dispose = AsyncMock()
+
+        async with lifespan(app):
+            pass
+
+    mock_broker.stop.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_lifespan_shutdown_handles_broker_stop_exception():
+    """Verify that exceptions raised during broker.stop() do not crash the app shutdown."""
+    from create_api_app import lifespan
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    mock_broker = AsyncMock()
+    mock_broker.stop = AsyncMock(side_effect=ConnectionError("broker connection lost"))
+    if hasattr(mock_broker, "close"):
+        del mock_broker.close
+
+    with (
+        patch("create_api_app._start_broker_with_retry", new_callable=AsyncMock),
+        patch("create_api_app.declare_x_q", new_callable=AsyncMock),
+        patch("create_api_app._sync_rmq_device_definitions_on_startup", new_callable=AsyncMock),
+        patch("create_api_app.fs_router") as mock_router,
+        patch("create_api_app.db_helper") as mock_db,
+    ):
+        mock_router.broker = mock_broker
+        mock_db.dispose = AsyncMock()
+
+        # Should complete cleanly without raising ConnectionError
+        async with lifespan(app):
+            pass
+
+    mock_broker.stop.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_lifespan_shutdown_fallback_to_close():
+    """Verify fallback to broker.close() if broker only defines close()."""
+    from create_api_app import lifespan
+    from fastapi import FastAPI
+
+    app = FastAPI()
+
+    class LegacyBroker:
+        def __init__(self):
+            self.closed = False
+
+        async def close(self):
+            self.closed = True
+
+    legacy_broker = LegacyBroker()
+
+    with (
+        patch("create_api_app._start_broker_with_retry", new_callable=AsyncMock),
+        patch("create_api_app.declare_x_q", new_callable=AsyncMock),
+        patch("create_api_app._sync_rmq_device_definitions_on_startup", new_callable=AsyncMock),
+        patch("create_api_app.fs_router") as mock_router,
+        patch("create_api_app.db_helper") as mock_db,
+    ):
+        mock_router.broker = legacy_broker
+        mock_db.dispose = AsyncMock()
+
+        async with lifespan(app):
+            pass
+
+    assert legacy_broker.closed is True
