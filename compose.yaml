@@ -34,6 +34,7 @@ services:
     networks:
       - rabbitmq_network
       - pg_network
+      - redis_network
     volumes:
       - ./logs:/var/log/app
   rabbitmq:
@@ -159,6 +160,26 @@ services:
       - ./certbot/www/:/var/www/certbot/:rw
       - ./certbot/conf/:/etc/letsencrypt/:rw
 
+  redis:
+    image: redis:7.4-alpine
+    container_name: iot-redis
+    restart: unless-stopped
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - redis_data:/data
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      # Проброс строго на loopback хоста для смежных сервисов хоста
+      - "127.0.0.1:6379:6379"
+    networks:
+      - rabbitmq_network # Межсервисная сеть iot_rabbitmq_network
+      - redis_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
 # docker compose run --rm certbot certonly --webroot --webroot-path /var/www/certbot/ -d dev.leo4.ru
 # docker compose run --rm certbot renew
 
@@ -178,10 +199,15 @@ volumes:
   pgdata:
   rabbitmq_data:
     driver: local
+  redis_data:
+    driver: local
 
 networks:
   rabbitmq_network:
     name: iot_rabbitmq_network
     driver: bridge
   pg_network:
+    driver: bridge
+  redis_network:
+    name: iot_redis_network
     driver: bridge
