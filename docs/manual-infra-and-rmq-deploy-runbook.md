@@ -15,12 +15,14 @@
 Данный runbook применяется в случаях, когда деплой затрагивает не только код `app1`, но и инфраструктурный слой:
 1. **Конфигурация RabbitMQ**: изменение `rmq/rabbitmq.conf` (слушатели портов, таймауты, лимиты сессий).
 2. **Базовые дефиниции брокера**: добавление/изменение сервисных пользователей (например, `etran_service`), прав на vhost `/` и топиковых разрешений (`topic_permissions`) в `rmq/definitions.json`.
-3. **Сетевая топология Docker Compose**: объявление или переименование bridge-сетей (например, `iot_rabbitmq_network`), подключение внешних потребителей телеметрии.
+3. **Сетевая топология Docker Compose**: объявление или переименование bridge-сетей (например, `iot_rabbitmq_network`, `iot_redis_network`), подключение внешних потребителей телеметрии.
 4. **Конфигурация reverse-proxy**: синхронизация `nginx` и `nginx-mutual` при изменении сетевых настроек или сертификатов.
+5. **Инфраструктура Redis**: развёртывание персистентного кэша и хранилища сессий/лизов (`redis/redis.conf`, сервис `redis` / `iot-redis`, том `redis_data`, сеть `iot_redis_network`).
 
 > ⚠️ **КРИТИЧЕСКИЕ ПРАВИЛА СОХРАННОСТИ ДАННЫХ:**
-> - **СТРОГО ЗАПРЕЩЕНО** выполнять `docker compose down -v` или удалять том `rabbitmq_data`. В нём хранятся динамические аккаунты устройств и постоянные сессии MQTT. База данных PostgreSQL вынесена на внешний хост `10.0.0.7:5432/iot_rpc` и не управляется локальным compose.
+> - **СТРОГО ЗАПРЕЩЕНО** выполнять `docker compose down -v` или удалять тома `rabbitmq_data` и `redis_data`. В них хранятся динамические аккаунты устройств, постоянные сессии MQTT и персистентные сессии/кэш Redis. База данных PostgreSQL вынесена на внешний хост `10.0.0.7:5432/iot_rpc` и не управляется локальным compose.
 > - **СТРОГО ЗАПРЕЩЕНО** публиковать сервисный порт Plain MQTT `1883` наружу в интернет на хосте. Доступ к нему разрешён исключительно внутри изолированной сети Docker.
+> - **СТРОГО ЗАПРЕЩЕНО** публиковать порт Redis `6379` в публичный интернет. Порт привязывается строго к `127.0.0.1:6379` на хосте.
 > - **СОБЛЮДАТЬ ИЗОЛЯЦИЮ СЕРВИСОВ**: перезапуск компонентов выполняется поэтапно через `docker compose up -d --no-deps <service>`.
 
 ---
@@ -38,6 +40,8 @@
   - `1883` (Plain MQTT) — внутренний слушатель для межсервисной телеметрии (`etranprocessing`);
   - `8883` (MQTT SSL/mTLS) — внешний защищённый шлюз для IoT-терминалов;
   - `15672` (HTTP Management) — панель управления и API RabbitMQ.
+- **Порт Redis**:
+  - `6379` (In-Memory Key-Value Store) — внутренний транспорт для сессий/лизов L4D, кэша MenuBuilder, WebRTC-сигналинга l4media и телеметрии (доступен в docker-сетях и строго на loopback хоста `127.0.0.1:6379`).
 
 ---
 
@@ -74,6 +78,7 @@ $script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "b
 ```powershell
 # Синхронизация инфраструктурных файлов
 scp -i "d:\.ssh\id_ed25519" compose.yaml user1@87.242.100.34:/home/user1/iot-rpc-rest-app/compose.yaml
+scp -i "d:\.ssh\id_ed25519" redis/redis.conf user1@87.242.100.34:/home/user1/iot-rpc-rest-app/redis/redis.conf
 scp -i "d:\.ssh\id_ed25519" rmq/rabbitmq.conf user1@87.242.100.34:/home/user1/iot-rpc-rest-app/rmq/rabbitmq.conf
 scp -i "d:\.ssh\id_ed25519" rmq/definitions.json user1@87.242.100.34:/home/user1/iot-rpc-rest-app/rmq/definitions.json
 scp -i "d:\.ssh\id_ed25519" rmq/enabled_plugins user1@87.242.100.34:/home/user1/iot-rpc-rest-app/rmq/enabled_plugins
@@ -123,6 +128,7 @@ mkdir -p "$BACKUP_DIR"
 echo "=== Резервное копирование файлов в $BACKUP_DIR ==="
 test -f compose.yaml && cp compose.yaml "$BACKUP_DIR/compose.yaml" || true
 test -f iot-rpc-rest-app/app-service/.env && cp iot-rpc-rest-app/app-service/.env "$BACKUP_DIR/app-service.env" || true
+test -f iot-rpc-rest-app/redis/redis.conf && cp iot-rpc-rest-app/redis/redis.conf "$BACKUP_DIR/redis.conf" || true
 test -f iot-rpc-rest-app/rmq/rabbitmq.conf && cp iot-rpc-rest-app/rmq/rabbitmq.conf "$BACKUP_DIR/rabbitmq.conf" || true
 test -f iot-rpc-rest-app/rmq/definitions.json && cp iot-rpc-rest-app/rmq/definitions.json "$BACKUP_DIR/definitions.json" || true
 test -f iot-rpc-rest-app/rmq/enabled_plugins && cp iot-rpc-rest-app/rmq/enabled_plugins "$BACKUP_DIR/enabled_plugins" || true
@@ -260,6 +266,30 @@ $script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "b
 
 ---
 
+### Этап 7. Развёртывание, запуск и диагностика сервиса `redis`
+
+Запуск сервиса Redis (образ `redis:7.4-alpine`, имя контейнера `iot-redis`) и проверка состояния:
+
+```powershell
+$script = @'
+set -euo pipefail
+cd /home/user1
+
+echo "=== Запуск сервиса Redis ==="
+sudo docker compose up -d --no-deps redis
+
+echo "=== Проверка состояния контейнера ==="
+sudo docker compose ps redis
+
+echo "=== Проверка отклика Redis (Ping-Pong) ==="
+sudo docker compose exec -T redis redis-cli ping
+'@
+
+$script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "bash -s"
+```
+
+---
+
 ## 4. Верификация и диагностика работоспособности
 
 После завершения перезапуска контейнеров необходимо выполнить полный цикл проверок.
@@ -345,6 +375,35 @@ ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "sudo docker
 ```
 Все тесты API, сервисов, схем и интеграций должны завершаться со статусом `passed`.
 
+### 4.6. Проверка доступности и персистентности Redis
+
+Проверяем отклик сервиса, доступность сокета на loopback `127.0.0.1:6379` и сохранение данных при перезапуске (AOF/RDB):
+
+```powershell
+$script = @'
+set -euo pipefail
+
+echo "=== 1. Проверка отклика Redis ==="
+sudo docker compose exec -T redis redis-cli ping
+
+echo "=== 2. Проверка сокета на 127.0.0.1:6379 ==="
+python3 -c "import socket; s = socket.create_connection(('127.0.0.1', 6379), timeout=2); s.sendall(b'PING\r\n'); print(s.recv(1024).decode())"
+
+echo "=== 3. Проверка персистентности AOF/RDB ==="
+sudo docker compose exec -T redis redis-cli SET "test:smoke_key" "ok_stage_1"
+sudo docker compose restart redis
+RESULT=$(sudo docker compose exec -T redis redis-cli GET "test:smoke_key")
+if [ "$RESULT" != "ok_stage_1" ]; then
+    echo "ERROR: Redis persistence failed!"
+    exit 1
+fi
+sudo docker compose exec -T redis redis-cli DEL "test:smoke_key"
+echo "=== Redis Stage 1 Deploy Verified Successfully ==="
+'@
+
+$script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "bash -s"
+```
+
 ---
 
 ## 5. Процедура отката (Rollback & Disaster Recovery)
@@ -362,6 +421,7 @@ LATEST_BACKUP=$(ls -td /home/user1/backups/backup-* | head -1)
 echo "Восстановление конфигураций из: $LATEST_BACKUP"
 
 test -f "$LATEST_BACKUP/compose.yaml" && cp "$LATEST_BACKUP/compose.yaml" compose.yaml
+test -f "$LATEST_BACKUP/redis.conf" && cp "$LATEST_BACKUP/redis.conf" iot-rpc-rest-app/redis/redis.conf
 test -f "$LATEST_BACKUP/rabbitmq.conf" && cp "$LATEST_BACKUP/rabbitmq.conf" iot-rpc-rest-app/rmq/rabbitmq.conf
 test -f "$LATEST_BACKUP/definitions.json" && cp "$LATEST_BACKUP/definitions.json" iot-rpc-rest-app/rmq/definitions.json
 test -f "$LATEST_BACKUP/enabled_plugins" && cp "$LATEST_BACKUP/enabled_plugins" iot-rpc-rest-app/rmq/enabled_plugins
@@ -401,23 +461,25 @@ $SSH_HOST = "user1@87.242.100.34"
 $COMPOSE_DIR = "/home/user1"
 $REPO_DIR = "/home/user1/iot-rpc-rest-app"
 
-Write-Host "==> [1/6] Подключение и создание резервной копии..." -ForegroundColor Cyan
+Write-Host "==> [1/7] Подключение и создание резервной копии..." -ForegroundColor Cyan
 $backupScript = @"
 set -euo pipefail
 TS=\$(date +%Y%m%d-%H%M%S)
 BDIR="/home/user1/backups/backup-\$TS"
 mkdir -p "\$BDIR"
-cp $COMPOSE_DIR/compose.yaml $REPO_DIR/rmq/rabbitmq.conf $REPO_DIR/rmq/definitions.json $REPO_DIR/rmq/enabled_plugins "\$BDIR/" 2>/dev/null || true
+cp $COMPOSE_DIR/compose.yaml $REPO_DIR/redis/redis.conf $REPO_DIR/rmq/rabbitmq.conf $REPO_DIR/rmq/definitions.json $REPO_DIR/rmq/enabled_plugins "\$BDIR/" 2>/dev/null || true
 echo "Backup created at \$BDIR"
 "@
 $backupScript | ssh -n -i $SSH_KEY -o BatchMode=yes $SSH_HOST "bash -s"
 
-Write-Host "==> [2/6] Синхронизация файлов на сервер..." -ForegroundColor Cyan
+Write-Host "==> [2/7] Синхронизация файлов на сервер..." -ForegroundColor Cyan
+scp -i $SSH_KEY compose.yaml "${SSH_HOST}:${REPO_DIR}/compose.yaml"
+scp -i $SSH_KEY redis/redis.conf "${SSH_HOST}:${REPO_DIR}/redis/redis.conf"
 scp -i $SSH_KEY rmq/rabbitmq.conf "${SSH_HOST}:${REPO_DIR}/rmq/rabbitmq.conf"
 scp -i $SSH_KEY rmq/definitions.json "${SSH_HOST}:${REPO_DIR}/rmq/definitions.json"
 scp -i $SSH_KEY rmq/enabled_plugins "${SSH_HOST}:${REPO_DIR}/rmq/enabled_plugins"
 
-Write-Host "==> [3/6] Сборка и перезапуск app1..." -ForegroundColor Cyan
+Write-Host "==> [3/7] Сборка и перезапуск app1..." -ForegroundColor Cyan
 $deployAppScript = @"
 set -euo pipefail
 cd $COMPOSE_DIR
@@ -426,28 +488,46 @@ sudo docker compose up -d --no-deps app1
 "@
 $deployAppScript | ssh -n -i $SSH_KEY -o BatchMode=yes $SSH_HOST "bash -s"
 
-Write-Host "==> [4/6] Перезапуск RabbitMQ и Nginx..." -ForegroundColor Cyan
+Write-Host "==> [4/7] Запуск/перезапуск RabbitMQ, Redis и Nginx..." -ForegroundColor Cyan
 $deployInfraScript = @"
 set -euo pipefail
 cd $COMPOSE_DIR
 sudo docker compose up -d --no-deps rabbitmq
+sudo docker compose up -d --no-deps redis
 sudo docker compose up -d --no-deps nginx
 "@
 $deployInfraScript | ssh -n -i $SSH_KEY -o BatchMode=yes $SSH_HOST "bash -s"
 
-Write-Host "==> [5/6] Верификация слушателей и статуса сервисов..." -ForegroundColor Cyan
+Write-Host "==> [5/7] Верификация слушателей и статуса сервисов..." -ForegroundColor Cyan
 $verifyScript = @"
 set -euo pipefail
 echo "--- Docker Containers ---"
 cd $COMPOSE_DIR && sudo docker compose ps
 echo "--- RabbitMQ Listeners ---"
 sudo docker exec rabbitmq rabbitmq-diagnostics listeners
+echo "--- Redis Ping ---"
+sudo docker compose exec -T redis redis-cli ping
 echo "--- Checking Internal App Status ---"
 sudo docker exec app1 python -c 'from urllib.request import urlopen; r=urlopen("http://127.0.0.1:8000/docs", timeout=5); print("API Response Code:", r.status)'
 "@
 $verifyScript | ssh -n -i $SSH_KEY -o BatchMode=yes $SSH_HOST "bash -s"
 
-Write-Host "==> [6/6] Запуск тестов в контейнере..." -ForegroundColor Cyan
+Write-Host "==> [6/7] Проверка персистентности Redis..." -ForegroundColor Cyan
+$redisSmokeScript = @"
+set -euo pipefail
+sudo docker compose exec -T redis redis-cli SET "test:smoke_key" "ok_stage_1"
+sudo docker compose restart redis
+RESULT=\$(sudo docker compose exec -T redis redis-cli GET "test:smoke_key")
+if [ "\$RESULT" != "ok_stage_1" ]; then
+    echo "ERROR: Redis persistence failed!"
+    exit 1
+fi
+sudo docker compose exec -T redis redis-cli DEL "test:smoke_key"
+echo "Redis persistence test passed!"
+"@
+$redisSmokeScript | ssh -n -i $SSH_KEY -o BatchMode=yes $SSH_HOST "bash -s"
+
+Write-Host "==> [7/7] Запуск тестов в контейнере..." -ForegroundColor Cyan
 ssh -n -i $SSH_KEY -o BatchMode=yes $SSH_HOST "sudo docker exec app1 uv run pytest"
 
 Write-Host "==> Деплой успешно завершён и верифицирован!" -ForegroundColor Green
