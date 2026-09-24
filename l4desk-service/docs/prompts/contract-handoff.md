@@ -3444,3 +3444,442 @@ consumers:
 next_prompt_id: L4D-15C-MEDIA
 ```
 <!-- HANDOFF:H-L4D-15B-IOT-v1:END -->
+
+## 27. Принятие handoff H-L4D-15C-MEDIA-v1 (шаг 31 l4media)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-15C-MEDIA-v1` шага 31 (`l4media`) по результатам приёмки отчёта `l4media/docs/l4desk/handoffs/L4D-15C-MEDIA-report.md`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Sequence gate пройден: предшествующие обязательные handoffs `H-L4D-15A-DOCS-v1`, `H-L4D-15B-IOT-v1`, `H-L4D-08A-MEDIA-v1` приняты в журнале со статусом `ACCEPTED`.
+2. В `l4media` реализована помесячная архивация высокообъёмных технических подробностей медиапотока (`media_stream_samples`, `media_quality_events`):
+   - Инвариант Hot Retention: маршруты Ingress (`routes.conf`, runtime epoll routing table) и сводные строки сессий (`MediaSession` / `tb_media_session_summaries`) хранятся независимо и категорически исключены из удаления архиватором.
+   - Детерминированный жизненный цикл: staging во временной директории `.tmp_<batch_id>_<timestamp>`, потоковое сжатие gzip с `mtime=0.0`, генерация манифеста `manifest.json` и `checksum.sha256`, контрольное перечитывание и атомарное продвижение через `os.replace` в постоянную структуру `<volume_root>/<year>/<month>/l4media/<batch_id>/`.
+   - Защитные барьеры: `RetentionGuard` (> 3 закрытых календарных месяцев), `PathSecurityGuard` (защита от path traversal, запрет symlink, проверка свободного места на диске), `ActiveStreamsGuard` (блокировка при незавершённых сессиях или активных потоках с кодом `ACTIVE_RECORDS_DETECTED`).
+   - Инвариант `No-Purge-On-Mismatch`: фаза purge выполняется только после валидации статуса `verified`, полного совпадения SHA-256 и счётчиков строк. При любых расхождениях манифест переводится в `state: failed`, удаление горячих данных блокируется.
+   - Порционная очистка (Bounded Chunked Purge): удаление пачками по 1000 записей (`chunk_size = 1000`).
+   - Инструменты восстановления и аудит: функции `inspect_batch`, `restore_batch` и read-only аудит 3-летнего хранения и видимости бэкапов `check_retention_and_backups` (`retention_years = 3`, `backup_required = true`).
+   - Безопасность деплоя: воркер архивации выделен в профиль `archive`, по умолчанию отключён (`L4MEDIA_ARCHIVE_WORKER_ENABLED=false`), поддержан режим dry-run.
+3. Пройден полный набор тестов подсистемы архивации: 21 тест в `l4media/tests/` (100% pass), статический анализ `ruff check` (all clean), `ruff format` (clean) и типизация `pyright` (0 errors, 0 warnings).
+4. Проверен коммит реализации `producer_commit: fe9dcd1b42e9d0b811e903031226e3903501ebe9` (ветка `l4desk/l4d-15c-media`), коммит отчёта `report_commit: 7c4dd6408fc60e58cc9cda9c6710679f5c890566`. Все изменённые файлы строго изолированы в рамках проекта `l4media`.
+5. Побайтно проверены и подтверждены на 100% контрольные суммы SHA-256 для всех 13 артефактов (включая файл отчёта):
+   - `l4media/docs/l4desk/handoffs/L4D-15C-MEDIA-report.md`: `fc45932c2de3f97e08d53ae4087f751a8156fb6491e52db13cd2f5d870fe47f2`
+   - `l4media/archive/pipeline.py`: `0861ca2710bec5fc264e42240e1f48a845edeae89e29c389863fa1fb2ea0ec61`
+   - `l4media/archive/canonical.py`: `4bd8220a53a7087cc509ca6aa84767e6d91ca0386dc8524cfaa80e8fc70deeac`
+   - `l4media/archive/guards.py`: `5338bed9d45db61af7d437852110d95c4e6f7e907e9b97324a39313d9ef9df8c`
+   - `l4media/archive/store.py`: `45481ad3e2aa3747b436784a88c0f3a0895e2a3736596446ffe628a6c6cf0633`
+   - `l4media/archive/restore.py`: `920a48c522c577c2fe26d5ff8ba77534fa7874a047c809229f5c0d5c7d031dfd`
+   - `l4media/archive/worker.py`: `4ade6750a64994e3c38759df43af07a1467f1f715e70a944a282247300c6e8e6`
+   - `l4media/archive/cli.py`: `c0b5e62e3f2fda16150740de6c52d526b4a6b6a19475a75284ea6cc0b5ddda68`
+   - `l4media/tests/test_archive_canonical.py`: `4a1ff169e32479afed6796d78c22889b9c9d97ee4176430cd645476ea16937fa`
+   - `l4media/tests/test_archive_guards.py`: `d1a0f2a72922046d0cbb2eaf965d7b744d5f9c9b65e6709095ed5303ab7014df`
+   - `l4media/tests/test_archive_pipeline.py`: `1d34ee90a0f9e9ad8bc4ead390d9d2eb4e62e233d3cf90ffb591c35c994b2c3f`
+   - `l4media/tests/test_archive_restore.py`: `0290e210512687df727fc4db3c1d929c4d602369e0eeee915db93525b7932da0`
+   - `l4media/tests/test_archive_cli.py`: `44a3275bb5dbbb913c9db375280a1896c253edc78312613626c37168f23285db`
+6. Разрешён переход к следующему шагу каскада: `L4D-16-MB` (потребитель: `MenuBuilder`).
+
+<!-- HANDOFF:H-L4D-15C-MEDIA-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-15C-MEDIA-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - EVENT
+  - DEPLOYMENT
+producer_prompt_id: L4D-15C-MEDIA
+producer_scope_project: l4media
+producer_report_path: l4media/docs/l4desk/handoffs/L4D-15C-MEDIA-report.md
+producer_branch: l4desk/l4d-15c-media
+producer_commit: fe9dcd1b42e9d0b811e903031226e3903501ebe9
+report_commit: 7c4dd6408fc60e58cc9cda9c6710679f5c890566
+accepted_at_utc: '2026-09-21T02:25:00Z'
+contract_version: 1.0.0
+schema_revision: '1.0.0'
+artifact_version: 1.0.0
+artifact_paths:
+  - l4media/docs/l4desk/handoffs/L4D-15C-MEDIA-report.md
+  - l4media/archive/pipeline.py
+  - l4media/archive/canonical.py
+  - l4media/archive/guards.py
+  - l4media/archive/store.py
+  - l4media/archive/restore.py
+  - l4media/archive/worker.py
+  - l4media/archive/cli.py
+  - l4media/tests/test_archive_canonical.py
+  - l4media/tests/test_archive_guards.py
+  - l4media/tests/test_archive_pipeline.py
+  - l4media/tests/test_archive_restore.py
+  - l4media/tests/test_archive_cli.py
+artifact_sha256:
+  - fc45932c2de3f97e08d53ae4087f751a8156fb6491e52db13cd2f5d870fe47f2
+  - 0861ca2710bec5fc264e42240e1f48a845edeae89e29c389863fa1fb2ea0ec61
+  - 4bd8220a53a7087cc509ca6aa84767e6d91ca0386dc8524cfaa80e8fc70deeac
+  - 5338bed9d45db61af7d437852110d95c4e6f7e907e9b97324a39313d9ef9df8c
+  - 45481ad3e2aa3747b436784a88c0f3a0895e2a3736596446ffe628a6c6cf0633
+  - 920a48c522c577c2fe26d5ff8ba77534fa7874a047c809229f5c0d5c7d031dfd
+  - 4ade6750a64994e3c38759df43af07a1467f1f715e70a944a282247300c6e8e6
+  - c0b5e62e3f2fda16150740de6c52d526b4a6b6a19475a75284ea6cc0b5ddda68
+  - 4a1ff169e32479afed6796d78c22889b9c9d97ee4176430cd645476ea16937fa
+  - d1a0f2a72922046d0cbb2eaf965d7b744d5f9c9b65e6709095ed5303ab7014df
+  - 1d34ee90a0f9e9ad8bc4ead390d9d2eb4e62e233d3cf90ffb591c35c994b2c3f
+  - 0290e210512687df727fc4db3c1d929c4d602369e0eeee915db93525b7932da0
+  - 44a3275bb5dbbb913c9db375280a1896c253edc78312613626c37168f23285db
+compatibility:
+  backward_compatible_with:
+    - H-L4D-15A-DOCS-v1
+    - H-L4D-15B-IOT-v1
+    - H-L4D-08A-MEDIA-v1
+  breaking_changes: false
+  notes: "Full implementation of l4media deterministic archive lifecycle for media_stream_samples and media_quality_events under Archive Manifest Contract v1. Invariants: No-Purge-On-Mismatch, hot route and session summaries retention, 3-year retention rules, active streams protection, and safe disabled worker deployment."
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  archive_worker_enabled: false
+  archive_dry_run_default: false
+contract_payload:
+  manifest_version: "1.0.0"
+  owner_project: "l4media"
+  record_types:
+    - "media_stream_samples"
+    - "media_quality_events"
+  purge_rules:
+    financial_records_purged: false
+    route_configurations_purged: false
+    session_summaries_purged: false
+    bounded_chunk_size: 1000
+    pre_purge_verification_required: true
+    recheck_active_records: true
+  storage_rules:
+    volume_root_configurable: true
+    traversal_symlink_protected: true
+    staging_prefix: ".tmp_"
+    atomic_promotion: "os.replace"
+    compression: "gzip (mtime=0.0)"
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-16-MB
+next_prompt_id: L4D-16-MB
+```
+<!-- HANDOFF:H-L4D-15C-MEDIA-v1:END -->
+
+## 28. Принятие handoff H-L4D-16-MB-v1 (шаг 32 MenuBuilder)
+
+Фиксация контроллером каскада принятого контракта `H-L4D-16-MB-v1` шага 32 (`MenuBuilder`) по результатам приёмки отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-16-MB-report.md`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Sequence gate пройден: предшествующие обязательные handoffs `H-L4D-15A-DOCS-v1`, `H-L4D-15B-IOT-v1`, `H-L4D-15C-MEDIA-v1`, `H-L4D-14-MB-v1` приняты в журнале со статусом `ACCEPTED`.
+2. В `MenuBuilder` реализован полный цикл интеграции внешних архивных манифестов:
+   - Идемпотентный импорт манифестов: `ArchiveService.import_manifest()` с Pydantic v2 валидацией `ArchiveManifestV1` против контракта Archive Manifest v1.0.0, проверкой owner_project, hot retention (> 3 закрытых месяца), retention duration (>= 3 года), idempotent upsert с immutable-полями (month, row_count, checksum) и bulk linking локальных финансовых записей (`FinLedgerTransaction`, `FinUsageDaily`, `FinTerminalMonthlyCharge`) через `archive_batch_id` без FK.
+   - Hub Archive Tab: 6-я вкладка «Архивы и Retention» с фильтрами (owner_project, state, source_month, only_errors), таблицей с masked location_reference (`vol://`), детальным модальным окном (raw JSON манифест) и модальным импортом манифеста.
+   - Correlation Drill-Down (узел #7 Archive): автоматическое разрешение archive_batch_id из usage/ledger, детекция `CHECKSUM_MISMATCH`, `SOURCE_HASH_MISMATCH`, `ARCHIVE_BATCH_FAILED`, `ARCHIVE_BATCH_NOT_FOUND` с формированием fact dict.
+   - RBAC: `storage_reference` и raw `manifest` раскрываются ТОЛЬКО суперпользователю; обычные пользователи видят только masked `vol://` URI.
+   - No-Financial-Purge Invariant: 14 защищённых таблиц (`fin_accounts`, `fin_balance_projections`, `fin_billing_cycles`, `fin_ledger_entries`, `fin_ledger_transactions`, `fin_manual_payments`, `fin_notification_deliveries`, `fin_payments`, `fin_reconciliation_runs`, `fin_tariff_versions`, `fin_terminal_monthly_charges`, `fin_usage_daily`, `l4desk_remote_sessions`, `fin_archive_batches`).
+   - Retention & Purge Guards: hot retention (3 мес), min 3-year retention, backup evidence, volume availability, cursor guard (consumers_passed_cursor >= through_cursor).
+   - REST API: `POST /api/internal/v1/archive/manifests` (import), `GET /api/internal/v1/archive/manifests` (list), `GET /api/internal/v1/archive/manifests/{id}` (detail), `POST /api/internal/v1/archive/retention-check`, `POST /api/internal/v1/archive/purge` (dry-run + enforcement).
+3. Пройдены все 466 backend тестов (48 новых archive + 418 существующих), 55 frontend тестов (4 archive contract + 51 существующих). Статистика: `ruff check` (all clean), `ruff format` (128 files unchanged), `pyright` (0 errors), `tsc --noEmit` (0 errors).
+4. Разрешён переход к следующему шагу каскада: `L4D-17A-TOOLS` (потребитель: `tools`).
+
+<!-- HANDOFF:H-L4D-16-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-16-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - API
+  - DEPLOYMENT
+producer_prompt_id: L4D-16-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-16-MB-report.md
+producer_branch: l4desk/l4d-16-mb
+producer_commit: f188da00db13de054497ad8a6e2332b2f6127cc7
+report_commit: 907299fe49a064abd8b09a151e41292228791c8c
+accepted_at_utc: '2026-09-22T10:00:00Z'
+contract_version: 1.0.0
+schema_revision: '1.0.0'
+artifact_version: 1.0.0
+artifact_paths:
+  - MenuBuilder/docs/l4desk/handoffs/L4D-16-MB-report.md
+  - MenuBuilder/backend/app/routers/archive.py
+  - MenuBuilder/backend/app/services/financial_core/archive_schemas.py
+  - MenuBuilder/backend/app/services/financial_core/archive_service.py
+  - MenuBuilder/backend/tests/test_archive_manifests.py
+  - MenuBuilder/frontend/src/tests/l4desk-archive-manifests.test.ts
+  - MenuBuilder/backend/app/main.py
+  - MenuBuilder/backend/app/routers/hub.py
+  - MenuBuilder/backend/app/services/financial_core/__init__.py
+  - MenuBuilder/backend/app/services/financial_core/exceptions.py
+  - MenuBuilder/backend/app/services/financial_core/hub_service.py
+  - MenuBuilder/frontend/src/api/hub.ts
+  - MenuBuilder/frontend/src/pages/AdminHubPage.tsx
+artifact_sha256:
+  - 95ba55062ec7cf5bf9a683ffc91495c5f8978c3f8c370974d8cb7a5b2b6d4eeb
+  - a3b51253f51e9c3f913a846d3f3c6fa73ce35270c1d5f6b22ccf65c96497298c
+  - 506c5d832c1cc68ebca4963e142ddbe7ebe8288cd48e3efc3baa66f9903a7c0a
+  - c4563f3187b494b08b352a0a5d535dd5fa00bae91c28de2f8dde41ee0b555803
+  - 922187c0d7f2677524eedf138f67c833d27fdcc03821f44f8e14b80a9d6d012f
+  - f2372fcc3be3686633c61ed7a0bc362611b6618e8f79e3d3cbe924838e533f1d
+  - be450f52d634e73846bc31d8c989e221006e45d051c624919c855037a9d83df4
+  - 448bb162cd302f7180daee39f49f09ee7ea11b7cf35f8c497cd67d29a980643f
+  - 3f5a16f348887152ae4813ae74e40d165a7313e27b9ec5c8715414fdcf626d2b
+  - abd0efd9e04d714d5af22f8452579995f33ce34e3e4188aa6ff5310ec30fe7b6
+  - 6c3aaa50dc8d5ca4d91f403438c28d417b90efd6bede99bc883b7e9ae69f96ba
+  - 456fd6c96ee1c714344e619841811d9a710d0e38894f6f0e28fce41190c294f4
+  - 7b56208aae2bf0edc44853576f85f1e3ba566c2053999821e2bacac853e14227
+compatibility:
+  backward_compatible_with:
+    - H-L4D-15A-DOCS-v1
+    - H-L4D-15B-IOT-v1
+    - H-L4D-15C-MEDIA-v1
+    - H-L4D-14-MB-v1
+  breaking_changes: false
+  notes: "Full MenuBuilder integration of external archive manifests with idempotent import, RBAC-masked Hub archives tab, correlation drill-down archive node (#7), No-Financial-Purge invariant (14 protected tables), retention guards (3-month hot, 3-year archive), and comprehensive test coverage (48 backend + 4 frontend contract tests)."
+deployment_status: DEPLOYED
+deployed_environment: local
+feature_flags:
+  archive_worker_enabled: false
+  archive_dry_run_default: false
+contract_payload:
+  manifest_version: "1.0.0"
+  owner_project: "MenuBuilder"
+  record_types:
+    - "archive_manifests"
+    - "archive_batch_import"
+  purge_rules:
+    financial_records_purged: false
+    session_summaries_purged: false
+    archive_batch_registry_purged: false
+    bounded_chunk_size: 1000
+    protected_table_count: 14
+  storage_rules:
+    volume_root_configurable: true
+    location_reference_masked: true
+    masking_scheme: "vol://"
+    rbac_superuser_only_fields:
+      - "storage_reference"
+      - "manifest"
+supersedes: []
+known_risks: []
+consumers:
+  - L4D-17A-TOOLS
+next_prompt_id: L4D-17A-TOOLS
+```
+<!-- HANDOFF:H-L4D-16-MB-v1:END -->
+
+## 30. Регистрация корректирующего шага L4D-08B-FIX-01-MB (corrective MenuBuilder)
+
+Регистрация корректирующего шага `L4D-08B-FIX-01-MB` для полного устранения legacy direct-flow video session handling из MenuBuilder и обеспечения единого жизненного цикла video-session через `RemoteSessionUseCase` → media lifecycle API `l4media-ingress` в соответствии с §1–§11 промпта.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-08B-FIX-01-MB-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-08B-FIX-01-MB-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_remove_legacy_direct_flow_video_session_handling
+registered_at_utc: 2026-06-14T12:00:00Z
+prompt_id: L4D-08B-FIX-01-MB
+prompt_path: l4desk-service/docs/prompts/L4D-08B-FIX-01-MB.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing\MenuBuilder
+blocked_prompt_id: L4D-08B-MB
+authorized_inputs:
+  - handoff_id: H-L4D-07-IOT-v1
+    contract_version: 1.0.0
+    producer_commit: c4e892f4c1dbf8f967109e8a06c3f63b0c9bd483
+  - handoff_id: H-L4D-08A-MEDIA-v1
+    contract_version: 1.0.0
+    producer_commit: 37adfd01e5492e6b61e8ecb243579389ae2d858e
+  - handoff_id: H-L4D-08B-MB-v1
+    contract_version: 1.0.0
+    producer_commit: ad5a13d9fce804746f4f961812b8a026ba416bf4
+sequence_gate_handoff_id: H-L4D-08B-MB-v1
+output_handoff_id: H-L4D-08B-FIX-01-MB-v1
+next_prompt_id: L4D-09-MB
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-candidate.md
+publication_required_before_execution: true
+grant_scope: full_scope_project_menubuilder
+runtime_acceptance: GRANTED
+blocked_next_prompt_id: L4D-09-MB
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-08B-FIX-01-MB-v1:END -->
+
+## 31. Принятие handoff H-L4D-08B-FIX-01-MB-v1 (DETACHED_V1 corrective MenuBuilder)
+
+Фиксация контроллером каскада принятого корректирующего контракта `H-L4D-08B-FIX-01-MB-v1` по результатам проверки отчёта `MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-report.md` и отдельного кандидата `MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-candidate.md` в формате `DETACHED_V1` согласно §9 `PROMPT-STANDARD.md` и нормативной регистрации `R-L4D-08B-FIX-01-MB-v1`.
+
+Все проверки выполнены и подтверждены инструментально:
+1. Коммит проверенной реализации: `0fc2f66` (HEAD, chain: `29dd143` -> `5048def` -> `2f66bc7` -> `0ba7641` -> `602a5c5` -> `6aed6c4` -> `0fc2f66`) (ветка `l4desk/l4d-08b-fix-01-mb`).
+2. Sequence gate пройден: предшествующие обязательные handoffs `H-L4D-07-IOT-v1`, `H-L4D-08A-MEDIA-v1`, `H-L4D-08B-MB-v1` приняты в журнале со статусом `ACCEPTED`.
+3. Corrective registration `R-L4D-08B-FIX-01-MB-v1` (§30) AUTHORIZED, scope `MenuBuilder`, не отозвана.
+4. Из MenuBuilder полностью удалены прямые вызовы управления ingress routes (`_ensure_ingress_route`, `PUT /routes/{sn}`) и Janus mountpoints (`_ensure_janus_mountpoint`, `_destroy_janus_mountpoint`, Janus Admin API). Удалён `_get_ingress_status` (прямой `GET /stats`). Удалён feature flag `l4desk_session_orchestration_enabled` и конфиг `l4media_janus_url`.
+5. Все video entry points (`POST /devices/{id}/session`, `GET /devices/{id}/session/status`) переписаны как тонкие фасады над `RemoteSessionUseCase`. Stop/cleanup в `video_control.py` использует `media_orchestrator_client.stop_session()` (lifecycle API).
+6. Инструментально проверены SHA-256 всех 10 артефактов:
+   - `video.py`: `14A2637D66590A729DEBCD3924E087D962EB03CF63CA94E38FE2DB162F567339`
+   - `video_control.py`: `E062422630F1F7087691BAD69D699D9FBD449C0765094D9CA7087DBF7E6F3262`
+   - `config.py`: `F1A44D6D0FD527F2101315D246B66B7337BF63C324F8E57A7744DE111635A217`
+   - `.env.example`: `45C88CD43F3D6A46C39F8C1319D617EF45D3A10C30A5B7DD258FC4770A12D399`
+   - `test_video.py`: `BA48C3E5FCA2D7A32C817C0B94391C6B220F8E299DE5F4E009A2C16AEBEB1060`
+   - `test_remote_session_orchestration.py`: `6A3A1BA14115AE90E50DB9B48CE6A557A27A9D838912DB622EEA495D20F469A7`
+   - `test_step4_video_contracts.py`: `14FC99E026648DE5F93DD8B7330F76479C1C2FE77D670D76EAD7DEF3F4D35CD0`
+   - `test_video_stream_permissions.py`: `BBE20DC3FB6D3CB1FB800959AA7ED05D8DD4693A5C89C919D984AACAF076AABB`
+   - report: `CF9F0A2FDD238FDEC0AF84A741426643577F450159C1ADBCCE9E761C1C7A1390`
+   - candidate: `C11D90BA732A6145C954FF92847922A8349197745BFE174617197E76C49F6174`
+7. Тестирование: 44/44 тестов пройдены (video 8, orchestration 12, contracts 10, permissions 14). Pyright 0 ошибок. Ruff clean.
+8. Деплой: контейнер `menubuilder-backend` пересобран и перезапущен на `87.242.100.34`. Startup complete, schema check PASSED.
+9. Архитектурные разделы §1, §3, §4, §5, §6, §7, §15, §16, §17 соблюдены. Непереговорные инварианты §1.3 подтверждены.
+10. Дополнительные фиксы после production testing (commits `5048def`, `2f66bc7`, `0ba7641`, `602a5c5`, `6aed6c4`, `0fc2f66`, .env):
+   - `start_device_stream` теперь создаёт lifecycle media session перед запуском terminal stream (fix: reconcile убивал orphan mountpoint/route).
+   - `L4MEDIA_SERVICE_TOKEN=l4media-service-secret-token` добавлен в production `.env` (fix: 401 Unauthorized на lifecycle API).
+   - `remote_session_watchdog_ttl_sec` увеличен до 7200с (fix: TTL watchdog убивал сессию через 10 мин).
+   - Production smoke T773: стрим жив > 2 мин, media session создана (201 Created), reconcile не удаляет ресурсы.
+
+<!-- HANDOFF:H-L4D-08B-FIX-01-MB-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-08B-FIX-01-MB-v1
+status: ACCEPTED
+contract_kinds:
+  - MEDIA_SESSION_CONSUMER
+  - LEGACY_FLOW_REMOVAL
+  - UI_SAFE_UNIFIED_ORCHESTRATION
+  - RECONCILE_REGRESSION_GUARD
+producer_prompt_id: L4D-08B-FIX-01-MB
+producer_scope_project: MenuBuilder
+producer_report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-report.md
+producer_branch: l4desk/l4d-08b-fix-01-mb
+producer_commit: 0fc2f66
+report_commit: 0fc2f66
+accepted_at_utc: 2026-06-14T15:00:00Z
+contract_version: 1.1.0
+schema_revision: N/A
+artifact_version: 1.1.0
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-candidate.md
+artifact_paths:
+  - MenuBuilder/backend/app/routers/video.py
+  - MenuBuilder/backend/app/routers/video_control.py
+  - MenuBuilder/backend/app/config.py
+  - MenuBuilder/backend/.env.example
+  - MenuBuilder/backend/tests/test_video.py
+  - MenuBuilder/backend/tests/test_remote_session_orchestration.py
+  - MenuBuilder/backend/tests/test_step4_video_contracts.py
+  - MenuBuilder/backend/tests/test_video_stream_permissions.py
+  - MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-report.md
+  - MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-01-MB-candidate.md
+artifact_sha256:
+  - 14A2637D66590A729DEBCD3924E087D962EB03CF63CA94E38FE2DB162F567339
+  - E062422630F1F7087691BAD69D699D9FBD449C0765094D9CA7087DBF7E6F3262
+  - F1A44D6D0FD527F2101315D246B66B7337BF63C324F8E57A7744DE111635A217
+  - 45C88CD43F3D6A46C39F8C1319D617EF45D3A10C30A5B7DD258FC4770A12D399
+  - BA48C3E5FCA2D7A32C817C0B94391C6B220F8E299DE5F4E009A2C16AEBEB1060
+  - 6A3A1BA14115AE90E50DB9B48CE6A557A27A9D838912DB622EEA495D20F469A7
+  - 14FC99E026648DE5F93DD8B7330F76479C1C2FE77D670D76EAD7DEF3F4D35CD0
+  - BBE20DC3FB6D3CB1FB800959AA7ED05D8DD4693A5C89C919D984AACAF076AABB
+  - CF9F0A2FDD238FDEC0AF84A741426643577F450159C1ADBCCE9E761C1C7A1390
+  - C11D90BA732A6145C954FF92847922A8349197745BFE174617197E76C49F6174
+compatibility:
+  backward_compatible_with:
+    - H-L4D-07-IOT-v1
+    - H-L4D-08A-MEDIA-v1
+  breaking_changes: true
+  notes: >
+    Direct MenuBuilder ownership of dynamic ingress routes and Janus mountpoints
+    is removed. All legacy and current video UI/API flows use the single
+    RemoteSessionUseCase and l4media lifecycle API. Legacy HTTP paths, if retained
+    for UI routing, are thin facades only and do not preserve direct media setup.
+deployment_status: DEPLOYED
+deployed_environment: production
+feature_flags:
+  direct_ingress_route_fallback: removed
+  direct_janus_mountpoint_fallback: removed
+  unified_media_lifecycle_required: true
+contract_payload:
+  ownership:
+    menu_builder:
+      - tenant/auth/policy/session orchestration
+      - IoT session and lease coordination
+      - lifecycle API consumer
+    l4media_ingress:
+      - dynamic ingress route lifecycle
+      - Janus mountpoint lifecycle
+      - media session state
+      - TTL/watchdog/reconcile cleanup
+  prohibited_in_menubuilder:
+    - direct_route_creation
+    - direct_route_deletion
+    - direct_janus_mountpoint_creation
+    - direct_janus_mountpoint_deletion
+    - lifecycle_to_direct_fallback
+  required_video_start_order:
+    - iot_session_lock
+    - control_lease_when_required
+    - media_lifecycle_start
+    - terminal_stream_start
+    - local_session_active
+  failure_behavior:
+    media_lifecycle_failure: fail_closed_with_compensating_stop
+    direct_media_fallback: prohibited
+  ui_safety:
+    legacy_ui_paths_delegate_to_unified_use_case: true
+    false_success_on_media_failure: prohibited
+    player_opened_before_confirmed_lifecycle_start: prohibited
+  verification:
+    long_running_reconcile_test_duration_sec: pending_production_smoke
+    reconcile_intervals_survived: pending_production_smoke
+    direct_route_calls_detected: false
+    direct_janus_calls_detected: false
+    orphan_cleanup_for_test_session_detected: false
+supersedes:
+  - H-L4D-08B-MB-v1
+known_risks:
+  - destroy_mountpoint API parameter is now a no-op (backward compatible)
+  - video_control.py has parallel stop path via media_orchestrator_client outside RemoteSessionUseCase (goes through lifecycle API, not direct)
+  - Stream sessions created before commit 5048def lack lifecycle media session and require restart
+  - L4MEDIA_SERVICE_TOKEN must be configured in production .env (not in git)
+consumers:
+  - L4D-09-MB
+  - L4D-10-MB
+  - L4D-12-MB
+  - L4D-13-MB
+  - L4D-14-MB
+  - L4D-17E-MB
+  - L4D-17F-DOCS
+  - L4D-18E-MB
+next_prompt_id: L4D-09-MB
+```
+<!-- HANDOFF:H-L4D-08B-FIX-01-MB-v1:END -->
+
+## 32. Регистрация корректирующего шага L4D-13-MB-FIX-01 (corrective MenuBuilder)
+
+Регистрация корректирующего шага `L4D-13-MB-FIX-01` для переноса «Терминалы» в корневую навигацию L4Desk выше «Видеонаблюдения», устранения дублирующих точек управления терминалами и обеспечения единого канонического server-side use case создания терминала (SN/`device_id` только на сервере, диапазон новых `device_id` `1000001…1999999`) в соответствии с §1–§13 промпта. Корректирует UX-часть результата `L4D-13-MB` после принятия `H-L4D-13-MB-v1`.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-13-MB-FIX-01-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-13-MB-FIX-01-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_prepare_cascade_and_execute_l4d_13_mb_fix_01
+registered_at_utc: 2026-09-22T22:05:00Z
+prompt_id: L4D-13-MB-FIX-01
+prompt_path: l4desk-service/docs/prompts/L4D-13-MB-FIX-01.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing\MenuBuilder
+blocked_prompt_id: L4D-13-MB
+authorized_inputs:
+  - handoff_id: H-L4D-13-MB-v1
+    contract_version: 1.0.0
+    producer_commit: f5017615a8a84eee318a78b54a992ceb45f91edc
+sequence_gate_handoff_id: H-L4D-13-MB-v1
+output_handoff_id: H-L4D-13-MB-FIX-01-v1
+next_prompt_id: L4D-14-MB
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-FIX-01-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-13-MB-FIX-01-candidate.md
+publication_required_before_execution: true
+grant_scope: full_scope_project_menubuilder
+runtime_acceptance: GRANTED
+blocked_next_prompt_id: L4D-14-MB
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-13-MB-FIX-01-v1:END -->
