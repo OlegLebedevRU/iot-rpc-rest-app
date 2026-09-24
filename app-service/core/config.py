@@ -431,6 +431,44 @@ class DiagnosticsConfig(BaseModel):
     implicit_console_lease: bool = True
 
 
+class RedisConfig(BaseModel):
+    url: str = "redis://127.0.0.1:6379/0"
+    pool_size: int = 20
+    timeout_sec: float = 5.0
+    health_check_interval: int = 30
+    auto_rewrite_docker: bool = True
+    compose_host: str = "redis"
+    compose_port: int = 6379
+
+    @model_validator(mode="after")
+    def _maybe_rewrite_host(self) -> "RedisConfig":
+        if not self.auto_rewrite_docker:
+            return self
+        if os.path.exists("/.dockerenv"):
+            parsed = urlparse(str(self.url))
+            host = parsed.hostname or ""
+            if host in ("127.0.0.1", "localhost"):
+                userinfo = ""
+                if parsed.username:
+                    userinfo = parsed.username
+                    if parsed.password:
+                        userinfo = f"{userinfo}:{parsed.password}"
+                path = parsed.path or "/0"
+                netloc = (
+                    f"{userinfo}@{self.compose_host}:{self.compose_port}"
+                    if userinfo
+                    else f"{self.compose_host}:{self.compose_port}"
+                )
+                rewritten = urlunparse(parsed._replace(netloc=netloc, path=path))
+                _log.info(
+                    "Docker environment detected; rewriting Redis URL from %s to %s",
+                    self.url,
+                    rewritten,
+                )
+                self.url = rewritten
+        return self
+
+
 class ArchiveConfig(BaseModel):
     enabled: bool = False
     volume_root: str = "/mnt/l4desk-archive"
@@ -470,6 +508,7 @@ class Settings(BaseSettings):
     remote_input: RemoteInputConfig = RemoteInputConfig()
     diagnostics: DiagnosticsConfig = DiagnosticsConfig()
     archive: ArchiveConfig = ArchiveConfig()
+    redis: RedisConfig = RedisConfig()
 
     @property
     def api_keys(self) -> Dict[str, int]:

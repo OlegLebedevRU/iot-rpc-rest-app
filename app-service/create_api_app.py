@@ -25,6 +25,7 @@ from core import settings
 from core.config import mask_amqp_url
 from core.fs_broker import fs_router
 from core.logging_config import setup_module_logger
+from core.redis_helper import redis_helper
 from core.models import db_helper
 from core.services.device_task_processing import act_ttl
 from core.services.devices import DeviceService
@@ -78,7 +79,7 @@ try:
     _RETRYABLE_EXCEPTIONS = _RETRYABLE_EXCEPTIONS + (
         aio_pika.exceptions.AMQPConnectionError,
     )
-except (ImportError, AttributeError):
+except ImportError, AttributeError:
     pass
 try:
     import aiormq.exceptions  # type: ignore[import]
@@ -86,7 +87,7 @@ try:
     _RETRYABLE_EXCEPTIONS = _RETRYABLE_EXCEPTIONS + (
         aiormq.exceptions.AMQPConnectionError,
     )
-except (ImportError, AttributeError):
+except ImportError, AttributeError:
     pass
 
 
@@ -297,6 +298,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             settings.gunicorn.workers,
         )
 
+    try:
+        await redis_helper.init_pool()
+        log.info("Redis connection pool initialized.")
+    except Exception as exc:
+        log.warning("Failed to initialize Redis pool on startup: %s", exc)
+
     await _start_broker_with_retry()
     await declare_x_q()
     await _sync_rmq_device_definitions_on_startup()
@@ -361,6 +368,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await db_helper.dispose()
     except Exception as exc:
         log.warning("Ignoring error while disposing DB helper: %s", exc)
+
+    try:
+        await redis_helper.close_pool()
+    except Exception as exc:
+        log.warning("Ignoring error while closing Redis pool: %s", exc)
 
     if scheduler.running:
         with suppress(Exception):

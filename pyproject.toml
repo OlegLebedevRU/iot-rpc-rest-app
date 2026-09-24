@@ -29,6 +29,7 @@ dependencies = [
     "pydeps>=3.0.2",
     "pytest>=9.0.2",
     "pytokens>=0.4.1",
+    "redis>=8.1.0",
     "sqlalchemy>=2.0.47",
     "starlette>=0.52.1",
     "tenacity>=9.1.4",
@@ -59,4 +60,9 @@ norecursedirs = [
 
 [tool.black]
 target-version = ["py314"]
+
+[dependency-groups]
+dev = [
+    "fakeredis>=2.38.0",
+]
 

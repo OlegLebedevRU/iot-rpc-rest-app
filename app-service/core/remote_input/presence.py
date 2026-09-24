@@ -4,8 +4,14 @@ import asyncio
 from datetime import UTC, datetime
 from typing import Protocol
 
+from redis.exceptions import (
+    ConnectionError as RedisConnectionError,
+    TimeoutError as RedisTimeoutError,
+)
+
 from core.config import settings
 from core.logging_config import setup_module_logger
+from core.redis_helper import redis_helper
 from core.remote_input.schemas import (
     AgentStatusView,
     CtlPresence,
@@ -401,4 +407,560 @@ class PresenceRegistry:
                     self._stream_listeners.pop(sn, None)
 
 
-presence_registry: PresenceRegistryProtocol = PresenceRegistry()
+class _CompatibilityPresenceDict(dict):
+    def __init__(self, registry: RedisPresenceRegistry) -> None:
+        super().__init__()
+        self._registry = registry
+
+    def clear(self) -> None:
+        super().clear()
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._registry._delete_all_redis_keys())
+        except RuntimeError:
+            pass
+
+
+class _CompatibilityInventoryDict(dict):
+    def __init__(self, registry: RedisPresenceRegistry) -> None:
+        super().__init__()
+        self._registry = registry
+
+    def clear(self) -> None:
+        super().clear()
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._registry._delete_all_redis_keys())
+        except RuntimeError:
+            pass
+
+
+class _CompatibilityStreamDict(dict):
+    def __init__(self, registry: RedisPresenceRegistry) -> None:
+        super().__init__()
+        self._registry = registry
+
+    def clear(self) -> None:
+        super().clear()
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self._registry._delete_all_redis_keys())
+        except RuntimeError:
+            pass
+
+
+class RedisPresenceRegistry:
+    def __init__(self) -> None:
+        self._presence: dict[str, tuple[CtlPresence, datetime]] = (
+            _CompatibilityPresenceDict(self)
+        )
+        self._last_inventory: dict[str, InventoryInfo] = _CompatibilityInventoryDict(
+            self
+        )
+        self._last_stream: dict[str, StreamInfo] = _CompatibilityStreamDict(self)
+        self._listeners: dict[str, list[asyncio.Queue[AgentStatusView]]] = {}
+        self._stream_listeners: dict[str, list[asyncio.Queue[WsStreamState]]] = {}
+        self._lock = asyncio.Lock()
+
+    @property
+    def _client(self):
+        return redis_helper.get_client()
+
+    async def _delete_all_redis_keys(self) -> None:
+        try:
+            client = self._client
+            keys = await client.keys("l4d:presence:*")
+            keys += await client.keys("l4d:inventory:*")
+            keys += await client.keys("l4d:stream:*")
+            if keys:
+                await client.delete(*keys)
+        except Exception as exc:
+            log.debug("Failed deleting all presence redis keys: %s", exc)
+
+    async def _build_view_async(
+        self,
+        sn: str,
+        presence: CtlPresence,
+        received_at: datetime,
+        now: datetime,
+    ) -> AgentStatusView:
+        age_sec = (now - received_at).total_seconds()
+        stale = age_sec >= settings.remote_input.presence_stale_sec
+        is_online = (presence.status == "online") or (
+            getattr(presence, "online", None) is True
+        )
+        online = is_online and (not stale)
+        desktop_available = presence.desktop_available if online else False
+        session_id = presence.session_id if online else None
+        screen = presence.screen if online else None
+
+        inventory: InventoryInfo | None = None
+        if online:
+            if presence.inventory is not None:
+                inventory = presence.inventory
+            else:
+                inventory = await self.get_inventory(sn)
+
+        if online and (
+            inventory is None or (not inventory.displays and not inventory.cameras)
+        ):
+            if presence.screen or presence.desktop_available:
+                w = presence.screen.virtual_width if presence.screen else 1920
+                h = presence.screen.virtual_height if presence.screen else 1080
+                x = presence.screen.virtual_x if presence.screen else 0
+                y = presence.screen.virtual_y if presence.screen else 0
+                inventory = InventoryInfo(
+                    displays=[
+                        DisplayInfo(
+                            desktop_id="0",
+                            name="Основной экран",
+                            primary=True,
+                            x=x,
+                            y=y,
+                            width=w,
+                            height=h,
+                            session_id=presence.session_id,
+                            policy="input",
+                        )
+                    ],
+                    cameras=[],
+                )
+
+        stream: StreamInfo | None = None
+        if online:
+            if presence.stream is not None:
+                stream = presence.stream
+            else:
+                stream = await self.get_stream(sn)
+
+        return AgentStatusView(
+            online=online,
+            desktop_available=desktop_available,
+            version=presence.version if online else None,
+            capabilities=presence.capabilities if online else None,
+            session_id=session_id,
+            screen=screen,
+            inventory=inventory,
+            stream=stream,
+            last_seen_at=presence.timestamp,
+            stale=stale,
+        )
+
+    async def update(
+        self, sn: str, presence: CtlPresence
+    ) -> tuple[bool, AgentStatusView]:
+        now = datetime.now(UTC)
+        client = self._client
+        stream_event_to_dispatch: WsStreamState | None = None
+        presence_key = f"l4d:presence:{sn}"
+        inv_key = f"l4d:inventory:{sn}"
+        stream_key = f"l4d:stream:{sn}"
+
+        try:
+            prev_raw = await client.hgetall(presence_key)
+            prev_p: CtlPresence | None = None
+            prev_at: datetime | None = None
+            if prev_raw and "data" in prev_raw:
+                try:
+                    prev_p = CtlPresence.model_validate_json(prev_raw["data"])
+                    prev_at = datetime.fromisoformat(prev_raw["received_at"])
+                except Exception as parse_err:
+                    log.debug("Error parsing prev presence from redis: %s", parse_err)
+
+            prev_status = prev_p.status if prev_p else None
+            prev_desktop = prev_p.desktop_available if prev_p else None
+
+            # LWT race protection: ignore stale offline if prev was online with newer timestamp
+            is_incoming_online = (presence.status == "online") or (
+                getattr(presence, "online", None) is True
+            )
+            if not is_incoming_online and prev_p is not None and prev_at is not None:
+                prev_is_online = (prev_p.status == "online") or (
+                    getattr(prev_p, "online", None) is True
+                )
+                if prev_is_online:
+                    prev_dt = _parse_timestamp(prev_p.timestamp)
+                    curr_dt = _parse_timestamp(presence.timestamp)
+                    if (
+                        prev_dt is not None
+                        and curr_dt is not None
+                        and curr_dt <= prev_dt
+                    ):
+                        log.warning(
+                            "Ignoring stale LWT offline presence for sn=%s (curr_ts=%s <= prev_ts=%s)",
+                            sn,
+                            presence.timestamp,
+                            prev_p.timestamp,
+                        )
+                        view = await self._build_view_async(sn, prev_p, prev_at, now)
+                        return False, view
+
+            if presence.inventory is not None:
+                await client.set(
+                    inv_key, presence.inventory.model_dump_json(), ex=86400
+                )
+                async with self._lock:
+                    self._last_inventory[sn] = presence.inventory
+
+            if presence.stream is not None:
+                prev_stream_raw = await client.get(stream_key)
+                prev_stream = (
+                    StreamInfo.model_validate_json(prev_stream_raw)
+                    if prev_stream_raw
+                    else None
+                )
+                stale_running = False
+                if prev_stream is not None and prev_stream.state in (
+                    "stopped",
+                    "failed",
+                ):
+                    if presence.stream.state == "running":
+                        if (
+                            presence.stream.stream_instance_id is not None
+                            and prev_stream.stream_instance_id
+                            == presence.stream.stream_instance_id
+                        ):
+                            stale_running = True
+                            log.warning(
+                                "Ignoring stale presence stream running for sn=%s on already stopped stream_instance_id=%s",
+                                sn,
+                                prev_stream.stream_instance_id,
+                            )
+                if not stale_running:
+                    stream_ttl = 90 if presence.stream.state == "running" else 300
+                    await client.set(
+                        stream_key,
+                        presence.stream.model_dump_json(),
+                        ex=stream_ttl,
+                    )
+                    async with self._lock:
+                        self._last_stream[sn] = presence.stream
+                    if (
+                        prev_stream is None
+                        or prev_stream.state != presence.stream.state
+                    ):
+                        stream_event_to_dispatch = WsStreamState(
+                            stream_instance_id=presence.stream.stream_instance_id,
+                            state=presence.stream.state,
+                            reason=presence.stream.reason,
+                            timestamp=presence.timestamp,
+                        )
+
+            stale_sec = settings.remote_input.presence_stale_sec
+            await client.hset(
+                presence_key,
+                mapping={
+                    "data": presence.model_dump_json(),
+                    "received_at": now.isoformat(),
+                },
+            )
+            await client.expire(presence_key, stale_sec)
+
+            async with self._lock:
+                self._presence[sn] = (presence, now)
+
+            view = await self._build_view_async(sn, presence, now, now)
+
+            changed = (prev_status != presence.status) or (
+                prev_desktop != presence.desktop_available
+            )
+            if changed:
+                log.info(
+                    "Presence state changed (redis) for sn=%s: status=%s->%s, desktop_available=%s->%s",
+                    sn,
+                    prev_status,
+                    presence.status,
+                    prev_desktop,
+                    presence.desktop_available,
+                )
+
+            async with self._lock:
+                listeners = list(self._listeners.get(sn, []))
+                stream_listeners = (
+                    list(self._stream_listeners.get(sn, []))
+                    if stream_event_to_dispatch
+                    else []
+                )
+
+            for q in listeners:
+                try:
+                    q.put_nowait(view)
+                except Exception:
+                    pass
+
+            if stream_event_to_dispatch:
+                for sq in stream_listeners:
+                    try:
+                        sq.put_nowait(stream_event_to_dispatch)
+                    except Exception:
+                        pass
+
+            return changed, view
+        except (RedisConnectionError, RedisTimeoutError) as exc:
+            log.error(
+                "Redis connection error during presence update for sn=%s: %s",
+                sn,
+                exc,
+            )
+            raise
+
+    async def update_stream_event(
+        self, sn: str, event: CtlStreamEvent
+    ) -> WsStreamState:
+        now = datetime.now(UTC)
+        client = self._client
+        stream_key = f"l4d:stream:{sn}"
+        presence_key = f"l4d:presence:{sn}"
+
+        try:
+            current_stream = await self.get_stream(sn)
+
+            if (
+                event.state in ("stopped", "failed")
+                and current_stream.state == "running"
+                and current_stream.stream_instance_id is not None
+                and event.stream_instance_id is not None
+                and event.stream_instance_id != current_stream.stream_instance_id
+            ):
+                log.info(
+                    "Ignoring stale stream_event %s for sn=%s (event_instance=%s != current_instance=%s)",
+                    event.state,
+                    sn,
+                    event.stream_instance_id,
+                    current_stream.stream_instance_id,
+                )
+                return WsStreamState(
+                    stream_instance_id=current_stream.stream_instance_id,
+                    state=current_stream.state,
+                    reason=current_stream.reason,
+                    timestamp=now.isoformat(),
+                )
+
+            current_stream.state = event.state
+            if event.stream_instance_id is not None:
+                current_stream.stream_instance_id = event.stream_instance_id
+            current_stream.reason = event.reason
+
+            ttl = 90 if event.state == "running" else 300
+            await client.set(stream_key, current_stream.model_dump_json(), ex=ttl)
+
+            async with self._lock:
+                self._last_stream[sn] = current_stream
+
+            prev_raw = await client.hgetall(presence_key)
+            rec_view: AgentStatusView | None = None
+            if prev_raw and "data" in prev_raw:
+                p = CtlPresence.model_validate_json(prev_raw["data"])
+                r_at = datetime.fromisoformat(prev_raw["received_at"])
+                p.stream = current_stream
+                await client.hset(
+                    presence_key,
+                    mapping={
+                        "data": p.model_dump_json(),
+                        "received_at": r_at.isoformat(),
+                    },
+                )
+                async with self._lock:
+                    self._presence[sn] = (p, r_at)
+                rec_view = await self._build_view_async(sn, p, r_at, now)
+
+            ws_state = WsStreamState(
+                stream_instance_id=current_stream.stream_instance_id,
+                state=event.state,
+                reason=event.reason,
+                timestamp=event.timestamp,
+            )
+
+            async with self._lock:
+                stream_listeners = list(self._stream_listeners.get(sn, []))
+                status_listeners = (
+                    list(self._listeners.get(sn, [])) if rec_view is not None else []
+                )
+
+            for sq in stream_listeners:
+                try:
+                    sq.put_nowait(ws_state)
+                except Exception:
+                    pass
+
+            if rec_view is not None:
+                for q in status_listeners:
+                    try:
+                        q.put_nowait(rec_view)
+                    except Exception:
+                        pass
+
+            log.info(
+                "Stream event updated (redis) for sn=%s: state=%s instance=%s reason=%s",
+                sn,
+                event.state,
+                event.stream_instance_id,
+                event.reason,
+            )
+            return ws_state
+        except (RedisConnectionError, RedisTimeoutError) as exc:
+            log.error(
+                "Redis connection error during stream event update for sn=%s: %s",
+                sn,
+                exc,
+            )
+            raise
+
+    async def update_inventory(self, sn: str, inventory: InventoryInfo) -> None:
+        client = self._client
+        inv_key = f"l4d:inventory:{sn}"
+        presence_key = f"l4d:presence:{sn}"
+        try:
+            await client.set(inv_key, inventory.model_dump_json(), ex=86400)
+            async with self._lock:
+                self._last_inventory[sn] = inventory
+
+            prev_raw = await client.hgetall(presence_key)
+            if prev_raw and "data" in prev_raw:
+                p = CtlPresence.model_validate_json(prev_raw["data"])
+                r_at = datetime.fromisoformat(prev_raw["received_at"])
+                p.inventory = inventory
+                await client.hset(
+                    presence_key,
+                    mapping={
+                        "data": p.model_dump_json(),
+                        "received_at": r_at.isoformat(),
+                    },
+                )
+                async with self._lock:
+                    self._presence[sn] = (p, r_at)
+        except (RedisConnectionError, RedisTimeoutError) as exc:
+            log.error(
+                "Redis connection error during update_inventory for sn=%s: %s",
+                sn,
+                exc,
+            )
+            raise
+
+    async def get(self, sn: str) -> AgentStatusView:
+        now = datetime.now(UTC)
+        client = self._client
+        presence_key = f"l4d:presence:{sn}"
+        try:
+            raw = await client.hgetall(presence_key)
+            if not raw or "data" not in raw:
+                return AgentStatusView(
+                    online=False,
+                    desktop_available=False,
+                    session_id=None,
+                    screen=None,
+                    inventory=None,
+                    stream=None,
+                    last_seen_at=None,
+                    stale=True,
+                )
+            presence = CtlPresence.model_validate_json(raw["data"])
+            received_at = datetime.fromisoformat(raw["received_at"])
+            async with self._lock:
+                self._presence[sn] = (presence, received_at)
+            return await self._build_view_async(sn, presence, received_at, now)
+        except (RedisConnectionError, RedisTimeoutError) as exc:
+            log.error(
+                "Redis connection error during get presence for sn=%s: %s",
+                sn,
+                exc,
+            )
+            raise
+
+    async def get_inventory(self, sn: str) -> InventoryInfo:
+        client = self._client
+        inv_key = f"l4d:inventory:{sn}"
+        presence_key = f"l4d:presence:{sn}"
+        try:
+            inv_raw = await client.get(inv_key)
+            if inv_raw:
+                inv = InventoryInfo.model_validate_json(inv_raw)
+                if inv.displays or inv.cameras:
+                    async with self._lock:
+                        self._last_inventory[sn] = inv
+                    return inv
+
+            raw = await client.hgetall(presence_key)
+            if raw and "data" in raw:
+                p = CtlPresence.model_validate_json(raw["data"])
+                if p.screen or p.desktop_available:
+                    w = p.screen.virtual_width if p.screen else 1920
+                    h = p.screen.virtual_height if p.screen else 1080
+                    x = p.screen.virtual_x if p.screen else 0
+                    y = p.screen.virtual_y if p.screen else 0
+                    return InventoryInfo(
+                        displays=[
+                            DisplayInfo(
+                                desktop_id="0",
+                                name="Основной экран",
+                                primary=True,
+                                x=x,
+                                y=y,
+                                width=w,
+                                height=h,
+                                session_id=p.session_id,
+                                policy="input",
+                            )
+                        ],
+                        cameras=[],
+                    )
+            return InventoryInfo()
+        except (RedisConnectionError, RedisTimeoutError) as exc:
+            log.error(
+                "Redis connection error during get_inventory for sn=%s: %s",
+                sn,
+                exc,
+            )
+            raise
+
+    async def get_stream(self, sn: str) -> StreamInfo:
+        client = self._client
+        stream_key = f"l4d:stream:{sn}"
+        try:
+            stream_raw = await client.get(stream_key)
+            if stream_raw:
+                s = StreamInfo.model_validate_json(stream_raw)
+                async with self._lock:
+                    self._last_stream[sn] = s
+                return s
+            return StreamInfo()
+        except (RedisConnectionError, RedisTimeoutError) as exc:
+            log.error(
+                "Redis connection error during get_stream for sn=%s: %s",
+                sn,
+                exc,
+            )
+            raise
+
+    async def subscribe(self, sn: str) -> asyncio.Queue[AgentStatusView]:
+        q: asyncio.Queue[AgentStatusView] = asyncio.Queue()
+        async with self._lock:
+            self._listeners.setdefault(sn, []).append(q)
+        return q
+
+    async def unsubscribe(self, sn: str, queue: asyncio.Queue[AgentStatusView]) -> None:
+        async with self._lock:
+            listeners = self._listeners.get(sn)
+            if listeners and queue in listeners:
+                listeners.remove(queue)
+                if not listeners:
+                    self._listeners.pop(sn, None)
+
+    async def subscribe_stream(self, sn: str) -> asyncio.Queue[WsStreamState]:
+        q: asyncio.Queue[WsStreamState] = asyncio.Queue()
+        async with self._lock:
+            self._stream_listeners.setdefault(sn, []).append(q)
+        return q
+
+    async def unsubscribe_stream(
+        self, sn: str, queue: asyncio.Queue[WsStreamState]
+    ) -> None:
+        async with self._lock:
+            listeners = self._stream_listeners.get(sn)
+            if listeners and queue in listeners:
+                listeners.remove(queue)
+                if not listeners:
+                    self._stream_listeners.pop(sn, None)
+
+
+presence_registry: PresenceRegistryProtocol = RedisPresenceRegistry()
