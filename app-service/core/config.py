@@ -516,9 +516,6 @@ class Settings(BaseSettings):
 
 
 settn = Settings()
-# print("🔧 Raw API Keys:", settn.auth.api_keys_raw)
-# print("🔑 Parsed keys:", settn.api_keys)
-print(str(settn))
 
 
 def settn_get():
