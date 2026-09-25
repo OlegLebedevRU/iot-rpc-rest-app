@@ -3496,3 +3496,116 @@ consumers:
 next_prompt_id: L4D-08A-MEDIA
 ```
 <!-- HANDOFF:H-L4D-REDIS-IOT-01-v1:END -->
+
+## 33. Принятие аддитивного IoT stop-контракта H-L4D-07-IOT-STOP-v1
+
+Контроллер принимает опубликованный и развёрнутый provider-контракт `1.1.0` как аддитивное усиление `H-L4D-07-IOT-v1`. Исторический handoff не переписывается; следующий consumer обязан использовать точный `session_id` и durable reconciliation.
+
+<!-- HANDOFF:H-L4D-07-IOT-STOP-v1:BEGIN -->
+```yaml
+handoff_id: H-L4D-07-IOT-STOP-v1
+status: ACCEPTED
+contract_kinds:
+  - REMOTE_SESSION_STOP_PROVIDER
+  - IDEMPOTENT_RECONCILIATION
+  - SESSION_IDENTITY_GUARD
+  - RETRYABLE_TEARDOWN
+producer_prompt_id: L4D-07-IOT
+producer_scope_project: iot-rpc-rest-app
+producer_report_path: docs/l4desk/handoffs/remote-session-stop-contract-v1.1.md
+producer_branch: l4desk/l4d-redis-iot-01
+producer_commit: 22a50a186da25dddb19612c475bf9bcbb4a7fab2
+report_commit: 22a50a186da25dddb19612c475bf9bcbb4a7fab2
+accepted_at_utc: 2026-09-25T14:05:00Z
+contract_version: 1.1.0
+schema_revision: 2026-09-25-v2
+artifact_version: 1.1.0
+artifact_paths:
+  - docs/l4desk/contracts/iot_event_feed_contract_v1.json
+  - docs/l4desk/contracts/schemas/iot_event_feed_openapi.json
+  - docs/l4desk/contracts/schemas/remote_session.schema.json
+  - docs/l4desk/fixtures/iot_event_feed_examples_v1.json
+  - docs/l4desk/handoffs/remote-session-stop-contract-v1.1.md
+artifact_sha256:
+  - 6eb13018c5805111724973fde57ff2d4b48de0ed886c9a837fd7706b697f8f79
+  - cbe372a960b10f190be971a6ccb7ffca06de257bedff9fccc6528f29fa143560
+  - d0f91f3a25932134e19ffd06cd4aa87088afff5d0f5de182915af7abb539b5e9
+  - 771856c6cfed996aa8a9a99c122a73096afee123a089895f0089c17eb6bac1fe
+  - 50e81c0cecc4a45903a9e05431fe901293da2a0b6342c943c9ede3923f3f0762
+compatibility:
+  backward_compatible_with:
+    - H-L4D-07-IOT-v1
+  breaking_changes: false
+  notes: Optional tenant_id/SN guards and explicit retryable 503 are additive; legacy stop bodies remain valid.
+deployment_status: DEPLOYED
+deployed_environment: dev.leo4.ru
+deployment_evidence:
+  deployed_commit: 22a50a186da25dddb19612c475bf9bcbb4a7fab2
+  app1_isolated_recreate: true
+  dependency_containers_recreated: false
+  startup_complete: true
+  internal_docs_http_status: 200
+contract_payload:
+  endpoint: POST /api/internal/v1/remote-sessions/{session_id}/stop
+  reconciliation_endpoint: GET /api/internal/v1/remote-sessions/{session_id}
+  success_200: committed terminal record for the same session_id
+  identity_mismatch_409: no mutation
+  teardown_failed_503: durable stopping, retryable
+  create_during_stopping: existing session_busy 409 remains protective
+  late_old_stop: never tears down a newer session or foreign lease
+  consumer_rule: local closed requires confirmed provider terminal state and completed required media teardown
+supersedes: []
+known_risks:
+  - MenuBuilder consumer is not yet switched to the v1.1 retry/reconciliation semantics.
+consumers:
+  - L4D-08B-FIX-03-MB
+next_prompt_id: L4D-08B-FIX-03-MB
+```
+<!-- HANDOFF:H-L4D-07-IOT-STOP-v1:END -->
+
+## 34. Регистрация корректирующего шага L4D-08B-FIX-03-MB
+
+Шаг устраняет известный parallel stop-path из `H-L4D-08B-FIX-01-MB-v1` и переключает оба MenuBuilder stop-сценария на одну durable операцию по контракту `H-L4D-07-IOT-STOP-v1`.
+
+<!-- CORRECTIVE_REGISTRATION:R-L4D-08B-FIX-03-MB-v1:BEGIN -->
+```yaml
+registration_id: R-L4D-08B-FIX-03-MB-v1
+status: AUTHORIZED
+authorized_by: Cascade Controller
+authorization_basis: explicit_user_request_to_integrate_deploy_and_push_remote_session_stop_fix
+registered_at_utc: 2026-09-25T14:05:00Z
+prompt_id: L4D-08B-FIX-03-MB
+prompt_path: l4desk-service/docs/prompts/L4D-08B-FIX-03-MB.md
+scope_project: MenuBuilder
+scope_root: D:\repo\platerra\Public\etranprocessing\MenuBuilder
+blocked_prompt_id: L4D-08B-FIX-01-MB
+authorized_inputs:
+  - handoff_id: H-L4D-08B-FIX-01-MB-v1
+    contract_version: 1.1.0
+    producer_commit: 0fc2f66
+  - handoff_id: H-L4D-07-IOT-STOP-v1
+    contract_version: 1.1.0
+    producer_commit: 22a50a186da25dddb19612c475bf9bcbb4a7fab2
+sequence_gate_handoff_id: H-L4D-08B-FIX-01-MB-v1
+output_handoff_id: H-L4D-08B-FIX-03-MB-v1
+next_prompt_id: L4D-13-MB-FIX-01
+report_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-03-MB-report.md
+candidate_format: DETACHED_V1
+detached_candidate_approved: true
+candidate_path: MenuBuilder/docs/l4desk/handoffs/L4D-08B-FIX-03-MB-candidate.md
+publication_required_before_execution: true
+grant_scope: full_scope_project_menubuilder
+runtime_acceptance: GRANTED
+blocked_next_prompt_id: L4D-13-MB-FIX-01
+external_artifact_reads:
+  source_project: iot-rpc-rest-app
+  artifact_commit: 22a50a186da25dddb19612c475bf9bcbb4a7fab2
+  purpose: data-only provider contract validation
+  allowed_paths:
+    - docs/l4desk/handoffs/remote-session-stop-contract-v1.1.md
+    - docs/l4desk/contracts/iot_event_feed_contract_v1.json
+    - docs/l4desk/contracts/schemas/iot_event_feed_openapi.json
+    - docs/l4desk/contracts/schemas/remote_session.schema.json
+    - docs/l4desk/fixtures/iot_event_feed_examples_v1.json
+```
+<!-- CORRECTIVE_REGISTRATION:R-L4D-08B-FIX-03-MB-v1:END -->
