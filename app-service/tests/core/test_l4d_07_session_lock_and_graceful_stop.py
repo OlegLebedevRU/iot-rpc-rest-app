@@ -25,6 +25,7 @@ from core.services.remote_session_event_service import (
     ConsoleCommandForbiddenError,
     RemoteSessionConflictError,
     RemoteSessionEventService,
+    remote_session_event_service,
 )
 from main import main_app
 
@@ -639,6 +640,197 @@ async def test_video_stop_control_flow():
     assert new_sess.status == RemoteSessionLifecycleState.ACTIVE.value
 
 
+@pytest.mark.asyncio
+async def test_stop_uses_row_lock_and_replay_does_not_repeat_teardown(monkeypatch):
+    """A lost HTTP response can be retried without repeating resource teardown or events."""
+
+    class LockTrackingSession(SessionLockInMemoryAsyncSession):
+        def __init__(self) -> None:
+            super().__init__()
+            self.for_update_queries = 0
+
+        async def scalar(self, stmt: Any) -> Any:
+            if getattr(stmt, "_for_update_arg", None) is not None:
+                self.for_update_queries += 1
+            return await super().scalar(stmt)
+
+    session = LockTrackingSession()
+    service = RemoteSessionEventService()
+    created = await service.create_session(
+        session,
+        RemoteSessionCreate(
+            operation_id="op-stop-lock-create",
+            tenant_id=10,
+            terminal_id="term-stop-lock",
+            sn="SN_STOP_LOCK",
+            session_type=RemoteSessionType.VIDEO,
+            auto_start=True,
+        ),
+    )
+    teardown_calls = 0
+
+    async def track_teardown(rec: RemoteSession, reason: str = "stop") -> None:
+        nonlocal teardown_calls
+        teardown_calls += 1
+
+    monkeypatch.setattr(service, "_teardown_video_session", track_teardown)
+    stop = RemoteSessionStop(
+        operation_id="op-stop-lock",
+        reason="user_requested",
+        tenant_id=10,
+        sn="SN_STOP_LOCK",
+    )
+
+    first = await service.stop_session(session, created.session_id, stop)
+    replay = await service.stop_session(session, created.session_id, stop)
+
+    assert first is replay
+    assert replay.status == RemoteSessionLifecycleState.CLOSED.value
+    assert session.for_update_queries == 2
+    assert teardown_calls == 1
+    assert [event.event_type for event in session.events].count(
+        RemoteSessionEventType.REMOTE_SESSION_STOP_REQUESTED
+    ) == 1
+    assert [event.event_type for event in session.events].count(
+        RemoteSessionEventType.REMOTE_SESSION_CLOSED
+    ) == 1
+
+
+@pytest.mark.asyncio
+async def test_stop_rejects_tenant_or_sn_identity_mismatch():
+    """A stale consumer cannot stop a session through another tenant or terminal identity."""
+    session = SessionLockInMemoryAsyncSession()
+    service = RemoteSessionEventService()
+    created = await service.create_session(
+        session,
+        RemoteSessionCreate(
+            operation_id="op-stop-identity-create",
+            tenant_id=10,
+            terminal_id="term-stop-identity",
+            sn="SN_STOP_IDENTITY",
+            session_type=RemoteSessionType.VIDEO,
+            auto_start=True,
+        ),
+    )
+
+    for stop in (
+        RemoteSessionStop(operation_id="op-wrong-tenant", tenant_id=11, sn="SN_STOP_IDENTITY"),
+        RemoteSessionStop(operation_id="op-wrong-sn", tenant_id=10, sn="SN_OTHER"),
+    ):
+        with pytest.raises(Exception) as exc_info:
+            await service.stop_session(session, created.session_id, stop)
+        assert getattr(exc_info.value, "code", None) == "session_identity_mismatch"
+
+    assert created.status == RemoteSessionLifecycleState.ACTIVE.value
+    assert RemoteSessionEventType.REMOTE_SESSION_STOP_REQUESTED not in {
+        event.event_type for event in session.events
+    }
+
+
+@pytest.mark.asyncio
+async def test_stop_teardown_failure_is_durable_and_retryable(monkeypatch):
+    """A resource teardown error must not be reported as closed and can be resumed after restart."""
+    session = SessionLockInMemoryAsyncSession()
+    first_service = RemoteSessionEventService()
+    created = await first_service.create_session(
+        session,
+        RemoteSessionCreate(
+            operation_id="op-stop-retry-create",
+            tenant_id=10,
+            terminal_id="term-stop-retry",
+            sn="SN_STOP_RETRY",
+            session_type=RemoteSessionType.VIDEO,
+            auto_start=True,
+        ),
+    )
+
+    async def fail_teardown(rec: RemoteSession, reason: str = "stop") -> None:
+        raise RuntimeError("lease registry unavailable")
+
+    monkeypatch.setattr(first_service, "_teardown_video_session", fail_teardown)
+    stop = RemoteSessionStop(
+        operation_id="op-stop-retry",
+        reason="user_requested",
+        tenant_id=10,
+        sn="SN_STOP_RETRY",
+    )
+
+    with pytest.raises(Exception) as exc_info:
+        await first_service.stop_session(session, created.session_id, stop)
+
+    assert getattr(exc_info.value, "code", None) == "stop_teardown_failed"
+    assert created.status == RemoteSessionLifecycleState.STOPPING.value
+    assert session.committed is True
+    assert RemoteSessionEventType.REMOTE_SESSION_CLOSED not in {
+        event.event_type for event in session.events
+    }
+
+    restarted_service = RemoteSessionEventService()
+
+    async def successful_teardown(rec: RemoteSession, reason: str = "stop") -> None:
+        return None
+
+    monkeypatch.setattr(restarted_service, "_teardown_video_session", successful_teardown)
+    stopped = await restarted_service.stop_session(session, created.session_id, stop)
+
+    assert stopped is created
+    assert stopped.status == RemoteSessionLifecycleState.CLOSED.value
+    assert [event.event_type for event in session.events].count(
+        RemoteSessionEventType.REMOTE_SESSION_STOP_REQUESTED
+    ) == 1
+    assert [event.event_type for event in session.events].count(
+        RemoteSessionEventType.REMOTE_SESSION_CLOSED
+    ) == 1
+
+
+@pytest.mark.asyncio
+async def test_late_stop_for_closed_session_does_not_touch_new_session(monkeypatch):
+    """A delayed stop by old session ID cannot close or tear down its successor."""
+    session = SessionLockInMemoryAsyncSession()
+    service = RemoteSessionEventService()
+    old_session = await service.create_session(
+        session,
+        RemoteSessionCreate(
+            operation_id="op-old-create",
+            tenant_id=10,
+            terminal_id="term-late-stop",
+            sn="SN_LATE_STOP",
+            session_type=RemoteSessionType.VIDEO,
+            auto_start=True,
+        ),
+    )
+    await service.stop_session(
+        session,
+        old_session.session_id,
+        RemoteSessionStop(operation_id="op-old-stop", tenant_id=10, sn="SN_LATE_STOP"),
+    )
+    new_session = await service.create_session(
+        session,
+        RemoteSessionCreate(
+            operation_id="op-new-create",
+            tenant_id=10,
+            terminal_id="term-late-stop",
+            sn="SN_LATE_STOP",
+            session_type=RemoteSessionType.VIDEO,
+            auto_start=True,
+        ),
+    )
+
+    async def unexpected_teardown(rec: RemoteSession, reason: str = "stop") -> None:
+        raise AssertionError("late stop attempted resource teardown")
+
+    monkeypatch.setattr(service, "_teardown_video_session", unexpected_teardown)
+    replay = await service.stop_session(
+        session,
+        old_session.session_id,
+        RemoteSessionStop(operation_id="op-late-stop", tenant_id=10, sn="SN_LATE_STOP"),
+    )
+
+    assert replay is old_session
+    assert replay.status == RemoteSessionLifecycleState.CLOSED.value
+    assert new_session.status == RemoteSessionLifecycleState.ACTIVE.value
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 7. Lifecycle Transitions, Event Ordering & Billable Interval Tests
 # ─────────────────────────────────────────────────────────────────────────────
@@ -826,16 +1018,38 @@ async def test_rest_api_session_lock_mutual_exclusion_and_endpoints(monkeypatch)
         assert resp_comp.status_code == 200
         assert resp_comp.json()["status"] == "completed"
 
-        # 7. Stop session
+        # 7. A stale tenant/SN identity cannot stop this session
+        resp_mismatch = await client.post(
+            f"/api/internal/v1/remote-sessions/{session_id_1}/stop",
+            headers=headers,
+            json={
+                "operation_id": "api-stop-wrong-identity",
+                "tenant_id": 2,
+                "sn": "SN_API_LOCK_1",
+                "reason": "api_test_done",
+            },
+        )
+        assert resp_mismatch.status_code == 409
+        mismatch_detail = resp_mismatch.json()["detail"]
+        assert mismatch_detail["code"] == "session_identity_mismatch"
+        assert mismatch_detail["actual_tenant_id"] == 1
+        assert shared_session.sessions[session_id_1].status == "active"
+
+        # 8. Stop session
         resp_stop = await client.post(
             f"/api/internal/v1/remote-sessions/{session_id_1}/stop",
             headers=headers,
-            json={"reason": "api_test_done"},
+            json={
+                "operation_id": "api-stop-001",
+                "tenant_id": 1,
+                "sn": "SN_API_LOCK_1",
+                "reason": "api_test_done",
+            },
         )
         assert resp_stop.status_code == 200
         assert resp_stop.json()["status"] == "closed"
 
-        # 8. After stop, lock is freed -> creating new session succeeds!
+        # 9. After stop, lock is freed -> creating new session succeeds!
         resp3 = await client.post(
             "/api/internal/v1/remote-sessions",
             headers=headers,
@@ -851,5 +1065,56 @@ async def test_rest_api_session_lock_mutual_exclusion_and_endpoints(monkeypatch)
         )
         assert resp3.status_code == 201
         assert resp3.json()["session_type"] == "video"
+        session_id_2 = resp3.json()["session_id"]
+
+        # 10. Teardown failure is explicit and retryable; it never reports false closed
+        async def fail_video_teardown(rec: RemoteSession, reason: str = "stop") -> None:
+            raise RuntimeError("lease registry unavailable")
+
+        monkeypatch.setattr(
+            remote_session_event_service,
+            "_teardown_video_session",
+            fail_video_teardown,
+        )
+        resp_failed_stop = await client.post(
+            f"/api/internal/v1/remote-sessions/{session_id_2}/stop",
+            headers=headers,
+            json={
+                "operation_id": "api-stop-002",
+                "tenant_id": 1,
+                "sn": "SN_API_LOCK_1",
+                "reason": "api_test_done",
+            },
+        )
+        assert resp_failed_stop.status_code == 503
+        failed_detail = resp_failed_stop.json()["detail"]
+        assert failed_detail == {
+            "code": "stop_teardown_failed",
+            "message": f"Resource teardown failed for remote session '{session_id_2}'",
+            "session_id": session_id_2,
+            "status": "stopping",
+            "retryable": True,
+        }
+
+        async def successful_video_teardown(rec: RemoteSession, reason: str = "stop") -> None:
+            return None
+
+        monkeypatch.setattr(
+            remote_session_event_service,
+            "_teardown_video_session",
+            successful_video_teardown,
+        )
+        resp_retry = await client.post(
+            f"/api/internal/v1/remote-sessions/{session_id_2}/stop",
+            headers=headers,
+            json={
+                "operation_id": "api-stop-002",
+                "tenant_id": 1,
+                "sn": "SN_API_LOCK_1",
+                "reason": "api_test_done",
+            },
+        )
+        assert resp_retry.status_code == 200
+        assert resp_retry.json()["status"] == "closed"
 
     main_app.dependency_overrides.clear()

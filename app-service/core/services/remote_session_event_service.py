@@ -71,6 +71,53 @@ class RemoteSessionConflictError(Exception):
         }
 
 
+class RemoteSessionIdentityMismatchError(Exception):
+    """Raised when stop guards do not match the durable session identity."""
+
+    def __init__(self, rec: RemoteSession, data: RemoteSessionStop) -> None:
+        self.code = "session_identity_mismatch"
+        self.session_id = rec.session_id
+        self.expected_tenant_id = data.tenant_id
+        self.actual_tenant_id = rec.tenant_id
+        self.expected_sn = data.sn
+        self.actual_sn = rec.sn
+        self.message = f"Stop identity does not match remote session '{rec.session_id}'"
+        super().__init__(self.message)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "message": self.message,
+            "session_id": self.session_id,
+            "expected_tenant_id": self.expected_tenant_id,
+            "actual_tenant_id": self.actual_tenant_id,
+            "expected_sn": self.expected_sn,
+            "actual_sn": self.actual_sn,
+        }
+
+
+class RemoteSessionTeardownError(Exception):
+    """Raised after a failed stop is durably retained in the stopping state."""
+
+    def __init__(self, rec: RemoteSession, cause: Exception) -> None:
+        self.code = "stop_teardown_failed"
+        self.session_id = rec.session_id
+        self.status = rec.status
+        self.retryable = True
+        self.message = f"Resource teardown failed for remote session '{rec.session_id}'"
+        self.cause = cause
+        super().__init__(self.message)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "code": self.code,
+            "message": self.message,
+            "session_id": self.session_id,
+            "status": self.status,
+            "retryable": self.retryable,
+        }
+
+
 class ConsoleCommandForbiddenError(Exception):
     """Raised when new commands are rejected because session is stopping, closed, or failed."""
 
@@ -873,6 +920,17 @@ class RemoteSessionEventService:
             select(RemoteSession).where(RemoteSession.session_id == session_id)
         )
 
+    async def get_session_for_update(
+        self,
+        session: AsyncSession,
+        session_id: str,
+    ) -> RemoteSession | None:
+        return await session.scalar(
+            select(RemoteSession)
+            .where(RemoteSession.session_id == session_id)
+            .with_for_update()
+        )
+
     async def start_session(
         self,
         session: AsyncSession,
@@ -1055,9 +1113,14 @@ class RemoteSessionEventService:
         data: RemoteSessionStop,
     ) -> RemoteSession | None:
         """Stop an active or requested session with graceful command/media completion."""
-        rec = await self.get_session(session, session_id)
+        rec = await self.get_session_for_update(session, session_id)
         if rec is None:
             return None
+
+        if (data.tenant_id is not None and data.tenant_id != rec.tenant_id) or (
+            data.sn is not None and data.sn != rec.sn
+        ):
+            raise RemoteSessionIdentityMismatchError(rec, data)
 
         if rec.status in (
             RemoteSessionLifecycleState.CLOSED.value,
@@ -1066,30 +1129,38 @@ class RemoteSessionEventService:
             log.info("Session %s already in terminal status %s", session_id, rec.status)
             return rec
 
-        # 1. Transition to STOPPING
-        rec.status = RemoteSessionLifecycleState.STOPPING.value
-        await session.flush()
+        if rec.status != RemoteSessionLifecycleState.STOPPING.value:
+            rec.status = RemoteSessionLifecycleState.STOPPING.value
+            await session.flush()
 
-        # Emit stop_requested event with lifecycle_state = STOPPING
-        await self.record_session_stop_requested(
-            session,
-            session_id=rec.session_id,
-            sn=rec.sn,
-            session_type=rec.session_type,
-            tenant_id=rec.tenant_id,
-            terminal_id=rec.terminal_id,
-            device_id=rec.device_id,
-            reason=data.reason,
-            operation_id=data.operation_id,
-            correlation_id=data.correlation_id,
-        )
+            await self.record_session_stop_requested(
+                session,
+                session_id=rec.session_id,
+                sn=rec.sn,
+                session_type=rec.session_type,
+                tenant_id=rec.tenant_id,
+                terminal_id=rec.terminal_id,
+                device_id=rec.device_id,
+                reason=data.reason,
+                operation_id=data.operation_id,
+                correlation_id=data.correlation_id,
+            )
 
-        # 2. Type-specific graceful stop flow
-        if rec.session_type == RemoteSessionType.CONSOLE.value or rec.session_type == "console":
-            timeout = data.timeout_sec if data.timeout_sec is not None else 5.0
-            await self._await_console_command_or_timeout(session, rec, timeout_sec=timeout)
-        elif rec.session_type == RemoteSessionType.VIDEO.value or rec.session_type == "video":
-            await self._teardown_video_session(rec, reason=data.reason)
+        try:
+            if rec.session_type == RemoteSessionType.CONSOLE.value or rec.session_type == "console":
+                timeout = data.timeout_sec if data.timeout_sec is not None else 5.0
+                await self._await_console_command_or_timeout(session, rec, timeout_sec=timeout)
+            elif rec.session_type == RemoteSessionType.VIDEO.value or rec.session_type == "video":
+                await self._teardown_video_session(rec, reason=data.reason)
+        except Exception as exc:
+            await session.commit()
+            log.error(
+                "Resource teardown failed; session %s remains stopping and can be retried: %s",
+                rec.session_id,
+                exc,
+                exc_info=True,
+            )
+            raise RemoteSessionTeardownError(rec, exc) from exc
 
         # 3. Transition to CLOSED
         rec.status = RemoteSessionLifecycleState.CLOSED.value
@@ -1154,14 +1225,21 @@ class RemoteSessionEventService:
             )
 
     async def _teardown_video_session(self, rec: RemoteSession, reason: str = "stop") -> None:
-        try:
-            from core.remote_input.leases import lease_registry
-            lease = await lease_registry.get_active(rec.sn)
-            if lease is not None and (lease.owner_session_id == rec.session_id or not lease.owner_session_id):
-                await lease_registry.revoke(lease.lease_id, reason=reason)
-                log.info("Revoked video stream lease %s for sn=%s", lease.lease_id, rec.sn)
-        except Exception as exc:
-            log.debug("Video teardown non-fatal error for session %s: %s", rec.session_id, exc)
+        from core.remote_input.leases import lease_registry
+
+        lease = await lease_registry.get_active(rec.sn)
+        if lease is None:
+            return
+        if lease.owner_session_id and lease.owner_session_id != rec.session_id:
+            log.warning(
+                "Skipping lease %s teardown for old session %s: owned by session %s",
+                lease.lease_id,
+                rec.session_id,
+                lease.owner_session_id,
+            )
+            return
+        await lease_registry.revoke(lease.lease_id, reason=reason)
+        log.info("Revoked video stream lease %s for sn=%s", lease.lease_id, rec.sn)
 
     def get_in_flight_command(self, session_id: str) -> InFlightCommand | None:
         return self._in_flight_commands.get(session_id)

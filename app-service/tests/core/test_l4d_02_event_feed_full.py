@@ -642,8 +642,8 @@ async def test_generate_and_verify_contract_artifacts():
     # 1. Generate OpenAPI specification for Internal API
     internal_app = FastAPI(
         title="L4Desk IoT Event Feed & Remote Sessions Internal API",
-        version="1.0.0",
-        description="Versioned internal REST contract for durable session facts and cursor event feed",
+        version="1.1.0",
+        description="Versioned internal REST contract for durable session facts, idempotent stop, and cursor event feed",
     )
     internal_app.include_router(remote_sessions_router, prefix="/api/internal/v1")
     openapi_spec = get_openapi(
@@ -667,14 +667,21 @@ async def test_generate_and_verify_contract_artifacts():
 
     # 3. Generate JSON Schema for RemoteSession
     session_schema_path = schemas_dir / "remote_session.schema.json"
+    session_definitions = {}
+    shared_definitions = {}
+    for name, model in (
+        ("RemoteSessionCreate", RemoteSessionCreate),
+        ("RemoteSessionResponse", RemoteSessionResponse),
+        ("RemoteSessionStop", RemoteSessionStop),
+    ):
+        model_schema = model.model_json_schema()
+        shared_definitions.update(model_schema.pop("$defs", {}))
+        session_definitions[name] = model_schema
     session_combined_schemas = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "title": "RemoteSessionSchemas",
-        "definitions": {
-            "RemoteSessionCreate": RemoteSessionCreate.model_json_schema(),
-            "RemoteSessionResponse": RemoteSessionResponse.model_json_schema(),
-            "RemoteSessionStop": RemoteSessionStop.model_json_schema(),
-        },
+        "$defs": shared_definitions,
+        "definitions": session_definitions,
     }
     with open(session_schema_path, "w", encoding="utf-8") as f:
         json.dump(session_combined_schemas, f, indent=2, ensure_ascii=False)
@@ -683,8 +690,8 @@ async def test_generate_and_verify_contract_artifacts():
     # 4. Generate Golden Examples for all 9 Events + Feed Page + Reconciliation
     base_time = datetime(2026, 9, 17, 22, 0, 0, tzinfo=UTC)
     golden_examples = {
-        "contract_version": "1.0.0",
-        "schema_revision": "2026-09-17-v1",
+        "contract_version": "1.1.0",
+        "schema_revision": "2026-09-25-v2",
         "events": {
             "device_online": {
                 "cursor": 1,

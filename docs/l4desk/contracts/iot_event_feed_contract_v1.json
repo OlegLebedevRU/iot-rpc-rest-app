@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "contract_id": "iot_event_feed_contract_v1",
-  "contract_version": "1.0.0",
-  "schema_revision": "2026-09-17-v1",
+  "contract_version": "1.1.0",
+  "schema_revision": "2026-09-25-v2",
   "producer_prompt_id": "L4D-02-IOT",
   "producer_scope_project": "iot-rpc-rest-app",
   "consumer_prompt_id": "L4D-03-MB",
@@ -130,14 +130,39 @@
     "stop_remote_session": {
       "path": "/api/internal/v1/remote-sessions/{session_id}/stop",
       "method": "POST",
-      "idempotency": "Idempotent. Repeated stop calls return closed session state.",
+      "idempotency": "Idempotent by immutable session_id. Concurrent calls are serialized by a database row lock. A retry after a lost 200 response returns the same durable closed session without repeating resource teardown or lifecycle events.",
       "request_body": {
         "operation_id": "UUID string or null",
+        "tenant_id": "integer or null; optional expected identity guard",
+        "sn": "string or null; optional expected identity guard",
         "reason": "string (default: 'user_requested')",
-        "correlation_id": "string or null"
+        "correlation_id": "string or null",
+        "timeout_sec": "number or null; graceful console stop timeout in range 0..60 seconds"
       },
-      "response_status": 200,
-      "not_found_status": 404
+      "success": {
+        "status": 200,
+        "meaning": "The response body is the committed terminal session record and status is closed (or failed if the session was already terminal). For a normal stop, 200 confirms durable closed and completed resource teardown.",
+        "reconciliation": "GET /api/internal/v1/remote-sessions/{session_id}; consumers must reconcile by the same session_id and must not infer closure from stream/media state alone."
+      },
+      "errors": {
+        "404": {
+          "code": "not_found",
+          "meaning": "The exact session_id is unknown. No other session is selected or stopped."
+        },
+        "409": {
+          "code": "session_identity_mismatch",
+          "meaning": "Provided tenant_id and/or sn does not match the durable session. No lifecycle transition or teardown is performed."
+        },
+        "503": {
+          "code": "stop_teardown_failed",
+          "meaning": "The session is durably stopping because resource teardown failed. retryable=true; repeat stop for the same session_id or reconcile until terminal."
+        }
+      },
+      "concurrency": {
+        "stop_vs_stop": "Calls for the same session_id join through row-level serialization; only one teardown and one stop_requested/closed event pair is produced.",
+        "stop_vs_create": "stopping remains a blocking state for the same SN. Create returns the existing session_busy 409 until stop is durably closed.",
+        "late_old_stop": "A stop for an already closed old session_id is a no-op on that record and never tears down a newer session or its owned lease."
+      }
     }
   },
   "mandatory_event_types": [
@@ -155,6 +180,10 @@
     "Cursor is strictly monotonically increasing (BigInteger autoincrement sequence)",
     "Event feed is append-only and deterministic in cursor ASC order",
     "Duplicate deliveries by event_id or (operation_id + event_type) are idempotently deduped",
+    "A normal stop 200 response means the session is durably closed; stopping is never reported as successful closure",
+    "requested, starting, active, and stopping all block creation of another session for the same SN",
+    "Stop targets only the explicit session_id and optional tenant_id/SN guards; no latest-session lookup is used",
+    "A lease owned by another session_id is never revoked by a late stop",
     "occurred_at and created_at timestamps are strictly UTC ISO 8601",
     "Payloads are validated against commercial field injection (no financial data in IoT feed)",
     "Agent MQTT protocol remains completely unchanged and binary backward-compatible"

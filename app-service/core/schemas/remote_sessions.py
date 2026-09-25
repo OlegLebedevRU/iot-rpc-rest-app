@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import StrEnum
-from typing import Any, Literal
-from uuid import UUID
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -123,6 +122,8 @@ class RemoteSessionStop(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     operation_id: str | None = Field(None, description="UUID for idempotency")
+    tenant_id: int | None = Field(None, description="Expected tenant ID used as a stale-request guard")
+    sn: str | None = Field(None, min_length=1, description="Expected device SN used as a stale-request guard")
     reason: str = Field("user_requested", description="Stop reason")
     correlation_id: str | None = Field(None, description="End-to-end correlation ID")
     timeout_sec: float | None = Field(None, ge=0.0, le=60.0, description="Graceful stop timeout in seconds")

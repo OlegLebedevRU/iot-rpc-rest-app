@@ -1,18 +1,18 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "RemoteSessionSchemas",
+  "$defs": {
+    "RemoteSessionType": {
+      "enum": [
+        "console",
+        "video"
+      ],
+      "title": "RemoteSessionType",
+      "type": "string"
+    }
+  },
   "definitions": {
     "RemoteSessionCreate": {
-      "$defs": {
-        "RemoteSessionType": {
-          "enum": [
-            "console",
-            "video"
-          ],
-          "title": "RemoteSessionType",
-          "type": "string"
-        }
-      },
       "additionalProperties": false,
       "properties": {
         "operation_id": {
@@ -285,6 +285,33 @@
           "default": null,
           "description": "UUID for idempotency",
           "title": "Operation Id"
+        },
+        "tenant_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected tenant ID used as a stale-request guard",
+          "title": "Tenant Id"
+        },
+        "sn": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected device SN used as a stale-request guard",
+          "title": "Sn"
         },
         "reason": {
           "default": "user_requested",

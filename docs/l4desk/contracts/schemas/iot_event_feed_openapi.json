@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "L4Desk IoT Event Feed & Remote Sessions Internal API",
-    "description": "Versioned internal REST contract for durable session facts and cursor event feed",
-    "version": "1.0.0"
+    "description": "Versioned internal REST contract for durable session facts, idempotent stop, and cursor event feed",
+    "version": "1.1.0"
   },
   "paths": {
     "/api/internal/v1/remote-session-events": {
@@ -417,7 +417,7 @@
         "tags": [
           "Internal Remote Sessions & Events"
         ],
-        "summary": "Stop a remote session with graceful stop flow",
+        "summary": "Idempotently stop a remote session; 200 confirms durable closed state",
         "operationId": "stop_remote_session_api_internal_v1_remote_sessions__session_id__stop_post",
         "parameters": [
           {
@@ -452,6 +452,12 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "Stop tenant or SN guard does not match the session"
+          },
+          "503": {
+            "description": "Resource teardown failed; session remains stopping and is retryable"
           },
           "422": {
             "description": "Validation Error",
@@ -1396,6 +1402,31 @@
             ],
             "title": "Operation Id",
             "description": "UUID for idempotency"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id",
+            "description": "Expected tenant ID used as a stale-request guard"
+          },
+          "sn": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sn",
+            "description": "Expected device SN used as a stale-request guard"
           },
           "reason": {
             "type": "string",

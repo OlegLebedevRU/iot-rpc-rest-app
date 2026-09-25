@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 import sqlalchemy as sa
 
 from api.internal_v1.internal_depends import (
@@ -24,6 +24,8 @@ from core.schemas.remote_sessions import (
 from core.services.remote_session_event_service import (
     ConsoleCommandForbiddenError,
     RemoteSessionConflictError,
+    RemoteSessionIdentityMismatchError,
+    RemoteSessionTeardownError,
     remote_session_event_service,
 )
 
@@ -180,7 +182,11 @@ async def get_remote_session(
 @router.post(
     "/remote-sessions/{session_id}/stop",
     response_model=RemoteSessionResponse,
-    summary="Stop a remote session with graceful stop flow",
+    responses={
+        409: {"description": "Stop tenant or SN guard does not match the session"},
+        503: {"description": "Resource teardown failed; session remains stopping and is retryable"},
+    },
+    summary="Idempotently stop a remote session; 200 confirms durable closed state",
 )
 async def stop_remote_session(
     session_id: str,
@@ -188,15 +194,27 @@ async def stop_remote_session(
     _: Internal_Auth_dep,
     body: RemoteSessionStop = RemoteSessionStop(),
 ) -> RemoteSessionResponse:
-    rec = await remote_session_event_service.stop_session(session, session_id, body)
-    if rec is None:
+    try:
+        rec = await remote_session_event_service.stop_session(session, session_id, body)
+        if rec is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Remote session '{session_id}' not found",
+            )
+        await session.commit()
+        await session.refresh(rec)
+        return RemoteSessionResponse.model_validate(rec)
+    except RemoteSessionIdentityMismatchError as exc:
+        await session.rollback()
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Remote session '{session_id}' not found",
-        )
-    await session.commit()
-    await session.refresh(rec)
-    return RemoteSessionResponse.model_validate(rec)
+            status_code=status.HTTP_409_CONFLICT,
+            detail=exc.to_dict(),
+        ) from exc
+    except RemoteSessionTeardownError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=exc.to_dict(),
+        ) from exc
 
 
 @router.post(
