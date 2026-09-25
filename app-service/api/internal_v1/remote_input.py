@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import hmac
+from contextlib import suppress
+from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import (
@@ -22,6 +25,7 @@ from api.internal_v1.internal_depends import (
 )
 from core.config import settings
 from core.logging_config import setup_module_logger
+from core.models import db_helper
 from core.remote_input.leases import lease_registry
 from core.remote_input.presence import presence_registry
 from core.remote_input.schemas import (
@@ -502,6 +506,117 @@ async def post_key_event(
 # ── WebSocket Endpoint ───────────────────────────────────────────────────────
 
 
+@router.websocket("/ws/watch/{sn}")
+async def remote_input_watch_ws(websocket: WebSocket, sn: str) -> None:
+    """Internal, read-only invalidation feed for one tenant-scoped device.
+
+    This feed uses process-local subscriptions and therefore requires one app1 worker.
+    The consumer must refresh the authoritative REST snapshot after every event and
+    after reconnecting; event fields are only hints, never durable state.
+    """
+    # This endpoint is never exposed with the development auth bypass used by REST.
+    expected_key = settings.auth.internal_service_key
+    supplied_key = websocket.headers.get("X-Internal-Service-Key") or ""
+    if not expected_key or not hmac.compare_digest(supplied_key, expected_key):
+        await websocket.close(code=4403)
+        return
+    raw_org = websocket.headers.get("X-Org-Id")
+    try:
+        org_id = int(raw_org) if raw_org else None
+    except ValueError:
+        org_id = None
+    if org_id is None or org_id <= 0:
+        await websocket.close(code=4403)
+        return
+
+    presence_queue = await presence_registry.subscribe(sn)
+    stream_queue = await presence_registry.subscribe_stream(sn)
+    try:
+        try:
+            async with db_helper.session_factory() as session:
+                snapshot = await remote_input_service.get_status(
+                    session, sn=sn, org_id=org_id
+                )
+        except HTTPException:
+            await websocket.close(code=4403)
+            return
+
+        await websocket.accept()
+        await asyncio.wait_for(
+            websocket.send_json(
+                {"type": "snapshot", "data": snapshot.model_dump(mode="json")}
+            ),
+            timeout=5,
+        )
+        while True:
+            # The receive task exists solely to detect disconnects and reject writes.
+            tasks = [
+                asyncio.create_task(presence_queue.get()),
+                asyncio.create_task(stream_queue.get()),
+                asyncio.create_task(websocket.receive_text()),
+            ]
+            try:
+                done, pending = await asyncio.wait(
+                    tasks, return_when=asyncio.FIRST_COMPLETED
+                )
+                for task in pending:
+                    task.cancel()
+                for task in pending:
+                    with suppress(asyncio.CancelledError):
+                        await task
+                if tasks[2] in done:
+                    try:
+                        tasks[2].result()
+                    except WebSocketDisconnect:
+                        return
+                    # No command namespace is accepted on this channel.
+                    await websocket.close(code=4403)
+                    return
+                if presence_queue.qsize() + stream_queue.qsize() > 100:
+                    await websocket.close(code=1013)
+                    return
+                for task, kind in ((tasks[0], "presence"), (tasks[1], "stream")):
+                    if task in done:
+                        event = task.result()
+                        await asyncio.wait_for(
+                            websocket.send_json(
+                                {
+                                    "type": "invalidate",
+                                    "kind": kind,
+                                    "online": (
+                                        event.online if kind == "presence" else None
+                                    ),
+                                    "state": event.state if kind == "stream" else None,
+                                    "reason": (
+                                        event.reason if kind == "stream" else None
+                                    ),
+                                    "stream_instance_id": (
+                                        str(event.stream_instance_id)
+                                        if kind == "stream" and event.stream_instance_id
+                                        else None
+                                    ),
+                                    "timestamp": (
+                                        event.timestamp if kind == "stream" else None
+                                    )
+                                    or datetime.now(timezone.utc).isoformat(),
+                                }
+                            ),
+                            timeout=5,
+                        )
+            finally:
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                for task in tasks:
+                    with suppress(asyncio.CancelledError, WebSocketDisconnect):
+                        await task
+    except WebSocketDisconnect, TimeoutError:
+        pass
+    finally:
+        await presence_registry.unsubscribe_stream(sn, stream_queue)
+        await presence_registry.unsubscribe(sn, presence_queue)
+
+
 @router.websocket("/ws/lease/{lease_id}")
 async def remote_input_ws(
     websocket: WebSocket,
@@ -632,9 +747,7 @@ async def remote_input_ws(
                 code_str = (
                     "rate_limited"
                     if exc.status_code == 429
-                    else str(exc.detail)
-                    if isinstance(exc.detail, str)
-                    else "error"
+                    else str(exc.detail) if isinstance(exc.detail, str) else "error"
                 )
                 await outgoing_queue.put(
                     WsError(
@@ -859,9 +972,7 @@ async def remote_input_ws(
                     code_str = (
                         "rate_limited"
                         if exc.status_code == 429
-                        else str(exc.detail)
-                        if isinstance(exc.detail, str)
-                        else "error"
+                        else str(exc.detail) if isinstance(exc.detail, str) else "error"
                     )
                     await outgoing_queue.put(
                         WsError(
@@ -922,9 +1033,7 @@ async def remote_input_ws(
                     code_str = (
                         "rate_limited"
                         if exc.status_code == 429
-                        else str(exc.detail)
-                        if isinstance(exc.detail, str)
-                        else "error"
+                        else str(exc.detail) if isinstance(exc.detail, str) else "error"
                     )
                     await outgoing_queue.put(
                         WsError(
@@ -997,9 +1106,7 @@ async def remote_input_ws(
                     code_str = (
                         "rate_limited"
                         if exc.status_code == 429
-                        else str(exc.detail)
-                        if isinstance(exc.detail, str)
-                        else "error"
+                        else str(exc.detail) if isinstance(exc.detail, str) else "error"
                     )
                     await outgoing_queue.put(
                         WsError(

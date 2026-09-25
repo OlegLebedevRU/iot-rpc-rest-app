@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from typing import cast
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
@@ -15,10 +16,14 @@ from core.remote_input.leases import lease_registry
 from core.remote_input.pending import pending_registry
 from core.remote_input.presence import presence_registry
 from core.remote_input.schemas import (
+    AgentStatusView,
     CtlPresence,
     DisplayInfo,
     InventoryInfo,
     ScreenInfo,
+    LeaseStatusView,
+    StatusResponse,
+    WsStreamState,
 )
 from main import main_app as app
 
@@ -47,6 +52,128 @@ class DummyWS:
 
     async def receive_text(self) -> str:
         return await self.receive_queue.get()
+
+
+@pytest.mark.asyncio
+async def test_read_only_watch_requires_auth_and_tenant(monkeypatch):
+    monkeypatch.setattr(settings.auth, "internal_service_key", "secret-key")
+    no_key = DummyWS({"X-Org-Id": "1"})
+    await remote_input_api.remote_input_watch_ws(cast(any, no_key), "SN123")
+    assert no_key.close_code == 4403
+
+    url_key = DummyWS({"X-Org-Id": "1"}, {"internal_service_key": "secret-key"})
+    await remote_input_api.remote_input_watch_ws(cast(any, url_key), "SN123")
+    assert url_key.close_code == 4403
+
+    no_org = DummyWS({"X-Internal-Service-Key": "secret-key"})
+    await remote_input_api.remote_input_watch_ws(cast(any, no_org), "SN123")
+    assert no_org.close_code == 4403
+
+    @asynccontextmanager
+    async def fake_session():
+        yield object()
+
+    async def forbidden(*args, **kwargs):
+        raise remote_input_api.HTTPException(status_code=403)
+
+    monkeypatch.setattr(remote_input_api.db_helper, "session_factory", fake_session)
+    monkeypatch.setattr(remote_input_api.remote_input_service, "get_status", forbidden)
+    cross_tenant = DummyWS({"X-Internal-Service-Key": "secret-key", "X-Org-Id": "2"})
+    await remote_input_api.remote_input_watch_ws(cast(any, cross_tenant), "SN123")
+    assert cross_tenant.accepted is False
+    assert cross_tenant.close_code == 4403
+    assert not presence_registry._listeners.get("SN123")
+
+
+@pytest.mark.asyncio
+async def test_read_only_watch_snapshot_invalidation_and_rejects_commands(monkeypatch):
+    monkeypatch.setattr(settings.auth, "internal_service_key", "secret-key")
+
+    @asynccontextmanager
+    async def fake_session():
+        yield object()
+
+    async def status(*args, **kwargs):
+        return StatusResponse(
+            sn="SN123",
+            agent=AgentStatusView(online=True, desktop_available=True, stale=False),
+            lease=LeaseStatusView(active=False),
+        )
+
+    monkeypatch.setattr(remote_input_api.db_helper, "session_factory", fake_session)
+    monkeypatch.setattr(remote_input_api.remote_input_service, "get_status", status)
+    ws = DummyWS({"X-Internal-Service-Key": "secret-key", "X-Org-Id": "1"})
+    watch = asyncio.create_task(
+        remote_input_api.remote_input_watch_ws(cast(any, ws), "SN123")
+    )
+    try:
+        for _ in range(100):
+            if ws.sent_messages:
+                break
+            await asyncio.sleep(0.01)
+        assert ws.sent_messages[0]["type"] == "snapshot"
+        assert ws.sent_messages[0]["data"]["sn"] == "SN123"
+        assert await lease_registry.get_active("SN123") is None
+
+        stream_id = uuid4()
+        await presence_registry._stream_listeners["SN123"][0].put(
+            WsStreamState(state="stopped", stream_instance_id=stream_id, reason="ended")
+        )
+        for _ in range(100):
+            if len(ws.sent_messages) > 1:
+                break
+            await asyncio.sleep(0.01)
+        assert ws.sent_messages[1]["type"] == "invalidate"
+        assert ws.sent_messages[1]["stream_instance_id"] == str(stream_id)
+        assert ws.sent_messages[1]["timestamp"]
+
+        await ws.receive_queue.put('{"type":"release"}')
+        await asyncio.wait_for(watch, 1)
+        assert ws.close_code == 4403
+        assert await lease_registry.get_active("SN123") is None
+        assert not presence_registry._listeners.get("SN123")
+        assert not presence_registry._stream_listeners.get("SN123")
+    finally:
+        if not watch.done():
+            watch.cancel()
+
+
+@pytest.mark.asyncio
+async def test_read_only_watch_closes_backlogged_subscriber(monkeypatch):
+    monkeypatch.setattr(settings.auth, "internal_service_key", "secret-key")
+
+    @asynccontextmanager
+    async def fake_session():
+        yield object()
+
+    async def status(*args, **kwargs):
+        return StatusResponse(
+            sn="SN123",
+            agent=AgentStatusView(online=True, desktop_available=True, stale=False),
+            lease=LeaseStatusView(active=False),
+        )
+
+    monkeypatch.setattr(remote_input_api.db_helper, "session_factory", fake_session)
+    monkeypatch.setattr(remote_input_api.remote_input_service, "get_status", status)
+    ws = DummyWS({"X-Internal-Service-Key": "secret-key", "X-Org-Id": "1"})
+    watch = asyncio.create_task(
+        remote_input_api.remote_input_watch_ws(cast(any, ws), "SN123")
+    )
+    try:
+        for _ in range(100):
+            if ws.sent_messages:
+                break
+            await asyncio.sleep(0.01)
+        assert ws.sent_messages[0]["type"] == "snapshot"
+        queue = presence_registry._stream_listeners["SN123"][0]
+        for _ in range(102):
+            queue.put_nowait(WsStreamState(state="stopped"))
+        await asyncio.wait_for(watch, 1)
+        assert ws.close_code == 1013
+        assert not presence_registry._stream_listeners.get("SN123")
+    finally:
+        if not watch.done():
+            watch.cancel()
 
 
 @pytest.fixture(autouse=True)
