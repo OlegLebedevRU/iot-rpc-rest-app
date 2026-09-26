@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 import hashlib
 import inspect
@@ -17,20 +18,15 @@ from core.models.db_helper import db_helper
 from core.models.devices import Device, DeviceOrgBind
 from core.models.remote_sessions import RemoteSession, RemoteSessionEvent
 from core.schemas.remote_sessions import (
-    ConsoleCommandCompleteRequest,
-    ConsoleCommandStartRequest,
-    ConsoleCommandTimeoutRequest,
     RemoteSessionCreate,
     RemoteSessionEventFeedResponse,
     RemoteSessionEventItem,
     RemoteSessionEventType,
     RemoteSessionLifecycleState,
     RemoteSessionReconciliationResponse,
-    RemoteSessionResponse,
     RemoteSessionStart,
     RemoteSessionStop,
     RemoteSessionType,
-    SessionConflictDetail,
     validate_no_commercial_fields,
 )
 
@@ -195,7 +191,7 @@ class RemoteSessionEventService:
                     if (
                         res is not None
                         and not inspect.iscoroutine(res)
-                        and isinstance(res, (tuple, list))
+                        and isinstance(res, Sequence)
                     ):
                         if resolved_device_id is None and len(res) > 0:
                             resolved_device_id = res[0]

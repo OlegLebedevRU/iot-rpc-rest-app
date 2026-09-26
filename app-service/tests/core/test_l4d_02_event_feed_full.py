@@ -1,20 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+from collections import UserList
 from datetime import UTC, datetime, timedelta
-import hashlib
 from typing import Any
 from unittest.mock import AsyncMock
-from sqlalchemy import select
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from core.config import settings
 from core.models import db_helper
 from core.models.remote_sessions import RemoteSession, RemoteSessionEvent
 from core.schemas.remote_sessions import (
-    FORBIDDEN_EVENT_COMMERCIAL_FIELDS,
     RemoteSessionCreate,
     RemoteSessionEventFeedResponse,
     RemoteSessionEventItem,
@@ -23,12 +20,9 @@ from core.schemas.remote_sessions import (
     RemoteSessionReconciliationResponse,
     RemoteSessionResponse,
     RemoteSessionStop,
-    RemoteSessionType,
-    validate_no_commercial_fields,
 )
 from core.services.remote_session_event_service import (
     RemoteSessionEventService,
-    remote_session_event_service,
 )
 from main import main_app
 
@@ -192,6 +186,21 @@ class InMemoryAsyncSession:
 
         # Fallback for device/tenant resolution
         return ExecResult([(1, 10)])
+
+
+@pytest.mark.asyncio
+async def test_device_online_resolves_identity_from_sqlalchemy_style_row():
+    service = RemoteSessionEventService()
+    session = AsyncMock()
+    result = AsyncMock()
+    result.first = lambda: UserList([1000003, 3])
+    session.execute.return_value = result
+
+    tenant_id, device_id = await service.resolve_device_and_tenant(
+        session, "a4b1000003c96241d260926"
+    )
+
+    assert (tenant_id, device_id) == (3, 1000003)
 
 
 @pytest.mark.asyncio
