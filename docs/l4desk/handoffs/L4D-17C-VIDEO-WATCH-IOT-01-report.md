@@ -67,6 +67,27 @@ The first smoke attempt used a device without a valid organization binding and
 was correctly rejected with HTTP 403; the positive smoke was then run against a
 tenant-bound device. No UI action is required for this provider handoff.
 
+## Corrective update: heartbeat invalidation noise (2026-09-26)
+
+During MenuBuilder browser validation, unchanged l4desk presence heartbeats
+triggered watch `invalidate` and two REST status reads every 30 seconds. Commit
+`d7b604a` compares the complete agent status view apart from volatile
+`last_seen_at` before publishing a presence invalidation. Desktop availability,
+screen, inventory, stream and stale-state changes still trigger it; stream
+events remain unchanged. The v1 message shape and tenant/auth contract remain
+unchanged.
+
+`uv run pytest -q`: **423 passed**, 4 existing warnings; changed-file Ruff and
+Black checks passed. The commit was pushed to both
+`l4desk/l4d-17c-video-watch-iot-01` and `l4desk/l4d-17c-iot`. The server
+checkout fast-forwarded to `d7b604a`; only `app1` was built and recreated with
+`--no-deps`. Runtime source SHA-256 is
+`f83a3194d882689df49264a2c90c50a05f2a2436e76623defa5777ffcd94ae4b`.
+Migrations and startup completed, `WEB_CONCURRENCY=1`. In the live browser
+trace, the 30-second heartbeat interval no longer caused status GETs; the
+remaining status reads aligned with MenuBuilder's 60-second WS reauthorization.
+The lease keepalive POST remains required for terminal watchdog safety.
+
 ## Rollback
 
 The preceding deployed source was `22a50a186da25dddb19612c475bf9bcbb4a7fab2`.
