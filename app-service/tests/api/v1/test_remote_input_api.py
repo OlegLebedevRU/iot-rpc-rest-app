@@ -55,6 +55,16 @@ class DummyWS:
 
 
 @pytest.mark.asyncio
+async def test_l4desk_owner_role_is_preserved_from_trusted_headers():
+    assert remote_input_api.extract_caller_role(
+        DummyWS({"X-Role": "l4desk_owner", "X-Role-Id": "5"})
+    ) == "l4desk_owner"
+    assert remote_input_api.extract_caller_role(
+        DummyWS({"X-Role-Id": "5"})
+    ) == "l4desk_owner"
+
+
+@pytest.mark.asyncio
 async def test_read_only_watch_requires_auth_and_tenant(monkeypatch):
     monkeypatch.setattr(settings.auth, "internal_service_key", "secret-key")
     no_key = DummyWS({"X-Org-Id": "1"})

@@ -30,6 +30,15 @@ def service_env():
     return srv, leases, pending, presence
 
 
+def test_l4desk_owner_scope_matrix(service_env):
+    srv, _, _, _ = service_env
+    for scope in ("view", "stream", "input", "console"):
+        srv._validate_role_and_scope("l4desk_owner", scope)
+    with pytest.raises(HTTPException) as denied:
+        srv._validate_role_and_scope("viewer", "console")
+    assert denied.value.status_code == 403
+
+
 @pytest.mark.asyncio
 async def test_mouse_click_injected(service_env):
     srv, leases, pending, _ = service_env

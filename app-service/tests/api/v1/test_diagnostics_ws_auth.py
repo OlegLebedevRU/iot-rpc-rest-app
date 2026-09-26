@@ -72,12 +72,14 @@ async def test_resolve_websocket_org_id_does_not_accept_api_key() -> None:
 async def test_resolve_websocket_org_id_from_forwarded_header() -> None:
     cases = [
         ({"X-Role": "superuser", "orgId": "42"}, {}, 42),
-        ({"X-Role": "admin", "orgid": "43"}, {}, 43),
-        ({"X-User-Id": "1", "orgId": "44"}, {}, 44),
-        ({"jwt-role": "admin", "jwt-org": "45"}, {}, 45),
+        ({"X-Role": "admin", "orgid": "43"}, {}, None),
+        ({"X-User-Id": "1", "orgId": "44"}, {}, None),
+        ({"jwt-role": "admin", "jwt-org": "45"}, {}, None),
         ({"X-Role-Id": "1", "X-Org-Id": "46"}, {}, 46),
         ({"X-Role": "superuser"}, {"org_id": "47"}, 47),
         ({"X-Role": "superuser", "orgId": "bad"}, {}, None),
+        ({"X-Role": "l4desk_owner", "X-Org-Id": "7"}, {"org_id": "7"}, 7),
+        ({"X-Role": "l4desk_owner", "X-Org-Id": "7"}, {"org_id": "8"}, None),
         ({"X-Role": "superuser"}, {}, None),
         ({"orgId": "42"}, {}, None),  # Rejected because not superuser
         ({}, {}, None),
@@ -175,6 +177,51 @@ async def test_diagnostics_ws_with_valid_console_lease(monkeypatch) -> None:
     )
 
     assert websocket.accepted is True
+
+
+@pytest.mark.asyncio
+async def test_owner_console_requires_matching_explicit_tenant_lease(monkeypatch) -> None:
+    async def fake_allowed(*a, **k):
+        return True
+
+    monkeypatch.setattr(diagnostics_api, "_is_websocket_device_allowed", fake_allowed)
+    lease = await lease_registry.acquire(
+        org_id=7,
+        device_id=123,
+        sn="SN001",
+        owner_user_id="owner",
+        owner_role="l4desk_owner",
+        ttl_sec=60,
+        scope="console",
+        owner_session_id="owner-session",
+    )
+    headers = {
+        "X-Role": "l4desk_owner",
+        "X-Org-Id": "7",
+        "X-User-Id": "owner",
+        "X-Session-Id": "owner-session",
+    }
+    owner_ws = DummyWebSocket(headers, {"lease_id": str(lease.lease_id)})
+    await diagnostics_api.diagnostics_ws(
+        cast(WebSocket, owner_ws), "SN001", cast(AsyncSession, object())
+    )
+    assert owner_ws.accepted is True
+
+    no_lease_ws = DummyWebSocket(headers)
+    await diagnostics_api.diagnostics_ws(
+        cast(WebSocket, no_lease_ws), "SN001", cast(AsyncSession, object())
+    )
+    assert no_lease_ws.accepted is False
+    assert no_lease_ws.close_reason == "lease_required"
+
+    foreign_ws = DummyWebSocket(
+        {**headers, "X-Org-Id": "8"}, {"lease_id": str(lease.lease_id)}
+    )
+    await diagnostics_api.diagnostics_ws(
+        cast(WebSocket, foreign_ws), "SN001", cast(AsyncSession, object())
+    )
+    assert foreign_ws.accepted is False
+    assert foreign_ws.close_reason == "lease_inactive"
 
 
 @pytest.mark.asyncio

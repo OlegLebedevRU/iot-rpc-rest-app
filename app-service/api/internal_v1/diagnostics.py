@@ -7,7 +7,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.internal_v1.internal_depends import Session_dep, is_request_superuser
+from api.internal_v1.internal_depends import Session_dep
+from api.internal_v1.remote_input import extract_caller_role
 from core import settings
 from core.crud.device_repo import DeviceRepo
 from core.diagnostics.schemas import (
@@ -44,12 +45,15 @@ async def close_diagnostics_ws_for_sn(sn: str, reason: str = "lease_revoked") ->
 
 async def _resolve_websocket_org_id(websocket: WebSocket) -> int | None:
     """Resolve org_id from the trusted headers injected by internal auth gateway."""
-    if not is_request_superuser(websocket):
-        log.warning("Diagnostics websocket rejected: non-superuser")
+    caller_role = extract_caller_role(websocket)
+    is_superuser = caller_role == "superuser"
+    is_owner = caller_role == "l4desk_owner"
+    if not is_superuser and not is_owner:
+        log.warning("Diagnostics websocket rejected: role not allowed")
         return None
 
     query_org_id = websocket.query_params.get("org_id")
-    if query_org_id:
+    if query_org_id and is_superuser:
         try:
             return int(query_org_id)
         except ValueError:
@@ -65,7 +69,10 @@ async def _resolve_websocket_org_id(websocket: WebSocket) -> int | None:
     )
     if org_id is not None:
         try:
-            return int(org_id)
+            resolved_org_id = int(org_id)
+            if query_org_id and int(query_org_id) != resolved_org_id:
+                return None
+            return resolved_org_id
         except ValueError:
             return None
     return None
@@ -140,6 +147,10 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
         "X-Lease-Id"
     )
 
+    if extract_caller_role(websocket) == "l4desk_owner" and not lease_id_raw:
+        await websocket.close(code=4409, reason="lease_required")
+        return
+
     implicit_lease = False
     if lease_id_raw:
         try:
@@ -149,8 +160,19 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
             return
 
         lease = await lease_registry.get(lease_id)
-        if lease is None or not lease.is_active() or lease.sn != sn:
+        if (
+            lease is None
+            or not lease.is_active()
+            or lease.sn != sn
+            or lease.org_id != org_id
+        ):
             await websocket.close(code=4409, reason="lease_inactive")
+            return
+        if (
+            extract_caller_role(websocket) == "l4desk_owner"
+            and lease.owner_role != "l4desk_owner"
+        ):
+            await websocket.close(code=4409, reason="lease_role_mismatch")
             return
         if lease.scope != "console":
             await websocket.close(code=4409, reason="scope_mismatch")

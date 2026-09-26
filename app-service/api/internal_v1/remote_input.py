@@ -103,6 +103,8 @@ def extract_caller_role(request_or_ws: Request | WebSocket) -> str:
         return "user"
     if role in ("viewer", "4") or role_id == "4":
         return "viewer"
+    if role in ("l4desk_owner", "5") or role_id == "5":
+        return "l4desk_owner"
     return role or "user"
 
 

@@ -168,7 +168,7 @@ class RemoteInputService:
         )
 
         if scope == "console":
-            if not actual_superuser:
+            if not actual_superuser and norm_role != "l4desk_owner":
                 raise HTTPException(status_code=403, detail="scope_not_allowed")
             return
 
@@ -177,7 +177,7 @@ class RemoteInputService:
                 raise HTTPException(status_code=403, detail="scope_not_allowed")
             return
 
-        if norm_role in ("admin", "user"):
+        if norm_role in ("admin", "user", "l4desk_owner"):
             if scope not in ("view", "stream", "input"):
                 raise HTTPException(status_code=403, detail="scope_not_allowed")
             return
