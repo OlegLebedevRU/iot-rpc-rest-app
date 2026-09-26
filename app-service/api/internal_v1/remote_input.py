@@ -548,6 +548,12 @@ async def remote_input_watch_ws(websocket: WebSocket, sn: str) -> None:
             ),
             timeout=5,
         )
+        # Heartbeat timestamps refresh liveness but do not change the browser's
+        # authoritative status view. Keep every other field, including desktop
+        # availability and stream identity, in the comparison.
+        last_agent_state = snapshot.agent.model_dump(
+            mode="json", exclude={"last_seen_at"}
+        )
         while True:
             # The receive task exists solely to detect disconnects and reject writes.
             tasks = [
@@ -578,6 +584,13 @@ async def remote_input_watch_ws(websocket: WebSocket, sn: str) -> None:
                 for task, kind in ((tasks[0], "presence"), (tasks[1], "stream")):
                     if task in done:
                         event = task.result()
+                        if kind == "presence":
+                            agent_state = event.model_dump(
+                                mode="json", exclude={"last_seen_at"}
+                            )
+                            if agent_state == last_agent_state:
+                                continue
+                            last_agent_state = agent_state
                         await asyncio.wait_for(
                             websocket.send_json(
                                 {

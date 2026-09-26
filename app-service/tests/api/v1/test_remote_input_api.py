@@ -139,6 +139,73 @@ async def test_read_only_watch_snapshot_invalidation_and_rejects_commands(monkey
 
 
 @pytest.mark.asyncio
+async def test_read_only_watch_ignores_heartbeat_but_forwards_desktop_change(
+    monkeypatch,
+):
+    monkeypatch.setattr(settings.auth, "internal_service_key", "secret-key")
+
+    @asynccontextmanager
+    async def fake_session():
+        yield object()
+
+    async def status(*args, **kwargs):
+        return StatusResponse(
+            sn="SN123",
+            agent=AgentStatusView(
+                online=True,
+                desktop_available=True,
+                stale=False,
+                last_seen_at="2026-09-26T09:00:00Z",
+            ),
+            lease=LeaseStatusView(active=False),
+        )
+
+    monkeypatch.setattr(remote_input_api.db_helper, "session_factory", fake_session)
+    monkeypatch.setattr(remote_input_api.remote_input_service, "get_status", status)
+    ws = DummyWS({"X-Internal-Service-Key": "secret-key", "X-Org-Id": "1"})
+    watch = asyncio.create_task(
+        remote_input_api.remote_input_watch_ws(cast(any, ws), "SN123")
+    )
+    try:
+        for _ in range(100):
+            if ws.sent_messages:
+                break
+            await asyncio.sleep(0.01)
+        assert len(ws.sent_messages) == 1
+
+        queue = presence_registry._listeners["SN123"][0]
+        queue.put_nowait(
+            AgentStatusView(
+                online=True,
+                desktop_available=True,
+                stale=False,
+                last_seen_at="2026-09-26T09:00:30Z",
+            )
+        )
+        await asyncio.sleep(0.05)
+        assert len(ws.sent_messages) == 1
+
+        queue.put_nowait(
+            AgentStatusView(
+                online=True,
+                desktop_available=False,
+                stale=False,
+                last_seen_at="2026-09-26T09:01:00Z",
+            )
+        )
+        for _ in range(100):
+            if len(ws.sent_messages) > 1:
+                break
+            await asyncio.sleep(0.01)
+        assert ws.sent_messages[1]["type"] == "invalidate"
+        assert ws.sent_messages[1]["kind"] == "presence"
+    finally:
+        watch.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await watch
+
+
+@pytest.mark.asyncio
 async def test_read_only_watch_closes_backlogged_subscriber(monkeypatch):
     monkeypatch.setattr(settings.auth, "internal_service_key", "secret-key")
 

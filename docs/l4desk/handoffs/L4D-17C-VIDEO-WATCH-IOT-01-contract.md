@@ -23,6 +23,12 @@ snapshot, not state transitions:
 {"type":"invalidate","kind":"presence","online":false,"state":null,"reason":null,"stream_instance_id":null,"timestamp":"UTC"}
 ```
 
+Presence heartbeat messages that only advance `agent.last_seen_at` do not
+produce an invalidation. Changes to other agent status fields, including
+`desktop_available`, `screen`, `inventory`, `stream`, and `stale`, still do.
+Stream events continue to produce invalidations. This keeps the REST resnapshot
+flow event-driven without hiding a desktop lock or stream transition.
+
 The consumer must fetch the current snapshot after each invalidation and on
 reconnect. It must never restore `running` from an old event or treat an event
 from a prior `stream_instance_id` as the state of the current stream. The
