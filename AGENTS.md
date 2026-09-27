@@ -8,6 +8,13 @@
 Монорепо: FastAPI + FastStream + RabbitMQ (MQTT 5) + PostgreSQL + Docker Compose.
 Python 3.14, сборка через **uv** (`uv.lock`). Ветка по умолчанию — `master`.
 
+`master` — единая интеграционная база для новых задач. Создавать новые ветки
+от актуального `origin/master`; завершённые ветки каскада не продолжать.
+Принятые handoff остаются привязаны к исходным immutable commit SHA.
+Production развёртывается по проверенному полному SHA из runbook, а не
+автоматически при обновлении `master`.
+Карта консолидации: [`docs/branch-baseline-2026-09-27.md`](docs/branch-baseline-2026-09-27.md).
+
 ## Структура и контекст агента
 
 ### Обязательный контекст

@@ -1,0 +1,706 @@
+[
+  {
+    "ref": "l4desk/fix-org-id-17e",
+    "sha": "60f7762ec766e432bf372e255e94fdd33d3d91d2",
+    "ancestor": true
+  },
+  {
+    "ref": "l4desk/fix-owner-lease-17e",
+    "sha": "5e1093b827c6fac04fd191766ad6b06fe5a2d598",
+    "ancestor": true
+  },
+  {
+    "ref": "l4desk/l4d-00b-iot",
+    "sha": "de431c15ca0064a9c2cbd3d9233d0b9921d85cff",
+    "ancestor": true
+  },
+  {
+    "ref": "l4desk/l4d-01b-iot",
+    "sha": "9ee6895bc0abbf45676f702df076e98f7a12fa11",
+    "ancestor": true
+  },
+  {
+    "ref": "l4desk/l4d-02-iot",
+    "sha": "e21ba8410e7c0ce9a679c737c271e79064bb70c7",
+    "ancestor": true
+  },
+  {
+    "ref": "l4desk/l4d-06b-iot",
+    "sha": "63f502ff0ec429ffa8ad680e52af4751ed3fa740",
+    "ancestor": true
+  },
+  {
+    "ref": "l4desk/l4d-06b-iot-fix-01",
+    "sha": "6dc38a832895ff1facf1771b786aaa582d8ee500",
+    "ancestor": false,
+    "unique": "1",
+    "commits": [
+      "6dc38a8 fix(lifespan): use broker stop on shutdown and suppress secondary exceptions"
+    ]
+  },
+  {
+    "ref": "l4desk/l4d-07-iot",
+    "sha": "2b21f4e3670cdd662999e225625dc3471bb242b9",
+    "ancestor": true
+  },
+  {
+    "ref": "l4desk/l4d-15b-iot",
+    "sha": "92ed44416ff1abb41479eb2303b47eb1d90073e3",
+    "ancestor": true
+  },
+  {
+    "ref": "l4desk/l4d-17c-iot",
+    "sha": "166094fbf0e8d497c626f5600323eceeaf946ed6",
+    "ancestor": true
+  },
+  {
+    "ref": "l4desk/l4d-17c-video-watch-iot-01",
+    "sha": "9cdd740d921afcb23483de9f9234c2a6b7ad0268",
+    "ancestor": true
+  },
+  {
+    "ref": "l4desk/l4d-18c-iot",
+    "sha": "a31025b7236830533567a49ab15b4259a7bd76ca",
+    "ancestor": true
+  },
+  {
+    "ref": "l4desk/l4d-redis-iot-01",
+    "sha": "e8227cb973fcf6f0a80addb162b2d361fe90dfda",
+    "ancestor": true
+  },
+  {
+    "ref": "master",
+    "sha": "fcc67ef3cfb822e10609c984018b92e232a4ad4e",
+    "ancestor": true
+  },
+  {
+    "ref": "origin",
+    "sha": "fcc67ef3cfb822e10609c984018b92e232a4ad4e",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-ai-integration-details",
+    "sha": "dc786a1ddab9b9550b851c31911c584f2b6e5fa4",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-build-only-deployment-option",
+    "sha": "ec5ee215ee34e1e64bae97d8752c90f5b638809d",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-c-example-windows",
+    "sha": "c6a90c843da0c78b93b70765ecdb1e1a0e6e309f",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-certificates-to-deploy-plan",
+    "sha": "db34d6ff06381ad0b99710d0ce6af1a46ad4c655",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-correlation-data-guide",
+    "sha": "902bfd4ecf4eb1427a594f08d67c036c8d2b8d68",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-device-emulator-example",
+    "sha": "f78eec5425274473ceb153c75b68592e85b7ee95",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-diagrams-to-readme",
+    "sha": "9b5d08034cac7054957d1bd4544b4a3f61246d9a",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-documentation-leo4-mesh",
+    "sha": "565a3156199cda625a8a0268e53123c2097c0c29",
+    "ancestor": false,
+    "unique": "1",
+    "commits": [
+      "565a315 Initial plan"
+    ]
+  },
+  {
+    "ref": "origin/copilot/add-documentation-leo4-mesh-again",
+    "sha": "1eec8aa6239301d160c7a63701b05943ae1d8ff7",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-example-kotlin-spring",
+    "sha": "55939d1a7b80f0f098aa06fbdbce9b3d84768b72",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-flow-diagram",
+    "sha": "12db325ca49a78c2ace0efa6a24a27caa23f01ae",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-integration-section-ai-agents",
+    "sha": "2a651b2ac6d5caaba5bcc81f2478654b723fe60d",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-marketing-document",
+    "sha": "c001b664c4e77a0c094f7152a58f70f9e2b9514e",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-mcp-server-example",
+    "sha": "14f27ccc2a0847a46b23f264ab40edc1040abf6d",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-method-code-51-info",
+    "sha": "20451fc48cc9acb8e111570ba3312affb73cf5e0",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-mtls-endpoint-nginx",
+    "sha": "adcc03f7f9324fcccac02832422fb499f3dd8499",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-onboarding-files-for-ai-agents",
+    "sha": "2f5e048845003ceb4428b8cce99cb43cf376f625",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-presale-technical-response-doc",
+    "sha": "07e548885f5b06848915774794331410032da91d",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-rpc-event-mock-emulator",
+    "sha": "6a1917536bcda15514584222334eea23e3bc32eb",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-scenario-diagram",
+    "sha": "3b283702549527d9424d9fd56b4c3f6b23f9df90",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-send-email-api-reference",
+    "sha": "8cbfd52b0daefe5a1be8ccc0bec5f98659792ff6",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/add-smart-landscapes-concept",
+    "sha": "5dee73fd23877b167fa8f58bfe0729715d89e56f",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/analyze-p6-build-only-results",
+    "sha": "1f3aee48a275b5a85c419623b2b9d96875c36180",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/build-docs-deploy-plan",
+    "sha": "b2a649482d245b662266f2450b39d2a028f068b7",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/check-changes-and-resolve-conflicts",
+    "sha": "04240fd5eab840a2b8cbfcb8de7f542208da12e5",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/check-code-rpc-compliance",
+    "sha": "ad3b1730430f3bb467d29a104f4788d62c0a525e",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/check-rpc-polling-mode",
+    "sha": "8ddcb2dec22037ea336855f1ae148f02dc83f25b",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/check-rpc-polling-mode-again",
+    "sha": "c01505a70207a013d2cb855df3998c2f98b51e0b",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/clarify-polling-event-method",
+    "sha": "92170799b9f5dddfd703156e0456c3e2453ac1c2",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/convert-docs-to-pdf",
+    "sha": "30bd5fad73b41f08f27b7e92f2b8cfc048f8a892",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/copy-file-to-pdf-and-doc",
+    "sha": "b85f9a495617e8dda6dc4dcc633a45ee69e267a1",
+    "ancestor": false,
+    "unique": "1",
+    "commits": [
+      "b85f9a4 Add DOC and PDF exports for solution presentation"
+    ]
+  },
+  {
+    "ref": "origin/copilot/copy-svg-to-png",
+    "sha": "b873dc1d06ee574d479bf4a554c87a46da96a847",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/create-architecture-diagram",
+    "sha": "a215fe46a22cd22b22c59da76143106a5f2c5425",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/create-file-copies-pdf-doc",
+    "sha": "53be697d5f82182cde4b082d17d3913ffcbb7e10",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/create-referral-md-file",
+    "sha": "cc73e72c0c035b131bd3770b85bdcf3960fb0daa",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/create-rpc-client-device",
+    "sha": "db8be181a7242180b8c1587ae1f2cafb312f2182",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/detail-event-70-in-documents",
+    "sha": "aefeeeac8b2e87014abb7549d2355c074fa109f5",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/direct-link-to-i2c-file",
+    "sha": "a86b1322cdb6d77868cdc08dc98d54890103d812",
+    "ancestor": false,
+    "unique": "1",
+    "commits": [
+      "a86b132 Initial plan"
+    ]
+  },
+  {
+    "ref": "origin/copilot/docs-seed-init-event",
+    "sha": "e255af56f23099cf686f57cc6bf05da9ea8d4b5d",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/document-race-condition-risk",
+    "sha": "8da1a8a60410e157da1f32c48ea632b33d7c6246",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/expand-robotics-research",
+    "sha": "149e5847db6c2fc788649be35525c4141098d5ae",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/fix-app1-startup-error",
+    "sha": "eea93d573a8bc1c9b7b061319cb04aa76cf49ec9",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/fix-correlationdata-uuid-parsing",
+    "sha": "1ed5144aa731960926d792819fc1cc66fdcbddb2",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/fix-deploy-plan-errors",
+    "sha": "7c600015a6ad91f2753d9efe370a34dfe32f01f4",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/fix-error-in-pr",
+    "sha": "ed5d9ed031069c0002e1d91b1759c9a77e1a8051",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/fix-foreign-key-violation",
+    "sha": "f8d2f3fee6b615a635a7e38dc14b739eb90c9466",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/fix-issue-comment-40",
+    "sha": "236b4b2b1c26c2b004ea9fc368f812384918e7c7",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/fix-webhook-delivery-mapping",
+    "sha": "32c690dccaa1f28c42ecaddfe8c4b2a3a956a673",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/fix-workflow-errors",
+    "sha": "4b88e7ab1986282cd58c7e014faddfad9d461c4f",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/format-documents-and-add-icons",
+    "sha": "bbbaa723c643b4a1dd774e8a8c27fce298410ee8",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/implement-billing-integration",
+    "sha": "724fd935fa4f389b55bda6b73bc1647917d2e92d",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/implement-siplite-command-accepted",
+    "sha": "821dba154c40b0a5661a60b5f6fb478e35d1223a",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/improve-docs-mqtt-topic-rules",
+    "sha": "8fca60f64405fb39d1a4055efc49c56712ae2a7a",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/improve-docs-task-states-formatting",
+    "sha": "2603724f7b8c88085ad51ec894f4bb50e302309b",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/improve-file-formatting",
+    "sha": "e747cdc170125bbd97d42c04831815a47c7dba77",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/kotlin-spring-server-example",
+    "sha": "e74beee8eb06daad724c815e47b915080120c05d",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/prepare-presentation-solution",
+    "sha": "af51293fc4c38f34e823b34121277e4fb1c013e6",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/prepare-pull-request-remote-diagnostics",
+    "sha": "d287608e9fc99842efa021d84f4737d8f2e325d5",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/refactor-presale-document-architecture",
+    "sha": "d943b70c661dfc279c20c8cf257c6e22c920469c",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/refactor-readme-overview",
+    "sha": "2021fae53a881f06afb3ce3e6a00025f3e9308ab",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/remove-docs-app-stack",
+    "sha": "127c3d70279d7af234d28b02cf59c4c8dd202d09",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/remove-examples-and-event-info",
+    "sha": "be73b3bf5c6793408a1c51d060a9a321e27ca290",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/remove-method-code-table",
+    "sha": "4593026a34422a60240a802c1990d98e5ae7e2bf",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/replace-docs-ai-agent-integration-guide",
+    "sha": "cd669910a01ca18ba236d24c4eaf0ba4272d4ae0",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/research-devops-architecture",
+    "sha": "e24559ba75b2c108bea3a3d2d30bbbe916e4a494",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/research-iot-rpc-rest-app",
+    "sha": "1aaf0958e8b52cf847660777ca31dbcd972f4552",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/review-pr-conflicts-and-changes",
+    "sha": "ce2c84c10cc3ff3d61f934a95c966774484e4b8f",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/rework-device-emulator-flow",
+    "sha": "c9d687675de5a23817f3d31fab4ac9bdca93164e",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/server-integration-process",
+    "sha": "ddbc395e70c2a2ee40ce41d4ae9c81ef8e9a28c8",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/split-mtls-email-upload-ingress",
+    "sha": "f0a3684076b49737327d754c82a0911c8a2b67ad",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-ai-agent-integration-guide",
+    "sha": "dc1f7b2fa060211782af7951be674ef02eaa5368",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-ai-agent-integration-guide-again",
+    "sha": "fac664b459a0edccbf951fb08df26326ee884404",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-ai-agent-integration-guide-another-one",
+    "sha": "1c3b51873cd0c04563dec3dd6d460ba60e329731",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-ai-agent-integration-guide-yet-again",
+    "sha": "6d37bb5de2bad82218fd33997b39c65f10ac17fb",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-allowlist-and-add-mssql-query",
+    "sha": "8402e1cc1f79cd159057b01f6a7b0dcedcdf5b7d",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-architecture-and-components",
+    "sha": "8fdddcc618744dae04107c5b492ab17f81bd287a",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-architecture-schema",
+    "sha": "d6c085d554cd428ccedc1a0e9d8632676592ef26",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-billing-coefficient-precision",
+    "sha": "3180f2e03cb724609b045c200e7045438f5962ba",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-cmd-operate-cell-description",
+    "sha": "3d2ccd8ba2d2582deed17c878f2936e887bbddde",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-description-of-first-element",
+    "sha": "272176b3cddea0c30b63dc183a81cc52e1544033",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-device-events-documentation",
+    "sha": "36588191cc3e3dda8c262c3f333a67e397c6a45e",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-device-http-mtls-docs",
+    "sha": "b0be369a1080af560f6d9f9873d41262b8e55a5a",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-device-http-mtls-send-email-docs",
+    "sha": "0f852da138fe71738d70313ee01936aecbacc32e",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-docs-events-api-format",
+    "sha": "4f817518003e3e686066268b712fccd30109cccd",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-email-mtls-docs-json-contract",
+    "sha": "fd3a3b06c6816cc5f4e2815d756c27852d686111",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-event-documentation",
+    "sha": "b2c9b28a5cf162bad8f404d471119e2b3fe7679e",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-event-property-tags",
+    "sha": "4cd89b3388f548aa0118906bd61c9b9d49bceaa8",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-events-api-format-description",
+    "sha": "1f14918c725f40f79debcbc78ef31d06e2396113",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-integration-guide-cellopen-event",
+    "sha": "956a4c97687a8e0363ba21b34fa505c93d6b3582",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-mermaid-scheme",
+    "sha": "64865700575a9497db7ef92031a7ccd392cd832b",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-method-codes-reference",
+    "sha": "939774e2c439506bff806aa89df5f76949ac73d8",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-nginx-config-for-mtls",
+    "sha": "ebdeb4a2eb19ffc9ae8f1599b1dd8fcdc3dbc6da",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-nginx-config-for-proxy",
+    "sha": "46c0f61c0f67a3a39674d136c3ed530531a6e2ee",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-nginx-mtls-email-upload",
+    "sha": "749fb8eeb26830b34b544c851c002e52437267e2",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-readme-add-table-row",
+    "sha": "74b5035bf48e1c2550879e2959f308e1bdcdb330",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-readme-controllers",
+    "sha": "05b94a1e5cac19cdef005886dc80fa32a4ed706b",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-readme-file",
+    "sha": "6a5f80fa60986127b6e8ba4a72470f9c5a9894fc",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-readme-integration-robotics",
+    "sha": "6683625617d3a6d2be2d306c3e42e91c727daabb",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-readme-key-principles",
+    "sha": "096f26b985cda81a9193059c020d8fd2915cf066",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-robotics-files",
+    "sha": "8d05ff8afb6581b1b70f158a8d2fd9480b4dd894",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-rpc-docs-and-method-reference",
+    "sha": "cc725bed7be74cffeb2b8748c886ac4e5c731309",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-rpc-protocol-implementation",
+    "sha": "8433dd7b08e47df613f158182e3621a326c87505",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-sequence-diagram",
+    "sha": "4a4e7121df0d4eed0e23954f0ef8467f74199982",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/copilot/update-ttl-docs-formatting",
+    "sha": "2589802b45517d45b69043e0ccfe7d200964bae7",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/docs-seed-init-event",
+    "sha": "eb2aa899271dd275eb1be0b81c252d1264d1cd96",
+    "ancestor": false,
+    "unique": "1",
+    "commits": [
+      "eb2aa89 docs: reserve SeedInitDone as event 65 and define tag 370 seed_data"
+    ]
+  },
+  {
+    "ref": "origin/docs/full-cycle-integration-guide",
+    "sha": "22d6fb4fd6ce15246625e3c10bef6b735eda0c8c",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/docs/v2-integration-guide",
+    "sha": "944bc75b17da900ad09be57bdfceca89d44540fc",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/feat/terem-email-mtls-nginx",
+    "sha": "6d73301ef79132ae63d0915d82a2203a6ea49bec",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/l4desk/fix-org-id-17e",
+    "sha": "60f7762ec766e432bf372e255e94fdd33d3d91d2",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/l4desk/fix-owner-lease-17e",
+    "sha": "5e1093b827c6fac04fd191766ad6b06fe5a2d598",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/l4desk/l4d-00b-iot",
+    "sha": "de431c15ca0064a9c2cbd3d9233d0b9921d85cff",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/l4desk/l4d-01b-iot",
+    "sha": "7b597de934ef0047c19f7e96c803972945eec9ac",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/l4desk/l4d-02-iot",
+    "sha": "e21ba8410e7c0ce9a679c737c271e79064bb70c7",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/l4desk/l4d-06b-iot",
+    "sha": "63f502ff0ec429ffa8ad680e52af4751ed3fa740",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/l4desk/l4d-06b-iot-fix-01",
+    "sha": "6dc38a832895ff1facf1771b786aaa582d8ee500",
+    "ancestor": false,
+    "unique": "1",
+    "commits": [
+      "6dc38a8 fix(lifespan): use broker stop on shutdown and suppress secondary exceptions"
+    ]
+  },
+  {
+    "ref": "origin/l4desk/l4d-15b-iot",
+    "sha": "92ed44416ff1abb41479eb2303b47eb1d90073e3",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/l4desk/l4d-17c-iot",
+    "sha": "166094fbf0e8d497c626f5600323eceeaf946ed6",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/l4desk/l4d-17c-video-watch-iot-01",
+    "sha": "166094fbf0e8d497c626f5600323eceeaf946ed6",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/l4desk/l4d-18c-iot",
+    "sha": "a31025b7236830533567a49ab15b4259a7bd76ca",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/l4desk/l4d-redis-iot-01",
+    "sha": "e8227cb973fcf6f0a80addb162b2d361fe90dfda",
+    "ancestor": true
+  },
+  {
+    "ref": "origin/master",
+    "sha": "fcc67ef3cfb822e10609c984018b92e232a4ad4e",
+    "ancestor": true
+  }
+]
