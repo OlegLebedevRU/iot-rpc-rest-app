@@ -44,7 +44,7 @@ async def get_task(
 @router.get(
     "/",
     response_model=Page[TaskListOut],
-    description=f"Tasks search by device_id with pagination",
+    description="Tasks search by device_id with pagination",
 )
 async def list_tasks(
     session: Session_dep,

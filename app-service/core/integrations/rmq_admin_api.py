@@ -16,7 +16,17 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 log = setup_module_logger(__name__, "rabbit_admin_api.log")
 
 IGNORED_USERS: frozenset[str] = frozenset(
-    {"guest", "admin", "user", "internal", "root", "anonymous", "null", "none", "etran_service"}
+    {
+        "guest",
+        "admin",
+        "user",
+        "internal",
+        "root",
+        "anonymous",
+        "null",
+        "none",
+        "etran_service",
+    }
 )
 
 
@@ -139,10 +149,13 @@ class RmqAdminApi:
         )
 
     @classmethod
-    def _same_topic_permissions(cls, existing: dict | list | None, expected: dict) -> bool:
+    def _same_topic_permissions(
+        cls, existing: dict | list | None, expected: dict
+    ) -> bool:
         if isinstance(existing, list):
             existing = next(
-                (item for item in existing if item.get("exchange") == cls._exchange), None
+                (item for item in existing if item.get("exchange") == cls._exchange),
+                None,
             )
         if not isinstance(existing, dict):
             return False
@@ -265,7 +278,10 @@ class RmqAdminApi:
                                         return data
                             except Exception as e:
                                 log.warning("HTTP fallback query error: %s", e)
-                        log.warning("Failed to fetch RMQ connections: status=%d", resp.status_code)
+                        log.warning(
+                            "Failed to fetch RMQ connections: status=%d",
+                            resp.status_code,
+                        )
                         break
 
                     data = resp.json()
@@ -299,7 +315,11 @@ class RmqAdminApi:
                 detail_requests: list[tuple[str, str, asyncio.Future]] = []
                 for sn, conn_data in zip(sn_arr, connections, strict=False):
                     if isinstance(conn_data, Exception):
-                        log.info("Error Get connectionsFrom rabbit API for '%s' = %s", sn, conn_data)
+                        log.info(
+                            "Error Get connectionsFrom rabbit API for '%s' = %s",
+                            sn,
+                            conn_data,
+                        )
                         continue
 
                     if conn_data is None:
@@ -323,7 +343,11 @@ class RmqAdminApi:
                             )
                             continue
                         detail_requests.append(
-                            (sn, connection_name, fetch_one(session, cls.conn, connection_name))
+                            (
+                                sn,
+                                connection_name,
+                                fetch_one(session, cls.conn, connection_name),
+                            )
                         )
 
                 detail_results = await asyncio.gather(
@@ -412,13 +436,16 @@ class RmqAdminApi:
 
                 try:
                     # Пользователя создаем только если его еще нет: это безопаснее, чем bulk replace definitions.
-                    user = await cls._get_json_or_none(client, f"api/users/{user_quoted}")
+                    user = await cls._get_json_or_none(
+                        client, f"api/users/{user_quoted}"
+                    )
                     if user is None:
                         if dry_run:
                             result["would_create"] += 1
                         else:
                             create_user = await client.put(
-                                f"api/users/{user_quoted}", json=cls._user_payload(device_name)
+                                f"api/users/{user_quoted}",
+                                json=cls._user_payload(device_name),
                             )
                             create_user.raise_for_status()
                             result["created"] += 1
@@ -442,7 +469,9 @@ class RmqAdminApi:
                     existing_topic_perm = await cls._get_json_or_none(
                         client, f"api/topic-permissions/{vhost_quoted}/{user_quoted}"
                     )
-                    if not cls._same_topic_permissions(existing_topic_perm, topic_payload):
+                    if not cls._same_topic_permissions(
+                        existing_topic_perm, topic_payload
+                    ):
                         if dry_run:
                             result["would_update"] += 1
                         else:
@@ -454,7 +483,9 @@ class RmqAdminApi:
                             result["updated"] += 1
                 except Exception as e:
                     result["errors"].append({"device": device_name, "error": str(e)})
-                    log.info("RMQ incremental definitions error for '%s': %s", device_name, e)
+                    log.info(
+                        "RMQ incremental definitions error for '%s': %s", device_name, e
+                    )
 
         mode = "dry-run" if dry_run else "apply"
         log.info("set RMQ definitions incrementally (%s) = %s", mode, result)
@@ -467,10 +498,16 @@ class RmqAdminApi:
             return False
         try:
             conn_quoted = cls._quote_path(conn_name)
-            async with httpx.AsyncClient(base_url=cls._admin_url(), timeout=5.0) as client:
+            async with httpx.AsyncClient(
+                base_url=cls._admin_url(), timeout=5.0
+            ) as client:
                 resp = await client.delete(f"api/connections/{conn_quoted}")
                 if resp.status_code in (200, 204, 404):
-                    log.info("Terminated RMQ connection %s (status=%s)", conn_name, resp.status_code)
+                    log.info(
+                        "Terminated RMQ connection %s (status=%s)",
+                        conn_name,
+                        resp.status_code,
+                    )
                     return True
                 resp.raise_for_status()
                 return True
@@ -486,23 +523,33 @@ class RmqAdminApi:
         terminated_count = 0
         try:
             user_quoted = cls._quote_path(username)
-            async with httpx.AsyncClient(base_url=cls._admin_url(), timeout=5.0) as client:
-                conns = await cls._get_json_or_none(client, f"api/connections/username/{user_quoted}")
+            async with httpx.AsyncClient(
+                base_url=cls._admin_url(), timeout=5.0
+            ) as client:
+                conns = await cls._get_json_or_none(
+                    client, f"api/connections/username/{user_quoted}"
+                )
                 if isinstance(conns, list):
                     for conn in conns:
                         if isinstance(conn, dict):
                             name = conn.get("name")
                             if name:
-                                resp = await client.delete(f"api/connections/{cls._quote_path(name)}")
+                                resp = await client.delete(
+                                    f"api/connections/{cls._quote_path(name)}"
+                                )
                                 if resp.status_code in (200, 204, 404):
                                     terminated_count += 1
-            log.info("Terminated %d connections for user %s", terminated_count, username)
+            log.info(
+                "Terminated %d connections for user %s", terminated_count, username
+            )
         except Exception as e:
             log.warning("Failed to terminate user connections for %s: %s", username, e)
         return terminated_count
 
     @classmethod
-    async def reconcile_service_definitions(cls, dry_run: bool = False) -> dict[str, Any]:
+    async def reconcile_service_definitions(
+        cls, dry_run: bool = False
+    ) -> dict[str, Any]:
         """Идемпотентно обновляет права сервисных пользователей (etran_service) через Management API."""
         result = {"updated": 0, "errors": []}
         vhost_quoted = cls._quote_path(cls._vhost)
@@ -519,7 +566,9 @@ class RmqAdminApi:
             "read": "^(dev\\..*\\.gauge\\..*|telemetry\\..*)",
         }
         try:
-            async with httpx.AsyncClient(base_url=cls._admin_url(), timeout=10.0) as client:
+            async with httpx.AsyncClient(
+                base_url=cls._admin_url(), timeout=10.0
+            ) as client:
                 user = await cls._get_json_or_none(client, f"api/users/{user_quoted}")
                 if user is not None:
                     existing_perm = await cls._get_json_or_none(
@@ -537,7 +586,9 @@ class RmqAdminApi:
                     existing_topic_perm = await cls._get_json_or_none(
                         client, f"api/topic-permissions/{vhost_quoted}/{user_quoted}"
                     )
-                    if not cls._same_topic_permissions(existing_topic_perm, topic_payload):
+                    if not cls._same_topic_permissions(
+                        existing_topic_perm, topic_payload
+                    ):
                         if not dry_run:
                             upsert_topic_perm = await client.put(
                                 f"api/topic-permissions/{vhost_quoted}/{user_quoted}",
@@ -547,7 +598,9 @@ class RmqAdminApi:
                         result["updated"] += 1
         except Exception as e:
             result["errors"].append({"service_user": etran_user, "error": str(e)})
-            log.warning("RMQ service definitions reconcile error for '%s': %s", etran_user, e)
+            log.warning(
+                "RMQ service definitions reconcile error for '%s': %s", etran_user, e
+            )
 
         return result
 
@@ -563,7 +616,9 @@ class RmqAdminApi:
         user_quoted = cls._quote_path(username)
         block_perm = {"configure": "^$", "write": "^$", "read": "^$"}
         try:
-            async with httpx.AsyncClient(base_url=cls._admin_url(), timeout=5.0) as client:
+            async with httpx.AsyncClient(
+                base_url=cls._admin_url(), timeout=5.0
+            ) as client:
                 # 1. Revoke vhost permissions
                 resp = await client.put(
                     f"api/permissions/{vhost_quoted}/{user_quoted}",
@@ -573,7 +628,9 @@ class RmqAdminApi:
 
                 # 2. Clear topic permissions
                 try:
-                    await client.delete(f"api/topic-permissions/{vhost_quoted}/{user_quoted}")
+                    await client.delete(
+                        f"api/topic-permissions/{vhost_quoted}/{user_quoted}"
+                    )
                 except Exception:
                     pass
 
@@ -595,7 +652,9 @@ class RmqAdminApi:
         perm_payload = cls._permission_payload()
         topic_payload = cls._topic_permission_payload()
         try:
-            async with httpx.AsyncClient(base_url=cls._admin_url(), timeout=5.0) as client:
+            async with httpx.AsyncClient(
+                base_url=cls._admin_url(), timeout=5.0
+            ) as client:
                 # 1. Ensure user exists
                 user = await cls._get_json_or_none(client, f"api/users/{user_quoted}")
                 if user is None:

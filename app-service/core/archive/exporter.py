@@ -232,9 +232,9 @@ async def export_batch_to_staging(
             "min_cursor": min_cursor,
             "max_cursor": max_cursor,
             "through_cursor": through_cursor,
-            "consumers_passed_cursor": consumers_passed_cursor
-            if consumers_passed_cursor is not None
-            else 0,
+            "consumers_passed_cursor": (
+                consumers_passed_cursor if consumers_passed_cursor is not None else 0
+            ),
         },
         "record_types": record_types,
         "record_counts": record_counts,

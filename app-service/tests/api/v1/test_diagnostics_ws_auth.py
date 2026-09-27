@@ -180,7 +180,9 @@ async def test_diagnostics_ws_with_valid_console_lease(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_owner_console_requires_matching_explicit_tenant_lease(monkeypatch) -> None:
+async def test_owner_console_requires_matching_explicit_tenant_lease(
+    monkeypatch,
+) -> None:
     async def fake_allowed(*a, **k):
         return True
 

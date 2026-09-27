@@ -1109,9 +1109,7 @@ class RemoteInputService:
         res_type: Literal["injected", "nack", "unconfirmed"] = (
             "injected"
             if pending_res.result == "injected"
-            else "nack"
-            if pending_res.result == "nack"
-            else "unconfirmed"
+            else "nack" if pending_res.result == "nack" else "unconfirmed"
         )
 
         return ClickResult(
@@ -1236,9 +1234,7 @@ class RemoteInputService:
         res_type: Literal["injected", "nack", "unconfirmed"] = (
             "injected"
             if pending_res.result == "injected"
-            else "nack"
-            if pending_res.result == "nack"
-            else "unconfirmed"
+            else "nack" if pending_res.result == "nack" else "unconfirmed"
         )
 
         return ShortcutResult(
@@ -1372,9 +1368,7 @@ class RemoteInputService:
         res_type: Literal["injected", "nack", "unconfirmed"] = (
             "injected"
             if pending_res.result == "injected"
-            else "nack"
-            if pending_res.result == "nack"
-            else "unconfirmed"
+            else "nack" if pending_res.result == "nack" else "unconfirmed"
         )
 
         return KeyResult(

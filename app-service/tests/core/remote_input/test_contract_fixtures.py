@@ -161,9 +161,7 @@ def test_l4desk_inbound_ack_results(result: str):
     state = (
         "running"
         if result in ("started", "switched")
-        else "stopped"
-        if result == "stopped"
-        else None
+        else "stopped" if result == "stopped" else None
     )
 
     raw = {

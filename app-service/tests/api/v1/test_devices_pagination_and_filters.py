@@ -10,7 +10,7 @@ from httpx import ASGITransport, AsyncClient
 
 from core.config import settings
 from core.crud.device_repo import DeviceRepo
-from core.models import db_helper, Device, DeviceConnection, DeviceTag
+from core.models import db_helper
 from core.schemas.devices import (
     DeviceConnectView,
     DeviceListResponse,
@@ -19,7 +19,6 @@ from core.schemas.devices import (
     DeviceTagView,
 )
 from main import main_app as app
-
 
 # =====================================================================
 # 1. Схемы Pydantic: DeviceStats, DeviceConnectView, DeviceListResponse
@@ -217,7 +216,12 @@ async def test_public_devices_endpoint_params_and_response(dummy_device_response
             assert data["page"] == 1
             assert data["size"] == 20
             assert data["pages"] == 1
-            assert data["stats"] == {"total": 10, "online": 8, "offline": 2, "blocked": 0}
+            assert data["stats"] == {
+                "total": 10,
+                "online": 8,
+                "offline": 2,
+                "blocked": 0,
+            }
 
             mock_get_list.assert_called_once_with(
                 session=mock_get_list.call_args.kwargs["session"],
@@ -264,7 +268,9 @@ async def test_public_devices_endpoint_params_and_response(dummy_device_response
         assert resp_invalid_size_low.status_code == 422
 
         # 5. Validation: size > 100 -> 422
-        resp_invalid_size_high = await ac.get("/api/v1/devices/?size=101", headers=headers)
+        resp_invalid_size_high = await ac.get(
+            "/api/v1/devices/?size=101", headers=headers
+        )
         assert resp_invalid_size_high.status_code == 422
 
     app.dependency_overrides.clear()

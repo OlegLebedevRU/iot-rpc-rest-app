@@ -1,22 +1,29 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from httpx import Response
 
-from core import settings
 from core.integrations.rmq_admin_api import (
     RmqAdminApi,
     is_ignored_or_service_identity,
     extract_device_sn_from_conn,
-    IGNORED_USERS,
 )
 from core.services.devices import DeviceService, extract_device_sn
-from core.services.rmq_admin import RmqAdmin
 
 
 def test_is_ignored_or_service_identity_matches():
     """Verify system users, service users and prefixes are correctly detected."""
     # 1. System users
-    for user in ["guest", "admin", "user", "internal", "root", "anonymous", "null", "none", "etran_service"]:
+    for user in [
+        "guest",
+        "admin",
+        "user",
+        "internal",
+        "root",
+        "anonymous",
+        "null",
+        "none",
+        "etran_service",
+    ]:
         assert is_ignored_or_service_identity(user) is True
         assert is_ignored_or_service_identity(user.upper()) is True
         assert is_ignored_or_service_identity(f"  {user}  ") is True
@@ -43,15 +50,31 @@ def test_extract_device_sn_and_from_conn():
     """Verify extract_device_sn and extract_device_sn_from_conn filter out service identities."""
     # Service connections -> None
     assert extract_device_sn_from_conn({"user": "etran_service"}) is None
-    assert extract_device_sn_from_conn({"user": "user", "client_properties": {"client_id": "menubuilder-1"}}) is None
+    assert (
+        extract_device_sn_from_conn(
+            {"user": "user", "client_properties": {"client_id": "menubuilder-1"}}
+        )
+        is None
+    )
     assert extract_device_sn({"user": "etran_processing_1"}, {}) is None
     assert extract_device_sn({"user": ""}, {"client_id": "menubuilder-worker"}) is None
 
     # Valid device connections -> SN
     assert extract_device_sn_from_conn({"user": "SN_123456"}) == "SN_123456"
-    assert extract_device_sn_from_conn({"user": "guest", "client_properties": {"client_id": "SN_7890"}}) == "SN_7890"
-    assert extract_device_sn({"user": "a3b0000000c10221d290825"}, {}) == "a3b0000000c10221d290825"
-    assert extract_device_sn({"user": ""}, {"client_id": "a3b0000000c10221d290825"}) == "a3b0000000c10221d290825"
+    assert (
+        extract_device_sn_from_conn(
+            {"user": "guest", "client_properties": {"client_id": "SN_7890"}}
+        )
+        == "SN_7890"
+    )
+    assert (
+        extract_device_sn({"user": "a3b0000000c10221d290825"}, {})
+        == "a3b0000000c10221d290825"
+    )
+    assert (
+        extract_device_sn({"user": ""}, {"client_id": "a3b0000000c10221d290825"})
+        == "a3b0000000c10221d290825"
+    )
 
 
 @pytest.mark.asyncio
@@ -122,5 +145,7 @@ async def test_reconcile_service_definitions(monkeypatch):
 
     assert result["updated"] == 1
     assert any("api/permissions/%2F/etran_service" in call[0] for call in put_calls)
-    perm_payload = next(call[1] for call in put_calls if "api/permissions/%2F/etran_service" in call[0])
+    perm_payload = next(
+        call[1] for call in put_calls if "api/permissions/%2F/etran_service" in call[0]
+    )
     assert perm_payload["configure"] == "^(mqtt-subscription-.*|telemetry\\..*)"

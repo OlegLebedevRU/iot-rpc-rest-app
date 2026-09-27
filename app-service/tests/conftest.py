@@ -8,7 +8,6 @@ from pathlib import Path
 
 import pytest
 
-
 os.environ.setdefault(
     "APP_CONFIG__FASTSTREAM__URL", "amqp://user:pass@localhost:5672//"
 )

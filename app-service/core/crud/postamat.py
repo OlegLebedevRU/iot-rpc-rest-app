@@ -22,7 +22,7 @@ class CRUDPostamat:
     ) -> Optional[Postamat]:
         stmt = select(Postamat).where(Postamat.id == postamat_id)
         if not include_deleted:
-            stmt = stmt.where(Postamat.is_deleted == False)
+            stmt = stmt.where(Postamat.is_deleted.is_(False))
 
         if org_id is not None:
             stmt = (
@@ -47,7 +47,7 @@ class CRUDPostamat:
     ) -> Optional[Postamat]:
         stmt = select(Postamat).where(Postamat.device_id == device_id)
         if not include_deleted:
-            stmt = stmt.where(Postamat.is_deleted == False)
+            stmt = stmt.where(Postamat.is_deleted.is_(False))
 
         if org_id is not None:
             stmt = (
@@ -72,7 +72,7 @@ class CRUDPostamat:
     ) -> List[Postamat]:
         stmt = select(Postamat)
         if not include_deleted:
-            stmt = stmt.where(Postamat.is_deleted == False)
+            stmt = stmt.where(Postamat.is_deleted.is_(False))
 
         if org_id is not None:
             stmt = (
@@ -129,7 +129,7 @@ class CRUDPostamat:
         Проверяет принадлежность к org_id перед удалением.
         """
         stmt = select(Postamat).where(
-            Postamat.id == postamat_id, Postamat.is_deleted == False
+            Postamat.id == postamat_id, Postamat.is_deleted.is_(False)
         )
         if org_id is not None:
             stmt = (
@@ -158,7 +158,7 @@ class CRUDPostamat:
         Проверяет принадлежность к org_id.
         """
         stmt = select(Postamat).where(
-            Postamat.id == postamat_id, Postamat.is_deleted == True
+            Postamat.id == postamat_id, Postamat.is_deleted.is_(True)
         )
         if org_id is not None:
             stmt = (

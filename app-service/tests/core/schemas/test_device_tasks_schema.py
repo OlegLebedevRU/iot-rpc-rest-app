@@ -38,4 +38,3 @@ def test_result_array_keeps_none_result():
     )
 
     assert result.result is None
-

@@ -32,7 +32,9 @@ def test_is_request_superuser():
     assert is_request_superuser(DummyRequest(headers={"x-role": "admin"})) is True
     assert is_request_superuser(DummyRequest(headers={"jwt-role": "1"})) is True
     assert is_request_superuser(DummyRequest(headers={"X-Role-Id": "1"})) is True
-    assert is_request_superuser(DummyRequest(headers={"x-role-id": "superuser"})) is True
+    assert (
+        is_request_superuser(DummyRequest(headers={"x-role-id": "superuser"})) is True
+    )
     assert is_request_superuser(DummyRequest(headers={"X-User-Id": "1"})) is True
     assert is_request_superuser(DummyRequest(headers={"jwt-sub": "1"})) is True
     assert is_request_superuser(DummyRequest(headers={"sub": "1"})) is True
@@ -159,7 +161,9 @@ async def test_internal_api_auth_and_operations(monkeypatch):
         }
 
         # 3. Devices with valid headers
-        with patch("core.services.devices.DeviceService.get_list", new_callable=AsyncMock) as mock_get_list:
+        with patch(
+            "core.services.devices.DeviceService.get_list", new_callable=AsyncMock
+        ) as mock_get_list:
             mock_get_list.return_value = empty_device_response
             resp = await ac.get("/api/internal/v1/devices/", headers=headers)
             assert resp.status_code == 200
@@ -173,9 +177,13 @@ async def test_internal_api_auth_and_operations(monkeypatch):
             "X-Org-Id": "1",
             "X-Role": "superuser",
         }
-        with patch("core.services.devices.DeviceService.get_list", new_callable=AsyncMock) as mock_get_list:
+        with patch(
+            "core.services.devices.DeviceService.get_list", new_callable=AsyncMock
+        ) as mock_get_list:
             mock_get_list.return_value = empty_device_response
-            resp = await ac.get("/api/internal/v1/devices/?org_id=339", headers=su_headers)
+            resp = await ac.get(
+                "/api/internal/v1/devices/?org_id=339", headers=su_headers
+            )
             assert resp.status_code == 200
             assert mock_get_list.call_args.kwargs["org_id"] == 339
             assert mock_get_list.call_args.kwargs["device_id"] is None
@@ -186,17 +194,25 @@ async def test_internal_api_auth_and_operations(monkeypatch):
             "X-Org-Id": "1",
             "X-Role": "user",
         }
-        with patch("core.services.devices.DeviceService.get_list", new_callable=AsyncMock) as mock_get_list:
+        with patch(
+            "core.services.devices.DeviceService.get_list", new_callable=AsyncMock
+        ) as mock_get_list:
             mock_get_list.return_value = empty_device_response
-            resp = await ac.get("/api/internal/v1/devices/?org_id=339", headers=user_headers)
+            resp = await ac.get(
+                "/api/internal/v1/devices/?org_id=339", headers=user_headers
+            )
             assert resp.status_code == 200
             assert mock_get_list.call_args.kwargs["org_id"] == 1
             assert mock_get_list.call_args.kwargs["device_id"] is None
 
         # 6. Webhooks list with superuser override
-        with patch("core.crud.webhook_repo.WebhookRepo.get_all_by_org", new_callable=AsyncMock) as mock_webhooks:
+        with patch(
+            "core.crud.webhook_repo.WebhookRepo.get_all_by_org", new_callable=AsyncMock
+        ) as mock_webhooks:
             mock_webhooks.return_value = []
-            resp = await ac.get("/api/internal/v1/webhooks/?org_id=339", headers=su_headers)
+            resp = await ac.get(
+                "/api/internal/v1/webhooks/?org_id=339", headers=su_headers
+            )
             assert resp.status_code == 200
             mock_webhooks.assert_called_once_with(339)
 

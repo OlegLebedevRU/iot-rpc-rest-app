@@ -6,7 +6,6 @@ from core.adapters.agent_contract_v1 import assert_no_commercial_fields
 from core.config import RoutingKey, settings
 from core.logging_config import setup_module_logger, log_rpc_debug
 from core.schemas.device_tasks import TaskCreate, TaskResponse, TaskNotify
-from core.schemas.rmq_admin import RmqClientsAction
 from core.topologys.declare import (
     # topic_exchange,
     topic_publisher,

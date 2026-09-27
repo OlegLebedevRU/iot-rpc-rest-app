@@ -39,11 +39,21 @@ async def test_openapi_schema_clean_and_isolated():
         assert "/api/v1/diagnostics/" not in paths
 
         for path in paths:
-            assert not path.startswith("/api/internal/"), f"Internal route {path} leaked into OpenAPI schema!"
-            assert "provisioning" not in path, f"Provisioning route {path} leaked into OpenAPI schema!"
-            assert "billing" not in path, f"Billing route {path} leaked into OpenAPI schema!"
-            assert "admin" not in path, f"Admin route {path} leaked into OpenAPI schema!"
-            assert "postamat" not in path, f"Postamat route {path} leaked into OpenAPI schema!"
+            assert not path.startswith(
+                "/api/internal/"
+            ), f"Internal route {path} leaked into OpenAPI schema!"
+            assert (
+                "provisioning" not in path
+            ), f"Provisioning route {path} leaked into OpenAPI schema!"
+            assert (
+                "billing" not in path
+            ), f"Billing route {path} leaked into OpenAPI schema!"
+            assert (
+                "admin" not in path
+            ), f"Admin route {path} leaked into OpenAPI schema!"
+            assert (
+                "postamat" not in path
+            ), f"Postamat route {path} leaked into OpenAPI schema!"
 
         # 3. Check parameters in /api/v1/devices/ GET operation
         devices_get = paths["/api/v1/devices/"]["get"]
@@ -58,7 +68,9 @@ async def test_openapi_schema_clean_and_isolated():
         assert "jwt-role" not in param_names
         assert "Authorization" not in param_names
         assert "X-Internal-Service-Key" not in param_names
-        assert "org_id" not in param_names  # query param org_id should not exist for devices
+        assert (
+            "org_id" not in param_names
+        )  # query param org_id should not exist for devices
 
 
 @pytest.mark.asyncio

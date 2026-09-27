@@ -492,7 +492,9 @@ async def test_rest_shortcut_endpoints_and_validation(monkeypatch):
                         if pending_registry._pending:
                             cmd_id = next(iter(pending_registry._pending.keys()))
                     if cmd_id is not None:
-                        await pending_registry.resolve(cmd_id, PendingResult(result="injected"))
+                        await pending_registry.resolve(
+                            cmd_id, PendingResult(result="injected")
+                        )
                         return
 
             asyncio.create_task(delayed_ack())

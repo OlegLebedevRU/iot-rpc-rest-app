@@ -45,7 +45,7 @@ class TasksRepository:
         if isinstance(result, str):
             try:
                 result = json.loads(result)
-            except (json.JSONDecodeError, TypeError):
+            except json.JSONDecodeError, TypeError:
                 return {"value": result}
 
         if isinstance(result, dict):
@@ -64,14 +64,14 @@ class TasksRepository:
                 query.join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
                 .join(
                     Org,
-                    and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted == False),
+                    and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted.is_(False)),
                 )
                 .where(Org.org_id == org_id)
             )
         return query.outerjoin(
             DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id
         ).outerjoin(
-            Org, and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted == False)
+            Org, and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted.is_(False))
         )
 
     @staticmethod
@@ -147,7 +147,7 @@ class TasksRepository:
     ) -> tuple[dict | None, list[dict] | None]:
         query = cls._base_task_query().join(DevTask.status)
         query = cls._apply_org_filter(query, org_id)
-        query = query.where(DevTask.id == id, DevTask.is_deleted == False)
+        query = query.where(DevTask.id == id, DevTask.is_deleted.is_(False))
 
         res_q = (
             select(
@@ -200,7 +200,7 @@ class TasksRepository:
             .join(DevTaskStatus)
             .join(DevTaskPayload)
             .where(
-                DevTask.is_deleted == False,
+                DevTask.is_deleted.is_(False),
                 DevTaskStatus.status < TaskStatus.DONE,
                 DevTask.method_code <= method_le,
             )
@@ -227,7 +227,7 @@ class TasksRepository:
     ) -> dict[str, Any] | None:
         subq = (
             select(Device.device_id)
-            .where(Device.sn == sn, Device.is_deleted == False)
+            .where(Device.sn == sn, Device.is_deleted.is_(False))
             .subquery()
         )
         query = (
@@ -254,7 +254,7 @@ class TasksRepository:
         query = cls._base_task_query()
         query = query.join(DevTask.status)
         query = cls._apply_org_filter(query, org_id)
-        query = query.where(DevTask.is_deleted == False)
+        query = query.where(DevTask.is_deleted.is_(False))
 
         if device_id is not None:
             query = query.where(DevTask.device_id == device_id)
@@ -276,11 +276,11 @@ class TasksRepository:
             select(1)
             .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
             .join(
-                Org, and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted == False)
+                Org, and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted.is_(False))
             )
             .where(
                 DevTask.id == id,
-                DevTask.is_deleted == False,
+                DevTask.is_deleted.is_(False),
                 Org.org_id == org_id,
             )
         )

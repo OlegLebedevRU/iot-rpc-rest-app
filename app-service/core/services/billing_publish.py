@@ -25,13 +25,15 @@ async def publish_billing_event(
         payload_bytes: Payload size in bytes (for RES messages).
     """
     try:
-        message = json.dumps({
-            "org_id": org_id,
-            "device_id": device_id,
-            "counter_type": counter_type,
-            "value": value,
-            "payload_bytes": payload_bytes,
-        })
+        message = json.dumps(
+            {
+                "org_id": org_id,
+                "device_id": device_id,
+                "counter_type": counter_type,
+                "value": value,
+                "payload_bytes": payload_bytes,
+            }
+        )
         await job_publisher.publish(
             routing_key=billing_action.name,
             message=message,
@@ -41,5 +43,6 @@ async def publish_billing_event(
     except Exception as e:
         log.error(
             "Failed to publish billing event: type=%s error=%s",
-            counter_type, e,
+            counter_type,
+            e,
         )

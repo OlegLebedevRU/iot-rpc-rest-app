@@ -6,6 +6,7 @@ import logging
 from fastapi.middleware.cors import CORSMiddleware
 
 from core.config import settings
+from create_api_app import create_app
 
 logging.basicConfig(
     level=settings.logging.log_level_value,
@@ -13,7 +14,6 @@ logging.basicConfig(
 )
 # from core.fs_broker import fs_router
 # from core.topologys.declare import declare_x_q
-from create_api_app import create_app
 
 # import core.topologys.fs_queues
 

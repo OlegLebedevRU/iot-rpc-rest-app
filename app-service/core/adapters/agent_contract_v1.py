@@ -12,8 +12,6 @@ from pydantic import (
     ConfigDict,
     Field,
     ValidationError,
-    field_validator,
-    model_validator,
 )
 
 from core.diagnostics.schemas import DeviceOutputEnvelope, OutputKind
@@ -30,46 +28,52 @@ METHOD_EXEC_COMMAND = 7001
 METHOD_CANCEL_TASK = 7002
 SUPPORTED_METHODS = (METHOD_STREAM_CONTROL, METHOD_EXEC_COMMAND, METHOD_CANCEL_TASK)
 
-SUPPORTED_7000_ACTIONS = frozenset([
-    "inventory_get",
-    "stream_start",
-    "lease_renew",
-    "stream_stop",
-    "mouse_click",
-    "key_event",
-    "shortcut_action",
-])
+SUPPORTED_7000_ACTIONS = frozenset(
+    [
+        "inventory_get",
+        "stream_start",
+        "lease_renew",
+        "stream_stop",
+        "mouse_click",
+        "key_event",
+        "shortcut_action",
+    ]
+)
 
 SUPPORTED_7001_SHELLS = frozenset(["cmd", "powershell"])
 
-SUPPORTED_PRESENCE_EVENTS = frozenset([
-    "app_online",
-    "app_offline",
-    "svc_online",
-    "svc_offline",
-])
+SUPPORTED_PRESENCE_EVENTS = frozenset(
+    [
+        "app_online",
+        "app_offline",
+        "svc_online",
+        "svc_offline",
+    ]
+)
 
-FORBIDDEN_COMMERCIAL_FIELDS = frozenset([
-    "billing",
-    "price",
-    "tariff",
-    "cost",
-    "payment",
-    "fee",
-    "amount",
-    "currency",
-    "invoice",
-    "balance",
-    "account",
-    "subscription",
-    "entitlement",
-    "tenant_id",
-    "org_id",
-    "kopeck",
-    "ruble",
-    "rub",
-    "subledger",
-])
+FORBIDDEN_COMMERCIAL_FIELDS = frozenset(
+    [
+        "billing",
+        "price",
+        "tariff",
+        "cost",
+        "payment",
+        "fee",
+        "amount",
+        "currency",
+        "invoice",
+        "balance",
+        "account",
+        "subscription",
+        "entitlement",
+        "tenant_id",
+        "org_id",
+        "kopeck",
+        "ruble",
+        "rub",
+        "subledger",
+    ]
+)
 
 
 # ── Exceptions ────────────────────────────────────────────────────────────────
@@ -368,13 +372,19 @@ def verify_l4rtp_preamble(wire_bytes: bytes) -> dict[str, Any]:
         )
     magic = wire_bytes[:4].decode("ascii", errors="replace")
     if magic != "L4RT":
-        raise ContractValidationError(f"Invalid L4RTP magic: expected 'L4RT', got {magic!r}")
+        raise ContractValidationError(
+            f"Invalid L4RTP magic: expected 'L4RT', got {magic!r}"
+        )
     version = wire_bytes[4]
     if version != 1:
-        raise ContractValidationError(f"Invalid L4RTP version: expected 1, got {version}")
+        raise ContractValidationError(
+            f"Invalid L4RTP version: expected 1, got {version}"
+        )
     reserved = wire_bytes[5]
     if reserved != 0:
-        raise ContractValidationError(f"Invalid L4RTP reserved field: expected 0, got {reserved}")
+        raise ContractValidationError(
+            f"Invalid L4RTP reserved field: expected 0, got {reserved}"
+        )
     sn_len = struct.unpack(">H", wire_bytes[6:8])[0]
     total_expected = 8 + sn_len
     if len(wire_bytes) < total_expected:
@@ -399,7 +409,9 @@ def verify_l4rtp_frame_header(header_bytes: bytes) -> dict[str, Any]:
         )
     channel = header_bytes[0]
     if channel not in (1, 2):
-        raise ContractValidationError(f"Invalid L4RTP channel: expected 1 or 2, got {channel}")
+        raise ContractValidationError(
+            f"Invalid L4RTP channel: expected 1 or 2, got {channel}"
+        )
     reserved = header_bytes[1]
     payload_len = struct.unpack(">H", header_bytes[2:4])[0]
     channel_name = "RTP" if channel == 1 else "RTCP"
@@ -442,11 +454,15 @@ class AgentContractV1Adapter:
 
         action = raw.get("action") or raw.get("type")
         if not action or action not in SUPPORTED_7000_ACTIONS:
-            raise UnknownCapabilityError(f"Unsupported action for method 7000: {action}")
+            raise UnknownCapabilityError(
+                f"Unsupported action for method 7000: {action}"
+            )
 
         command_id = str(raw.get("command_id") or raw.get("cmd_id") or "")
         if not command_id:
-            raise ContractValidationError("Missing required command_id for method 7000 request")
+            raise ContractValidationError(
+                "Missing required command_id for method 7000 request"
+            )
 
         payload: dict[str, Any] = {
             "method_code": METHOD_STREAM_CONTROL,
@@ -470,7 +486,7 @@ class AgentContractV1Adapter:
         elif "source_id" in raw and raw["source_id"] is not None:
             try:
                 payload["display_index"] = int(raw["source_id"])
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 payload["display_index"] = 0
 
         if "camera_index" in raw and raw["camera_index"] is not None:
@@ -523,7 +539,9 @@ class AgentContractV1Adapter:
             validated = RPC7000Request.model_validate(payload)
             return validated.model_dump(mode="json", exclude_none=True)
         except ValidationError as e:
-            raise ContractValidationError(f"Invalid outbound RPC 7000 request: {e}") from e
+            raise ContractValidationError(
+                f"Invalid outbound RPC 7000 request: {e}"
+            ) from e
 
     def adapt_outbound_exec(
         self,
@@ -554,7 +572,9 @@ class AgentContractV1Adapter:
             validated = RPC7001Request.model_validate(req_dict)
             return validated.model_dump(mode="json", exclude_none=True)
         except ValidationError as e:
-            raise ContractValidationError(f"Invalid outbound RPC 7001 request: {e}") from e
+            raise ContractValidationError(
+                f"Invalid outbound RPC 7001 request: {e}"
+            ) from e
 
     def adapt_outbound_cancel(
         self,
@@ -577,7 +597,9 @@ class AgentContractV1Adapter:
             validated = RPC7002Request.model_validate(req_dict)
             return validated.model_dump(mode="json", exclude_none=True)
         except ValidationError as e:
-            raise ContractValidationError(f"Invalid outbound RPC 7002 request: {e}") from e
+            raise ContractValidationError(
+                f"Invalid outbound RPC 7002 request: {e}"
+            ) from e
 
     # ── Inbound Device Response & Stream Chunk Adaptation ─────────────────────
 
@@ -598,7 +620,9 @@ class AgentContractV1Adapter:
         try:
             chunk = RPC7001StreamChunk.model_validate(payload)
         except ValidationError as e:
-            raise ContractValidationError(f"Invalid dev/{sn}/out stream chunk: {e}") from e
+            raise ContractValidationError(
+                f"Invalid dev/{sn}/out stream chunk: {e}"
+            ) from e
 
         # Duplicate check
         is_dup = self.chunk_dedup.is_duplicate(sn, chunk.session_id, chunk.seq)
@@ -642,7 +666,9 @@ class AgentContractV1Adapter:
         try:
             resp = RPC7000Response.model_validate(payload)
         except ValidationError as e:
-            raise ContractValidationError(f"Invalid dev/{sn}/res 7000 response: {e}") from e
+            raise ContractValidationError(
+                f"Invalid dev/{sn}/res 7000 response: {e}"
+            ) from e
 
         is_dup = self.cmd_dedup.is_duplicate(sn, resp.command_id)
         if not is_dup:
@@ -664,7 +690,9 @@ class AgentContractV1Adapter:
         try:
             resp = RPC7001Response.model_validate(payload)
         except ValidationError as e:
-            raise ContractValidationError(f"Invalid dev/{sn}/res 7001 response: {e}") from e
+            raise ContractValidationError(
+                f"Invalid dev/{sn}/res 7001 response: {e}"
+            ) from e
 
         is_dup = self.cmd_dedup.is_duplicate(sn, resp.id)
         if not is_dup:
@@ -686,7 +714,9 @@ class AgentContractV1Adapter:
         try:
             resp = RPC7002Response.model_validate(payload)
         except ValidationError as e:
-            raise ContractValidationError(f"Invalid dev/{sn}/res 7002 response: {e}") from e
+            raise ContractValidationError(
+                f"Invalid dev/{sn}/res 7002 response: {e}"
+            ) from e
 
         is_dup = self.cmd_dedup.is_duplicate(sn, resp.id)
         if not is_dup:

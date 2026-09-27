@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import uuid4
 
 import pytest
 import sqlalchemy as sa
@@ -11,9 +10,6 @@ from httpx import ASGITransport, AsyncClient
 
 from core.models.remote_sessions import RemoteSession, RemoteSessionEvent
 from core.schemas.remote_sessions import (
-    ConsoleCommandCompleteRequest,
-    ConsoleCommandStartRequest,
-    ConsoleCommandTimeoutRequest,
     RemoteSessionCreate,
     RemoteSessionEventType,
     RemoteSessionLifecycleState,
@@ -95,7 +91,9 @@ class SessionLockInMemoryAsyncSession:
 
         for criterion in where_criteria:
             if hasattr(criterion, "left") and hasattr(criterion, "right"):
-                col_name = getattr(criterion.left, "key", None) or getattr(criterion.left, "name", None)
+                col_name = getattr(criterion.left, "key", None) or getattr(
+                    criterion.left, "name", None
+                )
                 val = getattr(criterion.right, "value", None)
                 if col_name == "event_id":
                     target_event_id = val
@@ -139,7 +137,9 @@ class SessionLockInMemoryAsyncSession:
                     RemoteSessionLifecycleState.ACTIVE.value,
                     RemoteSessionLifecycleState.STOPPING.value,
                 }
-                for s in sorted(self.sessions.values(), key=lambda x: x.created_at, reverse=True):
+                for s in sorted(
+                    self.sessions.values(), key=lambda x: x.created_at, reverse=True
+                ):
                     if s.sn == target_sn and s.status in active_statuses:
                         return s
 
@@ -198,6 +198,7 @@ class SessionLockInMemoryAsyncSession:
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. Simultaneous Starts & Mutual Exclusion Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_mutual_exclusion_console_blocks_video_and_video_blocks_console():
@@ -302,6 +303,7 @@ async def test_simultaneous_concurrent_starts_mutual_exclusion():
 # 2. Duplicate Operations & Idempotency Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_duplicate_operations_idempotency():
     """Verify idempotent creation and stopping with duplicate operation_ids."""
@@ -344,13 +346,17 @@ async def test_duplicate_operations_idempotency():
 
     # 5. Stop session
     stopped1 = await service.stop_session(
-        session, sess1.session_id, RemoteSessionStop(operation_id="op-stop-1", reason="user_stop")
+        session,
+        sess1.session_id,
+        RemoteSessionStop(operation_id="op-stop-1", reason="user_stop"),
     )
     assert stopped1.status == RemoteSessionLifecycleState.CLOSED.value
 
     # 6. Duplicate stop_session
     stopped2 = await service.stop_session(
-        session, sess1.session_id, RemoteSessionStop(operation_id="op-stop-1", reason="user_stop")
+        session,
+        sess1.session_id,
+        RemoteSessionStop(operation_id="op-stop-1", reason="user_stop"),
     )
     assert stopped2.session_id == sess1.session_id
     assert stopped2.status == RemoteSessionLifecycleState.CLOSED.value
@@ -359,6 +365,7 @@ async def test_duplicate_operations_idempotency():
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Crash Recovery & Stale Session Eviction Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_crash_recovery_stale_session_eviction():
@@ -429,6 +436,7 @@ async def test_cleanup_stale_sessions_sweep():
 # 4. Start Failure Lifecycle Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_start_failure_lifecycle():
     """Verify that when start fails, session transitions to failed, duration is unbilled, and lock is released."""
@@ -453,10 +461,16 @@ async def test_start_failure_lifecycle():
     )
     assert failed_sess.status == RemoteSessionLifecycleState.FAILED.value
     assert failed_sess.close_reason == "device_offline"
-    assert failed_sess.started_at is None  # Never became active => billable interval duration is 0!
+    assert (
+        failed_sess.started_at is None
+    )  # Never became active => billable interval duration is 0!
 
     # 3. Check event emitted
-    ev_failed = [e for e in session.events if e.event_type == RemoteSessionEventType.REMOTE_SESSION_FAILED]
+    ev_failed = [
+        e
+        for e in session.events
+        if e.event_type == RemoteSessionEventType.REMOTE_SESSION_FAILED
+    ]
     assert len(ev_failed) == 1
     assert ev_failed[0].lifecycle_state == RemoteSessionLifecycleState.FAILED
 
@@ -476,6 +490,7 @@ async def test_start_failure_lifecycle():
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. Console Command-Aware Graceful Stop Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_console_command_aware_graceful_stop_with_response():
@@ -507,7 +522,9 @@ async def test_console_command_aware_graceful_stop_with_response():
         service.stop_session(
             session,
             sess.session_id,
-            RemoteSessionStop(operation_id="op-stop-cmd-1", reason="maintenance", timeout_sec=3.0),
+            RemoteSessionStop(
+                operation_id="op-stop-cmd-1", reason="maintenance", timeout_sec=3.0
+            ),
         )
     )
 
@@ -540,7 +557,9 @@ async def test_console_command_aware_graceful_stop_with_response():
     assert RemoteSessionEventType.REMOTE_SESSION_CLOSED in event_types
 
     idx_start = event_types.index(RemoteSessionEventType.CONSOLE_COMMAND_STARTED)
-    idx_stop_req = event_types.index(RemoteSessionEventType.REMOTE_SESSION_STOP_REQUESTED)
+    idx_stop_req = event_types.index(
+        RemoteSessionEventType.REMOTE_SESSION_STOP_REQUESTED
+    )
     idx_comp = event_types.index(RemoteSessionEventType.CONSOLE_COMMAND_COMPLETED)
     idx_closed = event_types.index(RemoteSessionEventType.REMOTE_SESSION_CLOSED)
     assert idx_start < idx_stop_req < idx_comp < idx_closed
@@ -573,7 +592,9 @@ async def test_console_command_aware_graceful_stop_with_timeout():
     stopped_sess = await service.stop_session(
         session,
         sess.session_id,
-        RemoteSessionStop(operation_id="op-stop-to-1", reason="timeout_stop", timeout_sec=0.15),
+        RemoteSessionStop(
+            operation_id="op-stop-to-1", reason="timeout_stop", timeout_sec=0.15
+        ),
     )
     elapsed = (datetime.now(UTC) - t0).total_seconds()
 
@@ -585,14 +606,15 @@ async def test_console_command_aware_graceful_stop_with_timeout():
     event_types = [e.event_type for e in session.events]
     assert RemoteSessionEventType.CONSOLE_COMMAND_TIMED_OUT in event_types
     assert RemoteSessionEventType.REMOTE_SESSION_CLOSED in event_types
-    assert event_types.index(RemoteSessionEventType.CONSOLE_COMMAND_TIMED_OUT) < event_types.index(
-        RemoteSessionEventType.REMOTE_SESSION_CLOSED
-    )
+    assert event_types.index(
+        RemoteSessionEventType.CONSOLE_COMMAND_TIMED_OUT
+    ) < event_types.index(RemoteSessionEventType.REMOTE_SESSION_CLOSED)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Video Stop Control Flow Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_video_stop_control_flow():
@@ -714,7 +736,9 @@ async def test_stop_rejects_tenant_or_sn_identity_mismatch():
     )
 
     for stop in (
-        RemoteSessionStop(operation_id="op-wrong-tenant", tenant_id=11, sn="SN_STOP_IDENTITY"),
+        RemoteSessionStop(
+            operation_id="op-wrong-tenant", tenant_id=11, sn="SN_STOP_IDENTITY"
+        ),
         RemoteSessionStop(operation_id="op-wrong-sn", tenant_id=10, sn="SN_OTHER"),
     ):
         with pytest.raises(Exception) as exc_info:
@@ -770,7 +794,9 @@ async def test_stop_teardown_failure_is_durable_and_retryable(monkeypatch):
     async def successful_teardown(rec: RemoteSession, reason: str = "stop") -> None:
         return None
 
-    monkeypatch.setattr(restarted_service, "_teardown_video_session", successful_teardown)
+    monkeypatch.setattr(
+        restarted_service, "_teardown_video_session", successful_teardown
+    )
     stopped = await restarted_service.stop_session(session, created.session_id, stop)
 
     assert stopped is created
@@ -834,6 +860,7 @@ async def test_late_stop_for_closed_session_does_not_touch_new_session(monkeypat
 # ─────────────────────────────────────────────────────────────────────────────
 # 7. Lifecycle Transitions, Event Ordering & Billable Interval Tests
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.asyncio
 async def test_lifecycle_transitions_ordering_and_billable_interval():
@@ -908,6 +935,7 @@ async def test_lifecycle_transitions_ordering_and_billable_interval():
 # 8. REST API Endpoints Integration Tests
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_rest_api_session_lock_mutual_exclusion_and_endpoints(monkeypatch):
     """Verify REST API behavior for create, start, heartbeat, stop, command tracking, and conflict 409."""
@@ -932,7 +960,9 @@ async def test_rest_api_session_lock_mutual_exclusion_and_endpoints(monkeypatch)
         return {"sub": "internal_test", "role": "admin"}
 
     main_app.dependency_overrides[db_helper.session_getter] = override_session
-    main_app.dependency_overrides[internal_depends.verify_internal_service_auth] = override_auth
+    main_app.dependency_overrides[internal_depends.verify_internal_service_auth] = (
+        override_auth
+    )
 
     transport = ASGITransport(app=main_app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -1096,7 +1126,9 @@ async def test_rest_api_session_lock_mutual_exclusion_and_endpoints(monkeypatch)
             "retryable": True,
         }
 
-        async def successful_video_teardown(rec: RemoteSession, reason: str = "stop") -> None:
+        async def successful_video_teardown(
+            rec: RemoteSession, reason: str = "stop"
+        ) -> None:
             return None
 
         monkeypatch.setattr(

@@ -1,17 +1,15 @@
 from __future__ import annotations
 
-import time
 from datetime import datetime, timezone
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.crud.device_repo import DeviceRepo
-from core.models.devices import Device, DeviceConnection, DeviceAuditLog, Org, DeviceOrgBind
-from core.schemas.devices import DeviceConnectView, DeviceAuditEventView, DeviceListResult
+from core.models.devices import DeviceConnection
+from core.schemas.devices import DeviceConnectView, DeviceAuditEventView
 from core.services.devices import (
-    DeviceService,
     evaluate_connection_collision,
     clear_device_connection_history,
 )
@@ -66,19 +64,34 @@ def test_evaluate_device_clone_detection_multi_ip():
 
     # 1. Host A
     v1, d1 = evaluate_connection_collision(
-        sn=sn, peer_host="83.237.254.238", peer_port=53001, cert_validity=cert, conn_name=None, now_ts=now
+        sn=sn,
+        peer_host="83.237.254.238",
+        peer_port=53001,
+        cert_validity=cert,
+        conn_name=None,
+        now_ts=now,
     )
     assert v1 is None
 
     # 2. Host B (1-я смена хоста)
     v2, d2 = evaluate_connection_collision(
-        sn=sn, peer_host="91.242.213.17", peer_port=64001, cert_validity=cert, conn_name=None, now_ts=now + 10.0
+        sn=sn,
+        peer_host="91.242.213.17",
+        peer_port=64001,
+        cert_validity=cert,
+        conn_name=None,
+        now_ts=now + 10.0,
     )
     assert v2 is None
 
     # 3. Host A (2-я смена хоста -> пинг-понг!)
     v3, d3 = evaluate_connection_collision(
-        sn=sn, peer_host="83.237.254.238", peer_port=53002, cert_validity=cert, conn_name=None, now_ts=now + 20.0
+        sn=sn,
+        peer_host="83.237.254.238",
+        peer_port=53002,
+        cert_validity=cert,
+        conn_name=None,
+        now_ts=now + 20.0,
     )
     assert v3 == "DEVICE_CLONE"
     assert d3 is not None
@@ -93,11 +106,32 @@ def test_evaluate_device_clone_detection_3_distinct_ips():
     now = 3000.0
 
     # 1. IP 1
-    evaluate_connection_collision(sn=sn, peer_host="1.1.1.1", peer_port=1000, cert_validity=cert, conn_name=None, now_ts=now)
+    evaluate_connection_collision(
+        sn=sn,
+        peer_host="1.1.1.1",
+        peer_port=1000,
+        cert_validity=cert,
+        conn_name=None,
+        now_ts=now,
+    )
     # 2. IP 2
-    evaluate_connection_collision(sn=sn, peer_host="2.2.2.2", peer_port=2000, cert_validity=cert, conn_name=None, now_ts=now + 5.0)
+    evaluate_connection_collision(
+        sn=sn,
+        peer_host="2.2.2.2",
+        peer_port=2000,
+        cert_validity=cert,
+        conn_name=None,
+        now_ts=now + 5.0,
+    )
     # 3. IP 3
-    v, d = evaluate_connection_collision(sn=sn, peer_host="3.3.3.3", peer_port=3000, cert_validity=cert, conn_name=None, now_ts=now + 10.0)
+    v, d = evaluate_connection_collision(
+        sn=sn,
+        peer_host="3.3.3.3",
+        peer_port=3000,
+        cert_validity=cert,
+        conn_name=None,
+        now_ts=now + 10.0,
+    )
 
     assert v == "DEVICE_CLONE"
     assert d is not None
@@ -111,15 +145,36 @@ def test_false_positive_cellular_ip_change_not_flagged():
     now = 4000.0
 
     # 1. Исходный IP сотовой сети
-    v1, _ = evaluate_connection_collision(sn=sn, peer_host="100.64.1.1", peer_port=1000, cert_validity=cert, conn_name=None, now_ts=now)
+    v1, _ = evaluate_connection_collision(
+        sn=sn,
+        peer_host="100.64.1.1",
+        peer_port=1000,
+        cert_validity=cert,
+        conn_name=None,
+        now_ts=now,
+    )
     assert v1 is None
 
     # 2. Переключение на новую вышку (смена IP на 100.64.2.2)
-    v2, _ = evaluate_connection_collision(sn=sn, peer_host="100.64.2.2", peer_port=1001, cert_validity=cert, conn_name=None, now_ts=now + 15.0)
+    v2, _ = evaluate_connection_collision(
+        sn=sn,
+        peer_host="100.64.2.2",
+        peer_port=1001,
+        cert_validity=cert,
+        conn_name=None,
+        now_ts=now + 15.0,
+    )
     assert v2 is None
 
     # 3. Следующий реконнект через 60 сек на том же новом IP 100.64.2.2 (нет пинг-понга)
-    v3, _ = evaluate_connection_collision(sn=sn, peer_host="100.64.2.2", peer_port=1002, cert_validity=cert, conn_name=None, now_ts=now + 75.0)
+    v3, _ = evaluate_connection_collision(
+        sn=sn,
+        peer_host="100.64.2.2",
+        peer_port=1002,
+        cert_validity=cert,
+        conn_name=None,
+        now_ts=now + 75.0,
+    )
     assert v3 is None  # Не должно заблокировать!
 
 
@@ -159,13 +214,15 @@ def test_schema_serialization_and_availability_override():
 @pytest.mark.asyncio
 async def test_rmq_admin_block_unblock_methods(monkeypatch):
     """Проверяет методы RmqAdminApi.block_device_user и unblock_device_user."""
-    mock_put = AsyncMock()
-    mock_delete = AsyncMock()
+    _mock_put = AsyncMock()
+    _mock_delete = AsyncMock()
 
     class MockResponse:
         status_code = 200
+
         def raise_for_status(self):
             pass
+
         def json(self):
             return [{"name": "mock_conn_1"}]
 

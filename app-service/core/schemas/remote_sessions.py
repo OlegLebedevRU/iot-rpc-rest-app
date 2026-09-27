@@ -37,25 +37,27 @@ class RemoteSessionType(StrEnum):
     VIDEO = "video"
 
 
-FORBIDDEN_EVENT_COMMERCIAL_FIELDS: frozenset[str] = frozenset([
-    "billing",
-    "price",
-    "tariff",
-    "cost",
-    "payment",
-    "fee",
-    "amount",
-    "currency",
-    "invoice",
-    "balance",
-    "account",
-    "subscription",
-    "entitlement",
-    "kopeck",
-    "ruble",
-    "rub",
-    "subledger",
-])
+FORBIDDEN_EVENT_COMMERCIAL_FIELDS: frozenset[str] = frozenset(
+    [
+        "billing",
+        "price",
+        "tariff",
+        "cost",
+        "payment",
+        "fee",
+        "amount",
+        "currency",
+        "invoice",
+        "balance",
+        "account",
+        "subscription",
+        "entitlement",
+        "kopeck",
+        "ruble",
+        "rub",
+        "subledger",
+    ]
+)
 
 
 def validate_no_commercial_fields(data: Any, path: str = "") -> None:
@@ -63,7 +65,10 @@ def validate_no_commercial_fields(data: Any, path: str = "") -> None:
     if isinstance(data, dict):
         for key, value in data.items():
             key_lower = str(key).lower()
-            if any(forbidden in key_lower for forbidden in FORBIDDEN_EVENT_COMMERCIAL_FIELDS):
+            if any(
+                forbidden in key_lower
+                for forbidden in FORBIDDEN_EVENT_COMMERCIAL_FIELDS
+            ):
                 raise ValueError(
                     f"Commercial or billing field '{key}' detected at '{path}'. "
                     "Financial semantics are strictly forbidden in IoT event feed."
@@ -83,11 +88,17 @@ class RemoteSessionCreate(BaseModel):
     terminal_id: str | None = Field(None, description="Terminal identifier")
     sn: str = Field(..., min_length=1, description="Device serial number")
     session_type: RemoteSessionType = Field(..., description="console or video")
-    session_id: str | None = Field(None, description="Optional custom or client-provided session identifier")
+    session_id: str | None = Field(
+        None, description="Optional custom or client-provided session identifier"
+    )
     requested_by_user_id: str | None = Field(None, description="Requesting user ID")
     correlation_id: str | None = Field(None, description="End-to-end correlation ID")
-    auto_start: bool = Field(False, description="Automatically transition from requested to active")
-    session_metadata: dict[str, Any] = Field(default_factory=dict, description="Session attributes")
+    auto_start: bool = Field(
+        False, description="Automatically transition from requested to active"
+    )
+    session_metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Session attributes"
+    )
 
     @field_validator("operation_id")
     @classmethod
@@ -109,7 +120,9 @@ class RemoteSessionStart(BaseModel):
 
     operation_id: str | None = Field(None, description="UUID for idempotency")
     correlation_id: str | None = Field(None, description="End-to-end correlation ID")
-    session_metadata: dict[str, Any] = Field(default_factory=dict, description="Session attributes")
+    session_metadata: dict[str, Any] = Field(
+        default_factory=dict, description="Session attributes"
+    )
 
     @field_validator("session_metadata")
     @classmethod
@@ -122,18 +135,30 @@ class RemoteSessionStop(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     operation_id: str | None = Field(None, description="UUID for idempotency")
-    tenant_id: int | None = Field(None, description="Expected tenant ID used as a stale-request guard")
-    sn: str | None = Field(None, min_length=1, description="Expected device SN used as a stale-request guard")
+    tenant_id: int | None = Field(
+        None, description="Expected tenant ID used as a stale-request guard"
+    )
+    sn: str | None = Field(
+        None,
+        min_length=1,
+        description="Expected device SN used as a stale-request guard",
+    )
     reason: str = Field("user_requested", description="Stop reason")
     correlation_id: str | None = Field(None, description="End-to-end correlation ID")
-    timeout_sec: float | None = Field(None, ge=0.0, le=60.0, description="Graceful stop timeout in seconds")
+    timeout_sec: float | None = Field(
+        None, ge=0.0, le=60.0, description="Graceful stop timeout in seconds"
+    )
 
 
 class SessionConflictDetail(BaseModel):
     code: str = Field("session_busy", description="Error code")
     message: str = Field(..., description="Conflict error description")
-    active_session_id: str = Field(..., description="Identifier of the currently conflicting session")
-    active_session_type: str = Field(..., description="Type of the active session ('console' or 'video')")
+    active_session_id: str = Field(
+        ..., description="Identifier of the currently conflicting session"
+    )
+    active_session_type: str = Field(
+        ..., description="Type of the active session ('console' or 'video')"
+    )
     active_status: str = Field(..., description="Current status of the active session")
     sn: str = Field(..., description="Device serial number")
 
@@ -158,7 +183,9 @@ class ConsoleCommandCompleteRequest(BaseModel):
     command_id: str = Field(..., min_length=1, description="Unique command identifier")
     exit_code: int = Field(0, description="Process exit code")
     correlation_id: str | None = Field(None, description="Correlation ID")
-    payload: dict[str, Any] = Field(default_factory=dict, description="Command completion payload")
+    payload: dict[str, Any] = Field(
+        default_factory=dict, description="Command completion payload"
+    )
 
     @field_validator("payload")
     @classmethod
@@ -220,7 +247,9 @@ class RemoteSessionEventItem(BaseModel):
     reason: str | None = Field(None, description="Reason or status code")
     operation_id: str | None = Field(None, description="Operation ID for idempotency")
     correlation_id: str | None = Field(None, description="End-to-end correlation ID")
-    payload: dict[str, Any] = Field(default_factory=dict, description="Immutable event payload")
+    payload: dict[str, Any] = Field(
+        default_factory=dict, description="Immutable event payload"
+    )
     created_at: datetime = Field(..., description="Database record creation timestamp")
 
     @field_validator("payload")
@@ -232,8 +261,12 @@ class RemoteSessionEventItem(BaseModel):
 
 class RemoteSessionEventFeedResponse(BaseModel):
     items: list[RemoteSessionEventItem]
-    next_cursor: int = Field(..., description="Cursor to use for subsequent 'after' query")
-    has_more: bool = Field(..., description="Whether more events are available beyond this page")
+    next_cursor: int = Field(
+        ..., description="Cursor to use for subsequent 'after' query"
+    )
+    has_more: bool = Field(
+        ..., description="Whether more events are available beyond this page"
+    )
     total_count: int = Field(..., description="Number of items returned in this page")
     server_time: datetime = Field(..., description="Current server UTC timestamp")
 
@@ -248,5 +281,7 @@ class RemoteSessionReconciliationResponse(BaseModel):
     events_by_type: dict[str, int] = Field(default_factory=dict)
     active_sessions_count: int = 0
     sessions_by_status: dict[str, int] = Field(default_factory=dict)
-    feed_sha256: str = Field(..., description="SHA-256 digest of feed facts for verification")
+    feed_sha256: str = Field(
+        ..., description="SHA-256 digest of feed facts for verification"
+    )
     server_time: datetime = Field(..., description="Current server UTC timestamp")

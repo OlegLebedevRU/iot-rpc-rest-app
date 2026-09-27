@@ -4,7 +4,14 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    field_validator,
+    model_validator,
+)
 
 from core.diagnostics.commands import (
     CMD_DIAG_CANCEL,
@@ -57,7 +64,7 @@ class DeviceOutputEnvelope(BaseModel):
         if isinstance(v, str):
             try:
                 return UUID(v)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 return v
         return v
 
@@ -114,7 +121,9 @@ class StopLogMessage(BrowserBaseMessage):
 
 class ExecDiagnosticMessage(BrowserBaseMessage):
     type: Literal[BrowserMessageType.EXEC] = BrowserMessageType.EXEC
-    command_id: str = Field(default="raw_cmd", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.:-]+$")
+    command_id: str = Field(
+        default="raw_cmd", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.:-]+$"
+    )
     command_line: str | None = Field(default=None, max_length=4096)
     shell: str | None = Field(default="cmd", max_length=32)
     session_id: UUID | str | None = Field(default=None)
@@ -159,7 +168,9 @@ class DiagExecPayload(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     session_id: UUID | str
-    command_id: str = Field(default="raw_cmd", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.:-]+$")
+    command_id: str = Field(
+        default="raw_cmd", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.:-]+$"
+    )
     command_line: str | None = None
     shell: str | None = "cmd"
     args: dict[str, Any] = Field(default_factory=dict)

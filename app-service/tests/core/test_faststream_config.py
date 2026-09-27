@@ -344,7 +344,10 @@ async def test_lifespan_shutdown_calls_broker_stop():
     with (
         patch("create_api_app._start_broker_with_retry", new_callable=AsyncMock),
         patch("create_api_app.declare_x_q", new_callable=AsyncMock),
-        patch("create_api_app._sync_rmq_device_definitions_on_startup", new_callable=AsyncMock),
+        patch(
+            "create_api_app._sync_rmq_device_definitions_on_startup",
+            new_callable=AsyncMock,
+        ),
         patch("create_api_app.fs_router") as mock_router,
         patch("create_api_app.db_helper") as mock_db,
     ):
@@ -372,7 +375,10 @@ async def test_lifespan_shutdown_handles_broker_stop_exception():
     with (
         patch("create_api_app._start_broker_with_retry", new_callable=AsyncMock),
         patch("create_api_app.declare_x_q", new_callable=AsyncMock),
-        patch("create_api_app._sync_rmq_device_definitions_on_startup", new_callable=AsyncMock),
+        patch(
+            "create_api_app._sync_rmq_device_definitions_on_startup",
+            new_callable=AsyncMock,
+        ),
         patch("create_api_app.fs_router") as mock_router,
         patch("create_api_app.db_helper") as mock_db,
     ):
@@ -406,7 +412,10 @@ async def test_lifespan_shutdown_fallback_to_close():
     with (
         patch("create_api_app._start_broker_with_retry", new_callable=AsyncMock),
         patch("create_api_app.declare_x_q", new_callable=AsyncMock),
-        patch("create_api_app._sync_rmq_device_definitions_on_startup", new_callable=AsyncMock),
+        patch(
+            "create_api_app._sync_rmq_device_definitions_on_startup",
+            new_callable=AsyncMock,
+        ),
         patch("create_api_app.fs_router") as mock_router,
         patch("create_api_app.db_helper") as mock_db,
     ):

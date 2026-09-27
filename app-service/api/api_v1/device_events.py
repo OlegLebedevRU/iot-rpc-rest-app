@@ -12,17 +12,17 @@ from core.schemas.device_events import (
 )
 from core.services.device_events import DeviceEventsService
 
-log = setup_module_logger(__name__, "api_dev_events.log")
-router = APIRouter(
-    prefix=settings.api.v1.device_events,
-    tags=["Device events"],
-)
-
 # Примеры ответа
 from core.examples import (
     EXAMPLE_PAGINATED_RESPONSE,
     EXAMPLE_INCREMENTAL_RESPONSE,
     EXAMPLE_FIELDS_RESPONSE,
+)
+
+log = setup_module_logger(__name__, "api_dev_events.log")
+router = APIRouter(
+    prefix=settings.api.v1.device_events,
+    tags=["Device events"],
 )
 
 

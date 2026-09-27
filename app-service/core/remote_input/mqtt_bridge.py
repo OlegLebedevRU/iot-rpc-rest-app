@@ -96,9 +96,9 @@ def _extract_malformed_ctl_diagnostics(
             return {
                 "type": cmd_type or "unknown",
                 "command_id": str(cmd_id)[:64] if cmd_id is not None else "<none>",
-                "terminal_time_ms": terminal_time
-                if isinstance(terminal_time, int)
-                else None,
+                "terminal_time_ms": (
+                    terminal_time if isinstance(terminal_time, int) else None
+                ),
                 "reason": reason,
             }
     except Exception:

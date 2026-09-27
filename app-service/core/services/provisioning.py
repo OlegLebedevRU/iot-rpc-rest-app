@@ -84,9 +84,14 @@ class ProvisioningService:
             conn_at = None
             if online_info and getattr(online_info, "connected_at", None):
                 from datetime import datetime, UTC
-                conn_at = datetime.fromtimestamp(online_info.connected_at / 1000, tz=UTC)
 
-            rmq_status = "ok" if rmq_res and not rmq_res.get("errors") else "rmq_warning"
+                conn_at = datetime.fromtimestamp(
+                    online_info.connected_at / 1000, tz=UTC
+                )
+
+            rmq_status = (
+                "ok" if rmq_res and not rmq_res.get("errors") else "rmq_warning"
+            )
             results.append(
                 TerminalProvisionResult(
                     device_id=t.device_id,
@@ -157,7 +162,13 @@ class ProvisioningService:
         # Ensure parent Org exists in tb_orgs
         await session.execute(
             pg_insert(Org)
-            .values({"org_id": request.org_id, "name": request.name or f"Org {request.org_id}", "is_deleted": False})
+            .values(
+                {
+                    "org_id": request.org_id,
+                    "name": request.name or f"Org {request.org_id}",
+                    "is_deleted": False,
+                }
+            )
             .on_conflict_do_nothing(index_elements=["org_id"])
         )
 

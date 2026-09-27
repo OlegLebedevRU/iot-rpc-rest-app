@@ -1,9 +1,9 @@
 import math
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -174,9 +174,7 @@ class BillingRepo:
         return result.scalar_one()
 
     @classmethod
-    async def list_coefficients(
-        cls, session: AsyncSession
-    ) -> list[BillingCoefficient]:
+    async def list_coefficients(cls, session: AsyncSession) -> list[BillingCoefficient]:
         stmt = select(BillingCoefficient).order_by(
             BillingCoefficient.effective_from.desc()
         )

@@ -1,6 +1,5 @@
 from __future__ import annotations as _annotations
 
-from typing import Any
 
 from fastui import AnyComponent
 from fastui import components as c

@@ -1,20 +1,14 @@
-import asyncio
-from datetime import datetime, timezone
+from datetime import datetime
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import cast
 
 from core.crud.device_repo import DeviceRepo
 from core.models import DeviceConnection
-from core.schemas.devices import DeviceConnectStatus, DeviceConnectView
-from core.schemas.rmq_admin import DeviceConnectionDetails
+from core.schemas.devices import DeviceConnectView
 from core.services.devices import DeviceService, extract_device_sn
-from core.services.rmq_admin import RmqAdmin
 from core.integrations.rmq_admin_api import (
     RmqAdminApi,
-    extract_device_sn_from_conn,
-    IGNORED_USERS,
 )
 
 
@@ -252,9 +246,7 @@ async def test_handle_connection_event_ignores_internal_users():
 @pytest.mark.asyncio
 async def test_extract_device_sn_helpers():
     # Из user
-    assert (
-        extract_device_sn({"user": "SN_A1"}, {}) == "SN_A1"
-    )
+    assert extract_device_sn({"user": "SN_A1"}, {}) == "SN_A1"
     # Из client_properties.client_id
     assert (
         extract_device_sn(
@@ -289,7 +281,9 @@ async def test_update_connect_flag_sql_generation():
 
     # Test invalid flag name
     with pytest.raises(ValueError, match="Invalid connection flag name"):
-        await DeviceRepo.update_connect_flag(mock_session, "SN123", "unknown_flag", True)
+        await DeviceRepo.update_connect_flag(
+            mock_session, "SN123", "unknown_flag", True
+        )
 
 
 def test_device_connection_availability_computation():

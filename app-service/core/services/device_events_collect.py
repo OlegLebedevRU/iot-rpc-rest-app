@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core import settings
 from core.crud.dev_events_repo import EventRepository
 from core.crud.device_repo import DeviceRepo
-from core.logging_config import setup_module_logger, log_rpc_debug
+from core.logging_config import setup_module_logger
 
 from core.schemas.device_events import DevEventBody
 from core.services.device_task_processing import send_eva
@@ -36,7 +36,7 @@ def _parse_dev_timestamp(raw) -> int:
     try:
         dt = datetime.fromisoformat(s)
         return int(dt.timestamp())
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         pass
     log.warning("Unparseable dev_timestamp=%r, using current time", raw)
     return int(time.time())
@@ -88,7 +88,7 @@ class DeviceEventsCollect:
 
         try:
             payload_dict = json.loads(msg.body.decode()) if msg.body else {}
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             payload_dict = {}
 
         if not is_gauge_event:
@@ -169,4 +169,3 @@ class DeviceEventsCollect:
                     corr_id=corr_id,
                     status="success",
                 )
-

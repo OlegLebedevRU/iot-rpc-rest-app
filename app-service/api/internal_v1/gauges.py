@@ -1,8 +1,5 @@
-from typing import Annotated
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from fastapi_pagination import Page
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.internal_v1.internal_depends import Internal_Org_dep, Session_dep
 from core.schemas.devices import DeviceGaugesView

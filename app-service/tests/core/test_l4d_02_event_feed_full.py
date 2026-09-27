@@ -73,7 +73,9 @@ class InMemoryAsyncSession:
 
         for criterion in where_criteria:
             if hasattr(criterion, "left") and hasattr(criterion, "right"):
-                col_name = getattr(criterion.left, "key", None) or getattr(criterion.left, "name", None)
+                col_name = getattr(criterion.left, "key", None) or getattr(
+                    criterion.left, "name", None
+                )
                 val = getattr(criterion.right, "value", None)
                 if col_name == "event_id":
                     target_event_id = val
@@ -163,7 +165,10 @@ class InMemoryAsyncSession:
             max_c = max((e.cursor for e in self.events), default=None)
             return ExecResult([(count, min_c, max_c)])
 
-        if "group by tb_remote_session_events.event_type" in stmt_str or "group_by" in stmt_str:
+        if (
+            "group by tb_remote_session_events.event_type" in stmt_str
+            or "group_by" in stmt_str
+        ):
             counts: dict[str, int] = {}
             for e in self.events:
                 counts[e.event_type] = counts.get(e.event_type, 0) + 1
@@ -175,7 +180,10 @@ class InMemoryAsyncSession:
                 counts_s[s.status] = counts_s.get(s.status, 0) + 1
             return ExecResult([(k, v) for k, v in counts_s.items()])
 
-        if "tb_remote_session_events.cursor" in stmt_str and "tb_remote_session_events.event_id" in stmt_str:
+        if (
+            "tb_remote_session_events.cursor" in stmt_str
+            and "tb_remote_session_events.event_id" in stmt_str
+        ):
             # SHA hash items query
             sorted_events = sorted(self.events, key=lambda e: e.cursor)
             rows = [
@@ -250,7 +258,11 @@ async def test_all_nine_mandatory_events_recording():
 
     # 5. console_command_completed
     ev5 = await service.record_console_command_completed(
-        session, sn="SN1001", command_id="system_info", exit_code=0, session_id="sess-c-1"
+        session,
+        sn="SN1001",
+        command_id="system_info",
+        exit_code=0,
+        session_id="sess-c-1",
     )
     assert ev5.event_type == RemoteSessionEventType.CONSOLE_COMMAND_COMPLETED
     assert ev5.cursor == 5
@@ -266,7 +278,11 @@ async def test_all_nine_mandatory_events_recording():
 
     # 7. remote_session_stop_requested
     ev7 = await service.record_session_stop_requested(
-        session, session_id="sess-c-1", sn="SN1001", session_type="console", reason="user_stop"
+        session,
+        session_id="sess-c-1",
+        sn="SN1001",
+        session_type="console",
+        reason="user_stop",
     )
     assert ev7.event_type == RemoteSessionEventType.REMOTE_SESSION_STOP_REQUESTED
     assert ev7.cursor == 7
@@ -274,14 +290,22 @@ async def test_all_nine_mandatory_events_recording():
 
     # 8. remote_session_closed
     ev8 = await service.record_session_closed(
-        session, session_id="sess-c-1", sn="SN1001", session_type="console", reason="graceful"
+        session,
+        session_id="sess-c-1",
+        sn="SN1001",
+        session_type="console",
+        reason="graceful",
     )
     assert ev8.event_type == RemoteSessionEventType.REMOTE_SESSION_CLOSED
     assert ev8.cursor == 8
 
     # 9. remote_session_failed
     ev9 = await service.record_session_failed(
-        session, session_id="sess-c-2", sn="SN1001", session_type="console", reason="timeout"
+        session,
+        session_id="sess-c-2",
+        sn="SN1001",
+        session_type="console",
+        reason="timeout",
     )
     assert ev9.event_type == RemoteSessionEventType.REMOTE_SESSION_FAILED
     assert ev9.cursor == 9
@@ -337,7 +361,15 @@ async def test_forbidden_commercial_fields_rejection():
     session = InMemoryAsyncSession()
     service = RemoteSessionEventService()
 
-    for forbidden in ["billing", "price", "tariff", "balance", "cost", "invoice", "subledger"]:
+    for forbidden in [
+        "billing",
+        "price",
+        "tariff",
+        "balance",
+        "cost",
+        "invoice",
+        "subledger",
+    ]:
         with pytest.raises(ValueError) as exc:
             await service.record_event(
                 session,
@@ -488,6 +520,7 @@ async def test_api_auth_protection_and_headers():
 
         # 3. Valid auth header -> 200 OK (with mocked session)
         fake_session = InMemoryAsyncSession()
+
         async def fake_session_getter():
             yield fake_session
 
@@ -512,6 +545,7 @@ async def test_api_auth_protection_and_headers():
 async def test_api_remote_session_lifecycle_and_idempotency():
     """Verify POST /remote-sessions, GET /remote-sessions/{id}, and POST /remote-sessions/{id}/stop."""
     fake_session = InMemoryAsyncSession()
+
     async def fake_session_getter():
         yield fake_session
 
@@ -671,7 +705,9 @@ async def test_generate_and_verify_contract_artifacts():
     # 2. Generate JSON Schema for RemoteSessionEventItem
     event_schema_path = schemas_dir / "remote_session_event.schema.json"
     with open(event_schema_path, "w", encoding="utf-8") as f:
-        json.dump(RemoteSessionEventItem.model_json_schema(), f, indent=2, ensure_ascii=False)
+        json.dump(
+            RemoteSessionEventItem.model_json_schema(), f, indent=2, ensure_ascii=False
+        )
     assert event_schema_path.exists() and event_schema_path.stat().st_size > 0
 
     # 3. Generate JSON Schema for RemoteSession
@@ -794,7 +830,11 @@ async def test_generate_and_verify_contract_artifacts():
                 "reason": "exit_code_0",
                 "operation_id": "op-cmd-001",
                 "correlation_id": "corr-003",
-                "payload": {"command_id": "system_info", "exit_code": 0, "bytes_emitted": 256},
+                "payload": {
+                    "command_id": "system_info",
+                    "exit_code": 0,
+                    "bytes_emitted": 256,
+                },
                 "created_at": (base_time + timedelta(seconds=5)).isoformat(),
             },
             "console_command_timed_out": {

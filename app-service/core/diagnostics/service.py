@@ -54,9 +54,7 @@ class DeviceTaskDiagnosticTaskSender:
         return int(ttl_sec) if ttl_sec is not None else 60
 
     async def send(self, sn: str, task: DiagnosticRpcTask) -> None:
-        device_id = await DeviceRepo.get_device_id(
-            self.session, sn, self.org_id
-        )
+        device_id = await DeviceRepo.get_device_id(self.session, sn, self.org_id)
         if device_id is None:
             raise ValueError(f"device not found for sn={sn} org_id={self.org_id}")
 

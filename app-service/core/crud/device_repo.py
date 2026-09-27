@@ -6,10 +6,10 @@ from fastapi_pagination.ext.sqlalchemy import apaginate
 from core.logging_config import setup_module_logger
 from typing import Any, List
 
-from sqlalchemy import select, not_, func, update, text, sql, case, cast, String, or_, and_
+from sqlalchemy import select, not_, func, update, text, case, cast, String, or_, and_
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
-from sqlalchemy.orm import joinedload, load_only, selectinload, contains_eager
+from sqlalchemy.orm import selectinload, contains_eager
 from fastapi import HTTPException
 
 from core.models import (
@@ -25,7 +25,6 @@ from core.schemas.devices import (
     DeviceConnectStatus,
     DeviceListResponse,
     DeviceStats,
-    DeviceListResult,
 )
 
 log = setup_module_logger(__name__, "repo_devices.log")
@@ -49,7 +48,9 @@ class DeviceRepo:
         if page < 1:
             raise HTTPException(status_code=400, detail="page must be >= 1")
         if size < 1 or size > 100:
-            raise HTTPException(status_code=400, detail="size must be between 1 and 100")
+            raise HTTPException(
+                status_code=400, detail="size must be between 1 and 100"
+            )
 
         sb = (sort_by or "device_id").strip().lower()
         if sb not in ("device_id", "sn", "connected_at", "status"):
@@ -57,7 +58,9 @@ class DeviceRepo:
 
         so = (sort_order or "asc").strip().lower()
         if so not in ("asc", "desc"):
-            raise HTTPException(status_code=400, detail=f"Invalid sort_order: {sort_order}")
+            raise HTTPException(
+                status_code=400, detail=f"Invalid sort_order: {sort_order}"
+            )
 
         st = (status or "").strip().lower()
         if st and st not in ("all", "online", "offline", "blocked"):
@@ -133,13 +136,10 @@ class DeviceRepo:
             has_q_filter = True
             search_str = q.strip()
             pattern = f"%{search_str}%"
-            tag_subq = (
-                select(DeviceTag.device_id)
-                .where(
-                    DeviceTag.is_deleted.is_(False),
-                    DeviceTag.tag.in_(["name", "description", "app", "sys"]),
-                    DeviceTag.value.ilike(pattern),
-                )
+            tag_subq = select(DeviceTag.device_id).where(
+                DeviceTag.is_deleted.is_(False),
+                DeviceTag.tag.in_(["name", "description", "app", "sys"]),
+                DeviceTag.value.ilike(pattern),
             )
             q_filter = or_(
                 Device.sn.ilike(pattern),
@@ -156,7 +156,9 @@ class DeviceRepo:
                 select(func.count(Device.id))
                 .select_from(Device)
                 .join(DeviceOrgBind, Device.device_id == DeviceOrgBind.device_id)
-                .outerjoin(DeviceConnection, Device.device_id == DeviceConnection.device_id)
+                .outerjoin(
+                    DeviceConnection, Device.device_id == DeviceConnection.device_id
+                )
                 .where(*where_clauses)
             )
             filtered_total = (await session.scalar(count_stmt)) or 0
@@ -165,10 +167,14 @@ class DeviceRepo:
 
         order_by_list = []
         if sb == "device_id":
-            order_by_list.append(Device.device_id.desc() if so == "desc" else Device.device_id.asc())
+            order_by_list.append(
+                Device.device_id.desc() if so == "desc" else Device.device_id.asc()
+            )
         elif sb == "sn":
             order_by_list.append(Device.sn.desc() if so == "desc" else Device.sn.asc())
-            order_by_list.append(Device.device_id.desc() if so == "desc" else Device.device_id.asc())
+            order_by_list.append(
+                Device.device_id.desc() if so == "desc" else Device.device_id.asc()
+            )
         elif sb == "connected_at":
             conn_order = (
                 DeviceConnection.connected_at.desc().nulls_last()
@@ -176,7 +182,9 @@ class DeviceRepo:
                 else DeviceConnection.connected_at.asc().nulls_last()
             )
             order_by_list.append(conn_order)
-            order_by_list.append(Device.device_id.desc() if so == "desc" else Device.device_id.asc())
+            order_by_list.append(
+                Device.device_id.desc() if so == "desc" else Device.device_id.asc()
+            )
         elif sb == "status":
             status_order_expr = case(
                 (DeviceConnection.is_blocked.is_(True), "blocked"),
@@ -184,12 +192,12 @@ class DeviceRepo:
                 else_="offline",
             )
             status_order = (
-                status_order_expr.desc()
-                if so == "desc"
-                else status_order_expr.asc()
+                status_order_expr.desc() if so == "desc" else status_order_expr.asc()
             )
             order_by_list.append(status_order)
-            order_by_list.append(Device.device_id.desc() if so == "desc" else Device.device_id.asc())
+            order_by_list.append(
+                Device.device_id.desc() if so == "desc" else Device.device_id.asc()
+            )
 
         offset = (page - 1) * size
         stmt = (
@@ -237,7 +245,7 @@ class DeviceRepo:
             .join(Device.org_bind)
             .where(
                 Device.device_id == device_id,
-                Device.is_deleted == False,
+                Device.is_deleted.is_(False),
                 DeviceOrgBind.org_id == org_id,
             )
             .limit(1)
@@ -264,7 +272,7 @@ class DeviceRepo:
             return None
 
         stmt = select(Device.device_id).where(
-            Device.sn == sn, Device.is_deleted == False
+            Device.sn == sn, Device.is_deleted.is_(False)
         )
         if org_id > 0:
             stmt = stmt.join(Device.org_bind).where(DeviceOrgBind.org_id == org_id)
@@ -519,9 +527,7 @@ class DeviceRepo:
                 conn_row.connected_at = now_dt
 
             merged_details = (
-                dict(conn_row.details)
-                if isinstance(conn_row.details, dict)
-                else {}
+                dict(conn_row.details) if isinstance(conn_row.details, dict) else {}
             )
             merged_details.update(details_dict)
             conn_row.details = merged_details
@@ -582,8 +588,8 @@ class DeviceRepo:
             current_details = (
                 conn_row.details if isinstance(conn_row.details, dict) else {}
             )
-            current_conn_name = (
-                current_details.get("conn_name") or current_details.get("name")
+            current_conn_name = current_details.get("conn_name") or current_details.get(
+                "name"
             )
 
             # Если имена обоих сокетов известны и не совпадают -> закрылся старый сокет (гонка при реконнекте)
@@ -688,9 +694,9 @@ class DeviceRepo:
             select(DeviceGauge)
             .join(Device)
             .join(Device.org_bind)
-            .where(Device.is_deleted == False)
+            .where(Device.is_deleted.is_(False))
             .where(DeviceOrgBind.org_id == org_id)
-            .where(DeviceGauge.is_deleted == False)
+            .where(DeviceGauge.is_deleted.is_(False))
         )
 
         if device_id is not None:
@@ -971,7 +977,7 @@ class DeviceRepo:
             )
             .outerjoin(DeviceOrgBind, DeviceOrgBind.device_id == Device.device_id)
             .outerjoin(DeviceConnection, DeviceConnection.device_id == Device.device_id)
-            .where(Device.device_id.in_(device_ids), Device.is_deleted == False)
+            .where(Device.device_id.in_(device_ids), Device.is_deleted.is_(False))
         )
         res = await session.execute(stmt)
         rows = res.fetchall()

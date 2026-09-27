@@ -14,11 +14,9 @@ from core.integrations.rmq_admin_api import (
     RmqAdminApi,
     extract_device_sn_from_conn,
     is_ignored_or_service_identity,
-    IGNORED_USERS,
 )
 from core.logging_config import setup_module_logger
-from core.schemas.devices import DeviceConnectStatus, DeviceTagPut, DeviceListResponse
-from core.services.rmq_admin import RmqAdmin
+from core.schemas.devices import DeviceTagPut, DeviceListResponse
 
 log = setup_module_logger(__name__, "srv_devices.log")
 
@@ -101,13 +99,9 @@ def evaluate_connection_collision(
         return None, None
 
     # 1. Проверка SN_COLLISION (одинаковый SN, но разные валидные сертификаты)
-    certs_in_window = {
-        s.cert_validity for s in history if s.cert_validity is not None
-    }
+    certs_in_window = {s.cert_validity for s in history if s.cert_validity is not None}
     if len(certs_in_window) >= 2:
-        conflicting_hosts = sorted(
-            list({s.peer_host for s in history if s.peer_host})
-        )
+        conflicting_hosts = sorted(list({s.peer_host for s in history if s.peer_host}))
         violation_details = {
             "detected_at": datetime.now(timezone.utc).isoformat(),
             "violation_type": "SN_COLLISION",
@@ -137,9 +131,7 @@ def evaluate_connection_collision(
                     "detected_at": datetime.now(timezone.utc).isoformat(),
                     "violation_type": "DEVICE_CLONE",
                     "cert_validities": (
-                        sorted(list(certs_in_window))
-                        if certs_in_window
-                        else []
+                        sorted(list(certs_in_window)) if certs_in_window else []
                     ),
                     "conflicting_hosts": sorted(list(unique_hosts)),
                     "flapping_count": len(history),
@@ -242,13 +234,16 @@ class DeviceService:
             "ssl": payload.get("ssl") if "ssl" in payload else headers.get("ssl"),
             "ssl_cipher": payload.get("ssl_cipher") or headers.get("ssl_cipher"),
             "ssl_protocol": payload.get("ssl_protocol") or headers.get("ssl_protocol"),
-            "peer_cert_subject": payload.get("peer_cert_subject") or headers.get("peer_cert_subject"),
-            "peer_cert_validity": payload.get("peer_cert_validity") or headers.get("peer_cert_validity"),
+            "peer_cert_subject": payload.get("peer_cert_subject")
+            or headers.get("peer_cert_subject"),
+            "peer_cert_validity": payload.get("peer_cert_validity")
+            or headers.get("peer_cert_validity"),
             "protocol": payload.get("protocol") or headers.get("protocol"),
             "connected_at": connected_at,
             "bytes_received": payload.get("recv_oct") or headers.get("recv_oct"),
             "bytes_sent": payload.get("send_oct") or headers.get("send_oct"),
-            "client_properties": payload.get("client_properties") or headers.get("client_properties"),
+            "client_properties": payload.get("client_properties")
+            or headers.get("client_properties"),
         }
         details = {k: v for k, v in details.items() if v is not None}
 
@@ -267,25 +262,45 @@ class DeviceService:
                             "conn_name": conn_name,
                             "name": conn_name,
                             "user": single_details.get("user") or details.get("user"),
-                            "peer_host": single_details.get("peer_host") or details.get("peer_host"),
-                            "peer_port": single_details.get("peer_port") or details.get("peer_port"),
-                            "ssl": single_details.get("ssl") if "ssl" in single_details else details.get("ssl"),
-                            "ssl_cipher": single_details.get("ssl_cipher") or details.get("ssl_cipher"),
-                            "ssl_protocol": single_details.get("ssl_protocol") or details.get("ssl_protocol"),
-                            "peer_cert_subject": single_details.get("peer_cert_subject") or details.get("peer_cert_subject"),
-                            "peer_cert_validity": single_details.get("peer_cert_validity") or details.get("peer_cert_validity"),
-                            "protocol": single_details.get("protocol") or details.get("protocol"),
+                            "peer_host": single_details.get("peer_host")
+                            or details.get("peer_host"),
+                            "peer_port": single_details.get("peer_port")
+                            or details.get("peer_port"),
+                            "ssl": (
+                                single_details.get("ssl")
+                                if "ssl" in single_details
+                                else details.get("ssl")
+                            ),
+                            "ssl_cipher": single_details.get("ssl_cipher")
+                            or details.get("ssl_cipher"),
+                            "ssl_protocol": single_details.get("ssl_protocol")
+                            or details.get("ssl_protocol"),
+                            "peer_cert_subject": single_details.get("peer_cert_subject")
+                            or details.get("peer_cert_subject"),
+                            "peer_cert_validity": single_details.get(
+                                "peer_cert_validity"
+                            )
+                            or details.get("peer_cert_validity"),
+                            "protocol": single_details.get("protocol")
+                            or details.get("protocol"),
                             "connected_at": connected_at,
-                            "bytes_received": single_details.get("recv_oct") or details.get("bytes_received"),
-                            "bytes_sent": single_details.get("send_oct") or details.get("bytes_sent"),
-                            "recv_oct": single_details.get("recv_oct") or details.get("recv_oct"),
-                            "send_oct": single_details.get("send_oct") or details.get("send_oct"),
-                            "client_properties": single_details.get("client_properties") or details.get("client_properties"),
+                            "bytes_received": single_details.get("recv_oct")
+                            or details.get("bytes_received"),
+                            "bytes_sent": single_details.get("send_oct")
+                            or details.get("bytes_sent"),
+                            "recv_oct": single_details.get("recv_oct")
+                            or details.get("recv_oct"),
+                            "send_oct": single_details.get("send_oct")
+                            or details.get("send_oct"),
+                            "client_properties": single_details.get("client_properties")
+                            or details.get("client_properties"),
                         }
                     )
                     details = {k: v for k, v in details.items() if v is not None}
             except Exception as e:
-                log.debug("Failed to fetch fresh connection details for %s: %s", device_sn, e)
+                log.debug(
+                    "Failed to fetch fresh connection details for %s: %s", device_sn, e
+                )
 
             # Проверка на коллизии (SN_COLLISION / DEVICE_CLONE)
             violation_type, violation_details = evaluate_connection_collision(
@@ -326,9 +341,17 @@ class DeviceService:
             if res is False:
                 # Устройство уже заблокировано в БД -> сбрасываем сокет в RMQ
                 await RmqAdminApi.block_device_user(device_sn)
-                log.info("Handled connection.created for blocked %s (conn_name=%s)", device_sn, conn_name)
+                log.info(
+                    "Handled connection.created for blocked %s (conn_name=%s)",
+                    device_sn,
+                    conn_name,
+                )
             else:
-                log.info("Handled connection.created for %s (conn_name=%s)", device_sn, conn_name)
+                log.info(
+                    "Handled connection.created for %s (conn_name=%s)",
+                    device_sn,
+                    conn_name,
+                )
             return res
         elif "connection.closed" in routing_key:
             res = await DeviceRepo.handle_connection_closed(
@@ -534,10 +557,10 @@ class DeviceService:
                     tag_id = await DeviceRepo.upsert_tag(
                         session, org_id, device_id, tag_value.tag, tag_value.value
                     )
-                except:
+                except Exception as exc:
                     raise HTTPException(
                         status_code=404, detail="Tag/device_id uniqes error."
-                    )
+                    ) from exc
             else:
                 raise HTTPException(status_code=404, detail="Value is empty")
         else:

@@ -9,7 +9,6 @@ import pytest
 
 from core.schemas.billing import (
     BillingCoefficientCreate,
-    BillingCoefficientOut,
     BillingCounterOut,
     BillingEvent,
     BillingRecalculateRequest,
@@ -23,15 +22,12 @@ from core.services.billing_utils import (
     require_billing_admin,
 )
 
-
 # ──────────────── Schema tests ────────────────
 
 
 class TestBillingSchemas:
     def test_billing_event_schema_defaults(self):
-        evt = BillingEvent(
-            org_id=1, device_id=100, counter_type="evt"
-        )
+        evt = BillingEvent(org_id=1, device_id=100, counter_type="evt")
         assert evt.value == 1
         assert evt.payload_bytes == 0
 
@@ -159,15 +155,9 @@ class TestBillingService:
             patch.object(
                 BillingRepo, "get_effective_coefficients", return_value=mock_coeff
             ),
-            patch.object(
-                BillingRepo, "get_all_org_ids_for_period", return_value=[1]
-            ),
-            patch.object(
-                BillingRepo, "count_active_devices", return_value=5
-            ),
-            patch.object(
-                BillingRepo, "get_counter", return_value=mock_counter
-            ),
+            patch.object(BillingRepo, "get_all_org_ids_for_period", return_value=[1]),
+            patch.object(BillingRepo, "count_active_devices", return_value=5),
+            patch.object(BillingRepo, "get_counter", return_value=mock_counter),
             patch.object(
                 BillingRepo, "save_calculation", new_callable=AsyncMock
             ) as mock_save,
@@ -211,9 +201,7 @@ class TestBillingService:
         session = AsyncMock()
 
         with (
-            patch.object(
-                BillingRepo, "record_device_activity", new_callable=AsyncMock
-            ),
+            patch.object(BillingRepo, "record_device_activity", new_callable=AsyncMock),
             patch.object(
                 BillingRepo, "increment_res_messages", new_callable=AsyncMock
             ) as mock_res,
@@ -229,9 +217,7 @@ class TestBillingService:
         session = AsyncMock()
 
         with (
-            patch.object(
-                BillingRepo, "record_device_activity", new_callable=AsyncMock
-            ),
+            patch.object(BillingRepo, "record_device_activity", new_callable=AsyncMock),
             patch.object(
                 BillingRepo, "increment_api_requests", new_callable=AsyncMock
             ) as mock_api,
@@ -266,9 +252,7 @@ class TestBillingService:
             patch.object(
                 BillingRepo, "record_device_activity", new_callable=AsyncMock
             ) as mock_activity,
-            patch.object(
-                BillingRepo, "increment_api_requests", new_callable=AsyncMock
-            ),
+            patch.object(BillingRepo, "increment_api_requests", new_callable=AsyncMock),
         ):
             await BillingService.handle_billing_event(
                 session, org_id=1, device_id=0, counter_type="api"
@@ -280,9 +264,7 @@ class TestBillingService:
         session = AsyncMock()
 
         with (
-            patch.object(
-                BillingRepo, "record_device_activity", new_callable=AsyncMock
-            ),
+            patch.object(BillingRepo, "record_device_activity", new_callable=AsyncMock),
             patch.object(
                 BillingRepo,
                 "increment_evt_messages",

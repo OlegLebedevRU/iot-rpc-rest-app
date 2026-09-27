@@ -17,10 +17,7 @@ class BillingApiCounterMiddleware(BaseHTTPMiddleware):
         response = await call_next(request)
 
         # Only count successful API requests under /api/
-        if (
-            response.status_code < 400
-            and request.url.path.startswith("/api/")
-        ):
+        if response.status_code < 400 and request.url.path.startswith("/api/"):
             org_id = getattr(request.state, "billing_org_id", None)
             if org_id is not None and org_id >= 0:
                 try:

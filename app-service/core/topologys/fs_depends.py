@@ -56,19 +56,19 @@ def _try_parse_uuid(value: object) -> uuid.UUID | None:
     if isinstance(value, str):
         try:
             return uuid.UUID(value)
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             pass
         if len(value) == 16:
             try:
                 return uuid.UUID(bytes=value.encode("latin-1"))
-            except (UnicodeEncodeError, ValueError, AttributeError):
+            except UnicodeEncodeError, ValueError, AttributeError:
                 pass
     if isinstance(value, memoryview):
         value = value.tobytes()
     if isinstance(value, bytes | bytearray) and len(value) == 16:
         try:
             return uuid.UUID(bytes=bytes(value))
-        except (ValueError, AttributeError):
+        except ValueError, AttributeError:
             pass
     return None
 
@@ -106,13 +106,22 @@ def _try_extract_corr_id_from_body(body: object) -> uuid.UUID | None:
 
     try:
         payload = json.loads(body)
-    except (json.JSONDecodeError, TypeError, ValueError):
+    except json.JSONDecodeError, TypeError, ValueError:
         return None
 
     if not isinstance(payload, dict):
         return None
 
-    for key in ("correlationData", "CorrelationData", "correlation_data", "corr_data", "corr_id", "id", "command_id", "target_task_id"):
+    for key in (
+        "correlationData",
+        "CorrelationData",
+        "correlation_data",
+        "corr_data",
+        "corr_id",
+        "id",
+        "command_id",
+        "target_task_id",
+    ):
         if key not in payload:
             continue
 
@@ -126,8 +135,8 @@ def _try_extract_corr_id_from_body(body: object) -> uuid.UUID | None:
 async def corr_id_getter_dep(msg: RabbitMessage) -> UUID4 | None:
     try:
         log.debug("corr_id_getter_dep: Starting extraction of correlation ID")
-        #log.debug("Full message object: %s", msg)
-        #log.debug("Full message dict: %s", msg.__dict__ if hasattr(msg, '__dict__') else str(msg))
+        # log.debug("Full message object: %s", msg)
+        # log.debug("Full message dict: %s", msg.__dict__ if hasattr(msg, '__dict__') else str(msg))
 
         msg_headers = getattr(msg, "headers", None)
         raw_headers = getattr(msg.raw_message, "headers", None)
@@ -160,7 +169,9 @@ async def corr_id_getter_dep(msg: RabbitMessage) -> UUID4 | None:
             )
             corr_id = _try_parse_uuid(header_value)
             if corr_id is not None:
-                log.debug("Using correlation ID from headers[%s] = %s", header_name, corr_id)
+                log.debug(
+                    "Using correlation ID from headers[%s] = %s", header_name, corr_id
+                )
                 return corr_id
 
             log.debug("Failed to parse headers[%s]: %r", header_name, header_value)
@@ -175,7 +186,9 @@ async def corr_id_getter_dep(msg: RabbitMessage) -> UUID4 | None:
             )
             corr_id = _try_parse_uuid(header_value)
             if corr_id is not None:
-                log.debug("Using correlation ID from headers[x-correlation-id] = %s", corr_id)
+                log.debug(
+                    "Using correlation ID from headers[x-correlation-id] = %s", corr_id
+                )
                 return corr_id
 
             log.debug("Failed to parse headers[x-correlation-id]: %r", header_value)
@@ -200,11 +213,17 @@ async def corr_id_getter_dep(msg: RabbitMessage) -> UUID4 | None:
 
             log.debug("Failed to parse msg.correlation_id: %s", msg.correlation_id)
 
-        log.debug("No correlation ID found in any supported source. Headers: %s", headers)
+        log.debug(
+            "No correlation ID found in any supported source. Headers: %s", headers
+        )
         corr_id = None
 
     except (TypeError, ValueError, KeyError) as e:
-        log.debug("Exception while extracting correlation ID: %s (type: %s)", e, type(e).__name__)
+        log.debug(
+            "Exception while extracting correlation ID: %s (type: %s)",
+            e,
+            type(e).__name__,
+        )
         corr_id = None
     return corr_id
 

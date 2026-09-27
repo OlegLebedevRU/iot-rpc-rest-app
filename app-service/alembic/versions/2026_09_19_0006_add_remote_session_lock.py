@@ -13,7 +13,6 @@ from typing import Sequence
 from alembic import op
 import sqlalchemy as sa
 
-
 # revision identifiers, used by Alembic.
 revision: str = "0006_remote_session_lock"
 down_revision: str | None = "0005_device_provisioning"
@@ -27,8 +26,12 @@ def upgrade() -> None:
         "tb_remote_sessions",
         ["sn"],
         unique=True,
-        postgresql_where=sa.text("status IN ('requested', 'starting', 'active', 'stopping')"),
-        sqlite_where=sa.text("status IN ('requested', 'starting', 'active', 'stopping')"),
+        postgresql_where=sa.text(
+            "status IN ('requested', 'starting', 'active', 'stopping')"
+        ),
+        sqlite_where=sa.text(
+            "status IN ('requested', 'starting', 'active', 'stopping')"
+        ),
     )
 
 

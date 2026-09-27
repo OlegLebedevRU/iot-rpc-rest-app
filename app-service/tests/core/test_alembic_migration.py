@@ -1,5 +1,4 @@
 import pathlib
-import pytest
 from unittest.mock import MagicMock
 from alembic import op
 import importlib.util
@@ -44,7 +43,9 @@ def test_alembic_org_api_keys_migration_upgrade_and_downgrade(monkeypatch):
         / "versions"
         / "2026_08_27_0002_add_org_api_keys_table_and_seed.py"
     )
-    spec = importlib.util.spec_from_file_location("migration_org_api_keys", migration_path)
+    spec = importlib.util.spec_from_file_location(
+        "migration_org_api_keys", migration_path
+    )
     assert spec is not None
     assert spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
@@ -78,7 +79,9 @@ def test_alembic_remote_session_events_migration_upgrade_and_downgrade(monkeypat
         / "versions"
         / "2026_09_17_0004_add_remote_session_events_and_facts.py"
     )
-    spec = importlib.util.spec_from_file_location("migration_remote_session_events", migration_path)
+    spec = importlib.util.spec_from_file_location(
+        "migration_remote_session_events", migration_path
+    )
     assert spec is not None
     assert spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
@@ -110,7 +113,9 @@ def test_alembic_device_provisioning_migration_upgrade_and_downgrade(monkeypatch
         / "versions"
         / "2026_09_18_0005_add_device_provisioning_operations.py"
     )
-    spec = importlib.util.spec_from_file_location("migration_device_provisioning", migration_path)
+    spec = importlib.util.spec_from_file_location(
+        "migration_device_provisioning", migration_path
+    )
     assert spec is not None
     assert spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
@@ -142,7 +147,9 @@ def test_alembic_remote_session_lock_migration_upgrade_and_downgrade(monkeypatch
         / "versions"
         / "2026_09_19_0006_add_remote_session_lock.py"
     )
-    spec = importlib.util.spec_from_file_location("migration_remote_session_lock", migration_path)
+    spec = importlib.util.spec_from_file_location(
+        "migration_remote_session_lock", migration_path
+    )
     assert spec is not None
     assert spec.loader is not None
     mod = importlib.util.module_from_spec(spec)

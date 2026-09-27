@@ -23,7 +23,9 @@ def test_definitions_json_etran_service():
     root = _get_project_root()
     defs_path = root / "rmq" / "definitions.json"
     if not defs_path.is_file():
-        pytest.skip(f"definitions.json not found at {defs_path} (isolated container run)")
+        pytest.skip(
+            f"definitions.json not found at {defs_path} (isolated container run)"
+        )
 
     data = json.loads(defs_path.read_text(encoding="utf-8"))
 
@@ -36,7 +38,9 @@ def test_definitions_json_etran_service():
     assert etran_user["password_hash"], "password_hash should not be empty"
 
     # 2. Permissions check
-    permissions = [p for p in data.get("permissions", []) if p.get("user") == "etran_service"]
+    permissions = [
+        p for p in data.get("permissions", []) if p.get("user") == "etran_service"
+    ]
     assert len(permissions) == 1, "etran_service permissions missing or duplicated"
     perm = permissions[0]
     assert perm.get("vhost") == "/"
@@ -46,7 +50,8 @@ def test_definitions_json_etran_service():
 
     # 3. Topic Permissions check
     topic_perms = [
-        tp for tp in data.get("topic_permissions", [])
+        tp
+        for tp in data.get("topic_permissions", [])
         if tp.get("user") == "etran_service" and tp.get("exchange") == "amq.topic"
     ]
     assert len(topic_perms) == 1, "etran_service topic_permissions on amq.topic missing"
@@ -66,15 +71,31 @@ def test_rabbitmq_conf_listeners_and_mqtt():
     content = conf_path.read_text(encoding="utf-8")
 
     # Check that listeners are configured without comments
-    assert re.search(r"^\s*listeners\.tcp\.default\s*=\s*5672", content, re.MULTILINE), "AMQP 5672 listener missing"
-    assert re.search(r"^\s*mqtt\.listeners\.ssl\.default\s*=\s*8883", content, re.MULTILINE), "MQTT SSL 8883 listener missing"
-    assert re.search(r"^\s*mqtt\.listeners\.tcp\.default\s*=\s*1883", content, re.MULTILINE), "Plain MQTT 1883 listener missing"
+    assert re.search(
+        r"^\s*listeners\.tcp\.default\s*=\s*5672", content, re.MULTILINE
+    ), "AMQP 5672 listener missing"
+    assert re.search(
+        r"^\s*mqtt\.listeners\.ssl\.default\s*=\s*8883", content, re.MULTILINE
+    ), "MQTT SSL 8883 listener missing"
+    assert re.search(
+        r"^\s*mqtt\.listeners\.tcp\.default\s*=\s*1883", content, re.MULTILINE
+    ), "Plain MQTT 1883 listener missing"
 
     # Check MQTT options
-    assert re.search(r"^\s*mqtt\.allow_anonymous\s*=\s*false", content, re.MULTILINE), "mqtt.allow_anonymous=false missing"
-    assert re.search(r"^\s*mqtt\.vhost\s*=\s*/", content, re.MULTILINE), "mqtt.vhost=/ missing"
-    assert re.search(r"^\s*mqtt\.exchange\s*=\s*amq\.topic", content, re.MULTILINE), "mqtt.exchange=amq.topic missing"
-    assert re.search(r"^\s*mqtt\.max_session_expiry_interval_seconds\s*=\s*86400", content, re.MULTILINE), "mqtt.max_session_expiry_interval_seconds=86400 missing"
+    assert re.search(
+        r"^\s*mqtt\.allow_anonymous\s*=\s*false", content, re.MULTILINE
+    ), "mqtt.allow_anonymous=false missing"
+    assert re.search(
+        r"^\s*mqtt\.vhost\s*=\s*/", content, re.MULTILINE
+    ), "mqtt.vhost=/ missing"
+    assert re.search(
+        r"^\s*mqtt\.exchange\s*=\s*amq\.topic", content, re.MULTILINE
+    ), "mqtt.exchange=amq.topic missing"
+    assert re.search(
+        r"^\s*mqtt\.max_session_expiry_interval_seconds\s*=\s*86400",
+        content,
+        re.MULTILINE,
+    ), "mqtt.max_session_expiry_interval_seconds=86400 missing"
 
 
 def test_compose_yaml_rabbitmq_network():
@@ -82,13 +103,22 @@ def test_compose_yaml_rabbitmq_network():
     root = _get_project_root()
     compose_path = root / "compose.yaml"
     if not compose_path.is_file():
-        pytest.skip(f"compose.yaml not found at {compose_path} (isolated container run)")
+        pytest.skip(
+            f"compose.yaml not found at {compose_path} (isolated container run)"
+        )
 
     content = compose_path.read_text(encoding="utf-8")
 
     # Check rabbitmq_network name: iot_rabbitmq_network
-    network_block_match = re.search(r"rabbitmq_network:\s*\n\s*name:\s*iot_rabbitmq_network\s*\n\s*driver:\s*bridge", content)
-    assert network_block_match, "rabbitmq_network with name 'iot_rabbitmq_network' and driver 'bridge' not found in compose.yaml"
+    network_block_match = re.search(
+        r"rabbitmq_network:\s*\n\s*name:\s*iot_rabbitmq_network\s*\n\s*driver:\s*bridge",
+        content,
+    )
+    assert (
+        network_block_match
+    ), "rabbitmq_network with name 'iot_rabbitmq_network' and driver 'bridge' not found in compose.yaml"
 
     # Check ports for rabbitmq service: 1883 should NOT be in ports section
-    assert not re.search(r'["\']?1883:1883["\']?', content), "Port 1883 must not be exposed to host in compose.yaml"
+    assert not re.search(
+        r'["\']?1883:1883["\']?', content
+    ), "Port 1883 must not be exposed to host in compose.yaml"

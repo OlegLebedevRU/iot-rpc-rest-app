@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from uuid import UUID, uuid4
 
 import pytest
 
@@ -19,7 +18,6 @@ from core.adapters.agent_contract_v1 import (
     CommercialFieldViolationError,
     ContractValidationError,
     UnknownCapabilityError,
-    agent_contract_v1_adapter,
     assert_no_commercial_fields,
     verify_l4rtp_frame_header,
     verify_l4rtp_preamble,
@@ -27,8 +25,6 @@ from core.adapters.agent_contract_v1 import (
 from core.diagnostics.mqtt_bridge import decode_output_payload
 from core.diagnostics.schemas import (
     DeviceOutputEnvelope,
-    DiagCancelPayload,
-    DiagExecPayload,
     OutputKind,
 )
 from core.diagnostics.sessions import DiagnosticSession, DiagnosticsSessionRegistry
@@ -95,7 +91,7 @@ def test_presence_lifecycle_golden_vectors():
     adapter = AgentContractV1Adapter()
 
     for vec in vectors:
-        vec_id = vec["id"]
+        _vec_id = vec["id"]
         topic = vec["topic"]
         payload = vec["payload"]
         qos = vec["qos"]
@@ -149,7 +145,7 @@ def test_method_7000_golden_vectors_requests_and_responses():
     sn = "000100773"
 
     for vec in vectors:
-        vec_id = vec["id"]
+        _vec_id = vec["id"]
         req = vec["request"]
         exp_res = vec["expected_response"]
 
@@ -199,7 +195,7 @@ def test_method_7001_golden_vectors_and_streaming_chunks():
     sn = "000100773"
 
     for vec in vectors:
-        vec_id = vec["id"]
+        _vec_id = vec["id"]
         req = vec["request"]["payload"]
 
         # 1. Outbound exec request adaptation
@@ -252,7 +248,7 @@ def test_method_7002_golden_vectors():
     sn = "000100773"
 
     for vec in vectors:
-        vec_id = vec["id"]
+        _vec_id = vec["id"]
         req = vec["request"]["payload"]
         exp_res = vec["expected_response"]["payload"]
 

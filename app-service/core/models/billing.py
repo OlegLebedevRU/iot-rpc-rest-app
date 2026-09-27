@@ -30,7 +30,9 @@ class BillingCoefficient(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("effective_from", name="uq_billing_coefficients_effective_from"),
+        UniqueConstraint(
+            "effective_from", name="uq_billing_coefficients_effective_from"
+        ),
     )
 
 
@@ -54,7 +56,9 @@ class BillingCounter(Base):
     )
 
     __table_args__ = (
-        UniqueConstraint("org_id", "period_start", name="uq_billing_counters_org_period"),
+        UniqueConstraint(
+            "org_id", "period_start", name="uq_billing_counters_org_period"
+        ),
         Index("ix_billing_counters_period_start", "period_start"),
     )
 

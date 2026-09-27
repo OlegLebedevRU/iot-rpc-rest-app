@@ -178,7 +178,9 @@ class RemoteSessionEventService:
             try:
                 stmt = (
                     select(Device.device_id, DeviceOrgBind.org_id)
-                    .outerjoin(DeviceOrgBind, Device.device_id == DeviceOrgBind.device_id)
+                    .outerjoin(
+                        DeviceOrgBind, Device.device_id == DeviceOrgBind.device_id
+                    )
                     .where(Device.sn == sn)
                     .limit(1)
                 )
@@ -195,7 +197,11 @@ class RemoteSessionEventService:
                     ):
                         if resolved_device_id is None and len(res) > 0:
                             resolved_device_id = res[0]
-                        if resolved_tenant_id is None and len(res) > 1 and res[1] is not None:
+                        if (
+                            resolved_tenant_id is None
+                            and len(res) > 1
+                            and res[1] is not None
+                        ):
                             resolved_tenant_id = res[1]
             except Exception as e:
                 log.debug("Device/tenant resolution fallback for sn=%s: %s", sn, e)
@@ -227,17 +233,28 @@ class RemoteSessionEventService:
         if event_id:
             try:
                 existing = await session.scalar(
-                    select(RemoteSessionEvent).where(RemoteSessionEvent.event_id == event_id)
+                    select(RemoteSessionEvent).where(
+                        RemoteSessionEvent.event_id == event_id
+                    )
                 )
                 if (
                     existing is not None
                     and not asyncio.iscoroutine(existing)
                     and getattr(existing, "cursor", None) is not None
                 ):
-                    log.info("Duplicate event ignored by event_id=%s (cursor=%s)", event_id, existing.cursor)
+                    log.info(
+                        "Duplicate event ignored by event_id=%s (cursor=%s)",
+                        event_id,
+                        existing.cursor,
+                    )
                     return existing
             except Exception as e:
-                log.debug("Scalar check failed for event_id=%s: %s", event_id, e, exc_info=True)
+                log.debug(
+                    "Scalar check failed for event_id=%s: %s",
+                    event_id,
+                    e,
+                    exc_info=True,
+                )
 
         # 2. Idempotency check by operation_id + event_type
         if operation_id:
@@ -261,7 +278,12 @@ class RemoteSessionEventService:
                     )
                     return existing_op
             except Exception as e:
-                log.debug("Scalar check failed for operation_id=%s: %s", operation_id, e, exc_info=True)
+                log.debug(
+                    "Scalar check failed for operation_id=%s: %s",
+                    operation_id,
+                    e,
+                    exc_info=True,
+                )
 
         # 3. Payload validation
         clean_payload = dict(payload) if payload else {}
@@ -754,7 +776,11 @@ class RemoteSessionEventService:
         ):
             return False
 
-        timeout = stale_timeout_sec if stale_timeout_sec is not None else self.stale_timeout_sec
+        timeout = (
+            stale_timeout_sec
+            if stale_timeout_sec is not None
+            else self.stale_timeout_sec
+        )
         curr = now or datetime.now(UTC)
         last_act = (
             session_rec.last_heartbeat_at
@@ -816,7 +842,9 @@ class RemoteSessionEventService:
         async with lock:
             # Re-check idempotency under lock
             existing = await session.scalar(
-                select(RemoteSession).where(RemoteSession.operation_id == data.operation_id)
+                select(RemoteSession).where(
+                    RemoteSession.operation_id == data.operation_id
+                )
             )
             if existing is not None:
                 return existing
@@ -856,8 +884,12 @@ class RemoteSessionEventService:
             res_tenant_id, res_device_id = await self.resolve_device_and_tenant(
                 session, sn=data.sn, tenant_id=data.tenant_id
             )
-            final_tenant_id = res_tenant_id if res_tenant_id is not None else data.tenant_id
-            session_uid = data.session_id or f"sess-{data.session_type.value}-{uuid4().hex[:12]}"
+            final_tenant_id = (
+                res_tenant_id if res_tenant_id is not None else data.tenant_id
+            )
+            session_uid = (
+                data.session_id or f"sess-{data.session_type.value}-{uuid4().hex[:12]}"
+            )
 
             new_session = RemoteSession(
                 session_id=session_uid,
@@ -942,7 +974,9 @@ class RemoteSessionEventService:
             RemoteSessionLifecycleState.CLOSED.value,
             RemoteSessionLifecycleState.FAILED.value,
         ):
-            raise ValueError(f"Cannot start session '{session_id}' in terminal status '{rec.status}'")
+            raise ValueError(
+                f"Cannot start session '{session_id}' in terminal status '{rec.status}'"
+            )
 
         if rec.status == RemoteSessionLifecycleState.ACTIVE.value:
             return rec
@@ -1143,10 +1177,18 @@ class RemoteSessionEventService:
             )
 
         try:
-            if rec.session_type == RemoteSessionType.CONSOLE.value or rec.session_type == "console":
+            if (
+                rec.session_type == RemoteSessionType.CONSOLE.value
+                or rec.session_type == "console"
+            ):
                 timeout = data.timeout_sec if data.timeout_sec is not None else 5.0
-                await self._await_console_command_or_timeout(session, rec, timeout_sec=timeout)
-            elif rec.session_type == RemoteSessionType.VIDEO.value or rec.session_type == "video":
+                await self._await_console_command_or_timeout(
+                    session, rec, timeout_sec=timeout
+                )
+            elif (
+                rec.session_type == RemoteSessionType.VIDEO.value
+                or rec.session_type == "video"
+            ):
                 await self._teardown_video_session(rec, reason=data.reason)
         except Exception as exc:
             await session.commit()
@@ -1220,7 +1262,9 @@ class RemoteSessionEventService:
                 correlation_id=cmd.correlation_id,
             )
 
-    async def _teardown_video_session(self, rec: RemoteSession, reason: str = "stop") -> None:
+    async def _teardown_video_session(
+        self, rec: RemoteSession, reason: str = "stop"
+    ) -> None:
         from core.remote_input.leases import lease_registry
 
         lease = await lease_registry.get_active(rec.sn)
@@ -1475,7 +1519,11 @@ class RemoteSessionEventService:
         active_count = sum(
             count
             for status, count in sessions_by_status.items()
-            if status in (RemoteSessionLifecycleState.ACTIVE.value, RemoteSessionLifecycleState.REQUESTED.value)
+            if status
+            in (
+                RemoteSessionLifecycleState.ACTIVE.value,
+                RemoteSessionLifecycleState.REQUESTED.value,
+            )
         )
 
         # 5. Deterministic feed SHA-256 computation over ordered events in window
@@ -1537,4 +1585,6 @@ async def safe_record_device_online(
                     correlation_id=correlation_id,
                 )
     except Exception as exc:
-        log.warning("Failed to record background device_online event for sn=%s: %s", sn, exc)
+        log.warning(
+            "Failed to record background device_online event for sn=%s: %s", sn, exc
+        )

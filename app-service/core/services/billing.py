@@ -47,7 +47,11 @@ class BillingService:
             k4 = Decimal(str(settings.billing.default_k4))
             log.warning(
                 "No coefficients found for period %s, using defaults: k1=%s k2=%s k3=%s k4=%s",
-                period_start, k1, k2, k3, k4,
+                period_start,
+                k1,
+                k2,
+                k3,
+                k4,
             )
         else:
             k1, k2, k3, k4 = coeff.k1, coeff.k2, coeff.k3, coeff.k4
@@ -85,7 +89,13 @@ class BillingService:
             )
             log.info(
                 "Billing calculated: org_id=%d period=%s P1=%s P2=%s P3=%s P4=%s total=%s",
-                org_id, period_start, p1, p2, p3, p4, consumption,
+                org_id,
+                period_start,
+                p1,
+                p2,
+                p3,
+                p4,
+                consumption,
             )
             count += 1
 
@@ -146,5 +156,8 @@ class BillingService:
             await session.rollback()
             log.error(
                 "Billing event processing error: org_id=%d device_id=%d type=%s error=%s",
-                org_id, device_id, counter_type, e,
+                org_id,
+                device_id,
+                counter_type,
+                e,
             )

@@ -41,8 +41,12 @@ async def get_remote_session_events(
     session: Session_dep,
     _: Internal_Auth_dep,
     after: int = Query(0, ge=0, description="Return events strictly after this cursor"),
-    limit: int = Query(100, ge=1, le=1000, description="Maximum number of events to return"),
-    tenant_id: int | None = Query(None, description="Filter by tenant / organization ID"),
+    limit: int = Query(
+        100, ge=1, le=1000, description="Maximum number of events to return"
+    ),
+    tenant_id: int | None = Query(
+        None, description="Filter by tenant / organization ID"
+    ),
     sn: str | None = Query(None, description="Filter by device serial number"),
     session_id: str | None = Query(None, description="Filter by session ID"),
     event_type: str | None = Query(None, description="Filter by event type"),
@@ -58,7 +62,9 @@ async def get_remote_session_events(
             event_type=event_type,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
 
 
 @router.get(
@@ -90,7 +96,10 @@ async def get_remote_session_events_reconciliation(
     response_model=RemoteSessionResponse,
     status_code=status.HTTP_201_CREATED,
     responses={
-        409: {"model": SessionConflictDetail, "description": "Device already has an active or starting session"},
+        409: {
+            "model": SessionConflictDetail,
+            "description": "Device already has an active or starting session",
+        },
     },
     summary="Create a remote session with idempotency on operation_id and mutual exclusion on device",
 )
@@ -112,7 +121,9 @@ async def create_remote_session(
         ) from exc
     except sa.exc.IntegrityError as exc:
         await session.rollback()
-        active = await remote_session_event_service.get_active_session_for_sn(session, data.sn)
+        active = await remote_session_event_service.get_active_session_for_sn(
+            session, data.sn
+        )
         if active:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -133,7 +144,9 @@ async def create_remote_session(
         ) from exc
     except ValueError as exc:
         await session.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
 
 
 @router.post(
@@ -148,7 +161,9 @@ async def start_remote_session(
     body: RemoteSessionStart = RemoteSessionStart(),
 ) -> RemoteSessionResponse:
     try:
-        rec = await remote_session_event_service.start_session(session, session_id, body)
+        rec = await remote_session_event_service.start_session(
+            session, session_id, body
+        )
         await session.commit()
         await session.refresh(rec)
         return RemoteSessionResponse.model_validate(rec)
@@ -156,7 +171,9 @@ async def start_remote_session(
         await session.rollback()
         msg = str(exc)
         if "not found" in msg.lower():
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=msg) from exc
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=msg
+            ) from exc
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=msg) from exc
 
 
@@ -184,7 +201,9 @@ async def get_remote_session(
     response_model=RemoteSessionResponse,
     responses={
         409: {"description": "Stop tenant or SN guard does not match the session"},
-        503: {"description": "Resource teardown failed; session remains stopping and is retryable"},
+        503: {
+            "description": "Resource teardown failed; session remains stopping and is retryable"
+        },
     },
     summary="Idempotently stop a remote session; 200 confirms durable closed state",
 )
@@ -271,7 +290,9 @@ async def start_console_command(
         ) from exc
     except ValueError as exc:
         await session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
 
 
 @router.post(

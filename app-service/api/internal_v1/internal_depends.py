@@ -19,17 +19,21 @@ Session_dep = Annotated[
 
 def is_request_superuser(request: Request | WebSocket | Any) -> bool:
     """Determine if the request or websocket is initiated by a superuser/admin."""
-    role = str(
-        request.headers.get("X-Role")
-        or request.headers.get("x-role")
-        or request.headers.get("jwt-role")
-        or ""
-    ).strip().lower()
-    role_id = str(
-        request.headers.get("X-Role-Id")
-        or request.headers.get("x-role-id")
-        or ""
-    ).strip().lower()
+    role = (
+        str(
+            request.headers.get("X-Role")
+            or request.headers.get("x-role")
+            or request.headers.get("jwt-role")
+            or ""
+        )
+        .strip()
+        .lower()
+    )
+    role_id = (
+        str(request.headers.get("X-Role-Id") or request.headers.get("x-role-id") or "")
+        .strip()
+        .lower()
+    )
     user_id = str(
         request.headers.get("X-User-Id")
         or request.headers.get("x-user-id")
@@ -143,7 +147,7 @@ async def get_internal_org_id(
         )
     try:
         org_id = int(raw_org_id)
-    except (ValueError, TypeError):
+    except ValueError, TypeError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid 'X-Org-Id' header or 'org_id' query parameter: must be a valid integer",
@@ -189,7 +193,7 @@ async def get_internal_billing_org_id(
     if raw_org_id is not None and str(raw_org_id).strip() != "":
         try:
             org_id = int(raw_org_id)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid 'X-Org-Id' header or 'org_id' query parameter: must be a valid integer",

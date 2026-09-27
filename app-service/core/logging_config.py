@@ -86,7 +86,6 @@ def log_rpc_debug(sn: str | None, event: str, **fields: Any) -> None:
     get_rpc_debug_logger().info(" ".join(payload), extra={"sn": sn})
 
 
-
 def setup_module_logger(module_name: str, log_file: str) -> logging.Logger:
     """
     Настраивает и возвращает логгер для модуля с ротацией по размеру.

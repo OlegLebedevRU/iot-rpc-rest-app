@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from typing import Annotated, Optional
-from fastapi import Header, Depends, Query, Security, HTTPException, Request
+from fastapi import Depends, Security, HTTPException, Request
 from fastapi.security import APIKeyHeader
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -35,9 +35,7 @@ async def get_org_id_dependency(
 
     # 1. Extract API key from x-api-key Security param or headers fallback (X-API-Key, Authorization: ApiKey/Bearer)
     raw_api_key = (
-        api_key
-        or request.headers.get("x-api-key")
-        or request.headers.get("X-API-Key")
+        api_key or request.headers.get("x-api-key") or request.headers.get("X-API-Key")
     )
     if not raw_api_key:
         auth_header = (request.headers.get("Authorization") or "").strip()
@@ -74,7 +72,9 @@ async def get_org_id_dependency(
 
     # 3. If still unable to resolve org_id
     if resolved_org_id is None:
-        log.warning("Authentication failed: missing API key or insufficient permissions")
+        log.warning(
+            "Authentication failed: missing API key or insufficient permissions"
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing or invalid authentication credentials (x-api-key required)",

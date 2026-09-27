@@ -7,7 +7,6 @@ from fastapi import APIRouter, HTTPException, Query
 from starlette import status
 
 from api.internal_v1.internal_depends import (
-    Internal_Auth_dep,
     Internal_Billing_Org_dep,
     Session_dep,
 )

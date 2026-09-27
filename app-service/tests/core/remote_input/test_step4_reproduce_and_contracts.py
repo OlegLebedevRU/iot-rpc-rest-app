@@ -35,9 +35,9 @@ def test_f1_ctl_lease_renew_wire_format_has_command_id():
 
     assert "command_id" in data
     assert data["command_id"] == "831028de-8f1a-42b9-986a-6a2ee4e5e578"
-    assert "cmd_id" not in data, (
-        "Legacy cmd_id field must not be sent on wire to strict consumers"
-    )
+    assert (
+        "cmd_id" not in data
+    ), "Legacy cmd_id field must not be sent on wire to strict consumers"
     assert data["v"] == 1
     assert data["type"] == "lease_renew"
     assert data["ttl_sec"] == 60
@@ -161,15 +161,15 @@ async def test_camera_lease_stream_mode_not_overwritten_to_desktop():
         scope="stream",
         owner_session_id="sess_1",
     )
-    assert reacquired.stream_mode == "usb-camera", (
-        "Re-acquire must preserve existing camera stream_mode"
-    )
+    assert (
+        reacquired.stream_mode == "usb-camera"
+    ), "Re-acquire must preserve existing camera stream_mode"
 
     # 2. Scope upgrade to input
     upgraded = await leases.upgrade_scope(lease.lease_id, "input")
-    assert upgraded.stream_mode == "usb-camera", (
-        "Scope upgrade must preserve existing camera stream_mode"
-    )
+    assert (
+        upgraded.stream_mode == "usb-camera"
+    ), "Scope upgrade must preserve existing camera stream_mode"
 
 
 @pytest.mark.asyncio
@@ -215,9 +215,9 @@ async def test_release_idempotent_for_own_lease_no_double_side_effects():
             caller_user_id="user1",
             caller_session_id="sess_1",
         )
-        assert mock_stop.call_count == 1, (
-            "Duplicate release must not resend StreamStopCommand"
-        )
+        assert (
+            mock_stop.call_count == 1
+        ), "Duplicate release must not resend StreamStopCommand"
 
         # Cross-tenant release on already revoked lease must STILL be forbidden (403)
         with pytest.raises(HTTPException) as exc_info:

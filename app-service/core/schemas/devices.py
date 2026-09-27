@@ -5,8 +5,7 @@ from datetime import datetime
 from ipaddress import IPv4Address
 from typing import Optional, List, Any
 
-from pydantic import BaseModel, JsonValue, computed_field, ConfigDict, field_validator
-from pydantic_core.core_schema import JsonSchema
+from pydantic import BaseModel, computed_field, ConfigDict, field_validator
 
 from core.schemas.rmq_admin import DeviceConnectionDetails
 
@@ -103,14 +102,18 @@ class DeviceConnectView(BaseModel):
     def is_app_available(self) -> Optional[bool]:
         if self.app_connect is None:
             return None
-        return bool(self.last_checked_result and self.app_connect and not self.is_blocked)
+        return bool(
+            self.last_checked_result and self.app_connect and not self.is_blocked
+        )
 
     @computed_field
     @property
     def is_svc_available(self) -> Optional[bool]:
         if self.svc_connect is None:
             return None
-        return bool(self.last_checked_result and self.svc_connect and not self.is_blocked)
+        return bool(
+            self.last_checked_result and self.svc_connect and not self.is_blocked
+        )
 
 
 class DeviceListResult(BaseModel):

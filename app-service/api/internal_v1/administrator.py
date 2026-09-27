@@ -1,7 +1,6 @@
 import logging
 from typing import Annotated
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Query
 
 from api.internal_v1.internal_depends import Internal_Auth_dep, Session_dep
 from core import settings
