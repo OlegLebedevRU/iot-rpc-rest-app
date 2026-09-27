@@ -1,8 +1,12 @@
 # Use a Python image with uv pre-installed
 #FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
 # Install uv
-FROM python:3.14-slim
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d
+COPY --from=ghcr.io/astral-sh/uv:0.12.5@sha256:db2d5999728c5837e1bf9ba278ee6b05cef1e95e82a20e27b0c915cb4478b9d7 /uv /uvx /bin/
+ARG SOURCE_REVISION
+ARG SOURCE_ARCHIVE_SHA256
+LABEL org.opencontainers.image.revision=$SOURCE_REVISION \
+      io.l4desk.source-archive-sha256=$SOURCE_ARCHIVE_SHA256
 # Install the project into `/app`
 WORKDIR /app
 

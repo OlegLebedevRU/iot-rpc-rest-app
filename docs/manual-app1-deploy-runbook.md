@@ -116,17 +116,23 @@ ssh -n -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "cd /home/user1/iot-rpc-rest-
 
 ### 3.1. Синхронизация актуального кода на сервере
 
-Перейти в каталог репозитория на VM и получить актуальный код:
+Сначала выбрать полный SHA опубликованного и проверенного release commit.
+Ветка `master` не обязательно содержит развёрнутые исправления: переключение
+на неё без проверки ancestry запрещено. Задать `APP1_RELEASE_COMMIT` внутри передаваемого серверу Bash-скрипта;
+значение должно совпадать с release report. Сохранить текущие
+commit и image ID для отката до переключения.
 
 ```powershell
 $script = @'
 set -euo pipefail
 cd /home/user1/iot-rpc-rest-app
 
-echo "=== 1. Git fetch & pull ==="
+: "${APP1_RELEASE_COMMIT:?Set the approved full release commit SHA}"
 git fetch origin
-git checkout master
-git pull --ff-only
+git cat-file -e "${APP1_RELEASE_COMMIT}^{commit}"
+test -z "$(git status --porcelain --untracked-files=no)"
+git checkout --detach "$APP1_RELEASE_COMMIT"
+test "$(git rev-parse HEAD)" = "$APP1_RELEASE_COMMIT"
 git status
 git log -1 --oneline
 '@
@@ -134,7 +140,29 @@ git log -1 --oneline
 $script | ssh -i "d:\.ssh\id_ed25519" user1@87.242.100.34 "bash -s"
 ```
 
-*(Если изменения переносятся напрямую или через checkout конкретной ветки/коммита, убедитесь, что рабочее дерево содержит нужный коммит).*
+Для передачи исходников архивом использовать `git -c core.autocrlf=false archive`
+по тому же commit. Распаковать архив и запускать Docker build по каталогу,
+чтобы Docker CLI применил `.dockerignore`; не передавать непроверенный tar
+напрямую в `docker build -`. Сверить SHA-256 архива перед распаковкой; не переносить
+приватные `.env`, backups или сертификаты в архиве исходников.
+
+### 3.1.1. Контекст сборки и runtime-конфигурация
+
+- `.dockerignore` исключает приватные env, резервные копии, ключи, сертификаты,
+  логи и локальные рабочие каталоги. В образ разрешён только обезличенный
+  `app-service/.env.template`; секретные поля шаблона пустые.
+- Секреты передаются через приватный `env_file` оркестратора. Проверять наличие
+  и совпадение значений булевыми результатами, не выводить значения.
+- До production deploy проверить отсутствие `.env`, `.env.bak` и ключей в
+  образе. Исторические credentials из удалённого backup требуют отдельного
+  подтверждения отзыва/ротации владельцем; удаление файла не отзывает секреты.
+- Dockerfile закрепляет базовые образы по digest. Сборке передать
+  `SOURCE_REVISION` и `SOURCE_ARCHIVE_SHA256`; сохранить image ID и labels.
+- Отдельный разрешённый тестовый хост использовать только с синтетической
+  конфигурацией и изолированными тестами. Production credentials туда не
+  переносить; существующие контейнеры и тома стенда не пересоздавать.
+- Сохранить текущий production image под отдельным rollback tag. Откат
+  выполнять к этому image ID, без повторной сборки из устаревшей ветки.
 
 ### 3.2. Сборка Docker-образа напрямую на целевой машине
 
