@@ -6,6 +6,7 @@ Pending independent controller acceptance. This file is not the cascade journal.
 ```yaml
 handoff_id: H-L4D-18C-IOT-v1
 status: ACCEPTED
+accepted_at_utc: null
 contract_kinds: [DEPLOYMENT, REPORT]
 producer_prompt_id: L4D-18C-IOT-FIX-01
 producer_scope_project: iot-rpc-rest-app
