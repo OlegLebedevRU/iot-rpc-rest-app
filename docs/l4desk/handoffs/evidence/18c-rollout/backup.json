@@ -1,0 +1,8 @@
+{
+  "dump_bytes": 481957,
+  "dump_sha256": "749bcf6245566b2b022b4000ce322feb1c7d4b9b6fb411c13307d1f07406bb01",
+  "toc_entries": 248,
+  "rollback_image": "sha256:29aa88169ab8b051705044f0feb1ad8b4d5af5827bcef5294b437c7e29b9c431",
+  "rollback_tag": "user1-app1:18c-pre-a47f4e5",
+  "pg_client_digest": "postgres@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722"
+}

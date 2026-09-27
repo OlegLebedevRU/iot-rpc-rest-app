@@ -1,0 +1,13 @@
+{
+  "image": "sha256:d2540c3e7c5da54077a0543491a6b0bb0782244c9837d7430b218bbf730568ba",
+  "source_files_matched": 207,
+  "private_payload_count": 0,
+  "labels": {
+    "com.docker.compose.project": "user1",
+    "com.docker.compose.service": "app1",
+    "com.docker.compose.version": "2.40.3",
+    "io.l4desk.source-archive-sha256": "6401058dc075164d660aaf38c686c05939e6737a9f7ba59f685ad7992781081e",
+    "org.opencontainers.image.revision": "35f1fce054e388a2206af45f1416b9572b0614a9"
+  },
+  "deploy_exit": 0
+}

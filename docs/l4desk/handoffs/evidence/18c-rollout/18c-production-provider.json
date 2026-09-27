@@ -1,0 +1,30 @@
+{
+  "feed_first_status": 200,
+  "feed_resume_status": 200,
+  "repeat_same_items": true,
+  "resume_strictly_after": true,
+  "first_cursors": [
+    487,
+    488
+  ],
+  "next_cursors": [
+    489,
+    490
+  ],
+  "provision_lookup_status": 200,
+  "unauthenticated_feed_status": 403,
+  "provision": {
+    "tenant_id": 10000,
+    "terminal_id": 3722,
+    "status": "provisioned",
+    "contract_version": "1.0.0",
+    "replayed_flag": true
+  },
+  "metrics": {
+    "active_duplicate_sn": 0,
+    "duplicate_event_ids": 0,
+    "orphan_session_events": 0,
+    "events": 494,
+    "cursor": 494
+  }
+}

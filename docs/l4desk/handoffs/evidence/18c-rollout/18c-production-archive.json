@@ -1,0 +1,11 @@
+{
+  "dry_run": true,
+  "purge": false,
+  "state": "prepared",
+  "records_reread": 1,
+  "checksum_equal": true,
+  "transaction_rolled_back": true,
+  "temporary_files_removed": true,
+  "lag_rejected": true,
+  "equal_cursor_accepted": true
+}

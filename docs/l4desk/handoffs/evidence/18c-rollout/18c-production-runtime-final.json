@@ -1,0 +1,20 @@
+{
+  "other_12_containers_unchanged": true,
+  "image": "sha256:d2540c3e7c5da54077a0543491a6b0bb0782244c9837d7430b218bbf730568ba",
+  "running": true,
+  "restarts": 0,
+  "started": "2026-09-27T20:38:47.480096655Z",
+  "runtime_env": {
+    "count": 12,
+    "present": true,
+    "equal": true
+  },
+  "queues": {
+    "count": 40,
+    "counted": 37,
+    "ready": 0,
+    "unacknowledged": 0
+  },
+  "tracebacks": 0,
+  "rollback_image_present": true
+}

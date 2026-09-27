@@ -1,0 +1,10 @@
+{
+  "create_status": 201,
+  "initial_state": "active",
+  "replay_same_session": true,
+  "second_session_status": 409,
+  "conflict_code": "session_busy",
+  "stop_status": 200,
+  "final_state": "closed",
+  "stop_replay_same_closed_at": true
+}

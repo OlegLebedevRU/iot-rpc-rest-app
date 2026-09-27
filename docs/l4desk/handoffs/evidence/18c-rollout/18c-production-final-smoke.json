@@ -1,0 +1,20 @@
+{
+  "docs": 200,
+  "feed": 200,
+  "archive_enabled": false,
+  "redis_ping": true,
+  "schema": "0008_org_reservations",
+  "active_duplicates": 0,
+  "orphan_events": 0,
+  "duplicate_events": 0,
+  "recent_test_sessions": [
+    {
+      "id": 183,
+      "session_type": "console",
+      "status": "closed",
+      "created_at": "2026-09-27 20:39:28.860233+00:00",
+      "closed_at": "2026-09-27 20:39:28.969023+00:00",
+      "close_reason": "18c_provider_smoke_complete"
+    }
+  ]
+}
