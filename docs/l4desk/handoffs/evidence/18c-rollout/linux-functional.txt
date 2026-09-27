@@ -1,0 +1,18 @@
+........................                                                 [100%]
+=============================== warnings summary ===============================
+core/fs_broker.py:4
+  /app/core/fs_broker.py:4: DeprecationWarning: The integration has been moved to the faststream_fastapi package and will be removed in 1.0.0 version.
+  `pip install faststream_fastapi`
+  https://github.com/faststream-community/faststream_fastapi
+    from faststream.rabbit.fastapi import RabbitRouter
+
+core/schemas/webhook.py:7
+  /app/core/schemas/webhook.py:7: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class WebhookCreateUpdate(BaseModel):
+
+core/schemas/webhook.py:22
+  /app/core/schemas/webhook.py:22: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class WebhookResponse(BaseModel):
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+24 passed, 3 warnings in 2.65s
