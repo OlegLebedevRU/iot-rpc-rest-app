@@ -1,0 +1,2 @@
+{"mode": "baseline", "private_paths_in_image": ["app/.env", "app/.env.bak", "app/private.key"], "source_present": true, "template_present": true, "expected_result_verified": true}
+{"mode": "hardened", "private_paths_in_image": [], "source_present": true, "template_present": true, "expected_result_verified": true}

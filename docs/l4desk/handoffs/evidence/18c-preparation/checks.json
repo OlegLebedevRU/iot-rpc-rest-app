@@ -1,0 +1,40 @@
+{
+  "checked_at_utc": "2026-09-27T20:21:25.750402+00:00",
+  "preparation_only": true,
+  "source_commit": "a47f4e54ae5b5e791f513e4c4bd9e3df0b17083e",
+  "image_id": "sha256:eebf349ff3c46da2b9bb535d775133e41e27bcf69b7838c6d2e44b95b172a723",
+  "image_source_files_verified": 150,
+  "image_private_files": [],
+  "local_pytest": {
+    "passed": 431,
+    "warnings": 4
+  },
+  "linux_network_none_config_tests": {
+    "passed": 27,
+    "warnings": 3
+  },
+  "ruff": {
+    "version": "0.15.5",
+    "status": "PASS"
+  },
+  "black": {
+    "version": "26.5.1",
+    "status": "PASS",
+    "files": 192
+  },
+  "schema_head": "0008_org_reservations",
+  "historical_credentials": "owner confirmed replaced/revoked; no values retained in report",
+  "production_deployed": false,
+  "cleanup": {
+    "production_disk_percent_before": 89,
+    "production_disk_percent_after": 45,
+    "production_running_containers": 13,
+    "test_disk_percent_before": 87,
+    "test_disk_percent_after": 34,
+    "test_running_containers": 4,
+    "test_rotated_logs_removed": 6,
+    "test_journal_reclaimed_mib": 243,
+    "container_restarts": 0,
+    "volumes_deleted": 0
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "status": "PASS",
+  "packet_commit": "b11acd74b2c753d3488354cf85ecba1a58fa49a8",
+  "registration_id": "R-L4D-18C-IOT-FIX-01-v1",
+  "verified_package_files": 25,
+  "verified_granted_artifacts": 22,
+  "inputs": [
+    "H-L4D-18B-PB-v1",
+    "H-L4D-18C-IOT-EVIDENCE-CONTRACT-01-v1"
+  ],
+  "quality_gate": "Ruff lint + Black check; Pyright not configured"
+}

@@ -1,0 +1,185 @@
+{
+  "package_id": "L4D-18C-IOT-FIX-01-inputs",
+  "registration_id": "R-L4D-18C-IOT-FIX-01-v1",
+  "controller_registration_commit": "95b7a7acf081819abb943aa4fc1d628cff109d4f",
+  "file_count": 25,
+  "authorized_artifact_count": 22,
+  "files": [
+    {
+      "role": "standard",
+      "path": "l4desk-service/docs/prompts/PROMPT-STANDARD.md",
+      "source_commit": "b11acd74b2c753d3488354cf85ecba1a58fa49a8",
+      "sha256_git_raw": "8911cc0a63f20265e80ddd379bb982030f27010ade6aafbf0b651d066c7929ba",
+      "bytes": 27534
+    },
+    {
+      "role": "journal",
+      "path": "l4desk-service/docs/prompts/contract-handoff.md",
+      "source_commit": "b11acd74b2c753d3488354cf85ecba1a58fa49a8",
+      "sha256_git_raw": "471102b62be3c74f35d034b93b7953245d395dfe53695a28f786d1b48da7eb5f",
+      "bytes": 403468
+    },
+    {
+      "role": "prompt",
+      "path": "l4desk-service/docs/prompts/L4D-18C-IOT-FIX-01.md",
+      "source_commit": "b11acd74b2c753d3488354cf85ecba1a58fa49a8",
+      "sha256_git_raw": "209494eb25b793ab8bce0437ff742d2e91fc7a6826df1a1e782a4ea001b79f45",
+      "bytes": 8011
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "ProcessingBackend/docs/l4desk/handoffs/L4D-18B-PB-FIX-01-report.md",
+      "source_commit": "3d76c7d6d5165959e4cd077b4730a5712d7e1f6a",
+      "sha256_git_raw": "388f232b5aa3c76408b80c232844cd8b57fc1207d94d060da4da24de19cea0ee",
+      "bytes": 7835
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/01c-report.md",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "1c412fa34400a53163694fb1891b20b5e0088d5fdb57ddb315ffd20a879fa34b",
+      "bytes": 26194
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/01c-agent-compatibility.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "51a29c80272b1e92c2d80b65057b413c4bdad9c7df6b8d0c274b83037ba8db4d",
+      "bytes": 4784
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/01c-golden-vectors.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "0ae6f4b2815d95f41c41eba80712ed1184f05cd81740a2597246b54dfa24a202",
+      "bytes": 17963
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-event-feed-contract.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "07be82d70e768ae0a44f24f6e5de6b948a039b746a798ce9c08179fbae810a77",
+      "bytes": 5281
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-event-feed-openapi.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "8196befa2b3e103ec27cfbd39f65cbd230de55de037cadfbb890b06792d4d324",
+      "bytes": 27595
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-remote-session-event.schema.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "4d7393d0dcd1ae62f04e0ad488b6bab519d8d7e357f0cad569809743cb6270e9",
+      "bytes": 3544
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-remote-session.schema.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "c05027474d31f993954451d388667370caadcaeee044997a7a5a97e066cbb1ad",
+      "bytes": 6778
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/02-event-feed-examples.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "41734c7b68850b083eefc07891183c91965c88d0a6589f15e265be0563006f61",
+      "bytes": 8394
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-provision-openapi.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "bf15db6fff2fd6cddd7b14eea50e7be6c62ca22fd640706e564578e5d408a7b3",
+      "bytes": 14374
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-provision-request.schema.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "baad69034c08785c2fab3f3c2affbeba938da6340513ceb5bfbf8972a18520fa",
+      "bytes": 1906
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-provision-response.schema.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "e1bbb431378086b6b9b57ded34764d6ce251041522a4c5fd95d4b6ed0a096802",
+      "bytes": 2779
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-provision-examples.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "abe3a4c8e1136103ca16e45ed5b778c4ba55f0cddb8f693bdd338cfa096c3653",
+      "bytes": 3110
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/06b-report.md",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "5759fc1ab00dacfe2f16585f4df2753a8b4d5a8bc197af22f5b99c0fcff62d80",
+      "bytes": 33990
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/07-remote-session.schema.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "db102accadce58a7055ede40e6d4896b9d2a82004157a25b8b9c3e2a80df315b",
+      "bytes": 7676
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/07-remote-session-event.schema.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "4d7393d0dcd1ae62f04e0ad488b6bab519d8d7e357f0cad569809743cb6270e9",
+      "bytes": 3544
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/07-event-feed-openapi.json",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "dddc1d913e6ac94d82a09312060642bbc99c0d2c39c28b52b649aaea40aac81a",
+      "bytes": 41778
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/07-report.md",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "857cbe719dc7a035b79e8218aab9417a6176933ddc076b1884fcf4004e5cd0bd",
+      "bytes": 17921
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/15b-report.md",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "dcfcd947f0e141fc8a7d687a1c3e35d8354c12432b1a3fd5f363db26d022aa3a",
+      "bytes": 17823
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/17c-report.md",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "100ea273756776d445722e7c9d129894b63ffaca04cb80b2bcb25ace1277b949",
+      "bytes": 10131
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/17c-video-watch-contract.md",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "ef924d9992b4d319e3a876f01834175ba3fb8b2438698cfb289ccaed40bd5e42",
+      "bytes": 2080
+    },
+    {
+      "role": "authorized_artifact",
+      "path": "l4desk-service/docs/prompts/contracts/acceptance-18c-iot-evidence-v1/verification.md",
+      "source_commit": "e7a03f8e089537fd91fcaad62659ffdd2c349515",
+      "sha256_git_raw": "00d6a8d1090b6386cc7006c15821c6ee9681024dad467ba3266ad486e4053427",
+      "bytes": 6503
+    }
+  ],
+  "prompt_revision_commit": "b11acd74b2c753d3488354cf85ecba1a58fa49a8"
+}
