@@ -59,6 +59,7 @@
 * `POST /api/internal/v1/provisioning/api-keys` — Создание или обновление API-ключа организации.
 * `GET /api/internal/v1/provisioning/api-keys/{org_id}` — Получение API-ключа организации (параметр `?mask=true`).
 * `DELETE /api/internal/v1/provisioning/api-keys/{org_id}` — Удаление/отзыв API-ключа организации.
+* `POST /api/internal/v1/provisioning/organizations/reserve` — Атомарно резервирует свободный `org_id` для MenuBuilder до создания tenant. Требует `X-Internal-Service-Key`; `X-Org-Id` не нужен, поскольку tenant ещё не существует. Тело: `{"operation_id":"l4desk-registration:123","minimum_org_id":1}`; для административного выбора допускается `requested_org_id`. Ответ: `{"operation_id":"...","org_id":1001,"replayed":false}`. Повтор с тем же `operation_id` возвращает прежний ID (`replayed=true`), даже если нижняя граница выросла. Занятый явно запрошенный ID или повтор операции с другим явно запрошенным ID возвращает `409`; недоступность сервиса должна останавливать создание локального tenant. Резерв сохраняется в `tb_orgs` и `tb_org_reservations`; при неуспехе локальной транзакции он остаётся для безопасного повтора операции и не освобождается автоматически.
 
 ### 3.7. Управление биллингом (`/api/internal/v1/billing`)
 * `GET /api/internal/v1/billing/coefficients` — Получение действующих коэффициентов биллинга.

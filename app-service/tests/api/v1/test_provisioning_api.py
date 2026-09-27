@@ -6,11 +6,13 @@ from core.config import settings
 from core.models import db_helper
 from core.schemas.provisioning import (
     OrgApiKeyResponse,
+    OrgReservationResponse,
     TerminalProvisionResult,
     TerminalStatusResult,
 )
 from core.services.provisioning import ProvisioningService
 from main import main_app as app
+from api.internal_v1 import provisioning as provisioning_api
 
 
 @pytest.mark.asyncio
@@ -72,15 +74,23 @@ async def test_provisioning_api_auth_and_flow(monkeypatch):
     async def fake_delete_api_key(session, org_id):
         return org_id == 12
 
+    async def fake_reserve_org_id(session, request):
+        return OrgReservationResponse(
+            operation_id=request.operation_id, org_id=1001, replayed=False
+        )
+
     async def fake_session_getter():
         yield object()
 
     app.dependency_overrides[db_helper.session_getter] = fake_session_getter
     monkeypatch.setattr(ProvisioningService, "provision_terminals", fake_provision)
     monkeypatch.setattr(ProvisioningService, "get_terminals_status", fake_status)
-    monkeypatch.setattr(ProvisioningService, "provision_org_api_key", fake_provision_api_key)
+    monkeypatch.setattr(
+        ProvisioningService, "provision_org_api_key", fake_provision_api_key
+    )
     monkeypatch.setattr(ProvisioningService, "get_org_api_key", fake_get_api_key)
     monkeypatch.setattr(ProvisioningService, "delete_org_api_key", fake_delete_api_key)
+    monkeypatch.setattr(provisioning_api, "reserve_org_id", fake_reserve_org_id)
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
@@ -92,8 +102,21 @@ async def test_provisioning_api_auth_and_flow(monkeypatch):
         )
         assert resp.status_code == 403
 
+        reserve_denied = await ac.post(
+            "/api/internal/v1/provisioning/organizations/reserve",
+            json={"operation_id": "registration:1", "minimum_org_id": 4},
+        )
+        assert reserve_denied.status_code == 403
+
         # 2. Allow with X-Internal-Service-Key
         headers = {"X-Internal-Service-Key": "secret123"}
+        reserve_ok = await ac.post(
+            "/api/internal/v1/provisioning/organizations/reserve",
+            headers=headers,
+            json={"operation_id": "registration:1", "minimum_org_id": 4},
+        )
+        assert reserve_ok.status_code == 200
+        assert reserve_ok.json()["org_id"] == 1001
         resp = await ac.post(
             "/api/internal/v1/provisioning/terminals",
             headers=headers,

@@ -3,6 +3,7 @@ __all__ = (
     "Base",
     "Org",
     "OrgApiKey",
+    "OrgReservation",
     "Device",
     "DeviceConnection",
     "DeviceAuditLog",
@@ -30,6 +31,7 @@ __all__ = (
 from .db_helper import db_helper
 from .base import Base
 from .org_api_key import OrgApiKey
+from .org_reservation import OrgReservation
 from .device_events import DevEvent
 from .device_tasks import DevTask, DevTaskPayload, DevTaskStatus, DevTaskResult
 from .devices import (

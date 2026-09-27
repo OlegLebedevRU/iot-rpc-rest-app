@@ -1,7 +1,4 @@
-from typing import Annotated
-
 from fastapi import APIRouter, HTTPException, status
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.internal_v1.internal_depends import Internal_Auth_dep, Session_dep
 from core.config import settings
@@ -12,11 +9,14 @@ from core.schemas.provisioning import (
     BatchTerminalStatusResponse,
     OrgApiKeyProvisionRequest,
     OrgApiKeyResponse,
+    OrgReservationRequest,
+    OrgReservationResponse,
     TerminalProvisionRequest,
     TerminalProvisionResult,
     TerminalStatusQuery,
 )
 from core.services.provisioning import ProvisioningService
+from core.services.org_reservation import reserve_org_id
 
 log = setup_module_logger(__name__, "api_internal_provisioning.log")
 
@@ -25,6 +25,19 @@ router = APIRouter(
     tags=["Internal Provisioning"],
     include_in_schema=False,
 )
+
+
+@router.post(
+    "/organizations/reserve",
+    description="Atomically reserve an organization ID for MenuBuilder",
+    response_model=OrgReservationResponse,
+)
+async def reserve_organization_id(
+    request: OrgReservationRequest,
+    session: Session_dep,
+    _: Internal_Auth_dep,
+) -> OrgReservationResponse:
+    return await reserve_org_id(session, request)
 
 
 @router.post(
@@ -70,9 +83,7 @@ async def get_terminals_status(
     session: Session_dep,
     _: Internal_Auth_dep,
 ) -> BatchTerminalStatusResponse:
-    statuses = await ProvisioningService.get_terminals_status(
-        session, query.device_ids
-    )
+    statuses = await ProvisioningService.get_terminals_status(session, query.device_ids)
     return BatchTerminalStatusResponse(statuses=statuses)
 
 

@@ -47,6 +47,20 @@ class BatchTerminalStatusResponse(BaseModel):
     statuses: list[TerminalStatusResult]
 
 
+class OrgReservationRequest(BaseModel):
+    operation_id: str = Field(
+        ..., min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$"
+    )
+    minimum_org_id: int = Field(default=1, ge=1, le=2_147_483_647)
+    requested_org_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
+
+
+class OrgReservationResponse(BaseModel):
+    operation_id: str
+    org_id: int
+    replayed: bool
+
+
 class OrgApiKeyProvisionRequest(BaseModel):
     org_id: int
     api_key: str = Field(..., min_length=1, max_length=128)
