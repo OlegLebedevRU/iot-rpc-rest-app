@@ -14,7 +14,37 @@
 
 ---
 
-## 0. Обязательное уточнение перед любым деплоем
+## 0. Production: единый порядок доставки
+
+Source of truth — полный SHA принятого `origin/master` этого репозитория.
+На выделенном builder 176 выполняется `deploy/registry_app1.py` из чистого
+checkout: locked dependencies и тесты, затем buildx push уникального тега в
+`dev-leo4-ru.cr.cloud.ru/etran/app1`. Скрипт записывает SHA, tag и OCI digest;
+повтор того же SHA проверяет и переиспользует опубликованный artifact.
+
+Production 87 получает только immutable `app1@sha256:…` через общий deployer
+`etranprocessing/.github/ci/deploy.py`: pull, проверка revision label, Compose
+override для одного `app1`, `--no-deps --no-build --pull never`, `/docs` 200,
+сверка image ID и rollback образа при ошибке. `app1` при старте выполняет
+`alembic upgrade head`; перед выпуском обязательна проверка совместимости
+миграции с предыдущим образом. Данные и приватный `.env` не входят в образ.
+
+Для повторяемого выпуска на builder из чистого checkout `origin/master`:
+
+```sh
+python3 deploy/registry_app1.py \
+  --registry "$L4_IMAGE_REGISTRY" \
+  --artifact-dir "$L4_RELEASE_ARTIFACT_DIR"
+```
+
+Пути и параметры транспорта builder → production приведены в
+`etranprocessing/docs/ops_run-beta-ci-cd.md`; release record содержит digest.
+Ни тег, ни `latest` вместо digest на production не допускаются.
+
+Разделы ниже описывают исторический ручной сценарий и аварийное восстановление;
+они не задают production default.
+
+## 1. Исторический ручной сценарий
 
 Перед SSH-подключением и изменениями агент/оператор обязан явно определить режим операции:
 

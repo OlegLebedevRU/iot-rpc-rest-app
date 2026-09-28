@@ -65,14 +65,16 @@ docker compose up -d --build app1    # собрать и поднять толь
 
 ## Деплой `app1` и защита инфраструктуры
 
-Основной и фактический сценарий деплоя `app1` — сборка напрямую на целевом хосте
-через `docker compose build app1` с последующим перезапуском
-`docker compose up -d --no-deps app1`. Деплой готовых образов из GHCR
-(`docker compose pull app1`) используется **только при наличии прямого указания**.
+Для production `app1` исходником служит принятый `master`: образ собирается на
+выделенном builder, публикуется в приватный registry и на production ставится
+только pull по immutable digest. Сборка на production не является штатным
+путём. Релизный скрипт — `deploy/registry_app1.py`; production deployer проверяет
+revision label, image ID, health и откат. Локальная сборка допустима только
+как отдельно согласованное аварийное восстановление.
 Если пользователь просит «только app», следовать
 [`docs/manual-app1-deploy-runbook.md`](docs/manual-app1-deploy-runbook.md):
-делать backup `.env`, выполнять `docker compose up -d --no-deps app1`, не трогая
-остальные сервисы.
+сохранить действующий образ для отката, не трогать `.env`, выполнять только
+`docker compose up -d --no-deps --no-build app1`, не трогая остальные сервисы.
 
 **Критическое правило: НИКОГДА не пересоздавать `pg`, `rabbitmq`, `nginx`, `nginx-mutual`, `pgadmin`, `certbot` без прямого указания.**
 

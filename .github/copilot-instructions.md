@@ -36,7 +36,7 @@
 7. `docs/3-webhooks.md` — push‑уведомления.
 8. `docs/correlation-data-guide.md` — обязательная correlation data в RPC.
 9. `docs/mqtt_topic_rules.md` — правила топиков.
-10. `docs/manual-app1-deploy-runbook.md` — ручной деплой только `app1` (сборка на хосте / GHCR по запросу), backup/rollback и проверки.
+10. `docs/manual-app1-deploy-runbook.md` — выпуск `app1` через builder, registry digest, pull и проверки.
 
 ## Команды разработки
 ```bash
@@ -57,14 +57,14 @@ cd mcp && pip install -e ".[dev]" && pytest -v
 LEO4_DRY_RUN=1 python -m leo4_mcp        # без реальной сети
 ```
 
-## Ручной деплой `app1` и защита инфраструктуры
-- Основной и фактический сценарий деплоя `app1` — сборка напрямую на целевом хосте
-  через `docker compose build app1` и перезапуск `docker compose up -d --no-deps app1`.
-- Вариант деплоя готовых образов из GHCR (`docker compose pull app1`) используется
-  **только при наличии прямого указания** пользователя.
-- Если пользователь просит «только app», выполнять runbook
-  `docs/manual-app1-deploy-runbook.md`: сделать backup `.env`, выполнить
-  `docker compose up -d --no-deps app1`, затем проверить `ps`, логи и HTTP `200`.
+## Production-деплой `app1` и защита инфраструктуры
+- Собрать из чистого принятого `origin/master` на выделенном builder через
+  `deploy/registry_app1.py`, опубликовать уникальный тег и immutable digest в
+  приватный registry. Production только pull по digest через общий deployer.
+- Если пользователь просит «только app», следовать
+  `docs/manual-app1-deploy-runbook.md`: сохранить прежний образ для отката,
+  пересоздать только `app1` с `--no-deps --no-build`, проверить HTTP 200 и
+  фактический image ID. Приватный `.env` не менять.
 - **Критическое правило: никогда не пересоздавать `pg`, `rabbitmq`, `nginx`, `nginx-mutual`, `pgadmin`, `certbot` без прямого указания.**
 - Все конфиги и сами контейнеры Nginx **не управляются данным проектом**, любые конфиги Nginx в репозитории (`nginx/`, `nginx-configs/`) считаются **неавторитетными** и исключаются из инфраструктуры для compose.
 - **Прямое изменение конфигов Nginx на сервере не допускается**: при любом решении проблем и отладке необходимо уведомить владельца и получить ручную инструкцию о порядке действий.
