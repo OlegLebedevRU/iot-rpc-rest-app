@@ -24,18 +24,20 @@ database_migration: none
 - Blocked device users are deleted from RabbitMQ, closing their connections. Startup and manual ACL reconciliation delete blocked users before restoring active ones.
 - Device topic ACL remains mandatory. Its `{username}` expansion confines publishing to `dev.<SN>.*` and subscribing to `srv.<SN>.*`.
 - Provisioning remains incremental for the submitted SNs. Startup and explicit admin recovery perform the full scan.
-- `definitions.json` seeds service users and topology only; dynamic device users and ACL come from PostgreSQL. A normal restart preserves the named RabbitMQ volume.
+- `definitions.json` seeds service users and topology only; dynamic device users and ACL come from PostgreSQL. RabbitMQ must retain both its named volume and stable Erlang node name. The first production restart reused the volume but changed node name, exposing an empty Mnesia directory; app1 restored 114 active users and their ACL after its restart.
 - Broker console and connection logs use `warning`; successful connection history remains available through application state and management API.
 
 ## Rollout and rollback
 
 1. Record image IDs, volume name, non-secret topology names and counts; export live definitions to a protected backup.
-2. Release the tested `app1` image, then update the versioned RabbitMQ config and seed definitions via the standard repository deploy flow.
-3. Restart only RabbitMQ, preserving its named volume. Verify health, static topology, active user ACL and absence of blocked users.
+2. Release the tested `app1` image, then update the versioned RabbitMQ config, seed definitions and Compose node identity via the standard repository deploy flow.
+3. Restart only RabbitMQ, preserving its named volume. On the one-time node-name migration, restart app1 to reconcile ACL. Verify health, static topology, active user ACL and absence of blocked users. Verify a second restart retains those users without another app1 restart.
 4. Roll back the app1 image and versioned broker files if health or access fails. Do not restore a live definitions export blindly: it can contain blocked users.
 
 ## Evidence
 
 - Local test and lint results: `uv run pytest -q` 434 passed; changed-file `ruff check` and `black --check` passed; JSON seed parsed with two service users and zero device users.
-- Broker restart and ACL restoration: pending production verification.
-- Operator remote input check: pending after deployment.
+- Production app1 image: `sha256:87691012cb6da155795372fd2fa627cb19673c2c7e91029b42eeab8974dd959c`, source `9513df6880a1c93c1c8e10673954c5a3d1efd257`.
+- First broker restart with changing node name: two seed users only; app1 restart restored 114 active users, 114 exact topic ACL, 40 queues, 9 exchanges and all 14 static bindings; two blocked users remained absent.
+- Terminal 1000009 preflight: online and service online after broker recovery; app1 `/docs`: 200.
+- Stable node name migration and repeat restart: pending.

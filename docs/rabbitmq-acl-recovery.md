@@ -29,9 +29,11 @@ The application reconciles RabbitMQ MQTT device access at startup:
 5. A PostgreSQL advisory lock prevents concurrent sync storms when multiple gunicorn workers start.
 
 Normal provisioning updates only the requested SNs. The full scan runs on app startup
-or via the explicit admin recovery action. A RabbitMQ restart with the existing named
-volume preserves dynamic users and ACLs; a fresh broker needs both the static seed
-definitions and an app startup or explicit reconciliation to restore active devices.
+or via the explicit admin recovery action. A RabbitMQ restart preserves dynamic
+users and ACLs only when both the named volume and Erlang node name stay the same.
+Compose pins `hostname: rabbitmq` and `RABBITMQ_NODENAME: rabbit@rabbitmq`.
+A fresh broker needs both the static seed definitions and an app startup or
+explicit reconciliation to restore active devices.
 Never restore a blocked device from a saved live definitions export.
 
 The manual admin action remains available for forced recovery:
@@ -96,7 +98,8 @@ of static topology objects. Verify that every active device has its user, vhost
 permissions and topic ACL, that blocked device users are absent, and that one
 known terminal reconnects and can publish/subscribe only under its own SN.
 `definitions.skip_if_unchanged` can skip a repeated seed import; persisted Mnesia
-is the primary recovery source on a normal restart. If the volume is empty,
+is the primary recovery source only when RabbitMQ opens the same node directory.
+The Docker container name alone does not pin the Erlang node name. If the volume is empty,
 the seed restores service definitions and a fresh `app1` startup (or explicit
 admin reconciliation) restores active device users and ACLs.
 

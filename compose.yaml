@@ -42,11 +42,13 @@ services:
   rabbitmq:
     image: rabbitmq:4-management
     container_name: rabbitmq
+    hostname: rabbitmq
     restart: unless-stopped
     ports:
       - "8883:8883"
       - "5672:5672" # RabbitMQ AMQP export port alfa stage only, todo intranet only
     environment:
+      RABBITMQ_NODENAME: rabbit@rabbitmq
       RABBITMQ_HOST: '%'
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?RABBITMQ_USER must be set}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?RABBITMQ_PASSWORD must be set}
