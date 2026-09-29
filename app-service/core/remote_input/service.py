@@ -878,10 +878,16 @@ class RemoteInputService:
                     detail="action_blocked_policy",
                 )
         elif action in ("alt_f4", "win_d"):
+            allowed_sns = {
+                sn.strip()
+                for sn in settings.remote_input.maintenance_shortcut_sns.split(",")
+                if sn.strip()
+            }
             allowed = (
                 (action == "alt_f4" and settings.remote_input.allow_alt_f4)
                 or (action == "win_d" and settings.remote_input.allow_win_d)
                 or settings.remote_input.maintenance_profile
+                or lease.sn in allowed_sns
                 or getattr(lease, "profile", None) == "maintenance"
             )
             if not allowed:

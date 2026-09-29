@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from starlette.datastructures import Headers, QueryParams
 
 from core.config import settings
-from core.remote_input.leases import LeaseRegistry, lease_registry
+from core.remote_input.leases import Lease, LeaseRegistry, lease_registry
 from core.remote_input.mqtt_bridge import handle_device_ctl_message
 from core.remote_input.pending import (
     PendingCommandRegistry,
@@ -172,6 +172,7 @@ async def test_shortcut_action_blocked_by_default_policy(test_env, monkeypatch):
     monkeypatch.setattr(settings.remote_input, "allow_alt_f4", False)
     monkeypatch.setattr(settings.remote_input, "allow_win_d", False)
     monkeypatch.setattr(settings.remote_input, "maintenance_profile", False)
+    monkeypatch.setattr(settings.remote_input, "maintenance_shortcut_sns", "")
     monkeypatch.setattr(settings.remote_input, "app_profile", False)
 
     for action in ["f12", "alt_f4", "win_d"]:
@@ -183,6 +184,39 @@ async def test_shortcut_action_blocked_by_default_policy(test_env, monkeypatch):
                 caller_user_id="user1",
             )
         assert exc_info.value.status_code == 403
+        assert exc_info.value.detail == "action_blocked_policy"
+
+
+def test_shortcut_policy_allows_only_configured_terminal(test_env, monkeypatch):
+    """Addressed maintenance flags must not enable shortcuts for other terminals."""
+    srv, _, _, _, _ = test_env
+    monkeypatch.setattr(settings.remote_input, "allow_alt_f4", False)
+    monkeypatch.setattr(settings.remote_input, "allow_win_d", False)
+    monkeypatch.setattr(settings.remote_input, "maintenance_profile", False)
+    monkeypatch.setattr(
+        settings.remote_input, "maintenance_shortcut_sns", " SN_TARGET "
+    )
+
+    target = Lease(
+        lease_id=uuid4(),
+        org_id=1,
+        device_id=10,
+        sn="SN_TARGET",
+        owner_user_id="user1",
+        owner_role="admin",
+    )
+    other = Lease(
+        lease_id=uuid4(),
+        org_id=1,
+        device_id=11,
+        sn="SN_OTHER",
+        owner_user_id="user1",
+        owner_role="admin",
+    )
+    for action in ("alt_f4", "win_d"):
+        srv._check_shortcut_policy(target, action)
+        with pytest.raises(HTTPException) as exc_info:
+            srv._check_shortcut_policy(other, action)
         assert exc_info.value.detail == "action_blocked_policy"
 
 

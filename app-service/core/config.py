@@ -423,6 +423,7 @@ class RemoteInputConfig(BaseModel):
     allow_alt_f4: bool = False
     allow_win_d: bool = False
     maintenance_profile: bool = False
+    maintenance_shortcut_sns: str = ""
     app_profile: bool = False
     min_quick_actions_agent_version: str = "1.7.2"
 
