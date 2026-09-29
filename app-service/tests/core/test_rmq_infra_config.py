@@ -31,6 +31,7 @@ def test_definitions_json_etran_service():
 
     # 1. User check
     users = {u["name"]: u for u in data.get("users", [])}
+    assert all("device" not in user.get("tags", []) for user in users.values())
     assert "etran_service" in users, "etran_service user missing in definitions.json"
     etran_user = users["etran_service"]
     assert etran_user["hashing_algorithm"] == "rabbit_password_hashing_sha256"
@@ -69,6 +70,8 @@ def test_rabbitmq_conf_listeners_and_mqtt():
         pytest.skip(f"rabbitmq.conf not found at {conf_path} (isolated container run)")
 
     content = conf_path.read_text(encoding="utf-8")
+    assert re.search(r"^log\.console\.level = warning$", content, re.MULTILINE)
+    assert re.search(r"^log\.connection\.level = warning$", content, re.MULTILINE)
 
     # Check that listeners are configured without comments
     assert re.search(

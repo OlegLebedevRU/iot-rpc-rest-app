@@ -25,14 +25,34 @@ class RmqAdmin:
 
     @classmethod
     async def set_device_definitions(cls, session: AsyncSession, dry_run: bool = False):
-        device_names = [name for name in await DeviceRepo.list(session) if name]
+        blocked_names = set(filter(None, await DeviceRepo.list_blocked(session)))
+        device_names = [
+            name
+            for name in await DeviceRepo.list(session)
+            if name and name not in blocked_names
+        ]
 
         # Always reconcile baseline service definitions (etran_service, etc.)
         await RmqAdminApi.reconcile_service_definitions(dry_run=dry_run)
 
-        if not device_names:
+        if not device_names and not blocked_names:
             return None
 
-        # Always reconcile every device from DB, not only missing RabbitMQ users.
-        # This restores permissions/topic-permissions after RabbitMQ definitions or ACL loss.
-        return await RmqAdminApi.set_device_definitions(device_names, dry_run=dry_run)
+        # Revoke first: an inconsistent duplicate SN must never be restored below.
+        blocked_errors = []
+        if not dry_run:
+            for name in sorted(blocked_names):
+                if not await RmqAdminApi.block_device_user(name):
+                    blocked_errors.append(
+                        {"device": name, "error": "delete_user_failed"}
+                    )
+
+        # Full reconciliation is limited to startup and explicit recovery. Normal
+        # provisioning calls RmqAdminApi for the requested SNs only.
+        result = await RmqAdminApi.set_device_definitions(device_names, dry_run=dry_run)
+        result["blocked_deleted"] = (
+            0 if dry_run else len(blocked_names) - len(blocked_errors)
+        )
+        result["blocked_would_delete"] = len(blocked_names) if dry_run else 0
+        result["errors"].extend(blocked_errors)
+        return result

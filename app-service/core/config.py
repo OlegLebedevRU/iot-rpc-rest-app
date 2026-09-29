@@ -420,8 +420,8 @@ class RemoteInputConfig(BaseModel):
     stream_start_timeout_sec: int = 15
     inventory_timeout_sec: int = 5
     allow_f12: bool = False
-    allow_alt_f4: bool = False
-    allow_win_d: bool = False
+    allow_alt_f4: bool = True
+    allow_win_d: bool = True
     maintenance_profile: bool = False
     maintenance_shortcut_sns: str = ""
     app_profile: bool = False

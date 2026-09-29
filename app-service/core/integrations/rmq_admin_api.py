@@ -134,8 +134,8 @@ class RmqAdminApi:
     def _topic_permission_payload(cls) -> dict:
         return {
             "exchange": cls._exchange,
-            "write": "^dev.{client_id}.*",
-            "read": "^srv.{client_id}.*",
+            "write": r"^dev\.{username}\..*$",
+            "read": r"^srv\.{username}\..*$",
         }
 
     @staticmethod
@@ -606,36 +606,20 @@ class RmqAdminApi:
 
     @classmethod
     async def block_device_user(cls, username: str) -> bool:
-        """Блокирует устройство в RabbitMQ: обнуляет права и принудительно сбрасывает сокеты."""
+        """Удаляет MQTT-пользователя; RabbitMQ закрывает его активные соединения."""
         if not username:
             return False
         if is_ignored_or_service_identity(username):
             log.warning("Refusing to block system or service user: %s", username)
             return False
-        vhost_quoted = cls._quote_path(cls._vhost)
         user_quoted = cls._quote_path(username)
-        block_perm = {"configure": "^$", "write": "^$", "read": "^$"}
         try:
             async with httpx.AsyncClient(
                 base_url=cls._admin_url(), timeout=5.0
             ) as client:
-                # 1. Revoke vhost permissions
-                resp = await client.put(
-                    f"api/permissions/{vhost_quoted}/{user_quoted}",
-                    json=block_perm,
-                )
-                resp.raise_for_status()
-
-                # 2. Clear topic permissions
-                try:
-                    await client.delete(
-                        f"api/topic-permissions/{vhost_quoted}/{user_quoted}"
-                    )
-                except Exception:
-                    pass
-
-            # 3. Kill active connections
-            await cls.terminate_user_connections(username)
+                resp = await client.delete(f"api/users/{user_quoted}")
+                if resp.status_code not in (200, 204, 404):
+                    resp.raise_for_status()
             log.info("Successfully blocked device user %s in RabbitMQ", username)
             return True
         except Exception as e:

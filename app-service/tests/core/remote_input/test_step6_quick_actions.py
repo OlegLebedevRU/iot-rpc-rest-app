@@ -220,6 +220,23 @@ def test_shortcut_policy_allows_only_configured_terminal(test_env, monkeypatch):
         assert exc_info.value.detail == "action_blocked_policy"
 
 
+def test_shortcut_policy_global_flags_allow_every_terminal(test_env, monkeypatch):
+    srv, _, _, _, _ = test_env
+    monkeypatch.setattr(settings.remote_input, "allow_alt_f4", True)
+    monkeypatch.setattr(settings.remote_input, "allow_win_d", True)
+    monkeypatch.setattr(settings.remote_input, "maintenance_shortcut_sns", "")
+    lease = Lease(
+        lease_id=uuid4(),
+        org_id=1,
+        device_id=11,
+        sn="SN_ANY",
+        owner_user_id="user1",
+        owner_role="admin",
+    )
+    srv._check_shortcut_policy(lease, "alt_f4")
+    srv._check_shortcut_policy(lease, "win_d")
+
+
 @pytest.mark.asyncio
 async def test_shortcut_action_allowed_with_policy_profile(test_env, monkeypatch):
     """При подтвержденном профиле обслуживания alt_f4 и win_d разрешены, f12 при app_profile."""

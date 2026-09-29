@@ -238,7 +238,7 @@ async def test_rmq_admin_block_unblock_methods(monkeypatch):
     # 1. Block user
     res_block = await RmqAdminApi.block_device_user("SN_BLOCK_TEST")
     assert res_block is True
-    assert mock_client.put.called
+    mock_client.delete.assert_any_await("api/users/SN_BLOCK_TEST")
 
     # 2. Unblock user
     res_unblock = await RmqAdminApi.unblock_device_user("SN_BLOCK_TEST")

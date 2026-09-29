@@ -637,12 +637,22 @@ class DeviceRepo:
     @classmethod
     async def list(cls, session: AsyncSession) -> List[str]:
         """
-        Возвращает все client_id (serial numbers) из таблицы подключений.
+        Возвращает SN незаблокированных устройств для восстановления MQTT-доступа.
         """
-        stmt = select(DeviceConnection.client_id)
+        stmt = select(DeviceConnection.client_id).where(
+            DeviceConnection.is_blocked.is_not(True)
+        )
         result = await session.execute(stmt)
         return list(result.scalars().all())
-        # log.debug("#### device repo list device as scalar select: %s", sn_list)
+
+    @classmethod
+    async def list_blocked(cls, session: AsyncSession) -> List[str]:
+        """Возвращает SN устройств, которые не должны иметь пользователя RabbitMQ."""
+        stmt = select(DeviceConnection.client_id).where(
+            DeviceConnection.is_blocked.is_(True)
+        )
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
 
     @classmethod
     async def upsert_tag(

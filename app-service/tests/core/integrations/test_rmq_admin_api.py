@@ -236,8 +236,8 @@ async def test_set_device_definitions_repairs_acl_for_existing_user(monkeypatch)
             "api/topic-permissions/%2F/SN_EXIST",
             {
                 "exchange": "amq.topic",
-                "write": "^dev.{client_id}.*",
-                "read": "^srv.{client_id}.*",
+                "write": r"^dev\.{username}\..*$",
+                "read": r"^srv\.{username}\..*$",
             },
         ),
     ]

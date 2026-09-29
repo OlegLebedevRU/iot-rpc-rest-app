@@ -17,15 +17,6 @@
       "limits": {}
     },
     {
-      "name": "a3b0000000c10221d290825",
-      "password_hash": "",
-      "hashing_algorithm": "rabbit_password_hashing_sha256",
-      "tags": [
-        "device"
-      ],
-      "limits": {}
-    },
-    {
       "name": "etran_service",
       "password_hash": "EjRWeBg7tP7cGDzFUHytEFTo2tEGhjlRanuQBMBN1mDQMvo3",
       "hashing_algorithm": "rabbit_password_hashing_sha256",
@@ -54,13 +45,6 @@
       "read": ".*"
     },
     {
-      "user": "a3b0000000c10221d290825",
-      "vhost": "/",
-      "configure": ".*",
-      "write": ".*",
-      "read": ".*"
-    },
-    {
       "user": "etran_service",
       "vhost": "/",
       "configure": "^(mqtt-subscription-.*|telemetry\\..*)",
@@ -70,13 +54,6 @@
   ],
 
   "topic_permissions": [
-    {
-        "user": "a3b0000000c10221d290825",
-        "vhost": "/",
-        "exchange": "amq.topic",
-        "write": "^dev.{client_id}.*",
-        "read": "^srv.{client_id}.*"
-    },
     {
         "user": "user",
         "vhost": "/",

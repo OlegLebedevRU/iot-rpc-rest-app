@@ -20,12 +20,19 @@ POST /api/v1/admin/?action=get_u
 The application reconciles RabbitMQ MQTT device access at startup:
 
 1. PostgreSQL is the source of truth for registered devices.
-2. `app-service` reads all device client IDs from the DB.
-3. For every device it idempotently upserts:
+2. `app-service` reads active and blocked device client IDs from the DB.
+3. Blocked device users are deleted from RabbitMQ. RabbitMQ closes their open connections.
+4. For every active device it idempotently upserts:
    - RabbitMQ user;
    - vhost permissions;
    - topic permissions for `amq.topic`.
-4. A PostgreSQL advisory lock prevents concurrent sync storms when multiple gunicorn workers start.
+5. A PostgreSQL advisory lock prevents concurrent sync storms when multiple gunicorn workers start.
+
+Normal provisioning updates only the requested SNs. The full scan runs on app startup
+or via the explicit admin recovery action. A RabbitMQ restart with the existing named
+volume preserves dynamic users and ACLs; a fresh broker needs both the static seed
+definitions and an app startup or explicit reconciliation to restore active devices.
+Never restore a blocked device from a saved live definitions export.
 
 The manual admin action remains available for forced recovery:
 
@@ -77,6 +84,22 @@ docker compose up -d --no-deps rabbitmq
 
 ## Checks after deployment or RabbitMQ restart
 
+Before a planned restart, record the RabbitMQ container image ID, named volume,
+and counts of users, vhost permissions, topic permissions, queues, exchanges and
+bindings. Export live definitions to a protected backup, but do not import that
+export after this release: it may contain blocked device users. Keep the named
+volume attached. Deploy the checked `app1` image first so it can reconcile the
+new ACL shape; then restart only RabbitMQ with its updated bind-mounted config.
+
+After RabbitMQ reports healthy, compare the same counts and the non-secret names
+of static topology objects. Verify that every active device has its user, vhost
+permissions and topic ACL, that blocked device users are absent, and that one
+known terminal reconnects and can publish/subscribe only under its own SN.
+`definitions.skip_if_unchanged` can skip a repeated seed import; persisted Mnesia
+is the primary recovery source on a normal restart. If the volume is empty,
+the seed restores service definitions and a fresh `app1` startup (or explicit
+admin reconciliation) restores active device users and ACLs.
+
 ```powershell
 # Container status
 docker compose ps rabbitmq app1
@@ -112,5 +135,8 @@ Invoke-RestMethod -Method Post "https://dev.leo4.ru:3000/api/internal/v1/admin/?
 
 ## Notes
 
-`rmq/definitions.json` is only a seed for base broker topology and bootstrap users. It must not be treated as the canonical storage for dynamic device ACL. Dynamic device ACL is derived from PostgreSQL and re-applied by `app-service`.
-
+`rmq/definitions.json` is only a seed for base broker topology and service users.
+It contains no device account. Dynamic device ACL is derived from PostgreSQL and
+re-applied by `app-service`. Device topic permissions must restrict `dev.<SN>.*`
+publishing and `srv.<SN>.*` subscriptions; omitting topic permissions grants access
+to other devices' topics under the default RabbitMQ authorization backend.
