@@ -170,6 +170,39 @@ class MouseClickCommand(StrictBaseModel):
     expires_at_ms: int
 
 
+class MouseDragCommand(StrictBaseModel):
+    v: Literal[1] = 1
+    type: Literal["mouse_drag"] = "mouse_drag"
+    command_id: UUID
+    lease_id: UUID
+    sn: str
+    x: int = Field(..., ge=0, le=65535, strict=True)
+    y: int = Field(..., ge=0, le=65535, strict=True)
+    to_x: int = Field(..., ge=0, le=65535, strict=True)
+    to_y: int = Field(..., ge=0, le=65535, strict=True)
+    desktop_id: str | None = None
+    source_id: str | None = None
+    stream_instance_id: UUID | None = None
+    issued_at_ms: int
+    expires_at_ms: int
+
+
+class MouseWheelCommand(StrictBaseModel):
+    v: Literal[1] = 1
+    type: Literal["mouse_wheel"] = "mouse_wheel"
+    command_id: UUID
+    lease_id: UUID
+    sn: str
+    x: int = Field(..., ge=0, le=65535, strict=True)
+    y: int = Field(..., ge=0, le=65535, strict=True)
+    delta: int = Field(..., ge=-1200, le=1200, strict=True)
+    desktop_id: str | None = None
+    source_id: str | None = None
+    stream_instance_id: UUID | None = None
+    issued_at_ms: int
+    expires_at_ms: int
+
+
 class ShortcutActionCommand(StrictBaseModel):
     v: Literal[1] = 1
     type: Literal["shortcut_action"] = "shortcut_action"
@@ -507,6 +540,27 @@ class WsMouseClick(StrictBaseModel):
     stream_instance_id: UUID | None = None
 
 
+class WsMouseDrag(StrictBaseModel):
+    type: Literal["mouse_drag"] = "mouse_drag"
+    x: int = Field(..., ge=0, le=65535, strict=True)
+    y: int = Field(..., ge=0, le=65535, strict=True)
+    to_x: int = Field(..., ge=0, le=65535, strict=True)
+    to_y: int = Field(..., ge=0, le=65535, strict=True)
+    desktop_id: str | None = None
+    source_id: str | None = None
+    stream_instance_id: UUID | None = None
+
+
+class WsMouseWheel(StrictBaseModel):
+    type: Literal["mouse_wheel"] = "mouse_wheel"
+    x: int = Field(..., ge=0, le=65535, strict=True)
+    y: int = Field(..., ge=0, le=65535, strict=True)
+    delta: int = Field(..., ge=-1200, le=1200, strict=True)
+    desktop_id: str | None = None
+    source_id: str | None = None
+    stream_instance_id: UUID | None = None
+
+
 class WsShortcutAction(StrictBaseModel):
     type: Literal["shortcut_action"] = "shortcut_action"
     action: ShortcutActionType
@@ -539,6 +593,8 @@ WsInboundMessage = Annotated[
     Union[
         WsPointerMove,
         WsMouseClick,
+        WsMouseDrag,
+        WsMouseWheel,
         WsShortcutAction,
         WsKeyEvent,
         WsKeepalive,

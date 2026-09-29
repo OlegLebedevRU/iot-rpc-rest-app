@@ -19,6 +19,8 @@ from core.remote_input.schemas import (
     LeaseResponse,
     LeaseStatusView,
     MouseClickCommand,
+    MouseDragCommand,
+    MouseWheelCommand,
     PointerMoveCommand,
     StreamStartCommand,
     StreamStopCommand,
@@ -29,6 +31,30 @@ from core.remote_input.schemas import (
     WsMouseClick,
     WsPointerMove,
 )
+
+
+def test_mouse_drag_and_wheel_require_bounded_coordinates_and_delta():
+    common = dict(
+        command_id=uuid4(),
+        lease_id=uuid4(),
+        sn="SN12345",
+        x=100,
+        y=200,
+        issued_at_ms=1000,
+        expires_at_ms=3000,
+    )
+    assert MouseDragCommand(**common, to_x=65535, to_y=0).type == "mouse_drag"
+    assert MouseWheelCommand(**common, delta=-120).type == "mouse_wheel"
+    with pytest.raises(ValidationError):
+        MouseDragCommand(**common, to_x=65536, to_y=0)
+    with pytest.raises(ValidationError):
+        MouseWheelCommand(**common, delta=1201)
+    assert (
+        WsInboundAdapter.validate_python(
+            {"type": "mouse_wheel", "x": 100, "y": 200, "delta": -120}
+        ).type
+        == "mouse_wheel"
+    )
 
 
 def test_pointer_move_command_valid():

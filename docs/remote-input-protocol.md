@@ -53,6 +53,8 @@
 |---|---|---|---|:---:|:---:|:---:|
 | `pointer_move` | `srv/<SN>/ctl` | `srv.<SN>.ctl` | Server → Terminal | 0 | Нет | 2000 мс (`move_ttl_ms`) |
 | `mouse_click` | `srv/<SN>/ctl` | `srv.<SN>.ctl` | Server → Terminal | 1 | Нет | 5000 мс (`click_ttl_ms`) |
+| `mouse_drag` | `srv/<SN>/ctl` | `srv.<SN>.ctl` | Server → Terminal | 1 | Нет | 5000 мс (`click_ttl_ms`) |
+| `mouse_wheel` | `srv/<SN>/ctl` | `srv.<SN>.ctl` | Server → Terminal | 1 | Нет | 5000 мс (`click_ttl_ms`) |
 | `key_event` | `srv/<SN>/ctl` | `srv.<SN>.ctl` | Server → Terminal | 1 | Нет | 5000 мс (`click_ttl_ms`) |
 | `inventory_get`| `srv/<SN>/ctl` | `srv.<SN>.ctl` | Server → Terminal | 1 | Нет | 5000 мс (`inventory_timeout_sec`) |
 | `stream_start` | `srv/<SN>/ctl` | `srv.<SN>.ctl` | Server → Terminal | 1 | Нет | 15000 мс (`stream_start_timeout_sec`) |
@@ -69,7 +71,7 @@
 - `console`: Диагностическая сессия консоли (`/api/internal/v1/diagnostics/ws/devices/{sn}`). Доступна **только** роли `superuser`. Взаимно исключает `stream`, `input` и `view`.
 - `view`: Только просмотр активной видеотрансляции (для роли `viewer` с правом «Видеонаблюдение»). Выдаётся **только**, если `presence.stream.state == "running"`, иначе `409 stream_not_running`. Ввод команд мыши/клавиатуры заблокирован.
 - `stream`: Управление видеотрансляцией (`stream/start`, `stream/stop`), получение инвентаря. Ввод заблокирован.
-- `input`: Полный доступ к видеотрансляции и интерактивному вводу (`pointer_move`, `mouse_click`, `key_event`). По умолчанию при `POST /devices/{sn}/lease` без указания scope для обратной совместимости.
+- `input`: Полный доступ к видеотрансляции и интерактивному вводу (`pointer_move`, `mouse_click`, `mouse_drag`, `mouse_wheel`, `key_event`). По умолчанию при `POST /devices/{sn}/lease` без указания scope для обратной совместимости.
 
 ### 3.2. Правила LeaseRegistry
 1. **Одна активная аренда на SN**: Любая попытка захватить терминал при наличии активной аренды другого пользователя или другой браузерной сессии приводит к `409 Conflict` со структурированным телом `LeaseConflictError`:
@@ -196,6 +198,9 @@ stateDiagram-v2
   "expires_at_ms": 1788805983123
 }
 ```
+
+#### `mouse_drag` / `mouse_wheel`:
+`mouse_drag` and `mouse_wheel` use the same command envelope, lease and desktop/stream binding as `mouse_click`. `mouse_drag` has `x`, `y`, `to_x`, `to_y` (integers `0..65535`) and replays a bounded left-button down/move/up sequence after pointer release. `mouse_wheel` has `x`, `y` and signed `delta` (`-1200..1200`, nonzero, Windows wheel units; negative scrolls down). Both require an active input lease, a desktop stream, and matching `mouse_drag`/`mouse_wheel` capabilities in retained agent presence. They are never retained. The agent publishes ACK/NACK on `dev/<SN>/ctl`.
 
 #### `key_event`:
 ```json

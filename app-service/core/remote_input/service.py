@@ -46,6 +46,8 @@ from core.remote_input.schemas import (
     LeaseScope,
     LeaseStatusView,
     MouseClickCommand,
+    MouseDragCommand,
+    MouseWheelCommand,
     PointerMoveCommand,
     ShortcutActionCommand,
     ShortcutActionType,
@@ -848,6 +850,12 @@ class RemoteInputService:
 
     async def check_consumer_compatibility(self, sn: str, action: str) -> None:
         agent_status = await self.presence.get(sn)
+        if action in ("mouse_drag", "mouse_wheel"):
+            if action not in (agent_status.capabilities or []):
+                raise HTTPException(
+                    status_code=409, detail="consumer_version_unsupported"
+                )
+            return
         min_ver = _parse_semver(settings.remote_input.min_quick_actions_agent_version)
         agent_ver = _parse_semver(agent_status.version)
         capabilities = agent_status.capabilities or []
@@ -996,6 +1004,68 @@ class RemoteInputService:
         )
 
         await send_ctl_command(lease.sn, cmd, settings.remote_input.move_ttl_ms)
+        return {"accepted": True}
+
+    async def mouse_action(
+        self,
+        lease_id: UUID,
+        org_id: int,
+        action: Literal["mouse_drag", "mouse_wheel"],
+        x: int,
+        y: int,
+        to_x: int | None = None,
+        to_y: int | None = None,
+        delta: int | None = None,
+        desktop_id: str | None = None,
+        source_id: str | None = None,
+        stream_instance_id: UUID | None = None,
+        caller_user_id: str | None = None,
+        caller_session_id: str | None = None,
+        is_superuser: bool = False,
+    ) -> dict[str, bool]:
+        lease = await self.leases.get(lease_id)
+        if lease is None:
+            raise HTTPException(status_code=409, detail="lease inactive")
+        self._validate_input_command(
+            lease,
+            org_id,
+            caller_user_id,
+            caller_session_id,
+            desktop_id=desktop_id,
+            source_id=source_id,
+            stream_instance_id=stream_instance_id,
+            is_superuser=is_superuser,
+        )
+        await self.check_consumer_compatibility(lease.sn, action)
+        allowed = await self.limiter.check_rate_limit(
+            lease_id,
+            "mouse_click",
+            settings.remote_input.click_rate_per_sec,
+        )
+        if not allowed:
+            raise HTTPException(status_code=429, detail="rate limited")
+        now_ms = int(time.time() * 1000)
+        common = dict(
+            command_id=uuid4(),
+            lease_id=lease.lease_id,
+            sn=lease.sn,
+            x=x,
+            y=y,
+            desktop_id=lease.selected_desktop_id,
+            source_id=lease.selected_desktop_id,
+            stream_instance_id=lease.stream_instance_id,
+            issued_at_ms=now_ms,
+            expires_at_ms=now_ms + settings.remote_input.click_ttl_ms,
+        )
+        if action == "mouse_drag":
+            if to_x is None or to_y is None:
+                raise HTTPException(status_code=422, detail="drag destination missing")
+            command = MouseDragCommand(**common, to_x=to_x, to_y=to_y)
+        else:
+            if delta is None or delta == 0:
+                raise HTTPException(status_code=422, detail="wheel delta missing")
+            command = MouseWheelCommand(**common, delta=delta)
+        await send_ctl_command(lease.sn, command, settings.remote_input.click_ttl_ms)
         return {"accepted": True}
 
     async def mouse_click(

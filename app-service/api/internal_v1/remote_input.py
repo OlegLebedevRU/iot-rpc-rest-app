@@ -57,6 +57,8 @@ from core.remote_input.schemas import (
     WsLeaseRevoked,
     WsLimits,
     WsMouseClick,
+    WsMouseDrag,
+    WsMouseWheel,
     WsPointerMove,
     WsPresence,
     WsRelease,
@@ -994,6 +996,52 @@ async def remote_input_ws(
                             code=code_str,
                             message=str(exc.detail),
                             client_ref=msg.client_ref,
+                        ).model_dump(mode="json")
+                    )
+
+            elif isinstance(msg, (WsMouseDrag, WsMouseWheel)):
+                if lease.scope != "input":
+                    await outgoing_queue.put(
+                        WsError(
+                            code="scope_not_allowed", message="Input lease required"
+                        ).model_dump(mode="json")
+                    )
+                    continue
+                if lease.stream_mode is None:
+                    lease.stream_mode = "desktop"
+                if lease.stream_mode != "desktop":
+                    await outgoing_queue.put(
+                        WsError(
+                            code="mode_conflict", message="Desktop stream required"
+                        ).model_dump(mode="json")
+                    )
+                    continue
+                try:
+                    await remote_input_service.mouse_action(
+                        lease_id=lease_id,
+                        org_id=lease.org_id,
+                        action=msg.type,
+                        x=msg.x,
+                        y=msg.y,
+                        to_x=msg.to_x if isinstance(msg, WsMouseDrag) else None,
+                        to_y=msg.to_y if isinstance(msg, WsMouseDrag) else None,
+                        delta=msg.delta if isinstance(msg, WsMouseWheel) else None,
+                        desktop_id=msg.desktop_id,
+                        source_id=msg.source_id,
+                        stream_instance_id=msg.stream_instance_id,
+                        caller_user_id=lease.owner_user_id,
+                        caller_session_id=lease.owner_session_id,
+                        is_superuser=True,
+                    )
+                except HTTPException as exc:
+                    await outgoing_queue.put(
+                        WsError(
+                            code=(
+                                "rate_limited"
+                                if exc.status_code == 429
+                                else str(exc.detail)
+                            ),
+                            message=str(exc.detail),
                         ).model_dump(mode="json")
                     )
 
