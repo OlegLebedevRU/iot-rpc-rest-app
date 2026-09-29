@@ -9,6 +9,7 @@ from pydantic import (
     ConfigDict,
     AfterValidator,
     field_validator,
+    PrivateAttr,
 )
 
 
@@ -149,6 +150,7 @@ class TaskResponseResult(TaskResponseStatus):
 
 
 class TaskResponsePayload(TaskResponseStatus):
+    _expires_at: datetime | None = PrivateAttr(default=None)
     payload: Optional[Dict[str, Any]] = Field(
         default=None,
         title="Task payload",

@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -25,10 +26,6 @@ from core.schemas.device_tasks import (
 from core.services.device_task_processing import send_tsk, send_rsp, send_cmt
 
 log = setup_module_logger(__name__, "srv_dev_tasks.log")
-
-
-async def act_ttl():
-    pass
 
 
 class DeviceTasksService:
@@ -58,7 +55,11 @@ class DeviceTasksService:
 
         task = TaskResponse(id=db_uuid, created_at=created_at)
         log.info("Created task %s", task)
-        await send_tsk(sn, task_create, task)
+        remaining_seconds = max(
+            0.001,
+            created_at + (task_create.ttl or 1) * 60 - datetime.now(UTC).timestamp(),
+        )
+        await send_tsk(sn, task_create, task, expiration=remaining_seconds)
         return task
 
     # @classmethod
@@ -124,10 +125,15 @@ class DeviceTasksService:
             log_rpc_debug(sn, "rpc.ack.skip", corr_id=corr_id, reason="zero_corr_id")
             return
 
-        await TasksRepository.task_status_update(
-            self.session, corr_id, TaskStatus.PENDING
+        updated = await TasksRepository.task_status_update(
+            self.session, corr_id, TaskStatus.PENDING, sn=sn
         )
-        log_rpc_debug(sn, "rpc.ack.pending", corr_id=corr_id, status=TaskStatus.PENDING)
+        log_rpc_debug(
+            sn,
+            "rpc.ack.pending" if updated else "rpc.ack.ignored",
+            corr_id=corr_id,
+            status=TaskStatus.PENDING if updated else None,
+        )
 
     @staticmethod
     def _get_method_limit(msg) -> int:
@@ -144,7 +150,7 @@ class DeviceTasksService:
 
     @staticmethod
     def _build_task_response(task_data: dict) -> TaskResponsePayload:
-        return TaskResponsePayload(
+        response = TaskResponsePayload(
             header=TaskHeader.model_validate(task_data),
             id=task_data["id"],
             status=task_data["status"],
@@ -153,6 +159,8 @@ class DeviceTasksService:
             locked_at=task_data["locked_at"],
             payload=task_data["payload"],
         )
+        response._expires_at = task_data.get("expires_at")
+        return response
 
     @staticmethod
     def _normalize_result_payload(res_data: dict | str) -> dict | str:
@@ -203,7 +211,7 @@ class DeviceTasksService:
             return await self._select_polling_task(sn, method_le)
         else:
             task_data = await TasksRepository.select_task_by_id(
-                self.session, corr_id, method_le
+                self.session, corr_id, method_le, sn=sn
             )
 
         if task_data is None:
@@ -223,11 +231,19 @@ class DeviceTasksService:
             t_resp = task.model_dump(mode="json")
             log.info("from DB select task = %s", t_resp)
             method_code = str(task.header.method_code)
-            await TasksRepository.task_status_update(
-                self.session, task.id, TaskStatus.LOCK
+            claimed = await TasksRepository.task_status_update(
+                self.session, task.id, TaskStatus.LOCK, sn=sn
             )
-            correlation_id = task.id
-            expiration = task.header.ttl * 60_000  # Use actual TTL
+            if not claimed:
+                task = None
+            else:
+                correlation_id = task.id
+                expiration = (
+                    max(0.001, (task._expires_at - datetime.now(UTC)).total_seconds())
+                    if task._expires_at is not None
+                    else float((task.header.ttl or 1) * 60)
+                )
+        if task is not None:
             log_rpc_debug(
                 sn,
                 "rpc.req.selected",
@@ -242,7 +258,7 @@ class DeviceTasksService:
             log.debug("from DB select task = None")
             correlation_id = settings.task_proc_cfg.zero_corr_id
             method_code = "0"
-            expiration = 3 * 60 * 1000  # Fallback TTL: 3 minutes (or use config)
+            expiration = 3 * 60
             log_rpc_debug(
                 sn,
                 "rpc.req.nop",
@@ -253,7 +269,9 @@ class DeviceTasksService:
 
         await send_rsp(sn, t_resp, correlation_id, expiration, method_code)
 
-    async def save(self, msg, sn, corr_id: UUID4) -> bool:
+    async def save(
+        self, msg, sn, corr_id: UUID4, received_at: datetime | None = None
+    ) -> bool:
         """Process and save an incoming RES message.
 
         Returns ``True`` when the result was actually persisted to the DB,
@@ -261,8 +279,17 @@ class DeviceTasksService:
         task, etc.).  The caller can use this to decide whether to count the
         message for billing.
         """
+        received_at = received_at or datetime.now(UTC)
         ext_id = self._parse_int_header(msg.headers, "ext_id", 0)
         status_code = self._parse_int_header(msg.headers, "status_code", 501)
+        raw_result_uid = msg.headers.get("result_uid")
+        try:
+            result_uid = (
+                UUID(str(raw_result_uid)) if raw_result_uid is not None else None
+            )
+        except ValueError, TypeError, AttributeError:
+            log.warning("Invalid result_uid on RES task_id=%s", corr_id)
+            result_uid = None
 
         if corr_id is None:
             log.info(
@@ -326,10 +353,17 @@ class DeviceTasksService:
             payload=res_data,
         )
 
-        result_id = await TasksRepository.save_task_result(
-            self.session, corr_id, ext_id, status_code, res_data
+        stored = await TasksRepository.record_result(
+            self.session,
+            corr_id,
+            sn,
+            ext_id,
+            status_code,
+            res_data,
+            result_uid,
+            received_at,
         )
-        if result_id is None:
+        if stored is None:
             log.warning(
                 "Skip RESULT finalization for missing/uncommitted task corr_id=%s, ext_id=%d, status_code=%d",
                 corr_id,
@@ -345,16 +379,7 @@ class DeviceTasksService:
             )
             return False
 
-        rmsg = "committed"
-        try:
-            await TasksRepository.task_status_update(
-                self.session, corr_id, TaskStatus.DONE
-            )
-        except Exception as e:
-            log.error("Task status update error %s", e)
-            rmsg = "Partial error: result committed, but status update failed"
-
-        cmt_payload = {"message": rmsg}
+        cmt_payload = {"message": "committed"}
         dev_id = await DeviceRepo.get_device_id(session=self.session, sn=sn)
         log_rpc_debug(
             sn,
@@ -362,22 +387,25 @@ class DeviceTasksService:
             corr_id=corr_id,
             ext_id=ext_id,
             status_code=status_code,
-            result_id=result_id,
+            result_id=stored.result_id,
             dev_id=dev_id,
-            message=rmsg,
+            message="committed",
         )
         await send_cmt(
             sn,
             cmt_payload,
-            json.dumps(res_data),
+            json.dumps(stored.result),
             corr_id,
             dev_id,
-            result_id,
-            ext_id,
-            status_code,
+            stored.result_id,
+            stored.ext_id,
+            stored.status_code,
+            # Delivery was scheduled atomically with the result in PostgreSQL.
+            send_webhook=False,
+            result_uid=result_uid,
         )
-        return True
+        return stored.is_new
 
     async def ttl(self, decrement: int = 1):
         await TasksRepository.update_ttl(self.session, decrement)
-        log.info("Complited job event, decrement TTL = %d", decrement)
+        log.info("Completed task expiration check against deadlines")

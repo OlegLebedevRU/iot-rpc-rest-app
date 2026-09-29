@@ -1,3 +1,5 @@
+import json
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
@@ -7,7 +9,7 @@ import pytest
 
 
 from core.models.common import TaskStatus
-from core.crud.dev_tasks_repo import TasksRepository
+from core.crud.dev_tasks_repo import StoredTaskResult, TasksRepository
 from core.services import device_tasks as device_tasks_module
 from core.services.device_tasks import DeviceTasksService
 from core.topologys.fs_depends import corr_id_getter_dep
@@ -70,7 +72,9 @@ async def test_select_uses_sn_polling_for_zero_uuid(monkeypatch):
 
     select_next_task_by_sn.assert_awaited_once_with(session, "SN_TEST", 2999)
     select_task_by_id.assert_not_called()
-    task_status_update.assert_awaited_once_with(session, task_id, TaskStatus.LOCK)
+    task_status_update.assert_awaited_once_with(
+        session, task_id, TaskStatus.LOCK, sn="SN_TEST"
+    )
     send_rsp.assert_awaited_once_with(
         "SN_TEST",
         {
@@ -89,7 +93,7 @@ async def test_select_uses_sn_polling_for_zero_uuid(monkeypatch):
             "payload": {"dt": [{"cl": 5}]},
         },
         task_id,
-        5 * 60_000,
+        5 * 60,
         "51",
     )
 
@@ -121,14 +125,14 @@ async def test_select_uses_task_lookup_for_non_zero_uuid(monkeypatch):
 
     await service.select("SN_TEST", corr_id, msg)
 
-    select_task_by_id.assert_awaited_once_with(session, corr_id, 7099)
+    select_task_by_id.assert_awaited_once_with(session, corr_id, 7099, sn="SN_TEST")
     select_next_task_by_sn.assert_not_called()
     task_status_update.assert_not_called()
     send_rsp.assert_awaited_once_with(
         "SN_TEST",
         device_tasks_module.settings.task_proc_cfg.nop_resp,
         device_tasks_module.settings.task_proc_cfg.zero_corr_id,
-        3 * 60 * 1000,
+        3 * 60,
         "0",
     )
 
@@ -156,7 +160,7 @@ async def test_triggered_select_allows_diagnostics_without_slave_ws_header(monke
 
     await service.select("SN_TEST", corr_id, msg)
 
-    select_task_by_id.assert_awaited_once_with(session, corr_id, 7099)
+    select_task_by_id.assert_awaited_once_with(session, corr_id, 7099, sn="SN_TEST")
     select_next_task_by_sn.assert_not_called()
 
 
@@ -184,13 +188,13 @@ async def test_save_skips_result_processing_for_zero_uuid(monkeypatch):
         body=b'{"description": "from device partial result"}',
     )
 
-    save_task_result = AsyncMock()
+    record_result = AsyncMock()
     task_status_update = AsyncMock()
     get_device_id = AsyncMock()
     send_cmt = AsyncMock()
 
     monkeypatch.setattr(
-        device_tasks_module.TasksRepository, "save_task_result", save_task_result
+        device_tasks_module.TasksRepository, "record_result", record_result
     )
     monkeypatch.setattr(
         device_tasks_module.TasksRepository, "task_status_update", task_status_update
@@ -205,7 +209,7 @@ async def test_save_skips_result_processing_for_zero_uuid(monkeypatch):
     )
 
     assert result is False
-    save_task_result.assert_not_called()
+    record_result.assert_not_called()
     task_status_update.assert_not_called()
     get_device_id.assert_not_called()
     send_cmt.assert_not_called()
@@ -218,170 +222,102 @@ async def test_save_skips_finalization_for_missing_task(monkeypatch):
     corr_id = uuid4()
     msg = SimpleNamespace(
         headers={"ext_id": "12345", "status_code": "206"},
-        body=b'{"description": "from device partial result"}',
+        body=b'{"description":"partial"}',
     )
-
-    save_task_result = AsyncMock(return_value=None)
-    task_status_update = AsyncMock()
-    get_device_id = AsyncMock()
+    record_result = AsyncMock(return_value=None)
     send_cmt = AsyncMock()
-
-    monkeypatch.setattr(
-        device_tasks_module.TasksRepository, "save_task_result", save_task_result
-    )
-    monkeypatch.setattr(
-        device_tasks_module.TasksRepository, "task_status_update", task_status_update
-    )
-    monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
+    monkeypatch.setattr(TasksRepository, "record_result", record_result)
     monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
 
-    result = await service.save(msg, "SN_TEST", corr_id)
-
-    assert result is False
-    save_task_result.assert_awaited_once_with(
+    assert await service.save(msg, "SN_TEST", corr_id) is False
+    args = record_result.await_args.args
+    assert args[:7] == (
         session,
         corr_id,
+        "SN_TEST",
         12345,
         206,
-        {"description": "from device partial result"},
+        {"description": "partial"},
+        None,
     )
-    task_status_update.assert_not_called()
-    get_device_id.assert_not_called()
+    assert isinstance(args[7], datetime)
     send_cmt.assert_not_called()
 
 
 @pytest.mark.asyncio
-async def test_save_finalizes_existing_task(monkeypatch):
+async def test_save_new_result_sends_cmt_and_webhook(monkeypatch):
     session = object()
     service = DeviceTasksService(session, 0)
     corr_id = uuid4()
+    uid = uuid4()
+    payload = {"description": "result"}
     msg = SimpleNamespace(
-        headers={"ext_id": "12345", "status_code": "200"},
-        body=b'{"description": "from device final result"}',
+        headers={"ext_id": "123", "status_code": "200", "result_uid": str(uid)},
+        body=b'{"description":"result"}',
     )
-
-    save_task_result = AsyncMock(return_value=77)
-    task_status_update = AsyncMock(return_value=True)
+    record_result = AsyncMock(
+        return_value=StoredTaskResult(77, 123, 200, payload, True, True)
+    )
     get_device_id = AsyncMock(return_value=501)
     send_cmt = AsyncMock()
-
-    monkeypatch.setattr(
-        device_tasks_module.TasksRepository, "save_task_result", save_task_result
-    )
-    monkeypatch.setattr(
-        device_tasks_module.TasksRepository, "task_status_update", task_status_update
-    )
+    monkeypatch.setattr(TasksRepository, "record_result", record_result)
     monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
     monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
 
-    result = await service.save(msg, "SN_TEST", corr_id)
-
-    assert result is True
-    save_task_result.assert_awaited_once_with(
+    assert await service.save(msg, "SN_TEST", corr_id) is True
+    assert record_result.await_args.args[:7] == (
         session,
         corr_id,
-        12345,
-        200,
-        {"description": "from device final result"},
-    )
-    task_status_update.assert_awaited_once_with(session, corr_id, TaskStatus.DONE)
-    get_device_id.assert_awaited_once_with(session=session, sn="SN_TEST")
-    send_cmt.assert_awaited_once_with(
         "SN_TEST",
-        {"message": "committed"},
-        '{"description": "from device final result"}',
-        corr_id,
-        501,
-        77,
-        12345,
+        123,
         200,
-    )
-
-
-@pytest.mark.asyncio
-async def test_save_tolerates_non_numeric_ext_id_header(monkeypatch):
-    session = object()
-    service = DeviceTasksService(session, 0)
-    corr_id = uuid4()
-    msg = SimpleNamespace(
-        headers={"ext_id": "mock", "status_code": "200"},
-        body=b'{"description": "from device final result"}',
-    )
-
-    save_task_result = AsyncMock(return_value=77)
-    task_status_update = AsyncMock(return_value=True)
-    get_device_id = AsyncMock(return_value=501)
-    send_cmt = AsyncMock()
-
-    monkeypatch.setattr(
-        device_tasks_module.TasksRepository, "save_task_result", save_task_result
-    )
-    monkeypatch.setattr(
-        device_tasks_module.TasksRepository, "task_status_update", task_status_update
-    )
-    monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
-    monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
-
-    result = await service.save(msg, "SN_TEST", corr_id)
-
-    assert result is True
-    save_task_result.assert_awaited_once_with(
-        session,
-        corr_id,
-        0,
-        200,
-        {"description": "from device final result"},
+        payload,
+        uid,
     )
     send_cmt.assert_awaited_once_with(
         "SN_TEST",
         {"message": "committed"},
-        '{"description": "from device final result"}',
+        json.dumps(payload),
         corr_id,
         501,
         77,
-        0,
+        123,
         200,
+        send_webhook=False,
+        result_uid=uid,
     )
 
 
 @pytest.mark.asyncio
-async def test_save_strips_transport_corr_wrapper_from_result(monkeypatch):
+async def test_duplicate_result_only_resends_cmt(monkeypatch):
     session = object()
     service = DeviceTasksService(session, 0)
     corr_id = uuid4()
     msg = SimpleNamespace(
-        headers={"ext_id": "12345", "status_code": "200"},
-        body=(
-            b'{"corr_data":"'
-            + str(corr_id).encode("utf-8")
-            + b'","result":{"description":"from device final result"}}'
-        ),
+        headers={"ext_id": "bad", "status_code": "200", "result_uid": "invalid"},
+        body=b'{"corr_id":"' + str(corr_id).encode() + b'","result":{"status":"ok"}}',
     )
-
-    save_task_result = AsyncMock(return_value=77)
-    task_status_update = AsyncMock(return_value=True)
-    get_device_id = AsyncMock(return_value=501)
+    record_result = AsyncMock(
+        return_value=StoredTaskResult(77, 0, 200, {"status": "ok"}, False, False)
+    )
+    monkeypatch.setattr(TasksRepository, "record_result", record_result)
+    monkeypatch.setattr(
+        device_tasks_module.DeviceRepo, "get_device_id", AsyncMock(return_value=501)
+    )
     send_cmt = AsyncMock()
-
-    monkeypatch.setattr(
-        device_tasks_module.TasksRepository, "save_task_result", save_task_result
-    )
-    monkeypatch.setattr(
-        device_tasks_module.TasksRepository, "task_status_update", task_status_update
-    )
-    monkeypatch.setattr(device_tasks_module.DeviceRepo, "get_device_id", get_device_id)
     monkeypatch.setattr(device_tasks_module, "send_cmt", send_cmt)
 
-    result = await service.save(msg, "SN_TEST", corr_id)
-
-    assert result is True
-    save_task_result.assert_awaited_once_with(
+    assert await service.save(msg, "SN_TEST", corr_id) is False
+    assert record_result.await_args.args[:7] == (
         session,
         corr_id,
-        12345,
+        "SN_TEST",
+        0,
         200,
-        {"description": "from device final result"},
+        {"status": "ok"},
+        None,
     )
+    assert send_cmt.await_args.kwargs == {"send_webhook": False, "result_uid": None}
 
 
 @pytest.mark.asyncio
@@ -444,52 +380,6 @@ async def test_repository_task_status_update_skips_zero_uuid():
     session.rollback.assert_not_called()
 
 
-@pytest.mark.asyncio
-async def test_repository_save_task_result_skips_zero_uuid():
-    session: Any = SimpleNamespace(
-        execute=AsyncMock(),
-        commit=AsyncMock(),
-        rollback=AsyncMock(),
-    )
-
-    result_id = await TasksRepository.save_task_result(
-        session,
-        device_tasks_module.settings.task_proc_cfg.zero_corr_id,
-        12345,
-        206,
-        {"description": "from device partial result"},
-    )
-
-    assert result_id is None
-    session.execute.assert_not_called()
-    session.commit.assert_not_called()
-    session.rollback.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_repository_save_task_result_returns_none_for_missing_task():
-    session: Any = SimpleNamespace(
-        execute=AsyncMock(
-            return_value=SimpleNamespace(scalar_one_or_none=lambda: None)
-        ),
-        commit=AsyncMock(),
-        rollback=AsyncMock(),
-    )
-
-    result_id = await TasksRepository.save_task_result(
-        session,
-        uuid4(),
-        12345,
-        206,
-        {"description": "from device partial result"},
-    )
-
-    assert result_id is None
-    session.execute.assert_awaited_once()
-    session.commit.assert_not_called()
-    session.rollback.assert_not_called()
-
-
 def test_repository_normalize_result_for_storage_wraps_non_dict_values():
     assert TasksRepository._normalize_result_for_storage(
         [{"k": "send_options", "t": "i32", "v": 1}]
@@ -518,5 +408,5 @@ async def test_polling_query_prefers_high_priority_then_smallest_positive_ttl():
     assert "ttl >" in compiled
     assert "ORDER BY" in compiled
     assert "priority DESC" in compiled
-    assert "ttl ASC" in compiled
+    assert "ceil(" in compiled
     assert "created_at ASC" in compiled

@@ -28,6 +28,7 @@ from core.logging_config import setup_module_logger
 from core.redis_helper import redis_helper
 from core.models import db_helper
 from core.services.device_task_processing import act_ttl
+from core.services.rpc_result_webhooks import delivery_loop
 from core.services.devices import DeviceService
 from core.services.billing import BillingService
 from core.topologys.declare import declare_x_q
@@ -316,6 +317,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
     cold_boot_task = asyncio.create_task(_initial_device_connections_sync_cold_boot())
     remote_input_cleanup_task = asyncio.create_task(_remote_input_cleanup_loop())
+    rpc_webhook_task = asyncio.create_task(delivery_loop())
     scheduler = AsyncIOScheduler()
     scheduler.configure(jobstores={"default": MemoryJobStore()})
     try:
@@ -350,6 +352,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         log.info(f"Исключение scheduler: {str(e)}")
 
     yield
+
+    rpc_webhook_task.cancel()
+    with suppress(asyncio.CancelledError, Exception):
+        await rpc_webhook_task
 
     if not cold_boot_task.done():
         cold_boot_task.cancel()

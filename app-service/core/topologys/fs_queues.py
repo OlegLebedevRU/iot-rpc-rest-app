@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import UTC, datetime
 from faststream.rabbit.fastapi import RabbitMessage
 from core.crud.device_repo import DeviceRepo
 from core.fs_broker import fs_router
@@ -141,6 +142,7 @@ if _REGISTER_SUBSCRIBERS:
         sn: Sn_dep,
         corr_id: Corr_id_dep,
     ):
+        received_at = datetime.now(UTC)
         log.info("Processing message from the results queue sn = %s", sn)
         headers = getattr(msg, "headers", None) or {}
         log_rpc_debug(
@@ -151,7 +153,9 @@ if _REGISTER_SUBSCRIBERS:
             status_code=headers.get("status_code"),
         )
         payload_bytes = len(msg.body) if msg.body else 0
-        saved = await DeviceTasksService(session, 0).save(msg, sn, corr_id)
+        saved = await DeviceTasksService(session, 0).save(
+            msg, sn, corr_id, received_at=received_at
+        )
         if saved:
             await _publish_billing_for_sn(
                 session, sn, "res", payload_bytes=payload_bytes

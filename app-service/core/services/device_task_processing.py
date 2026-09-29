@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 from typing import Any
 from uuid import UUID
 
@@ -17,7 +18,7 @@ log = setup_module_logger(__name__, "srv_dev_task_processing.log")
 logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 topology = settings.rmq
 
-EVA_EXPIRATION_MS = 180_000  # 180 seconds
+EVA_EXPIRATION = timedelta(seconds=180)
 
 
 async def send_eva(
@@ -55,12 +56,17 @@ async def send_eva(
         routing_key=routing_key,
         message=payload,
         correlation_id=corr_id,
-        expiration=EVA_EXPIRATION_MS,
+        expiration=EVA_EXPIRATION,
         headers=headers,
     )
 
 
-async def send_tsk(sn: str, task: TaskCreate, stask: TaskResponse):
+async def send_tsk(
+    sn: str,
+    task: TaskCreate,
+    stask: TaskResponse,
+    expiration: float | timedelta | None = None,
+):
 
     task_device_topic = str(
         RoutingKey(settings.rmq.prefix_srv, sn, settings.rmq.suffix_task)
@@ -68,20 +74,23 @@ async def send_tsk(sn: str, task: TaskCreate, stask: TaskResponse):
     notify: TaskNotify = TaskNotify(
         id=stask.id, created_at=stask.created_at, header=task
     )
+    message_expiration = (
+        timedelta(minutes=task.ttl or 1) if expiration is None else expiration
+    )
     log_rpc_debug(
         sn,
         "rpc.tsk.publish",
         corr_id=stask.id,
         routing_key=task_device_topic,
         method_code=notify.header.method_code,
-        expiration=task.ttl * 60_000,
+        expiration=message_expiration,
     )
     await topic_publisher.publish(
         routing_key=task_device_topic,  # "srv.a3b0000000c99999d250813.tsk",
         message=notify,
         # exchange=topic_exchange,  # settings.rmq.x_name,
         correlation_id=stask.id,
-        expiration=task.ttl * 60_000,
+        expiration=message_expiration,
         headers={
             "method_code": str(notify.header.method_code),
             "correlationData": str(stask.id),
@@ -93,7 +102,7 @@ async def send_rsp(
     sn: str,
     t_resp: dict[str, Any],
     correlation_id: UUID | str,
-    expiration: int,
+    expiration: float,
     method_code: str,
 ):
     if isinstance(t_resp, dict):
@@ -132,6 +141,8 @@ async def send_cmt(
     result_id: int,
     ext_id: int,
     status_code: int,
+    send_webhook: bool = True,
+    result_uid: UUID | None = None,
 ):
 
     routing_key: str = str(
@@ -153,20 +164,23 @@ async def send_cmt(
         correlation_id=corr_id,
         content_type="application/json",
         # exchange=topic_exchange,  # settings.rmq.x_name,
-        expiration=180 * 60_000,
+        expiration=timedelta(minutes=180),
         headers={
             "ext_id": str(ext_id),
             "result_id": str(result_id),
             "correlationData": str(corr_id),
+            **({"result_uid": str(result_uid)} if result_uid is not None else {}),
         },
     )
 
+    if not send_webhook:
+        return
     await topic_publisher.publish(
         routing_key=settings.webhook.webhooks_queue,  # "srv.a3b0000000c99999d250813.tsk",
         message=webhook_msg,
         exchange=direct_exchange,  # settings.rmq.x_name_direct,
         correlation_id=corr_id,
-        expiration=30 * 60_000,
+        expiration=timedelta(minutes=30),
         headers={
             "x-device-id": str(dev_id),
             "x-msg-type": "msg-task-result",
@@ -191,5 +205,5 @@ async def act_ttl(step: int):
     await job_publisher.publish(
         message="ttl_decrement",
         routing_key=settings.ttl_job.queue_name,
-        expiration=1 * 60_000,
+        expiration=timedelta(minutes=1),
     )

@@ -11,6 +11,7 @@ __all__ = (
     "DevTaskPayload",
     "DevTaskStatus",
     "DevTaskResult",
+    "RpcResultWebhook",
     "DevEvent",
     "DeviceOrgBind",
     "DeviceTag",
@@ -33,7 +34,13 @@ from .base import Base
 from .org_api_key import OrgApiKey
 from .org_reservation import OrgReservation
 from .device_events import DevEvent
-from .device_tasks import DevTask, DevTaskPayload, DevTaskStatus, DevTaskResult
+from .device_tasks import (
+    DevTask,
+    DevTaskPayload,
+    DevTaskStatus,
+    DevTaskResult,
+    RpcResultWebhook,
+)
 from .devices import (
     DeviceOrgBind,
     Org,

@@ -7,6 +7,8 @@ from sqlalchemy import (
     ForeignKey,
     Boolean,
     func,
+    Index,
+    text,
 )
 from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -57,6 +59,10 @@ class DevTaskStatus(Base):
     priority: Mapped[int] = mapped_column(Integer, index=True, default=0)
     status: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     ttl: Mapped[int] = mapped_column(Integer, default=TaskTTL.MIN_TTL, index=True)
+    initial_ttl: Mapped[int] = mapped_column(Integer, default=TaskTTL.MIN_TTL)
+    expires_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True, index=True
+    )
     pending_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True
     )
@@ -67,6 +73,22 @@ class DevTaskStatus(Base):
 
 
 class DevTaskResult(Base):
+    __table_args__ = (
+        Index(
+            "uq_rpc_result_uid",
+            "task_id",
+            "result_uid",
+            unique=True,
+            postgresql_where=text("result_uid IS NOT NULL"),
+        ),
+        Index(
+            "uq_rpc_result_fingerprint",
+            "task_id",
+            "result_fingerprint",
+            unique=True,
+            postgresql_where=text("result_fingerprint IS NOT NULL"),
+        ),
+    )
     # __tablename__ = "tb_dev_tasks_result"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     task_id: Mapped[uuid.UUID] = mapped_column(Uuid, ForeignKey(DevTask.id))
@@ -75,4 +97,34 @@ class DevTaskResult(Base):
     result: Mapped[dict] = mapped_column(
         JSONB, default=dict, nullable=False
     )  # Изменено!
+    result_uid: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
+    result_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     task: Mapped["DevTask"] = relationship(back_populates="results")
+
+
+class RpcResultWebhook(Base):
+    """One durable delivery per accepted result; no payload or secret copies."""
+
+    __tablename__ = "tb_rpc_result_webhooks"
+    __table_args__ = (
+        Index(
+            "ix_rpc_webhook_due",
+            "next_attempt_at",
+            postgresql_where=text("finished_at IS NULL"),
+        ),
+    )
+    result_id: Mapped[int] = mapped_column(
+        ForeignKey(DevTaskResult.id, ondelete="CASCADE"), primary_key=True
+    )
+    webhook_id: Mapped[int] = mapped_column(
+        ForeignKey("tb_org_webhooks.id", ondelete="CASCADE"), nullable=False
+    )
+    attempts: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    next_attempt_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=func.now()
+    )
+    expires_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("now() + interval '30 minutes'")
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    last_error: Mapped[str | None] = mapped_column(String(64))

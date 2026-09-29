@@ -1,7 +1,10 @@
 import json
+import hashlib
+from math import ceil
+from datetime import datetime, timedelta
+from dataclasses import dataclass
 
 from core.logging_config import setup_module_logger
-import time
 import uuid
 from typing import Any
 
@@ -16,19 +19,24 @@ from sqlalchemy import (
     func,
     Integer,
     and_,
+    case,
+    exists,
+    literal,
 )
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from core import settings
 from core.models import Device, Org
-from core.models.common import TaskStatus, PersistentVariable
+from core.models.common import TaskStatus
 from core.models.device_tasks import (
     DevTaskStatus,
     DevTask,
     DevTaskResult,
     DevTaskPayload,
+    RpcResultWebhook,
 )
+from core.models.webhook import OrgWebhook
 from core.models.devices import DeviceOrgBind
 from core.schemas.device_tasks import (
     TaskCreate,
@@ -39,7 +47,42 @@ from core.schemas.device_tasks import (
 log = setup_module_logger(__name__, "repo_dev_tasks.log")
 
 
+@dataclass(frozen=True)
+class StoredTaskResult:
+    result_id: int
+    ext_id: int
+    status_code: int
+    result: dict[str, Any]
+    is_new: bool
+    send_webhook: bool
+
+
 class TasksRepository:
+    @staticmethod
+    def _remaining_ttl():
+        return case(
+            (DevTaskStatus.initial_ttl == 0, literal(0)),
+            else_=func.greatest(
+                0,
+                func.ceil(
+                    func.extract(
+                        "epoch", DevTaskStatus.expires_at - func.clock_timestamp()
+                    )
+                    / 60
+                ),
+            ),
+        ).cast(Integer)
+
+    @staticmethod
+    def result_fingerprint(ext_id: int, status_code: int, result: dict) -> str:
+        canonical = json.dumps(
+            [ext_id, status_code, result],
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=False,
+        )
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
     @staticmethod
     def _normalize_result_for_storage(result: Any) -> dict[str, Any]:
         if isinstance(result, str):
@@ -93,7 +136,13 @@ class TasksRepository:
             func.extract("EPOCH", DevTaskStatus.locked_at)
             .cast(Integer)
             .label("locked_at"),
-            DevTaskStatus.ttl.label("ttl"),
+            case(
+                (
+                    DevTaskStatus.status < TaskStatus.DONE,
+                    TasksRepository._remaining_ttl(),
+                ),
+                else_=DevTaskStatus.ttl,
+            ).label("ttl"),
             Org.org_id.label("org_id"),
         ).select_from(DevTask)
 
@@ -122,6 +171,13 @@ class TasksRepository:
             task_id=db_uuid,
             status=TaskStatus.READY,
             ttl=task.ttl,
+            initial_ttl=task.ttl,
+            expires_at=(
+                select(DevTask.created_at)
+                .where(DevTask.id == db_uuid)
+                .scalar_subquery()
+                + timedelta(minutes=task.ttl or 1)
+            ),
             priority=task.priority,
         )
 
@@ -194,14 +250,16 @@ class TasksRepository:
                 func.extract("EPOCH", DevTaskStatus.locked_at)
                 .cast(Integer)
                 .label("locked_at"),
-                DevTaskStatus.ttl.label("ttl"),
+                cls._remaining_ttl().label("ttl"),
                 DevTaskPayload.payload.label("payload"),
+                DevTaskStatus.expires_at.label("expires_at"),
             )
             .join(DevTaskStatus)
             .join(DevTaskPayload)
             .where(
                 DevTask.is_deleted.is_(False),
                 DevTaskStatus.status < TaskStatus.DONE,
+                DevTaskStatus.expires_at > func.clock_timestamp(),
                 DevTask.method_code <= method_le,
             )
         )
@@ -212,8 +270,13 @@ class TasksRepository:
         session: AsyncSession,
         task_id: UUID4,
         method_le: int = 65535,
+        sn: str | None = None,
     ) -> dict[str, Any] | None:
         query = cls._select_task_query(method_le).where(DevTask.id == task_id)
+        if sn is not None:
+            query = query.join(Device, DevTask.device_id == Device.device_id).where(
+                Device.sn == sn, Device.is_deleted.is_(False)
+            )
         result = await session.execute(query)
         row = result.mappings().one_or_none()
         return dict(row) if row is not None else None
@@ -232,10 +295,13 @@ class TasksRepository:
         )
         query = (
             cls._select_task_query(method_le)
-            .where(DevTask.device_id == subq.c.device_id, DevTaskStatus.ttl > 0)
+            .where(
+                DevTask.device_id == subq.c.device_id,
+                DevTaskStatus.initial_ttl > 0,
+            )
             .order_by(
                 desc(DevTaskStatus.priority),
-                asc(DevTaskStatus.ttl),
+                asc(cls._remaining_ttl()),
                 asc(DevTask.created_at),
             )
             .limit(1)
@@ -274,6 +340,7 @@ class TasksRepository:
     ) -> TaskResponseDeleted | None:
         exists_q = (
             select(1)
+            .select_from(DevTask)
             .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
             .join(
                 Org, and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted.is_(False))
@@ -318,32 +385,23 @@ class TasksRepository:
 
     @classmethod
     async def tasks_ttl_update(cls, session: AsyncSession, delta_ttl: int = 1):
-        try:
-            await session.execute(
-                update(DevTaskStatus)
-                .where(
-                    DevTaskStatus.status < TaskStatus.DONE,
-                    DevTaskStatus.ttl > (delta_ttl - 1),
-                )
-                .values(ttl=DevTaskStatus.ttl - delta_ttl)
+        await session.execute(
+            update(DevTaskStatus)
+            .where(
+                DevTaskStatus.status < TaskStatus.DONE,
+                DevTaskStatus.expires_at <= func.clock_timestamp(),
             )
-            await session.execute(
-                update(DevTaskStatus)
-                .where(
-                    DevTaskStatus.status < TaskStatus.DONE,
-                    DevTaskStatus.ttl <= (delta_ttl - 1),
-                )
-                .values(status=TaskStatus.EXPIRED, ttl=0)
-            )
-            await session.commit()
-        except Exception as e:
-            await session.rollback()
-            log.error("Failed to update TTLs: %s", e)
-            raise
+            .values(status=TaskStatus.EXPIRED, ttl=0)
+        )
+        await session.commit()
 
     @classmethod
     async def task_status_update(
-        cls, session: AsyncSession, task_id: UUID4 | None, status: int
+        cls,
+        session: AsyncSession,
+        task_id: UUID4 | None,
+        status: int,
+        sn: str | None = None,
     ) -> bool:
         if task_id is None:
             return True
@@ -353,12 +411,34 @@ class TasksRepository:
             return True
 
         stmt = update(DevTaskStatus).where(DevTaskStatus.task_id == task_id)
+        if sn is not None:
+            stmt = stmt.where(
+                exists(
+                    select(1)
+                    .select_from(DevTask)
+                    .join(Device, DevTask.device_id == Device.device_id)
+                    .where(
+                        DevTask.id == task_id,
+                        DevTask.is_deleted.is_(False),
+                        Device.sn == sn,
+                        Device.is_deleted.is_(False),
+                    )
+                )
+            )
         match status:
-            case TaskStatus.PENDING | TaskStatus.DONE:
-                stmt = stmt.values(status=status, pending_at=func.current_timestamp())
+            case TaskStatus.PENDING:
+                stmt = stmt.where(
+                    DevTaskStatus.status == TaskStatus.READY,
+                    DevTaskStatus.expires_at > func.clock_timestamp(),
+                ).values(status=status, pending_at=func.clock_timestamp())
             case TaskStatus.LOCK:
-                stmt = stmt.values(
-                    status=TaskStatus.LOCK, locked_at=func.current_timestamp()
+                stmt = stmt.where(
+                    DevTaskStatus.status < TaskStatus.DONE,
+                    DevTaskStatus.expires_at > func.clock_timestamp(),
+                ).values(status=TaskStatus.LOCK, locked_at=func.clock_timestamp())
+            case TaskStatus.DONE:
+                stmt = stmt.where(DevTaskStatus.status < TaskStatus.DONE).values(
+                    status=status
                 )
             case TaskStatus.DELETED:
                 stmt = stmt.where(DevTaskStatus.status < TaskStatus.DONE).values(
@@ -370,10 +450,24 @@ class TasksRepository:
                 return False
 
         try:
-            await session.execute(stmt)
+            if sn is not None:
+                owner = await session.execute(
+                    select(DevTask.id)
+                    .join(Device, Device.device_id == DevTask.device_id)
+                    .where(
+                        DevTask.id == task_id,
+                        DevTask.is_deleted.is_(False),
+                        Device.sn == sn,
+                        Device.is_deleted.is_(False),
+                    )
+                    .with_for_update(of=DevTask)
+                )
+                if owner.scalar_one_or_none() is None:
+                    await session.rollback()
+                    return False
+            result = await session.execute(stmt)
             await session.commit()
-            log.info("Updated task-status %s to %s", task_id, status)
-            return True
+            return bool(result.rowcount)
         except Exception as e:
             log.error("Failed to update task-status %s: %s", task_id, e)
             await session.rollback()
@@ -381,68 +475,152 @@ class TasksRepository:
 
     @classmethod
     async def update_ttl(cls, session: AsyncSession, step_ttl: int):
-        data = await PersistentVariable.get_data(session, "saved_time_minutes")
-        tn = int(time.time()) // 60
-        if data and data.var_val.isdigit():
-            delta_ttl = tn - int(data.var_val)
-            if delta_ttl <= 0:
-                delta_ttl = step_ttl
-        else:
-            delta_ttl = step_ttl
-
-        await cls.tasks_ttl_update(session, delta_ttl)
-        await PersistentVariable.upsert_data(
-            session, "saved_time_minutes", str(tn), "INT32"
-        )
+        await cls.tasks_ttl_update(session)
 
     @classmethod
-    async def save_task_result(
+    async def record_result(
         cls,
         session: AsyncSession,
         task_id: UUID4,
+        sn: str,
         ext_id: int,
         status_code: int,
         result: Any,
-    ) -> int | None:
-        if task_id == settings.task_proc_cfg.zero_corr_id:
-            log.debug("Skip task result save for polling corr_id=%s", task_id)
-            return None
-
-        # Verify that the referenced task exists before inserting the result
-        task_exists = await session.execute(
-            select(DevTask.id).where(DevTask.id == task_id)
-        )
-        if task_exists.scalar_one_or_none() is None:
-            log.warning(
-                "Cannot save result: task %s does not exist in the database",
-                task_id,
+        result_uid: uuid.UUID | None,
+        received_at: datetime,
+    ) -> StoredTaskResult | None:
+        """Serialize all results of one task on its status row, then commit once."""
+        # Match DELETE's lock order: task first, status second.
+        owner_row = await session.execute(
+            select(DevTask.id, DevTask.is_deleted)
+            .join(Device, Device.device_id == DevTask.device_id)
+            .where(
+                DevTask.id == task_id,
+                Device.sn == sn,
+                Device.is_deleted.is_(False),
             )
+            .with_for_update(of=DevTask)
+        )
+        owner = owner_row.one_or_none()
+        if owner is None:
+            await session.rollback()
             return None
+        task_row = await session.execute(
+            select(DevTaskStatus)
+            .where(DevTaskStatus.task_id == task_id)
+            .with_for_update(of=DevTaskStatus)
+        )
+        task_status = task_row.scalar_one_or_none()
+        if task_status is None:
+            await session.rollback()
+            return None
+        is_deleted = owner.is_deleted
+        parsed = cls._normalize_result_for_storage(result)
+        fingerprint = (
+            None
+            if result_uid is not None
+            else cls.result_fingerprint(ext_id, status_code, parsed)
+        )
+        existing_query = select(DevTaskResult).where(DevTaskResult.task_id == task_id)
+        if result_uid is not None:
+            existing_query = existing_query.where(
+                DevTaskResult.result_uid == result_uid
+            )
+        else:
+            existing_query = existing_query.where(
+                DevTaskResult.result_uid.is_(None),
+                DevTaskResult.ext_id == ext_id,
+                DevTaskResult.status_code == status_code,
+                DevTaskResult.result == parsed,
+            )
+        existing = (
+            await session.execute(existing_query.order_by(DevTaskResult.id).limit(1))
+        ).scalar_one_or_none()
+        if existing is not None:
+            if result_uid is not None and (
+                existing.ext_id != ext_id
+                or existing.status_code != status_code
+                or existing.result != parsed
+            ):
+                log.warning(
+                    "Conflicting result_uid task_id=%s uid=%s result_id=%s",
+                    task_id,
+                    result_uid,
+                    existing.id,
+                )
+            await session.commit()
+            return StoredTaskResult(
+                existing.id,
+                existing.ext_id,
+                existing.status_code,
+                existing.result,
+                False,
+                False,
+            )
 
-        parsed_result = cls._normalize_result_for_storage(result)
-
-        tsk_q = (
+        inserted = await session.execute(
             insert(DevTaskResult)
             .values(
                 task_id=task_id,
                 ext_id=ext_id,
                 status_code=status_code,
-                result=parsed_result,  # Теперь передаётся как dict → JSONB
+                result=parsed,
+                result_uid=result_uid,
+                result_fingerprint=fingerprint,
             )
             .returning(DevTaskResult.id)
         )
-        try:
-            result_row = await session.execute(tsk_q)
-            new_id = result_row.scalar_one()
-            await session.commit()
-            log.info("Task result committed, task_id=%s, result_id=%s", task_id, new_id)
-            return new_id
-        except Exception as e:
-            log.error(
-                "Failed to commit task result for task %s: %s",
-                task_id,
-                e,
-                exc_info=True,
+        result_id = inserted.scalar_one()
+        was_expired = task_status.status == TaskStatus.EXPIRED or (
+            task_status.status < TaskStatus.DONE
+            and task_status.expires_at is not None
+            and received_at >= task_status.expires_at
+        )
+        if task_status.status < TaskStatus.DONE:
+            if was_expired:
+                task_status.status = TaskStatus.EXPIRED
+                task_status.ttl = 0
+            else:
+                task_status.status = TaskStatus.DONE
+                if task_status.pending_at is None:
+                    task_status.pending_at = received_at
+                if task_status.initial_ttl == 0:
+                    task_status.ttl = 0
+                elif task_status.expires_at is not None:
+                    seconds_left = (
+                        task_status.expires_at - received_at
+                    ).total_seconds()
+                    task_status.ttl = max(0, ceil(seconds_left / 60))
+        send_webhook = (
+            not is_deleted
+            and task_status.status != TaskStatus.DELETED
+            and (
+                not was_expired
+                or (
+                    task_status.expires_at is not None
+                    and received_at <= task_status.expires_at + timedelta(minutes=3)
+                )
             )
-            await session.rollback()
-            return None
+        )
+        if send_webhook:
+            # Resolve the registered recipient now, not after a device changes org.
+            # No HTTP or broker operation participates in this transaction.
+            await session.execute(
+                insert(RpcResultWebhook).from_select(
+                    ["result_id", "webhook_id"],
+                    select(literal(result_id), OrgWebhook.id)
+                    .select_from(DevTask)
+                    .join(DeviceOrgBind, DeviceOrgBind.device_id == DevTask.device_id)
+                    .join(OrgWebhook, OrgWebhook.org_id == DeviceOrgBind.org_id)
+                    .where(
+                        DevTask.id == task_id,
+                        OrgWebhook.event_type == "msg-task-result",
+                        OrgWebhook.is_active.is_(True),
+                    )
+                    .limit(1),
+                )
+            )
+        await session.commit()
+        return StoredTaskResult(
+            result_id, ext_id, status_code, parsed, True, send_webhook
+        )

@@ -3,6 +3,15 @@ import asyncio
 from core import settings
 
 
+def is_retryable_webhook_error(error: Exception) -> bool:
+    if isinstance(error, httpx.HTTPStatusError):
+        return (
+            error.response.status_code in (408, 425, 429)
+            or error.response.status_code >= 500
+        )
+    return isinstance(error, (httpx.RequestError, TimeoutError))
+
+
 class WebhookConfig:
     def __init__(
         self,
@@ -68,12 +77,15 @@ class Webhook:
                 response = await self.client.post(self.url, json=payload)
                 response.raise_for_status()
                 return response
-            except httpx.RequestError as e:
+            except (httpx.RequestError, httpx.HTTPStatusError) as e:
                 last_exception = e
-                if attempt >= self.config.max_retries:
+                if (
+                    not is_retryable_webhook_error(e)
+                    or attempt >= self.config.max_retries
+                ):
                     break
                 # Экспоненциальная задержка
-                wait = self.config.backoff_factor * (2**attempt)
+                wait = min(30.0, self.config.backoff_factor * (2**attempt))
                 await asyncio.sleep(wait)
 
         raise last_exception

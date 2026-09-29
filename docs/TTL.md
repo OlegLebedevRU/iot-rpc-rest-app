@@ -1,81 +1,35 @@
-# ⏱️ TTL
+# Task TTL in MQTT RPC
 
-> **File:** `docs/TTL.md`
+`ttl` is measured in minutes and remains part of the REST and MQTT task header.
+The server stores an internal `expires_at` deadline in PostgreSQL. A periodic job
+marks overdue active tasks `EXPIRED`; repeated or delayed job runs do not change
+the deadline. REQ checks the deadline itself, so an overdue task cannot be
+dispatched while waiting for that job.
 
----
+For `ttl > 0`, the deadline is task creation plus `ttl` minutes. REST GET and
+LIST report the remaining minutes rounded up while the task is active. Polling uses
+the following order: `priority DESC`, remaining minutes `ASC`, creation time
+`ASC`. Polling excludes `ttl=0` tasks and expired deadlines.
 
-## ⚙️ How TTL Works
+`ttl=0` is a trigger-only, short-lived task. It can be requested by its task
+UUID following `tsk` for at most one minute after creation. The external TTL
+field stays `0`; the minute is an internal trigger window. Polling with the
+zero UUID never selects it. A late REQ receives the normal no-task response.
 
-| Property | Value |
-|---|---|
-| ⏲️ Unit | Minutes |
-| 📌 Initial value | Set once via the **Touch task** API request |
-| 🔁 Update cadence | Core decrements TTL by **1** every minute |
-| 🔝 Maximum value | **44 640 min** ≈ 1 month |
+An incoming RES is stored and acknowledged even if its task has become
+`EXPIRED`; the status stays `EXPIRED`. A new result received no later than three
+minutes after `expires_at` creates the normal `msg-task-result` webhook message.
+A later result is stored and acknowledged without creating a webhook. Delivery
+of a webhook already created follows the webhook subsystem's own rules. A
+duplicate RES receives the original `result_id` in CMT and creates no new
+result or webhook. After DELETE, RES is stored and acknowledged; status stays
+`DELETED` and no webhook is created.
 
----
+For tasks already `EXPIRED` before the deadline migration, the historical
+expiration instant cannot be reconstructed from the old minute counter. Their
+deadline is left unknown; late results on these records are still stored and
+acknowledged, but do not create a new webhook.
 
-## 🔄 Polling Strategy and TTL
-
-Tasks with `ttl = 0` are **excluded from the polling selection** (`req` with zero UUID).
-
-The server selects the next task for the device using the following rules, applied in order:
-
-| Step | Rule | Detail |
-|:---:|---|---|
-| 1 | ✅ Eligible status | Only tasks with `status < DONE` are considered |
-| 2 | 🚫 Exclude zero-TTL | Tasks with `ttl = 0` are skipped (`WHERE ttl > 0`) |
-| 3 | 🔀 Sort order | `priority DESC` → `ttl ASC` → `created_at ASC` |
-| 4 | 📤 Dispatch | The first task after sorting is sent as `rsp` |
-
-**Selection priority summary:**
-
-- Higher `priority` → always wins.  
-- Equal `priority` → task closest to expiration (smallest positive TTL) wins.  
-- Equal `priority` and `ttl` → oldest task (`created_at`) wins.
-
-### 📊 Polling Selection Flowchart
-
-```mermaid
-flowchart TD
-    A([📥 req — zero UUID\nDevice polls for a task]) --> B{status < DONE?}
-    B -- ❌ No --> EX1([Task not eligible])
-    B -- ✅ Yes --> C{ttl > 0?}
-    C -- ❌ No\nttl = 0 --> EX2([Task excluded\nfrom polling])
-    C -- ✅ Yes --> D[Sort candidates:\npriority DESC → ttl ASC → created_at ASC]
-    D --> E([📤 rsp — first task dispatched])
-```
-
----
-
-## ⚡ Case TTL = 0
-
-Setting `ttl = 0` means the task **will not be served during polling** (`req` with zero UUID).  
-See full polling strategy in [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md).
-
-### When to use TTL = 0
-
-| Use-case | Notes |
-|---|---|
-| 🔥 Urgent / fire-and-forget commands | Server trigger (`tsk`) + device `ack` matter more than the full `rsp` round-trip |
-| 📡 No delivery guarantee needed | E.g. reverse polling without result correlation |
-| ⚡ Momentary signals | Only needs to reach the transport layer; payload processing is secondary |
-
-### ⚠️ Race condition risk
-
-> When the kernel TTL job encounters `ttl = 0` it moves the task to `EXPIRED`.  
-> If the device simultaneously requests the task via a trigger (non-zero correlation), a **race condition** may occur.
-
-### 📝 Key distinction: polling vs. trigger
-
-| Flow | `ttl = 0` supported? |
-|---|:---:|
-| 🔍 Polling — `req` with zero UUID | ❌ Task will **not** be selected |
-| 🎯 Trigger — `tsk` → `req` with specific correlation UUID | ✅ Task **can** be delivered |
-
----
-
-## 📚 See Also
-
-- [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md) — Full RPC protocol specification with polling strategy and TTL=0 behaviour
-- [`1-task-workflow-doc.md`](./1-task-workflow-doc.md) — Task API workflow documentation
+RabbitMQ message expiration is separate from task TTL. The AMQP publisher API
+takes seconds or `timedelta`; it must receive the remaining transport lifetime,
+not a millisecond count passed as seconds.

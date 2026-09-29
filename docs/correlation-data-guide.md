@@ -172,33 +172,40 @@ await topic_publisher.publish(
 ### Цепочка fallback (в порядке приоритета)
 
 ```
-msg.correlation_id
+headers["correlationData"] / headers["CorrelationData"]
     ↓ (если пусто или не парсится)
 headers["x-correlation-id"]
     ↓ (если отсутствует или не парсится)
-headers["correlationData"]
+UUID-поля в JSON body (`correlationData`, `corr_id`, `id` и др.)
+    ↓ (если отсутствует или не парсится)
+msg.correlation_id
     ↓ (если отсутствует или не парсится)
 corr_id = None
 ```
 
-#### 1. `msg.correlation_id` — нативное AMQP-свойство (высший приоритет)
+#### Нативное `msg.correlation_id` — последний fallback
 
 Покрывает:
 - Python paho с нативным `props.CorrelationData = uuid_str.encode("utf-8")`
 - RabbitMQ-конверсии из 16-байтового binary UUID → строка `"urn:uuid:..."`
 - RabbitMQ-конверсии из `ulong` → строка-число
 
-#### 2. `headers["x-correlation-id"]` — переполнение RabbitMQ
+#### `headers["x-correlation-id"]` — переполнение RabbitMQ
 
 Покрывает:
 - Нативный `CorrelationData` длиной > 256 байт (RabbitMQ перемещает в headers)
 - Произвольные бинарные данные в `CorrelationData` (RabbitMQ помещает в `x-correlation-id`)
 
-#### 3. `headers["correlationData"]` — User Property (путь C# MQTTnet .NET 4.8)
+#### `headers["correlationData"]` — User Property (первый приоритет)
 
 Покрывает:
 - C# MQTTnet (`.WithUserProperty("correlationData", uuid_str)`)
 - Любые клиенты, передающие `correlationData` через User Properties
+
+Текущий код также принимает `headers["CorrelationData"]` и UUID из JSON body.
+При наличии конфликтующих значений используется первое успешно разобранное
+значение из указанного порядка. Статистика частоты источников пока не собрана;
+ради совместимости существующий приоритет сохранён.
 
 ### Парсинг UUID в каждом источнике
 
