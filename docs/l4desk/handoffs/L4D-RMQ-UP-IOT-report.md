@@ -12,7 +12,8 @@
 
 ```yaml
 handoff_id: H-L4D-RMQ-UP-IOT-v1
-status: READY_FOR_DEPLOY
+status: DEPLOYED
+accepted_at_utc: '2026-09-29T13:11:18Z'
 contract_kinds: [MQTT_ACL, DEPLOYMENT, REMOTE_INPUT_POLICY]
 producer_scope_project: iot-rpc-rest-app
 producer_report_path: docs/l4desk/handoffs/L4D-RMQ-UP-IOT-report.md
@@ -40,4 +41,9 @@ database_migration: none
 - Production app1 image: `sha256:87691012cb6da155795372fd2fa627cb19673c2c7e91029b42eeab8974dd959c`, source `9513df6880a1c93c1c8e10673954c5a3d1efd257`.
 - First broker restart with changing node name: two seed users only; app1 restart restored 114 active users, 114 exact topic ACL, 40 queues, 9 exchanges and all 14 static bindings; two blocked users remained absent.
 - Terminal 1000009 preflight: online and service online after broker recovery; app1 `/docs`: 200.
-- Stable node name migration and repeat restart: pending.
+- Runtime Compose was changed by exactly two lines (`hostname` and `RABBITMQ_NODENAME`) after explicit approval; the versioned source is `compose.yaml` in this repository. Production checkout is `c105eeeb2f1ee212f8b285d1fbc2d78c91122cf0`.
+- One-time migration to `rabbit@rabbitmq` initially loaded two seed users, then app1 startup restored 114 active users, 114 device topic ACL and 228 vhost/topic permissions updates with zero errors. Two blocked users remained absent.
+- Repeat RabbitMQ recreate retained `rabbit@rabbitmq`, the same `user1_rabbitmq_data` volume, 116 users and 114 device ACL **without restarting app1**. App1 start timestamp remained unchanged.
+- Final RabbitMQ: healthy; 116 vhost permissions, 9 exchanges, 14/14 baseline static bindings, 41 queues (dynamic MQTT queues can change with connections). Terminal 1000009 online and `svc_online`; app1 `/docs` 200.
+- The original live definitions export included four durable MQTT subscription bindings for one device that failed authentication after restart. They were not restored; all static bindings were restored. Do not import that export wholesale because it also contains accounts revoked during this release.
+- An orphan RabbitMQ user with no PostgreSQL connection record and no active socket was deleted after separate operator approval.

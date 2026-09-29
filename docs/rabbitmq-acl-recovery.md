@@ -103,6 +103,13 @@ The Docker container name alone does not pin the Erlang node name. If the volume
 the seed restores service definitions and a fresh `app1` startup (or explicit
 admin reconciliation) restores active device users and ACLs.
 
+When introducing the pinned node name on an existing installation, RabbitMQ
+opens a new Mnesia node directory once. Restart `app1` after that broker is
+healthy to restore active users and ACLs from PostgreSQL. Then recreate only
+RabbitMQ a second time and verify that the user and ACL counts remain stable
+without restarting `app1`. Keep the protected pre-migration definitions export
+for rollback; do not import it into production without filtering revoked users.
+
 ```powershell
 # Container status
 docker compose ps rabbitmq app1

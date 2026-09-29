@@ -200,7 +200,7 @@ $script | ssh -n -i "d:\.ssh\id_ed25519" -o BatchMode=yes user1@87.242.100.34 "b
 
 Пересоздаём контейнер `rabbitmq` для применения новых параметров `rabbitmq.conf`, дефиниций `definitions.json` и плагинов `enabled_plugins`:
 
-> 💡 **Важно:** Volume `rabbitmq_data` сохраняется неизменным. RabbitMQ подгрузит обновлённый конфигурационный файл слушателей и применит новые статические сущности из `definitions.json`, не затронув сохранённые в БД Mnesia динамические токены устройств.
+> 💡 **Важно:** Сохранения тома `rabbitmq_data` недостаточно: при смене Erlang node name RabbitMQ создаёт в томе новый каталог Mnesia и загружает только seed из `definitions.json`. В Compose закреплены `hostname: rabbitmq` и `RABBITMQ_NODENAME: rabbit@rabbitmq`. После первой миграции имени узла перезапустите `app1` для восстановления активных пользователей и ACL из PostgreSQL, затем проверьте повторный рестарт брокера без перезапуска `app1`. Не импортируйте старый live export без фильтрации отозванных учётных записей.
 
 ```powershell
 $script = @'
