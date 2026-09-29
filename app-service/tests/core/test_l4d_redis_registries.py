@@ -146,6 +146,45 @@ async def test_redis_lease_expiration_and_auto_cleanup() -> None:
 
 
 @pytest.mark.asyncio
+async def test_redis_stream_lease_survives_input_ws_disconnect(monkeypatch) -> None:
+    registry = RedisLeaseRegistry()
+    await registry._delete_all_redis_keys()
+    mock_send = AsyncMock()
+    monkeypatch.setattr("core.remote_input.leases.send_ctl_command", mock_send)
+
+    sn = "SN_SHARED_WS_01"
+    lease = await registry.acquire(
+        org_id=1,
+        device_id=104,
+        sn=sn,
+        owner_user_id="user_stream",
+        owner_role="operator",
+        ttl_sec=60,
+        scope="input",
+    )
+    stream_id = uuid4()
+    lease_key = f"l4d:lease:{lease.lease_id}"
+    await registry._client.hset(lease_key, "stream_instance_id", str(stream_id))
+    assert await registry.mark_ws_connected(lease.lease_id)
+    await registry.mark_ws_disconnected(lease.lease_id)
+    old_disconnect = (datetime.now(UTC) - timedelta(seconds=15)).isoformat()
+    await registry._client.hset(lease_key, "ws_disconnected_at", old_disconnect)
+    await registry.upgrade_scope(lease.lease_id, "stream")
+
+    assert await registry.cleanup_expired() == []
+    assert await registry.get_active(sn) is not None
+    mock_send.assert_not_called()
+
+    active_lease = await registry.get(lease.lease_id)
+    assert active_lease is not None
+    active_lease.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    expired = await registry.cleanup_expired()
+    assert len(expired) == 1
+    assert expired[0][1] == "expired"
+    mock_send.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_redis_presence_and_inventory_recovery_after_restart() -> None:
     # 1. State written by first instance
     presence_reg1 = RedisPresenceRegistry()

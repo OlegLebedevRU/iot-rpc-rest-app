@@ -392,6 +392,10 @@ class LeaseRegistry:
                 elif (
                     lease.ws_disconnected_at is not None
                     and not lease.ws_connected
+                    and not (
+                        lease.scope in ("stream", "input")
+                        and lease.stream_instance_id is not None
+                    )
                     and (now - lease.ws_disconnected_at).total_seconds() >= grace_sec
                 ):
                     expired_ids.append((lease_id, "ws_disconnect_timeout"))
@@ -1042,6 +1046,10 @@ class RedisLeaseRegistry:
                 elif (
                     lease.ws_disconnected_at is not None
                     and not lease.ws_connected
+                    and not (
+                        lease.scope in ("stream", "input")
+                        and lease.stream_instance_id is not None
+                    )
                     and (now - lease.ws_disconnected_at).total_seconds() >= grace_sec
                 ):
                     revoked_lease = await self.revoke(

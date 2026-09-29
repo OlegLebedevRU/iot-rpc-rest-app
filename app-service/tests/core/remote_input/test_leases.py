@@ -303,6 +303,38 @@ async def test_lease_ws_disconnect_grace_and_cleanup(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_stream_lease_survives_input_ws_disconnect_but_not_expiry(monkeypatch):
+    registry = LeaseRegistry()
+    mock_send = AsyncMock()
+    monkeypatch.setattr("core.remote_input.leases.send_ctl_command", mock_send)
+    lease = await registry.acquire(
+        org_id=1,
+        device_id=10,
+        sn="SN_SHARED_STREAM",
+        owner_user_id="user_1",
+        owner_role="admin",
+        ttl_sec=60,
+        scope="input",
+    )
+    lease.stream_instance_id = uuid4()
+
+    await registry.mark_ws_connected(lease.lease_id)
+    await registry.mark_ws_disconnected(lease.lease_id)
+    lease.ws_disconnected_at = datetime.now(UTC) - timedelta(seconds=15)
+    await registry.upgrade_scope(lease.lease_id, "stream")
+
+    assert await registry.cleanup_expired() == []
+    assert await registry.get_active("SN_SHARED_STREAM") is not None
+    mock_send.assert_not_called()
+
+    lease.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    expired = await registry.cleanup_expired()
+    assert len(expired) == 1
+    assert expired[0][1] == "expired"
+    mock_send.assert_awaited_once()
+
+
+@pytest.mark.asyncio
 async def test_lease_revoke_publishes_stream_stop(monkeypatch):
     registry = LeaseRegistry()
     mock_send = AsyncMock()
