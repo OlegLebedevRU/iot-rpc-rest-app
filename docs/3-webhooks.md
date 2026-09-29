@@ -148,8 +148,8 @@ DELETE /api/v1/webhooks/msg-task-result x-api-key: your-secret-key
 
 | Заголовок         | Пример значения       | Описание |
 |-------------------|------------------------|--------|
-| `x-ext-id`        | `task-001`             | Внешний ID задачи (`ext_task_id` из исходного запроса) |
-| `x-result-id`     | `291`                  | Внутренний числовой ID результата на устройстве |
+| `x-ext-id`        | `42`                   | `ext_id` результата, переданный устройством в заголовке RES |
+| `x-result-id`     | `291`                  | Числовой ID сохранённого результата на сервере |
 | `x-status-code`   | `200`                  | Код статуса выполнения (аналог HTTP-статуса) |
 | `x-signature`     | `sha256=...`           | Опционально: подпись запроса (если задана в `headers` при регистрации) |
 
@@ -164,7 +164,7 @@ DELETE /api/v1/webhooks/msg-task-result x-api-key: your-secret-key
  Content-Type: application/json 
  X-Msg-Type: msg-task-result 
  X-Device-Id: 4619 
- X-Ext-Id: task-001 
+ X-Ext-Id: 42
  X-Result-Id: 291 
  X-Status-Code: 200 
  X-Signature: sha256=hmac-sha256-hash-value
