@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi_pagination.ext.sqlalchemy import apaginate
 from core.models import DevEvent, DeviceOrgBind
 from core.models.device_events import DeviceEventOffset
-from core.schemas.device_events import DevEventBody, DevEventOut
+from core.schemas.device_events import (
+    DevEventBody,
+    DevEventOut,
+    UserEventSearchRequest,
+    UserEventSearchResponse,
+)
 
 log = setup_module_logger(__name__, "repo_dev_events.log")
 
@@ -22,12 +27,20 @@ class EventRepository:
         False если дубликат по (device_id, dev_event_id) — идемпотентная обработка.
         Raises на прочие ошибки.
         """
-        evt_q = DevEvent(
-            **event.model_dump(exclude={"dev_timestamp"}),
-            dev_timestamp=func.to_timestamp(event.dev_timestamp),
-        )
-        session.add(evt_q)
         try:
+            # Never derive the owner from device payload or overwrite it on retries.
+            owner = await session.scalar(
+                select(DeviceOrgBind.org_id).where(
+                    DeviceOrgBind.device_id == event.device_id,
+                    DeviceOrgBind.org_id > 0,
+                )
+            )
+            evt_q = DevEvent(
+                **event.model_dump(exclude={"dev_timestamp"}),
+                org_id=owner,
+                dev_timestamp=func.to_timestamp(event.dev_timestamp),
+            )
+            session.add(evt_q)
             await session.commit()
             return True
         except IntegrityError as e:
@@ -53,29 +66,66 @@ class EventRepository:
         device_id: int | None,
         events_include: list[int] | None = None,
         events_exclude: list[int] | None = None,
+        *,
+        org_id: int,
     ) -> Page[DevEventOut]:
+        stmt = select(DevEvent).where(
+            DevEvent.device_id == device_id, *cls.tenant_conditions(org_id)
+        )
         if events_include is not None:
-            return await apaginate(
-                session,
-                select(DevEvent)
-                .where(
-                    DevEvent.device_id == device_id,
-                    DevEvent.event_type_code.in_(events_include),
-                )
-                .order_by(DevEvent.created_at.desc()),
-            )
-        else:
-            return await apaginate(
-                session,
-                select(DevEvent)
-                .where(
-                    DevEvent.device_id == device_id,
-                    ~DevEvent.event_type_code.in_(
-                        events_exclude if events_exclude is not None else []
-                    ),
-                )
-                .order_by(DevEvent.created_at.desc()),
-            )
+            stmt = stmt.where(DevEvent.event_type_code.in_(events_include))
+        elif events_exclude:
+            stmt = stmt.where(~DevEvent.event_type_code.in_(events_exclude))
+        return await apaginate(
+            session, stmt.order_by(DevEvent.created_at.desc(), DevEvent.id.desc())
+        )
+
+    @staticmethod
+    def tenant_conditions(org_id: int) -> tuple:
+        """Current device access AND the immutable owner of each stored event."""
+        if org_id <= 0:
+            raise ValueError("A positive tenant org_id is required")
+        current_owner = select(DeviceOrgBind.device_id).where(
+            DeviceOrgBind.org_id == org_id
+        )
+        return (
+            DevEvent.org_id == org_id,
+            DevEvent.device_id.in_(current_owner),
+        )
+
+    @classmethod
+    async def search_user_events(
+        cls, session: AsyncSession, org_id: int, request: UserEventSearchRequest
+    ) -> UserEventSearchResponse:
+        stmt = select(DevEvent).where(
+            *cls.tenant_conditions(org_id),
+            DevEvent.device_id == request.device_id,
+            DevEvent.event_type_code.between(900, 999),
+        )
+        if request.events_include is not None:
+            stmt = stmt.where(DevEvent.event_type_code.in_(request.events_include))
+        if request.correlation_id is not None:
+            external_uuid = DevEvent.payload["300"][0]["448"].astext
+            stmt = stmt.where(func.lower(external_uuid) == str(request.correlation_id))
+        if request.after_event_id is not None:
+            stmt = stmt.where(DevEvent.id > request.after_event_id)
+        if request.created_from is not None:
+            stmt = stmt.where(DevEvent.created_at >= request.created_from)
+        if request.created_to is not None:
+            stmt = stmt.where(DevEvent.created_at < request.created_to)
+        result = await session.execute(
+            stmt.order_by(DevEvent.id.asc()).limit(request.limit + 1)
+        )
+        rows = list(result.scalars().all())
+        items = [
+            DevEventOut.model_validate(row, from_attributes=True)
+            for row in rows[: request.limit]
+        ]
+        return UserEventSearchResponse(
+            items=items,
+            next_after_event_id=items[-1].id if items else request.after_event_id,
+            has_more=len(rows) > request.limit,
+        )
 
     @classmethod
     async def get_event_fields(
@@ -86,7 +136,11 @@ class EventRepository:
         tag: int,
         interval_m: int | None,
         limit: int | None = 50,
+        *,
+        org_id: int,
     ):
+        if org_id <= 0:
+            raise ValueError("A positive tenant org_id is required")
         interval_m = 15 if interval_m is None or interval_m > 3600 else interval_m
         limit = 50 if limit is None else min(limit, 100)
         stmt = text("""
@@ -100,9 +154,13 @@ class EventRepository:
                     FROM tb_dev_events
                     WHERE
                         device_id = :did
+                        AND org_id = :org_id
+                        AND device_id IN (
+                            SELECT device_id FROM tb_device_org_binds WHERE org_id = :org_id
+                        )
                         AND event_type_code = :etc
                         AND created_at > CURRENT_TIMESTAMP - MAKE_INTERVAL(mins => CAST(:mins AS INTEGER))
-                    ORDER BY created_at DESC
+                    ORDER BY created_at DESC, id DESC
                     LIMIT :limit
                 """)
 
@@ -110,6 +168,7 @@ class EventRepository:
             stmt,
             {
                 "did": device_id,
+                "org_id": org_id,
                 "etc": event_type_code,
                 "tag": str(tag),
                 "mins": interval_m,
@@ -180,7 +239,7 @@ class EventRepository:
             # Получаем события, отсортированные по id
             events_stmt = (
                 select(DevEvent)
-                .where(*conditions)
+                .where(*conditions, *cls.tenant_conditions(org_id))
                 .order_by(DevEvent.id.asc())
                 .limit(limit)
             )

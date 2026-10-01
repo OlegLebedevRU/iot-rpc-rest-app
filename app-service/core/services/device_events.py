@@ -6,7 +6,12 @@ from core.crud.dev_events_repo import EventRepository
 from core.logging_config import setup_module_logger
 
 # from core.fs_broker import fs_router
-from core.schemas.device_events import DevEventFields, DevEventOut
+from core.schemas.device_events import (
+    DevEventFields,
+    DevEventOut,
+    UserEventSearchRequest,
+    UserEventSearchResponse,
+)
 
 log = setup_module_logger(__name__, "srv_dev_evnt.log")
 logging.getLogger("logger_proxy").setLevel(logging.WARNING)
@@ -14,17 +19,25 @@ logging.getLogger("logger_proxy").setLevel(logging.WARNING)
 
 
 class DeviceEventsService:
-    def __init__(self, session, sn: str = None, org_id: int = 0):
+    def __init__(self, session: AsyncSession, sn: str | None = None, org_id: int = 0):
         self.session: AsyncSession = session
         self.sn = sn
         self.org_id = org_id
 
+    def _require_tenant(self) -> None:
+        if self.org_id <= 0:
+            raise HTTPException(
+                status_code=400, detail="A positive tenant org_id is required"
+            )
+
     async def list(self, device_id, events_include, events_exclude):
+        self._require_tenant()
         events = await EventRepository.get_events_page(
             self.session,
             device_id,
             events_include=events_include,
             events_exclude=events_exclude,
+            org_id=self.org_id,
         )
         if events is None:
             raise HTTPException(status_code=404, detail="Events not found")
@@ -40,6 +53,7 @@ class DeviceEventsService:
         Получает инкрементальные события.
         Смещение автоматически обновляется внутри репозитория.
         """
+        self._require_tenant()
         return await EventRepository.get_incremental_events(
             self.session,
             org_id=self.org_id,
@@ -49,8 +63,15 @@ class DeviceEventsService:
         )
 
     async def fields(self, device_id, event_type_code, tag, interval_m, limit):
+        self._require_tenant()
         fields = await EventRepository.get_event_fields(
-            self.session, device_id, event_type_code, tag, interval_m, limit
+            self.session,
+            device_id,
+            event_type_code,
+            tag,
+            interval_m,
+            limit,
+            org_id=self.org_id,
         )
         if fields is None:
             raise HTTPException(status_code=404, detail="Fields not found")
@@ -64,6 +85,14 @@ class DeviceEventsService:
         ]
 
         return fres
+
+    async def search_user_events(
+        self, request: UserEventSearchRequest
+    ) -> UserEventSearchResponse:
+        self._require_tenant()
+        return await EventRepository.search_user_events(
+            self.session, self.org_id, request
+        )
 
 
 # """"

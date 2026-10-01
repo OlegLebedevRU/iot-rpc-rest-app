@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Optional, Dict, Any
+from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class DevEventBody(BaseModel):
@@ -24,6 +25,58 @@ class DevEventOut(BaseModel):
     created_at: datetime
     dev_timestamp: datetime
     payload: Optional[Dict] = None
+
+
+class UserEventSearchRequest(BaseModel):
+    device_id: int = Field(gt=0)
+    correlation_id: UUID | None = None
+    events_include: list[int] | None = Field(default=None, min_length=1, max_length=100)
+    after_event_id: int | None = Field(default=None, gt=0)
+    created_from: datetime | None = None
+    created_to: datetime | None = None
+    limit: int = Field(default=50, ge=1, le=100)
+
+    @field_validator("correlation_id", mode="before")
+    @classmethod
+    def validate_uuid(cls, value: Any) -> Any:
+        # Match l4con's canonical 8-4-4-4-12 format, accepting either case.
+        if isinstance(value, str):
+            parsed = UUID(value)
+            if str(parsed) != value.lower():
+                raise ValueError("correlation_id must use UUID 8-4-4-4-12 format")
+        return value
+
+    @field_validator("events_include")
+    @classmethod
+    def validate_codes(cls, codes: list[int] | None) -> list[int] | None:
+        if codes is not None and any(code < 900 or code > 999 for code in codes):
+            raise ValueError("events_include must contain only codes 900–999")
+        return codes
+
+    @field_validator("created_from", "created_to")
+    @classmethod
+    def validate_time(cls, value: datetime | None) -> datetime | None:
+        if value is not None:
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError("time boundaries must include a timezone")
+            return value.astimezone(UTC)
+        return value
+
+    @model_validator(mode="after")
+    def validate_interval(self) -> "UserEventSearchRequest":
+        if (
+            self.created_from is not None
+            and self.created_to is not None
+            and self.created_from >= self.created_to
+        ):
+            raise ValueError("created_from must be earlier than created_to")
+        return self
+
+
+class UserEventSearchResponse(BaseModel):
+    items: list[DevEventOut]
+    next_after_event_id: int | None
+    has_more: bool
 
 
 class DevEventFields(BaseModel):

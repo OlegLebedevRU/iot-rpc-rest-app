@@ -40,8 +40,43 @@
 
 ### 3.3. Телеметрия и события (`/api/internal/v1/device-events`)
 * `GET /api/internal/v1/device-events/?device_id=<id>` — Пагинированная выборка событий устройства.
-* `GET /api/internal/v1/device-events/incremental?device_id=<id>&last_id=<id>` — Строго инкрементальная выборка новых событий.
+* `GET /api/internal/v1/device-events/incremental?device_id=<id>&last_event_id=<id>` — Инкрементальная выборка, обновляющая общий offset устройства, в том числе при явном курсоре. Для независимого чтения MCP использовать search.
 * `GET /api/internal/v1/device-events/fields/?device_id=<id>&event_type_code=<code>&tag=<tag>` — Выборка и агрегация полей событий (например, polling датчиков).
+* `GET /api/internal/v1/device-events/search?device_id=<id>` — Read-only поиск пользовательских событий900–999, без изменения offsets.
+
+Все пути чтения проверяют текущую привязку устройства и сохранённый tenant
+события. Tenant фиксируется по серверной привязке при приёме, не берётся из
+payload и не меняется при повторе. При переносе A→B прежние событияA
+не выдаютсяB. История до миграции0011_event_tenants остаётся org_id=NULL
+и скрыта из tenant API; автоматического backfill нет.
+
+Search требует внутреннюю авторизацию и положительный effective org_id.
+MenuBuilder строит X-Org-Id после проверки токена/терминала; для MCP reader
+не передаёт superuser или пользовательский tenant override.
+UUID — фильтр, не разрешение доступа.
+
+| Параметр search | Правило |
+|---|---|
+| device_id | Обязательный положительный ID одного устройства |
+| correlation_id | Опциональный UUID8-4-4-4-12; сравнение300[0]["448"] без учёта регистра |
+| events_include | Повторяемый параметр, только900–999; отсутствие — весь диапазон |
+| after_event_id | Положительный серверный ID, id > cursor |
+| created_from /created_to | Время с TZ, нормализуется в UTC; created_at >= from и < to |
+| limit | 1–100, default50 |
+
+Ответ: `{"items": [...DevEventOut], "next_after_event_id": 123, "has_more": false}`.
+Items идут по id ASC, filters применяются в SQL до limit. Пустой ответ
+сохраняет заданный cursor (NULL, если не задан). Чтение не требует online
+или console lease. Невалидные параметры дают422, отсутствующий tenant400,
+неверные credentials403. Недоступное устройство/чужая история дают пустую
+выборку. Нет верхнего поля correlation_id события: внешний UUID находится
+в оригинальном payload448. Текст446 и int32-код447 передаются без изменения.
+
+Курсор не гарантирует порядок commit параллельных транзакций/exactly-once.
+Для проверки конкретной операции допустим повторный поиск по UUID с
+дедупликацией серверного id. Нет автоматического повторного запуска команды
+по отсутствию события. Источник истории — основная БД; архив и срок хранения
+этим контрактом не гарантируются.
 
 ### 3.4. Показания датчиков (`/api/internal/v1/gauges`)
 * `GET /api/internal/v1/gauges/?device_id=<id>&type=<type>` — Пагинированный список показаний датчиков организации.
@@ -95,6 +130,9 @@
   * При закрытии соединения аренда автоматически отзывается с причиной `released`.
 
 ---
+
+Реализация tenant history, проверки и условия выпуска:
+[IoT handoff](user-event-history-iot-handoff.md).
 
 ## 4. Примеры вызовов из смежных сервисов
 

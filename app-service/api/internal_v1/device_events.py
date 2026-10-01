@@ -10,6 +10,8 @@ from core.schemas.device_events import (
     DevEventOut,
     DevEventFields,
     DevEventFieldsRequest,
+    UserEventSearchRequest,
+    UserEventSearchResponse,
 )
 from core.services.device_events import DeviceEventsService
 
@@ -19,6 +21,16 @@ router = APIRouter(
     tags=["Internal Device Events"],
     include_in_schema=False,
 )
+
+
+@router.get("/search", response_model=UserEventSearchResponse)
+async def search_user_events(
+    session: Session_dep,
+    org_id: Internal_Org_dep,
+    request: Annotated[UserEventSearchRequest, Query()],
+) -> UserEventSearchResponse:
+    """Read stored 900–999 events without changing any consumer offsets."""
+    return await DeviceEventsService(session, None, org_id).search_user_events(request)
 
 
 @router.get(

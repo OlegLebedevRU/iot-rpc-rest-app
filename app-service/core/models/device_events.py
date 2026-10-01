@@ -1,9 +1,9 @@
 from datetime import datetime
 from typing import Dict, Any
 
-from sqlalchemy import Integer, func, ForeignKey, Index, UniqueConstraint
+from sqlalchemy import Integer, func, ForeignKey, Index, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import TIMESTAMP, JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, declared_attr
 
 from core.models import Base
 
@@ -19,15 +19,18 @@ class DevEvent(Base):
             unique=True,
             postgresql_where="dev_event_id != 0",
         ),
+        Index("ix_dev_events_org_device_id", "org_id", "device_id", "id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     device_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    # Immutable owner at receipt; NULL is unknown and excluded from tenant APIs.
+    org_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     event_type_code: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
     dev_event_id: Mapped[int] = mapped_column(Integer, index=True, nullable=True)
     created_at = mapped_column(
         TIMESTAMP(timezone=True, precision=3),
-        server_default=func.current_timestamp(3),
+        server_default=text("CURRENT_TIMESTAMP(3)"),
         default=None,
     )
     dev_timestamp: Mapped[datetime] = mapped_column(
@@ -37,7 +40,10 @@ class DevEvent(Base):
 
 
 class DeviceEventOffset(Base):
-    __tablename__ = "tb_device_event_offsets"
+    @declared_attr.directive
+    def __tablename__(cls) -> str:
+        return "tb_device_event_offsets"
+
     __table_args__ = (
         UniqueConstraint("device_id", name="uq_device_event_offset_device_id"),
     )
