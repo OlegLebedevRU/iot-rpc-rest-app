@@ -1,31 +1,32 @@
 import json
 import logging
 from datetime import UTC, datetime
+
 from faststream.rabbit.fastapi import RabbitMessage
+
 from core.crud.device_repo import DeviceRepo
+from core.diagnostics.mqtt_bridge import handle_device_output_message
 from core.fs_broker import fs_router
-from core.logging_config import setup_module_logger, log_rpc_debug
-from core.services.device_events_collect import DeviceEventsCollect
+from core.logging_config import log_rpc_debug, setup_module_logger
+from core.remote_input.mqtt_bridge import handle_device_ctl_message
 from core.services.billing_publish import publish_billing_event
 from core.services.billing_utils import evt_billing_counter_type, publish_then_process
+from core.services.device_events_collect import DeviceEventsCollect
+from core.services.device_tasks import DeviceTasksService
+from core.services.devices import DeviceService
+from core.services.remote_session_event_service import remote_session_event_service
 from core.topologys.declare import (
     q_ack,
-    q_req,
-    q_evt,
-    q_result,
-    q_out,
-    q_ctl,
     q_app,
-    q_svc,
+    q_ctl,
     q_device_conn_events,
+    q_evt,
+    q_out,
+    q_req,
+    q_result,
+    q_svc,
 )
-from core.topologys.fs_depends import Session_dep, Sn_dep, Corr_id_dep
-from core.diagnostics.mqtt_bridge import handle_device_output_message
-from core.remote_input.mqtt_bridge import handle_device_ctl_message
-
-from core.services.devices import DeviceService
-from core.services.device_tasks import DeviceTasksService
-from core.services.remote_session_event_service import remote_session_event_service
+from core.topologys.fs_depends import Corr_id_dep, Session_dep, Sn_dep
 
 log = setup_module_logger(__name__, "topology_queues.log")
 
@@ -65,7 +66,7 @@ async def _publish_billing_for_sn(
             counter_type=counter_type,
             payload_bytes=payload_bytes,
         )
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001 - billing failures must not discard device messages
         log.debug("Billing %s publish error (non-critical): %r", counter_type, e)
 
 
@@ -97,6 +98,11 @@ if _REGISTER_SUBSCRIBERS:
         billing_counter_type = evt_billing_counter_type(
             event_type_code, settings.webhook.gauge_event_types
         )
+        if billing_counter_type is None:
+            # Event75 uses the normal collector (tenant, dedup, webhook, EVA),
+            # but must not generate evt or activity billing.
+            await DeviceEventsCollect(session, sn, 0).add(msg, corr_id=corr_id)
+            return
         await publish_then_process(
             lambda: _publish_billing_for_sn(session, sn, billing_counter_type),
             lambda: DeviceEventsCollect(session, sn, 0).add(msg, corr_id=corr_id),
@@ -122,6 +128,9 @@ if _REGISTER_SUBSCRIBERS:
         sn: Sn_dep,
         corr_id: Corr_id_dep,
     ):
+        if corr_id is None:
+            log.warning("Ignoring RPC REQ without valid correlation: sn=%s", sn)
+            return
         # log.info("Subscribe req queue")
         headers = getattr(msg, "headers", None) or {}
         log_rpc_debug(
@@ -142,6 +151,9 @@ if _REGISTER_SUBSCRIBERS:
         sn: Sn_dep,
         corr_id: Corr_id_dep,
     ):
+        if corr_id is None:
+            log.warning("Ignoring RPC RES without valid correlation: sn=%s", sn)
+            return
         received_at = datetime.now(UTC)
         log.info("Processing message from the results queue sn = %s", sn)
         headers = getattr(msg, "headers", None) or {}
@@ -170,8 +182,10 @@ if _REGISTER_SUBSCRIBERS:
                     await handle_device_ctl_message(
                         routing_key=f"dev.{sn}.res", payload=raw_json
                     )
-            except Exception:
-                pass
+            except Exception as error:  # noqa: BLE001 - optional control relay must not undo stored RES
+                log.debug(
+                    "Optional RES control relay failed: sn=%s error=%r", sn, error
+                )
 
     @fs_router.subscriber(q_out)
     async def diagnostics_output(
@@ -196,7 +210,7 @@ if _REGISTER_SUBSCRIBERS:
             body = (
                 (msg.body or b"").decode("utf-8", errors="replace").strip().strip('"')
             )
-        except Exception as e:
+        except (AttributeError, TypeError) as e:
             log.warning("Failed to decode app connect message for %s: %s", sn, e)
             return
 
@@ -219,8 +233,8 @@ if _REGISTER_SUBSCRIBERS:
                         value = bool(data["app_connect"])
                     elif "online" in data:
                         value = bool(data["online"])
-            except Exception:
-                pass
+            except TypeError, ValueError:
+                log.debug("App presence is not a JSON object: sn=%s", sn)
 
         if value is None:
             log.warning("Unknown app connect message payload for %s: %s", sn, body)
@@ -245,7 +259,7 @@ if _REGISTER_SUBSCRIBERS:
             body = (
                 (msg.body or b"").decode("utf-8", errors="replace").strip().strip('"')
             )
-        except Exception as e:
+        except (AttributeError, TypeError) as e:
             log.warning("Failed to decode svc connect message for %s: %s", sn, e)
             return
 
@@ -268,8 +282,8 @@ if _REGISTER_SUBSCRIBERS:
                         value = bool(data["svc_connect"])
                     elif "online" in data:
                         value = bool(data["online"])
-            except Exception:
-                pass
+            except TypeError, ValueError:
+                log.debug("Service presence is not a JSON object: sn=%s", sn)
 
         if value is None:
             log.warning("Unknown svc connect message payload for %s: %s", sn, body)
@@ -308,7 +322,7 @@ if _REGISTER_SUBSCRIBERS:
             payload = json.loads((msg.body or b"{}").decode("utf-8", errors="replace"))
             if not isinstance(payload, dict):
                 payload = {}
-        except Exception:
+        except AttributeError, TypeError, ValueError:
             payload = {}
 
         await DeviceService.handle_connection_event(
@@ -323,5 +337,5 @@ if _REGISTER_SUBSCRIBERS:
 try:
     count = len(getattr(fs_router.broker, "_subscribers", []))
     log.info(f"✅ Subscribers registered: {count} handlers")
-except Exception as e:
+except (AttributeError, TypeError) as e:
     log.error(f"Could not log subscribers count: {e}")
