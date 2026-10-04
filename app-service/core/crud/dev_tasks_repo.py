@@ -227,7 +227,9 @@ class TasksRepository:
         )
 
         t = await session.execute(query)
-        resp_task_w_status = t.unique().mappings().one_or_none()
+        # Organization joins can repeat the same task. JSONB payload is not
+        # hashable, so deduplicate by the task identity, never by the whole row.
+        resp_task_w_status = t.unique(lambda row: row.id).mappings().one_or_none()
 
         if resp_task_w_status is None:
             return None, None
