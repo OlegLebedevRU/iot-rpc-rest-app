@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from core.config import settings
+from core.rpc_redaction import redact_rpc
 
 RPC_DEBUG_SNS = frozenset(
     {
@@ -65,7 +66,7 @@ def get_rpc_debug_logger() -> logging.Logger:
         handler.addFilter(SnDebugFilter(sn))
         logger.addHandler(handler)
 
-    logger._rpc_debug_configured = True
+    setattr(logger, "_rpc_debug_configured", True)
     return logger
 
 
@@ -77,6 +78,7 @@ def log_rpc_debug(sn: str | None, event: str, **fields: Any) -> None:
     for key, value in fields.items():
         if value is None:
             continue
+        value = redact_rpc({key: value})[key]
         if isinstance(value, (dict, list, tuple, set)):
             rendered = json.dumps(value, ensure_ascii=False, default=str)
         else:

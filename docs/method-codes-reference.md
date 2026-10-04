@@ -405,3 +405,11 @@ Stop stream:
 | [`correlation-data-guide.md`](./correlation-data-guide.md) | Руководство по передаче `correlationData` / `correlation_id` во всех клиентах и транспортах |
 | [`event-types-reference.md`](./event-types-reference.md) | Реестр типов событий, включая `event_type_code = 70` для `l4-hmi` |
 | [`event-property-tags.md`](./event-property-tags.md) | Реестр тегов событий, включая `401`–`410` для результата обновления UI-каталога |
+
+## 7011 — authenticated certificate renewal
+
+payload.dt has one item: {"pin":"000000","pin_expires_at":4102444800,"ttl_sec":120}.
+The shown PIN is a fixture. Purpose is renew; only PB's verified-live-certificate
+POST /api/certificates/renew may consume it. 7003 accepts empty dt and answers
+pong. 7004/7005 accept canonical empty dt but native l4con returns unsupported;
+no false keepalive acknowledgment. Historical7010 is not reinterpreted.

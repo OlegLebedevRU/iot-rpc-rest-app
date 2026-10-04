@@ -1,0 +1,72 @@
+{
+  "contract": "rpc7011-gate4",
+  "payload_schema": {
+    "$defs": {
+      "CertificateRenewalItem": {
+        "additionalProperties": false,
+        "properties": {
+          "pin": {
+            "pattern": "^[0-9]{6}$",
+            "title": "Pin",
+            "type": "string"
+          },
+          "pin_expires_at": {
+            "exclusiveMinimum": 0,
+            "maximum": 32503680000,
+            "title": "Pin Expires At",
+            "type": "integer"
+          },
+          "ttl_sec": {
+            "const": 120,
+            "default": 120,
+            "title": "Ttl Sec",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "pin",
+          "pin_expires_at"
+        ],
+        "title": "CertificateRenewalItem",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "dt": {
+        "items": {
+          "$ref": "#/$defs/CertificateRenewalItem"
+        },
+        "maxItems": 1,
+        "minItems": 1,
+        "title": "Dt",
+        "type": "array"
+      }
+    },
+    "required": [
+      "dt"
+    ],
+    "title": "CertificateRenewalPayload",
+    "type": "object"
+  },
+  "rsp": {
+    "id": "135a4120-9ba6-4f6c-8cac-4baf5df8f1df",
+    "header": {
+      "method_code": 7011
+    },
+    "payload": {
+      "dt": [
+        {
+          "pin": "000000",
+          "pin_expires_at": 4102444800,
+          "ttl_sec": 120
+        }
+      ]
+    }
+  },
+  "poll_properties": {
+    "correlationData": "00000000-0000-0000-0000-000000000000",
+    "rpc_methods": "7001,7002,7003,7011"
+  },
+  "pin_provider": "pb-renewal-gate3.json"
+}

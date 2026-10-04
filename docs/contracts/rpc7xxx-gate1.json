@@ -1,0 +1,48 @@
+{
+  "contract": "rpc7xxx-gate1",
+  "source_base": "987c5badbd810b55642be6c21870f5c9f0027640",
+  "task_id": "135a4120-9ba6-4f6c-8cac-4baf5df8f1df",
+  "tsk_empty_cancel": {
+    "id": "135a4120-9ba6-4f6c-8cac-4baf5df8f1df",
+    "created_at": 1,
+    "header": {
+      "ext_task_id": "fixture",
+      "device_id": 1,
+      "method_code": 7002,
+      "priority": 0,
+      "ttl": 1
+    },
+    "payload_required": false
+  },
+  "rsp_empty_cancel": {
+    "id": "135a4120-9ba6-4f6c-8cac-4baf5df8f1df",
+    "header": {
+      "method_code": 7002
+    },
+    "payload": {
+      "dt": []
+    }
+  },
+  "rsp_exec": {
+    "id": "f4106499-d645-4e31-8913-c2b73f41937a",
+    "header": {
+      "method_code": 7001
+    },
+    "payload": {
+      "dt": [
+        {
+          "session_id": "ea9c98c0-bcd2-4e87-9ab5-2df74eab41e7",
+          "command_line": "echo fixture",
+          "shell": "cmd",
+          "ttl_sec": 30,
+          "max_output_bytes": 1048576
+        }
+      ]
+    }
+  },
+  "required_res_properties": [
+    "correlationData",
+    "status_code",
+    "result_uid"
+  ]
+}

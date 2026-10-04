@@ -1,19 +1,25 @@
-import uuid
-from datetime import datetime
-from typing import Any, Annotated, Optional, List, Dict
+from datetime import UTC, datetime
+from typing import Any, Optional, List, Dict
 
 from pydantic import (
     BaseModel,
     Field,
     UUID4,
     ConfigDict,
-    AfterValidator,
     field_validator,
     PrivateAttr,
+    model_validator,
 )
+from core.diagnostics.schemas import validate_diagnostic_payload
+from core.schemas.certificate_renewal import CertificateRenewalPayload
 
 
 # Pydantic model for tasks
+class ParameterlessRpcPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    dt: list[Any] = Field(max_length=0)
+
+
 class TaskHeader(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     ext_task_id: str
@@ -67,9 +73,28 @@ class TaskCreate(TaskHeader):
         },
     )
 
+    @model_validator(mode="after")
+    def validate_registered_diagnostics(self):
+        # Other deployed methods (including legacy7010) retain their contracts.
+        if self.method_code in (7000, 7001, 7002):
+            self.payload = validate_diagnostic_payload(self.method_code, self.payload)
+        elif self.method_code in (7003, 7004, 7005):
+            self.payload = ParameterlessRpcPayload.model_validate(
+                self.payload
+            ).model_dump(mode="json")
+        elif self.method_code == 7011:
+            payload = CertificateRenewalPayload.model_validate(self.payload)
+            remaining = payload.dt[0].pin_expires_at - datetime.now(UTC).timestamp()
+            if self.ttl == 0 or self.ttl * 60 > remaining:
+                raise ValueError(
+                    "RPC TTL must be positive and no longer than remaining PIN lifetime"
+                )
+            self.payload = payload.model_dump(mode="json")
+        return self
+
 
 class TaskRequest(BaseModel):
-    id: UUID4 | Annotated[str, AfterValidator(lambda x: uuid.UUID(x, version=4))]
+    id: UUID4
 
 
 # Pydantic model for response data
@@ -109,13 +134,23 @@ class ResultArray(BaseModel):
     @field_validator("result", mode="before")
     @classmethod
     def normalize_result(cls, value: Any) -> dict | None:
+        from core.rpc_redaction import redact_rpc
+
         if value is None or isinstance(value, dict):
-            return value
-        return {"value": value}
+            return redact_rpc(value)
+        return {"value": redact_rpc(value)}
 
 
 class TaskResponseResult(TaskResponseStatus):
     results: List[ResultArray]
+    payload: dict[str, Any] | None = None
+
+    @field_validator("payload", mode="before")
+    @classmethod
+    def redact_history_payload(cls, value: Any) -> Any:
+        from core.rpc_redaction import redact_rpc
+
+        return redact_rpc(value)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -164,6 +199,7 @@ class TaskResponsePayload(TaskResponseStatus):
 class TaskNotify(TaskResponse):
     model_config = ConfigDict(from_attributes=True)
     header: TaskHeader
+    payload_required: bool = True
 
 
 class TaskListOut(TaskHeader):

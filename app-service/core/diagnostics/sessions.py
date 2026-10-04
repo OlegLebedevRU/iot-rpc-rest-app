@@ -94,6 +94,11 @@ class DiagnosticsSessionRegistry:
     async def route_output(self, sn: str, envelope: DeviceOutputEnvelope) -> bool:
         session = await self.get(sn, envelope.session_id)
         if session is None:
+            async with self._lock:
+                candidate = self._sessions.get(self._key(sn, envelope.session_id))
+                if candidate and candidate.closing and not candidate.is_expired():
+                    session = candidate
+        if session is None:
             return False
 
         if envelope.seq in session.seen_seqs:
@@ -160,7 +165,13 @@ class RedisDiagnosticsSessionRegistry(DiagnosticsSessionRegistry):
         client = self._client
         diag_key = f"l4d:diag:session:{session_id}"
         try:
-            raw = await client.hgetall(diag_key)
+            raw_values = await client.hgetall(diag_key)
+            raw = {
+                (k.decode() if isinstance(k, bytes) else k): (
+                    v.decode() if isinstance(v, bytes) else v
+                )
+                for k, v in raw_values.items()
+            }
             if raw and raw.get("sn") == sn and raw.get("closing") != "1":
                 created_at = datetime.fromisoformat(raw["created_at"])
                 ttl_sec = int(raw.get("ttl_sec", 60))
@@ -230,7 +241,11 @@ class RedisDiagnosticsSessionRegistry(DiagnosticsSessionRegistry):
                 created_raw = await client.hget(k, "created_at")
                 ttl_raw = await client.hget(k, "ttl_sec")
                 if created_raw and ttl_raw:
-                    dt = datetime.fromisoformat(created_raw)
+                    dt = datetime.fromisoformat(
+                        created_raw.decode()
+                        if isinstance(created_raw, bytes)
+                        else created_raw
+                    )
                     ttl = int(ttl_raw)
                     if (now - dt).total_seconds() >= ttl:
                         await client.delete(k)

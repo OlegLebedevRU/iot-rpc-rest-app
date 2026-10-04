@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
@@ -95,9 +96,24 @@ async def _forward_session_queue(
 ) -> None:
     try:
         while True:
-            message = await session.queue.get()
+            remaining = (session.expires_at - datetime.now(UTC)).total_seconds()
+            if remaining <= 0:
+                await _send_error(
+                    websocket, "session_expired", UUID(str(session.session_id))
+                )
+                break
             try:
-                await websocket.send_json(message.model_dump(mode="json"))
+                message = await asyncio.wait_for(session.queue.get(), timeout=remaining)
+            except TimeoutError:
+                await _send_error(
+                    websocket, "session_expired", UUID(str(session.session_id))
+                )
+                break
+            try:
+                await asyncio.wait_for(
+                    websocket.send_json(message.model_dump(mode="json")),
+                    timeout=min(5.0, remaining),
+                )
                 if getattr(message, "eof", False):
                     break
             finally:
@@ -105,7 +121,7 @@ async def _forward_session_queue(
     finally:
         await registry.remove(session.sn, session.session_id)
         if forwarders is not None:
-            forwarders.pop(session.session_id, None)
+            forwarders.pop(UUID(str(session.session_id)), None)
 
 
 async def _send_error(
@@ -222,7 +238,7 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
     forwarders: dict[UUID, asyncio.Task] = {}
 
     async def register_forwarder(diag_sess: DiagnosticSession) -> None:
-        forwarders[diag_sess.session_id] = asyncio.create_task(
+        forwarders[UUID(str(diag_sess.session_id))] = asyncio.create_task(
             _forward_session_queue(websocket, diag_sess, forwarders)
         )
 
@@ -245,7 +261,7 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
                     stop_message = message
                     assert isinstance(stop_message, StopLogMessage)
                     await service.stop_log(sn, stop_message)
-                    task = forwarders.pop(stop_message.session_id, None)
+                    task = forwarders.pop(UUID(str(stop_message.session_id)), None)
                     if task is not None:
                         task.cancel()
                 elif message.type is BrowserMessageType.EXEC:
@@ -257,9 +273,7 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
                     cancel_message = message
                     assert isinstance(cancel_message, CancelDiagnosticMessage)
                     await service.cancel(sn, cancel_message)
-                    task = forwarders.pop(cancel_message.session_id, None)
-                    if task is not None:
-                        task.cancel()
+                    # Preserve the forwarder until actual terminal EOF/timeout.
             except ValueError as exc:
                 await _send_error(websocket, str(exc))
     except WebSocketDisconnect:

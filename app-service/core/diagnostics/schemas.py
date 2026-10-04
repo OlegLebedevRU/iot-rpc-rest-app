@@ -102,8 +102,6 @@ class BrowserMessageType(StrEnum):
 class BrowserBaseMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    type: BrowserMessageType
-
 
 class StartLogMessage(BrowserBaseMessage):
     type: Literal[BrowserMessageType.START_LOG] = BrowserMessageType.START_LOG
@@ -165,13 +163,13 @@ class DiagStreamControlPayload(BaseModel):
 
 
 class DiagExecPayload(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     session_id: UUID | str
     command_id: str = Field(
         default="raw_cmd", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_.:-]+$"
     )
-    command_line: str | None = None
+    command_line: str | None = Field(default=None, max_length=4096)
     shell: str | None = "cmd"
     args: dict[str, Any] = Field(default_factory=dict)
     ttl_sec: int = Field(default=DEFAULT_DIAG_EXEC_TTL_SEC, ge=1, le=3600)
@@ -197,6 +195,46 @@ class DiagnosticRpcTask(BaseModel):
 
     method_code: int
     payload: DiagnosticRpcPayload
+
+    @model_validator(mode="before")
+    @classmethod
+    def validate_method_payload(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        method = data.get("method_code")
+        if isinstance(method, bool) or not isinstance(method, int):
+            raise ValueError("method_code must be an integer")
+        item_types = {
+            CMD_DIAG_STREAM_CONTROL: DiagStreamControlPayload,
+            CMD_DIAG_EXEC: DiagExecPayload,
+            CMD_DIAG_CANCEL: DiagCancelPayload,
+        }
+        if method not in item_types:
+            raise ValueError("unsupported diagnostics method")
+        payload = data.get("payload")
+        if isinstance(payload, DiagnosticRpcPayload):
+            payload = payload.model_dump(mode="python")
+        if not isinstance(payload, dict) or set(payload) != {"dt"}:
+            raise ValueError("RPC payload must contain only dt")
+        items = payload["dt"]
+        if not isinstance(items, list):
+            raise ValueError("dt must be an array")
+        # Empty cancellation is explicitly device-scoped: cancel the currently
+        # exclusive session at TSK. Addressed cancellation waits for its RSP.
+        if not items and method == CMD_DIAG_CANCEL:
+            return dict(data, payload=DiagnosticRpcPayload(dt=[]))
+        if len(items) != 1:
+            raise ValueError("this method requires exactly one dt item")
+        item = item_types[method].model_validate(items[0])
+        return dict(data, payload=DiagnosticRpcPayload(dt=[item]))
+
+
+def validate_diagnostic_payload(method_code: int, payload: Any) -> dict[str, Any]:
+    """Validate public task creation using the same schema as the WS producer."""
+    task = DiagnosticRpcTask.model_validate(
+        {"method_code": method_code, "payload": payload}
+    )
+    return task.payload.model_dump(mode="json")
 
 
 class BackendMessageType(StrEnum):

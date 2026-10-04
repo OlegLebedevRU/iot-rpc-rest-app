@@ -45,7 +45,7 @@ class DeviceTaskDiagnosticTaskSender:
     def _ext_task_id(task: DiagnosticRpcTask) -> str:
         session_id = task.payload.dt[0].session_id if task.payload.dt else uuid4()
         # ext_task_id format: diag:{8_hex_chars}:{method_code} (length <= 20 chars)
-        return f"diag:{session_id.hex[:8]}:{task.method_code}"
+        return f"diag:{UUID(str(session_id)).hex[:8]}:{task.method_code}"
 
     @staticmethod
     def _ttl_sec(task: DiagnosticRpcTask) -> int:
@@ -91,7 +91,7 @@ class DiagnosticService:
         await self.task_sender.send(
             sn,
             build_start_log_task(
-                session_id=session.session_id,
+                session_id=UUID(str(session.session_id)),
                 sn=sn,
                 level=message.level,
                 stream=message.stream,
@@ -105,7 +105,9 @@ class DiagnosticService:
         session = await self.registry.mark_closing(sn, message.session_id)
         await self.task_sender.send(
             sn,
-            build_stop_log_task(session_id=message.session_id, stream=message.stream),
+            build_stop_log_task(
+                session_id=UUID(str(message.session_id)), stream=message.stream
+            ),
         )
         await self.registry.remove(sn, message.session_id)
         return session is not None
@@ -126,7 +128,7 @@ class DiagnosticService:
         await self.task_sender.send(
             sn,
             build_exec_task(
-                session_id=session.session_id,
+                session_id=UUID(str(session.session_id)),
                 sn=sn,
                 command_id=message.command_id,
                 command_line=message.command_line,
@@ -142,9 +144,12 @@ class DiagnosticService:
         session = await self.registry.mark_closing(sn, message.session_id)
         await self.task_sender.send(
             sn,
-            build_cancel_task(session_id=message.session_id, reason=message.reason),
+            build_cancel_task(
+                session_id=UUID(str(message.session_id)), reason=message.reason
+            ),
         )
-        await self.registry.remove(sn, message.session_id)
+        # Dispatch is not terminal cleanup. Keep the stream consumer until EOF
+        # or the existing session deadline so the browser can observe completion.
         return session is not None
 
     async def close_session(
@@ -161,14 +166,16 @@ class DiagnosticService:
             await self.task_sender.send(
                 sn,
                 build_stop_log_task(
-                    session_id=session.session_id,
+                    session_id=UUID(str(session.session_id)),
                     stream=session.stream or "esp32-log",
                 ),
             )
         elif session.kind is DiagnosticSessionKind.EXEC:
             await self.task_sender.send(
                 sn,
-                build_cancel_task(session_id=session.session_id, reason=reason),
+                build_cancel_task(
+                    session_id=UUID(str(session.session_id)), reason=reason
+                ),
             )
 
         await self.registry.remove(sn, session_id)
@@ -176,7 +183,9 @@ class DiagnosticService:
 
     async def emit_status(self, session: DiagnosticSession, status: str) -> None:
         await session.queue.put(
-            BackendStatusMessage(session_id=session.session_id, status=status)
+            BackendStatusMessage(
+                session_id=UUID(str(session.session_id)), status=status
+            )
         )
 
     async def emit_error(
@@ -186,5 +195,7 @@ class DiagnosticService:
     ) -> None:
         if session is not None:
             await session.queue.put(
-                BackendErrorMessage(session_id=session.session_id, error=error)
+                BackendErrorMessage(
+                    session_id=UUID(str(session.session_id)), error=error
+                )
             )

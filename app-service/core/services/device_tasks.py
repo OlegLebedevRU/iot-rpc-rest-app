@@ -8,6 +8,7 @@ from pydantic import UUID4
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.config import settings
+from core.rpc_redaction import redact_rpc
 from core.crud.dev_tasks_repo import TasksRepository
 from core.diagnostics.commands import DIAGNOSTICS_MAX_METHOD_CODE
 from core.crud.device_repo import DeviceRepo
@@ -48,13 +49,21 @@ class DeviceTasksService:
                 task_create.device_id,
             )
             raise HTTPException(status_code=404, detail="device_id not found")
-        db_uuid, created_at = await TasksRepository.create_task(
+        created = await TasksRepository.create_task(
             session=self.session,
             task=task_create,
         )
-
-        task = TaskResponse(id=db_uuid, created_at=created_at)
-        log.info("Created task %s", task)
+        if created is None:
+            raise HTTPException(status_code=503, detail="Task could not be persisted")
+        db_uuid, created_at = created
+        task = TaskResponse(id=db_uuid, created_at=int(created_at))
+        log.info(
+            "Created task id=%s device_id=%s method_code=%s ttl_minutes=%s",
+            task.id,
+            task_create.device_id,
+            task_create.method_code,
+            task_create.ttl,
+        )
         remaining_seconds = max(
             0.001,
             created_at + (task_create.ttl or 1) * 60 - datetime.now(UTC).timestamp(),
@@ -99,14 +108,13 @@ class DeviceTasksService:
                 else None
             ),
             results=results,
+            payload=task_data.get("payload"),
         )
 
         return task_response
 
     async def delete(self, id: UUID) -> TaskResponseDeleted:
-        task: TaskResponseDeleted = await TasksRepository.delete_task(
-            self.session, id, self.org_id
-        )
+        task = await TasksRepository.delete_task(self.session, id, self.org_id)
         if task is None:
             raise HTTPException(status_code=404, detail="Task not found")
         return task
@@ -195,21 +203,31 @@ class DeviceTasksService:
             return default
 
     async def _select_polling_task(
-        self, sn: str, method_le: int
+        self, sn: str, method_le: int, method_codes: set[int] | None = None
     ) -> TaskResponsePayload | None:
-        task_data = await TasksRepository.select_next_task_by_sn(
-            self.session, sn, method_le
-        )
+        if method_codes is None:
+            task_data = await TasksRepository.select_next_task_by_sn(
+                self.session, sn, method_le
+            )
+        else:
+            task_data = await TasksRepository.select_next_task_by_sn(
+                self.session, sn, method_le, method_codes=method_codes
+            )
         if task_data is None:
             return None
         return self._build_task_response(task_data)
 
     async def _select_task(
-        self, sn: str, corr_id: UUID4 | None, method_le: int
+        self,
+        sn: str,
+        corr_id: UUID4 | None,
+        method_le: int,
+        method_codes: set[int] | None = None,
     ) -> TaskResponsePayload | None:
         if self._is_zero_corr_id(corr_id):
-            return await self._select_polling_task(sn, method_le)
+            return await self._select_polling_task(sn, method_le, method_codes)
         else:
+            assert corr_id is not None
             task_data = await TasksRepository.select_task_by_id(
                 self.session, corr_id, method_le, sn=sn
             )
@@ -220,16 +238,33 @@ class DeviceTasksService:
         return self._build_task_response(task_data)
 
     async def select(self, sn, corr_id: UUID4, msg):
+        method_codes = None
+        raw_methods = getattr(msg, "headers", {}).get("rpc_methods")
+        if raw_methods is not None:
+            # Capability-narrowed service polling cannot consume legacy main-app tasks.
+            value = str(raw_methods)
+            if len(value) <= 64 and all(
+                item.isascii() and item.isdigit() for item in value.split(",")
+            ):
+                requested = {int(item) for item in value.split(",")}
+                if requested and requested <= {7001, 7002, 7003, 7011}:
+                    method_codes = requested
         method_le = (
             self._get_method_limit(msg)
             if self._is_zero_corr_id(corr_id)
             else self._get_trigger_method_limit(msg)
         )
+        if method_codes is not None and self._is_zero_corr_id(corr_id):
+            method_le = max(method_codes)
         log_rpc_debug(sn, "rpc.req.processing", corr_id=corr_id, method_le=method_le)
-        task = await self._select_task(sn, corr_id, method_le)
+        task = await self._select_task(sn, corr_id, method_le, method_codes)
+        t_resp = settings.task_proc_cfg.nop_resp
+        correlation_id = settings.task_proc_cfg.zero_corr_id
+        method_code = "0"
+        expiration = 3 * 60.0
         if task is not None:
             t_resp = task.model_dump(mode="json")
-            log.info("from DB select task = %s", t_resp)
+            log.info("from DB select task = %s", redact_rpc(t_resp))
             method_code = str(task.header.method_code)
             claimed = await TasksRepository.task_status_update(
                 self.session, task.id, TaskStatus.LOCK, sn=sn
@@ -336,13 +371,13 @@ class DeviceTasksService:
         except json.JSONDecodeError, TypeError:
             res_data = {"result": raw_body}
 
-        res_data = self._normalize_result_payload(res_data)
+        res_data = redact_rpc(self._normalize_result_payload(res_data))
 
         log.info(
             "Mqtt received RESULT ext_id=%d, status_code=%d, parsed result: %s",
             ext_id,
             status_code,
-            res_data,
+            redact_rpc(res_data),
         )
         log_rpc_debug(
             sn,
@@ -381,6 +416,9 @@ class DeviceTasksService:
 
         cmt_payload = {"message": "committed"}
         dev_id = await DeviceRepo.get_device_id(session=self.session, sn=sn)
+        if dev_id is None:
+            log.warning("Skip CMT for removed device sn=%s task_id=%s", sn, corr_id)
+            return False
         log_rpc_debug(
             sn,
             "rpc.res.committed",

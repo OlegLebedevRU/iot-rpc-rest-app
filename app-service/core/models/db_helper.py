@@ -23,6 +23,7 @@ class DatabaseHelper:
         max_overflow: int = 10,
     ) -> None:
         self.engine: AsyncEngine = create_async_engine(
+            hide_parameters=True,
             url=url,
             echo=echo,
             echo_pool=echo_pool,

@@ -25,6 +25,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
+from sqlalchemy.engine import CursorResult
+from typing import cast
 
 from core import settings
 from core.models import Device, Org
@@ -167,17 +169,20 @@ class TasksRepository:
             )
         )
         payload_q = insert(DevTaskPayload).values(task_id=db_uuid, payload=task.payload)
+        deadline = select(DevTask.created_at).where(
+            DevTask.id == db_uuid
+        ).scalar_subquery() + timedelta(minutes=task.ttl or 1)
+        if task.method_code == 7011:
+            assert task.payload is not None
+            deadline = func.least(
+                deadline, func.to_timestamp(task.payload["dt"][0]["pin_expires_at"])
+            )
         status_q = insert(DevTaskStatus).values(
             task_id=db_uuid,
             status=TaskStatus.READY,
             ttl=task.ttl,
             initial_ttl=task.ttl,
-            expires_at=(
-                select(DevTask.created_at)
-                .where(DevTask.id == db_uuid)
-                .scalar_subquery()
-                + timedelta(minutes=task.ttl or 1)
-            ),
+            expires_at=deadline,
             priority=task.priority,
         )
 
@@ -190,7 +195,7 @@ class TasksRepository:
             log.info("Committed new task %s", db_uuid)
             return db_uuid, created_at
         except Exception as e:
-            log.error("Failed to create task %s: %s", db_uuid, e, exc_info=True)
+            log.error("Failed to create task %s: %s", db_uuid, type(e).__name__)
             await session.rollback()
             return None
 
@@ -201,7 +206,12 @@ class TasksRepository:
         id: UUID4,
         org_id: int,
     ) -> tuple[dict | None, list[dict] | None]:
-        query = cls._base_task_query().join(DevTask.status)
+        query = (
+            cls._base_task_query()
+            .join(DevTask.status)
+            .outerjoin(DevTaskPayload)
+            .add_columns(DevTaskPayload.payload.label("payload"))
+        )
         query = cls._apply_org_filter(query, org_id)
         query = query.where(DevTask.id == id, DevTask.is_deleted.is_(False))
 
@@ -287,6 +297,7 @@ class TasksRepository:
         session: AsyncSession,
         sn: str,
         method_le: int = 65535,
+        method_codes: set[int] | None = None,
     ) -> dict[str, Any] | None:
         subq = (
             select(Device.device_id)
@@ -306,6 +317,8 @@ class TasksRepository:
             )
             .limit(1)
         )
+        if method_codes is not None:
+            query = query.where(DevTask.method_code.in_(sorted(method_codes)))
         result = await session.execute(query)
         row = result.mappings().one_or_none()
         return dict(row) if row is not None else None
@@ -373,6 +386,7 @@ class TasksRepository:
         deleted_at = int(resp.deleted_at) if resp else None
 
         await session.execute(q2)
+        await cls.scrub_renewal_payload(session, [id])
         try:
             await session.commit()
             log.info("Deleted task %s", id)
@@ -385,15 +399,37 @@ class TasksRepository:
 
     @classmethod
     async def tasks_ttl_update(cls, session: AsyncSession, delta_ttl: int = 1):
-        await session.execute(
+        expired = await session.execute(
             update(DevTaskStatus)
             .where(
                 DevTaskStatus.status < TaskStatus.DONE,
                 DevTaskStatus.expires_at <= func.clock_timestamp(),
             )
             .values(status=TaskStatus.EXPIRED, ttl=0)
+            .returning(DevTaskStatus.task_id)
         )
+        ids = list(expired.scalars().all())
+        if ids:
+            await cls.scrub_renewal_payload(session, ids)
         await session.commit()
+
+    @staticmethod
+    async def scrub_renewal_payload(
+        session: AsyncSession, ids: list[uuid.UUID]
+    ) -> None:
+        await session.execute(
+            update(DevTaskPayload)
+            .where(
+                DevTaskPayload.task_id.in_(ids),
+                exists(
+                    select(1).where(
+                        DevTask.id == DevTaskPayload.task_id,
+                        DevTask.method_code == 7011,
+                    )
+                ),
+            )
+            .values(payload={"dt": []})
+        )
 
     @classmethod
     async def task_status_update(
@@ -467,7 +503,7 @@ class TasksRepository:
                     return False
             result = await session.execute(stmt)
             await session.commit()
-            return bool(result.rowcount)
+            return bool(cast(CursorResult, result).rowcount)
         except Exception as e:
             log.error("Failed to update task-status %s: %s", task_id, e)
             await session.rollback()
@@ -492,7 +528,7 @@ class TasksRepository:
         """Serialize all results of one task on its status row, then commit once."""
         # Match DELETE's lock order: task first, status second.
         owner_row = await session.execute(
-            select(DevTask.id, DevTask.is_deleted)
+            select(DevTask.id, DevTask.is_deleted, DevTask.method_code)
             .join(Device, Device.device_id == DevTask.device_id)
             .where(
                 DevTask.id == task_id,
@@ -620,6 +656,8 @@ class TasksRepository:
                     .limit(1),
                 )
             )
+        if getattr(owner, "method_code", 0) == 7011:
+            await cls.scrub_renewal_payload(session, [task_id])
         await session.commit()
         return StoredTaskResult(
             result_id, ext_id, status_code, parsed, True, send_webhook

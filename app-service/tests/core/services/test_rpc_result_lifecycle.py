@@ -9,6 +9,7 @@ from sqlalchemy.dialects import postgresql
 
 from core.crud.dev_tasks_repo import TasksRepository
 from core.models.common import TaskStatus
+from core.models.device_tasks import DevTaskPayload
 from core.schemas.device_tasks import TaskCreate, TaskResponse
 from core.services import device_task_processing
 
@@ -36,6 +37,12 @@ class FakeQueryResult:
     def mappings(self):
         return self
 
+    def scalars(self):
+        return self
+
+    def all(self):
+        return self.value if isinstance(self.value, list) else []
+
 
 class FakeSession:
     def __init__(self, responses):
@@ -47,10 +54,10 @@ class FakeSession:
     async def execute(self, statement):
         statement.compile(dialect=postgresql.dialect())
         self.statements.append(statement)
-        if (
-            getattr(getattr(statement, "table", None), "name", None)
-            == "tb_rpc_result_webhooks"
-        ):
+        if getattr(getattr(statement, "table", None), "name", None) in {
+            "tb_rpc_result_webhooks",
+            DevTaskPayload.__tablename__,
+        }:
             return FakeQueryResult(None)
         return FakeQueryResult(next(self.responses))
 

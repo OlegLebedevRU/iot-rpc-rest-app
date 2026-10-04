@@ -35,8 +35,8 @@ async def send_eva(
     routing_key: str = str(
         RoutingKey(prefix=topology.prefix_srv, sn=sn, suffix=topology.suffix_event_ack)
     )
-    payload = {"status": status}
-    headers = {
+    payload: dict[str, Any] = {"status": status}
+    headers: dict[str, Any] = {
         "event_type_code": str(event_type_code),
         "dev_event_id": str(dev_event_id),
     }
@@ -55,7 +55,7 @@ async def send_eva(
     await topic_publisher.publish(
         routing_key=routing_key,
         message=payload,
-        correlation_id=corr_id,
+        correlation_id=str(corr_id) if corr_id is not None else None,
         expiration=EVA_EXPIRATION,
         headers=headers,
     )
@@ -72,7 +72,12 @@ async def send_tsk(
         RoutingKey(settings.rmq.prefix_srv, sn, settings.rmq.suffix_task)
     )
     notify: TaskNotify = TaskNotify(
-        id=stask.id, created_at=stask.created_at, header=task
+        id=stask.id,
+        created_at=stask.created_at,
+        header=task,
+        payload_required=not (
+            task.method_code in (7002, 7003) and task.payload == {"dt": []}
+        ),
     )
     message_expiration = (
         timedelta(minutes=task.ttl or 1) if expiration is None else expiration
@@ -89,11 +94,12 @@ async def send_tsk(
         routing_key=task_device_topic,  # "srv.a3b0000000c99999d250813.tsk",
         message=notify,
         # exchange=topic_exchange,  # settings.rmq.x_name,
-        correlation_id=stask.id,
+        correlation_id=str(stask.id),
         expiration=message_expiration,
         headers={
             "method_code": str(notify.header.method_code),
             "correlationData": str(stask.id),
+            "payload_required": "1" if notify.payload_required else "0",
         },
     )
 
@@ -122,7 +128,7 @@ async def send_rsp(
     await topic_publisher.publish(
         routing_key=routing_key,
         message=t_resp,
-        correlation_id=correlation_id,  # str(correlation_id),uuid.UUID(correlation_id).bytes,
+        correlation_id=str(correlation_id),
         # exchange=topic_exchange,  # settings.rmq.x_name,
         expiration=expiration,
         headers={
@@ -161,7 +167,7 @@ async def send_cmt(
     await topic_publisher.publish(
         routing_key=routing_key,
         message=cmt_payload,
-        correlation_id=corr_id,
+        correlation_id=str(corr_id),
         content_type="application/json",
         # exchange=topic_exchange,  # settings.rmq.x_name,
         expiration=timedelta(minutes=180),
@@ -179,7 +185,7 @@ async def send_cmt(
         routing_key=settings.webhook.webhooks_queue,  # "srv.a3b0000000c99999d250813.tsk",
         message=webhook_msg,
         exchange=direct_exchange,  # settings.rmq.x_name_direct,
-        correlation_id=corr_id,
+        correlation_id=str(corr_id),
         expiration=timedelta(minutes=30),
         headers={
             "x-device-id": str(dev_id),
