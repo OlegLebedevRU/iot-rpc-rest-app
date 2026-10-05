@@ -95,6 +95,22 @@ class LeaseConflictError(Exception):
         }
 
 
+FILES_DRAIN_GUARD_SECONDS = 5
+
+
+def lease_blocks_acquire(lease: Lease, now: datetime) -> bool:
+    # A files worker may still be finishing I/O after release. Keep the shared
+    # slot until its last authorised deadline plus watchdog/commit guard.
+    if lease.scope == "files":
+        return now < lease.expires_at + timedelta(seconds=FILES_DRAIN_GUARD_SECONDS)
+    return lease.is_active(now)
+
+
+def require_compatible_scope(lease: Lease, scope: LeaseScope) -> None:
+    if (lease.scope == "files" or scope == "files") and lease.scope != scope:
+        raise LeaseConflictError(lease)
+
+
 class LeaseRegistryProtocol(Protocol):
     async def acquire(
         self,
@@ -169,10 +185,17 @@ class LeaseRegistry:
             existing_id = self._active_by_sn.get(sn)
             if existing_id is not None:
                 existing = self._leases_by_id.get(existing_id)
-                if existing is not None and existing.is_active(now):
-                    same_user = existing.owner_user_id == owner_user_id
+                if existing is not None and lease_blocks_acquire(existing, now):
+                    same_user = (
+                        existing.owner_user_id == owner_user_id
+                        and existing.org_id == org_id
+                        and existing.device_id == device_id
+                    )
                     same_session = existing.owner_session_id == owner_session_id
                     if same_user and same_session:
+                        require_compatible_scope(existing, scope)
+                        if not existing.is_active(now):
+                            raise LeaseConflictError(existing)
                         # Idempotent re-acquire
                         existing.ttl_sec = ttl_sec
                         if existing.scope == scope:
@@ -252,6 +275,7 @@ class LeaseRegistry:
             lease = self._leases_by_id.get(lease_id)
             if lease is None or not lease.is_active(now):
                 return None
+            require_compatible_scope(lease, new_scope)
             lease.scope = new_scope
             if lease.stream_mode is None and new_scope in ("stream", "input"):
                 lease.stream_mode = "desktop"
@@ -266,7 +290,8 @@ class LeaseRegistry:
                 return lease
             lease.revoked_reason = reason
             if self._active_by_sn.get(lease.sn) == lease_id:
-                self._active_by_sn.pop(lease.sn, None)
+                if lease.scope != "files":
+                    self._active_by_sn.pop(lease.sn, None)
             self._active_ws_leases.discard(lease_id)
             listeners = list(lease.listeners)
 
@@ -368,7 +393,7 @@ class LeaseRegistry:
             if lease_id is None:
                 return None
             lease = self._leases_by_id.get(lease_id)
-            if lease is None or not lease.is_active(now):
+            if lease is None or not lease_blocks_acquire(lease, now):
                 return None
             return lease
 
@@ -643,12 +668,19 @@ class RedisLeaseRegistry:
                                 raw_data,
                                 self._listeners.get(UUID(existing_id_str), []),
                             )
-                            if existing.is_active(now):
-                                same_user = existing.owner_user_id == owner_user_id
+                            if lease_blocks_acquire(existing, now):
+                                same_user = (
+                                    existing.owner_user_id == owner_user_id
+                                    and existing.org_id == org_id
+                                    and existing.device_id == device_id
+                                )
                                 same_session = (
                                     existing.owner_session_id == owner_session_id
                                 )
                                 if same_user and same_session:
+                                    require_compatible_scope(existing, scope)
+                                    if not existing.is_active(now):
+                                        raise LeaseConflictError(existing)
                                     existing.ttl_sec = ttl_sec
                                     existing.last_keepalive_at = now
                                     existing.expires_at = now + timedelta(
@@ -668,7 +700,15 @@ class RedisLeaseRegistry:
                                         mapping=_lease_to_dict(existing),
                                     )
                                     pipe.expire(existing_hash_key, ttl_sec + 30)
-                                    pipe.expire(active_key, ttl_sec)
+                                    pipe.expire(
+                                        active_key,
+                                        ttl_sec
+                                        + (
+                                            FILES_DRAIN_GUARD_SECONDS
+                                            if existing.scope == "files"
+                                            else 0
+                                        ),
+                                    )
                                     await pipe.execute()
 
                                     async with self._lock:
@@ -698,7 +738,12 @@ class RedisLeaseRegistry:
                         ttl_sec=ttl_sec,
                     )
                     pipe.multi()
-                    pipe.set(active_key, str(lease_id), ex=ttl_sec)
+                    pipe.set(
+                        active_key,
+                        str(lease_id),
+                        ex=ttl_sec
+                        + (FILES_DRAIN_GUARD_SECONDS if scope == "files" else 0),
+                    )
                     pipe.hset(lease_hash_key, mapping=_lease_to_dict(lease))
                     pipe.expire(lease_hash_key, ttl_sec + 30)
                     await pipe.execute()
@@ -733,40 +778,41 @@ class RedisLeaseRegistry:
         raise RuntimeError("Failed to acquire lease due to concurrent retries")
 
     async def touch(self, lease_id: UUID, ttl_sec: int) -> Lease | None:
-        now = datetime.now(UTC)
         lease_hash_key = f"l4d:lease:{lease_id}"
         client = self._client
-        try:
-            raw_data = await client.hgetall(lease_hash_key)
-            if not raw_data:
-                return None
-            lease = _dict_to_lease(raw_data, self._listeners.get(lease_id, []))
-            if not lease.is_active(now):
-                return None
-            lease.last_keepalive_at = now
-            lease.expires_at = now + timedelta(seconds=ttl_sec)
-            lease.ttl_sec = ttl_sec
-            active_key = f"l4d:lease:active:{lease.sn}"
-
-            async with client.pipeline(transaction=True) as pipe:
-                pipe.hset(lease_hash_key, mapping=_lease_to_dict(lease))
-                pipe.expire(lease_hash_key, ttl_sec + 30)
-                cur_active = await client.get(active_key)
-                if cur_active == str(lease_id):
-                    pipe.expire(active_key, ttl_sec)
-                await pipe.execute()
-
-            async with self._lock:
-                self._leases_by_id[lease_id] = lease
-                self._active_by_sn[lease.sn] = lease_id
-            return lease
-        except (RedisConnectionError, RedisTimeoutError) as exc:
-            log.error(
-                "Redis connection error during touch for lease_id=%s: %s",
-                lease_id,
-                exc,
-            )
-            raise
+        for _ in range(5):
+            try:
+                async with client.pipeline(transaction=True) as pipe:
+                    await pipe.watch(lease_hash_key)
+                    raw_data = await pipe.hgetall(lease_hash_key)
+                    if not raw_data:
+                        return None
+                    lease = _dict_to_lease(raw_data, self._listeners.get(lease_id, []))
+                    now = datetime.now(UTC)
+                    if not lease.is_active(now):
+                        return None
+                    active_key = f"l4d:lease:active:{lease.sn}"
+                    await pipe.watch(active_key)
+                    if await pipe.get(active_key) != str(lease_id):
+                        return None
+                    lease.last_keepalive_at = now
+                    lease.expires_at = now + timedelta(seconds=ttl_sec)
+                    lease.ttl_sec = ttl_sec
+                    pipe.multi()
+                    pipe.hset(lease_hash_key, mapping=_lease_to_dict(lease))
+                    pipe.expire(lease_hash_key, ttl_sec + 30)
+                    pipe.expire(
+                        active_key,
+                        ttl_sec
+                        + (FILES_DRAIN_GUARD_SECONDS if lease.scope == "files" else 0),
+                    )
+                    await pipe.execute()
+                async with self._lock:
+                    self._leases_by_id[lease_id] = lease
+                return lease
+            except WatchError:
+                continue
+        raise RuntimeError("Concurrent lease modification")
 
     async def upgrade_scope(
         self, lease_id: UUID, new_scope: LeaseScope
@@ -781,6 +827,7 @@ class RedisLeaseRegistry:
             lease = _dict_to_lease(raw_data, self._listeners.get(lease_id, []))
             if not lease.is_active(now):
                 return None
+            require_compatible_scope(lease, new_scope)
             lease.scope = new_scope
             if lease.stream_mode is None and new_scope in ("stream", "input"):
                 lease.stream_mode = "desktop"
@@ -828,9 +875,21 @@ class RedisLeaseRegistry:
 
             async with client.pipeline(transaction=True) as pipe:
                 pipe.hset(lease_hash_key, "revoked_reason", reason)
-                pipe.expire(lease_hash_key, 60)
+                pipe.expire(
+                    lease_hash_key,
+                    (
+                        max(
+                            60,
+                            int((lease.expires_at - datetime.now(UTC)).total_seconds())
+                            + FILES_DRAIN_GUARD_SECONDS
+                            + 30,
+                        )
+                        if lease.scope == "files"
+                        else 60
+                    ),
+                )
                 cur_active = await client.get(active_key)
-                if cur_active == str(lease_id):
+                if cur_active == str(lease_id) and lease.scope != "files":
                     pipe.delete(active_key)
                 await pipe.execute()
 
@@ -850,7 +909,10 @@ class RedisLeaseRegistry:
 
             async with self._lock:
                 self._leases_by_id[lease_id] = lease
-                if self._active_by_sn.get(lease.sn) == lease_id:
+                if (
+                    self._active_by_sn.get(lease.sn) == lease_id
+                    and lease.scope != "files"
+                ):
                     self._active_by_sn.pop(lease.sn, None)
                 self._active_ws_leases.discard(lease_id)
 
@@ -970,7 +1032,7 @@ class RedisLeaseRegistry:
     async def get(self, lease_id: UUID) -> Lease | None:
         async with self._lock:
             local = self._leases_by_id.get(lease_id)
-            if local is not None:
+            if local is not None and local.scope != "files":
                 try:
                     client = self._client
                     await client.hset(
@@ -1008,7 +1070,7 @@ class RedisLeaseRegistry:
             if not active_id:
                 return None
             lease = await self.get(UUID(active_id))
-            if lease is None or not lease.is_active(now):
+            if lease is None or not lease_blocks_acquire(lease, now):
                 return None
             return lease
         except (RedisConnectionError, RedisTimeoutError) as exc:

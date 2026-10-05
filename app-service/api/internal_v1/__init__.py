@@ -15,6 +15,7 @@ from .remote_input import router as remote_input_router
 from .remote_sessions import router as remote_sessions_router
 from .device_provisioning import router as device_provisioning_router
 from .archive import router as archive_router
+from .file_manager import router as file_manager_router
 
 router = APIRouter(
     prefix=settings.api.internal_v1.prefix,
@@ -32,3 +33,4 @@ router.include_router(remote_input_router, include_in_schema=False)
 router.include_router(remote_sessions_router, include_in_schema=False)
 router.include_router(device_provisioning_router, include_in_schema=False)
 router.include_router(archive_router, include_in_schema=False)
+router.include_router(file_manager_router, include_in_schema=False)

@@ -413,3 +413,18 @@ The shown PIN is a fixture. Purpose is renew; only PB's verified-live-certificat
 POST /api/certificates/renew may consume it. 7003 accepts empty dt and answers
 pong. 7004/7005 accept canonical empty dt but native l4con returns unsupported;
 no false keepalive acknowledgment. Historical7010 is not reinterpreted.
+
+
+## FM — локальный кандидат, 2026-10-05
+
+| method_code | Назначение | Payload dt[0] |
+|---|---|---|
+| 7020 | list | session_id, action=list, operation_id, expires_at, ttl_sec |
+| 7021 | transfer | session_id, action=transfer, operation_id, expires_at, ttl_sec |
+| 7022 | cancel | session_id, action=cancel, operation_id, expires_at, ttl_sec |
+| 7023 | start/renew/stop | session_id, action, expires_at, ttl_sec; без operation_id |
+
+Consumer: l4con extra_service. Общая lease scope files; данные/URL не передаются через IoT.
+Start отправляется после PB metadata registration; renew требует current ticket ACK в PB.
+Revocation сохраняет общий слот до исходного expires_at + 5 секунд. Байты идут только agent–S3–browser,
+HTTPS агента — ProcessingBackend. Реестр обновлён по исходникам, не по deployed broker evidence.

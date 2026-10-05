@@ -55,7 +55,7 @@ ALLOWED_VK_CODES: frozenset[int] = frozenset(
     ]
 )
 
-LeaseScope = Literal["console", "view", "stream", "input"]
+LeaseScope = Literal["console", "view", "stream", "input", "files"]
 
 StreamState = Literal[
     "stopped",
