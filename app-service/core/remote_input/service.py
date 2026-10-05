@@ -169,6 +169,9 @@ class RemoteInputService:
             is_superuser and norm_role == "superuser"
         )
 
+        if scope == "files":
+            raise HTTPException(status_code=403, detail="use_file_manager_control")
+
         if scope == "console":
             if not actual_superuser and norm_role != "l4desk_owner":
                 raise HTTPException(status_code=403, detail="scope_not_allowed")
@@ -291,7 +294,10 @@ class RemoteInputService:
             if stream_state != "running":
                 raise HTTPException(status_code=409, detail="stream_not_running")
 
-        upgraded = await self.leases.upgrade_scope(lease_id, new_scope)
+        try:
+            upgraded = await self.leases.upgrade_scope(lease_id, new_scope)
+        except LeaseConflictError as exc:
+            raise HTTPException(status_code=409, detail=exc.to_dict()) from exc
         if upgraded is None:
             raise HTTPException(status_code=404, detail="lease not found or expired")
 
@@ -319,6 +325,9 @@ class RemoteInputService:
         lease = await self.leases.get(lease_id)
         if lease is None or not lease.is_active():
             raise HTTPException(status_code=404, detail="lease not found or expired")
+
+        if lease.scope == "files":
+            raise HTTPException(status_code=409, detail="use_file_manager_control")
 
         effective_org_id = lease.org_id if org_id is None else org_id
         if org_id is None:
