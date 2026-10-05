@@ -266,6 +266,9 @@ class RabbitQXConfig(BaseModel):
     suffix_result_ack: str = "rac"
     suffix_commited: str = "cmt"
     suffix_control: str = "ctl"
+    suffix_fm_command: str = "fmc"
+    suffix_fm_result: str = "fmr"
+    fm_queue_name: str = "fm_result_v1"
     # dev -> core
     req_queue_name: str = "req"
     ack_queue_name: str = "ack"

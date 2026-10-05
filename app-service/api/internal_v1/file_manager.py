@@ -14,6 +14,7 @@ from core.crud.device_repo import DeviceRepo
 from core.remote_input.leases import LeaseConflictError, lease_registry
 from core.schemas.device_tasks import TaskCreate
 from core.services.device_tasks import DeviceTasksService
+from core.file_manager_navigation import Navigation, navigate
 
 
 async def service_auth(x_internal_service_key: str = Header(default="")) -> None:
@@ -27,14 +28,14 @@ router = APIRouter(prefix="/file-manager", dependencies=[Depends(service_auth)])
 
 class Signal(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    action: Literal["start", "renew", "stop", "list", "transfer", "cancel"]
+    action: Literal["start", "renew", "stop", "transfer", "cancel"]
     operation_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_operation(self):
-        needs_operation = self.action in ("list", "transfer", "cancel")
+        needs_operation = self.action in ("transfer", "cancel")
         if needs_operation != (self.operation_id is not None):
-            raise ValueError("operation_id required only for list/transfer/cancel")
+            raise ValueError("operation_id required only for transfer/cancel")
         return self
 
 
@@ -61,7 +62,7 @@ def actor(request: Request) -> tuple[int, str, str, str]:
     return tenant, user, session, role
 
 
-async def owned_lease(lease_id: UUID, request: Request):
+async def owned_lease(lease_id: UUID, request: Request, *, closing: bool = False):
     tenant, user, session, _ = actor(request)
     lease = await lease_registry.get(lease_id)
     if (
@@ -71,13 +72,13 @@ async def owned_lease(lease_id: UUID, request: Request):
         or lease.owner_session_id != session
     ):
         raise HTTPException(404, "Session not found")
-    if lease.scope != "files" or not lease.is_active():
+    if lease.scope != "files" or (not closing and not lease.is_active()):
         raise HTTPException(409, detail={"code": "lease_expired"})
     return lease
 
 
 async def dispatch(db, lease, signal: Signal):
-    method = {"list": 7020, "transfer": 7021, "cancel": 7022}.get(signal.action, 7023)
+    method = 7021 if signal.action == "transfer" else 7023
     payload = {
         "session_id": str(lease.lease_id),
         "action": signal.action,
@@ -133,8 +134,9 @@ async def acquire(device_id: int, body: Acquire, request: Request, db: Session_d
 
 
 @router.get("/sessions/{lease_id}")
-async def validate(lease_id: UUID, request: Request):
-    lease = await owned_lease(lease_id, request)
+async def validate(lease_id: UUID, request: Request, closing: bool = False):
+    # Closed-session inspection is ownership-bound, never permission for new IO.
+    lease = await owned_lease(lease_id, request, closing=closing)
     return {
         "lease_id": str(lease.lease_id),
         "device_id": lease.device_id,
@@ -143,12 +145,31 @@ async def validate(lease_id: UUID, request: Request):
         "expires_at": lease.expires_at.isoformat(),
         "server_time": datetime.now(UTC).isoformat(),
         "scope": "files",
+        "closed": not lease.is_active(),
     }
 
 
 @router.post("/sessions/{lease_id}/signals")
 async def signal(lease_id: UUID, body: Signal, request: Request, db: Session_dep):
-    lease = await owned_lease(lease_id, request)
+    closing = body.action in ("stop", "cancel")
+    lease = await owned_lease(lease_id, request, closing=closing)
+    if closing:
+        if lease.stream_state != "fm_stopped":
+            # Revoke before requesting stop, so racing renew/tickets fail closed.
+            await lease_registry.revoke(lease_id, reason="fm_user_closed")
+            result = await navigate(lease, Navigation(action="stop", path="C:\\"))
+            if result[
+                "state"
+            ] != "completed" or not await lease_registry.confirm_files_stopped(
+                lease_id
+            ):
+                raise HTTPException(409, detail={"code": "fm_stop_unconfirmed"})
+        return {
+            "lease_id": str(lease_id),
+            "expires_at": lease.expires_at.isoformat(),
+            "stopped": True,
+            "retry_after_sec": 0,
+        }
     if body.action == "renew":
         lease = await lease_registry.touch(lease_id, lease.ttl_sec)
         if lease is None:
@@ -158,6 +179,11 @@ async def signal(lease_id: UUID, body: Signal, request: Request, db: Session_dep
     except Exception:
         await lease_registry.revoke(lease_id, reason="fm_delivery_failed")
         raise
-    finally:
-        if body.action in ("stop", "cancel"):
-            await lease_registry.revoke(lease_id, reason="fm_user_closed")
+
+
+@router.post("/sessions/{lease_id}/navigation")
+async def navigation(lease_id: UUID, body: Navigation, request: Request):
+    if body.action != "list":
+        raise HTTPException(422, "Use the session close endpoint")
+    lease = await owned_lease(lease_id, request)
+    return await navigate(lease, body)
