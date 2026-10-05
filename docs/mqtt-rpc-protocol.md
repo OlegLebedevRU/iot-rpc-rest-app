@@ -433,3 +433,12 @@ including manual-console PIN arguments. SQLAlchemy engine hides bound parameters
 Stored status_code is taken from MQTT User Properties, so l4con must emit the
 property as well as its JSON body. A used PIN is issuance, not proof of store
 installation: fresh PB mTLS discovery of the current serial provides confirmation.
+
+
+## L4FM v2 — результат интеграции 2026-10-05
+
+FM start/renew используют RPC7023, transfer —7021. RPC7020/7022/7023-stop
+отклоняются. Navigation и confirmed stop вынесены в srv/{SN}/fmc → dev/{SN}/fmr,
+v=2, command_id/lease_id/TTL, no retain; bytes/URL S3 не идут через MQTT.
+Корреляция pending/reply через Redis общая для app workers; reply до64entries/24КиБ,
+ожидание7с. [Контракт, shared lease, topology и runtime evidence](file-manager-v2.md).

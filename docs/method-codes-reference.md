@@ -415,7 +415,7 @@ pong. 7004/7005 accept canonical empty dt but native l4con returns unsupported;
 no false keepalive acknowledgment. Historical7010 is not reinterpreted.
 
 
-## FM — локальный кандидат, 2026-10-05
+## FM v2 — выпущенный контракт, 2026-10-05
 
 | method_code | Назначение | Payload dt[0] |
 |---|---|---|
@@ -424,12 +424,8 @@ no false keepalive acknowledgment. Historical7010 is not reinterpreted.
 | 7022 | Retired FM v1 cancel | Отклоняется; stop/cancel через подтверждённый fmc/fmr stop |
 | 7023 | start/renew | session_id, action, expires_at, ttl_sec; без operation_id |
 
-Consumer: l4con extra_service. Общая lease scope files; данные/URL не передаются через IoT.
-Start отправляется после PB metadata registration; renew требует current ticket ACK в PB.
-Revocation сохраняет общий слот до исходного expires_at + 5 секунд. Байты идут только agent–S3–browser,
-HTTPS агента — ProcessingBackend. Реестр обновлён по исходникам, не по deployed broker evidence.
-
-FM v2 (local follow-up, not deployed): envelope v=2 on srv/{SN}/fmc and dev/{SN}/fmr.
-Navigation carries path/offset with bounded correlated response; no file bytes/storage URLs.
-Close always revokes first and requires worker-exit ACK before releasing the shared slot early.
-Lost ACK retains expiry guard. No v1 compatibility/fallback; HTTP API namespace remains v1.
+Files монополизирует общую lease с console/stream/input/view, включая того же owner.
+Start/renew требуют PB ticket/agent ACK. Close revokes first и освобождает слот
+раньше deadline+5с только после worker-exit ACK. Байты только agent–S3–browser,
+agent HTTPS только через Leo4Proxy в PB/S3. FM v1 fallback отсутствует.
+app1 production6209faf; [полный текущий контракт, конфигурация и evidence](file-manager-v2.md).

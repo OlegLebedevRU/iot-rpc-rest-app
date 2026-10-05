@@ -64,6 +64,7 @@ packet
 | `ack` | `dev/<SN>/ack` | ✅ Подтверждение получения команды от устройства (опционально) |
 | `req` | `dev/<SN>/req` | 🔍 Запрос устройства на получение задачи из очереди |
 | `res` | `dev/<SN>/res` | 📤 Отправка результата после выполнения задачи |
+| `fmr` | `dev/<SN>/fmr` | L4FM v2: коррелированный bounded result list/stop, no retain, не file bytes |
 | `out` | `dev/<SN>/out` | 🖥️ Volatile потоковый вывод устройства: live logs, diagnostic stdout/stderr, agent output |
 | `ctl` | `dev/<SN>/ctl` | 🎮 ACK/NACK и presence агента удалённого ввода `l4desk` (retained presence) |
 
@@ -71,6 +72,7 @@ packet
 
 | Суффикс | Топик | Описание |
 |---------|-------|---------|
+| `fmc` | `srv/<SN>/fmc` | L4FM v2: list/stop, command_id + lease_id + expiry, no retain |
 | `tsk` | `srv/<SN>/tsk` | 🔔 Мгновенное уведомление устройства о новой задаче (без payload) |
 | `rsp` | `srv/<SN>/rsp` | 📥 Ответ сервера с параметрами задачи (payload) |
 | `eva` | `srv/<SN>/eva` | 🔁 Опциональное подтверждение сервером получения события (`evt`) |
@@ -95,3 +97,8 @@ packet
 | [`remote-input-protocol.md`](./remote-input-protocol.md) | Спецификация протокола удалённого ввода `l4desk` (`srv/<SN>/ctl`, `dev/<SN>/ctl`) |
 | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) | 📊 Mermaid-диаграммы: Polling, Trigger, Fail-fast |
 | [`event-protocol-mqtt.md`](./event-protocol-mqtt.md) | Протокол асинхронных событий: топики `evt`/`eva` |
+
+
+FM имеет отдельное согласованное исключение из правила «без новых server→device
+топиков» для консоли: [L4FM v2](file-manager-v2.md). Console out не изменён;
+start/renew/transfer FM сохраняют RPC7023/7021, navigation/stop идут fmc/fmr.

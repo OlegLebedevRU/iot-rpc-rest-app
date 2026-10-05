@@ -395,3 +395,9 @@ Leo4 поддерживает развёртывание полностью ав
 ---
 
 > 📧 info@platerra.ru · 🌐 https://platerra.ru · © 2026 Leo4
+
+
+### L4FM v2
+
+[Итоговый контракт файлового менеджера](docs/file-manager-v2.md): общий монопольный
+сеанс, RPC7021/7023, отдельные fmc/fmr, bounded Redis correlation и границы runtime evidence.
