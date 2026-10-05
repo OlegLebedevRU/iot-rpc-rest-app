@@ -56,6 +56,16 @@ q_ctl = RabbitQueue(
     durable=False,
     arguments=topology.ctl_queue_args,
 )
+q_fm = RabbitQueue(
+    name=topology.fm_queue_name,
+    durable=False,
+    arguments={
+        "x-message-ttl": 10000,
+        "x-max-length": 1000,
+        "x-max-length-bytes": 8 * 1024 * 1024,
+        "x-overflow": "reject-publish",
+    },
+)
 q_app = RabbitQueue(
     name=topology.app_queue_name, durable=True, arguments=topology.def_queue_args
 )
@@ -88,6 +98,7 @@ q_device_conn_events = RabbitQueue(
 
 # Список биндингов: (queue, routing_key, exchange)
 BINDINGS: List[Tuple[RabbitQueue, str, RabbitExchange]] = [
+    (q_fm, f"dev.*.{topology.suffix_fm_result}", topic_exchange),
     (q_req, topology.routing_key_dev_request, topic_exchange),
     (q_ack, topology.routing_key_dev_ack, topic_exchange),
     (q_evt, topology.routing_key_dev_event, topic_exchange),

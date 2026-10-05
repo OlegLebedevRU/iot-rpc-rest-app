@@ -24,3 +24,13 @@ Companion etranprocessing implementation includes additive PB schema 032, agent 
 S3 signed SHA256/version grants, native no-overwrite commit/receipt and standalone Classic/L4Desk /files.
 Release must coordinate common lease conflicts, consumer schema compatibility, native signing,
 provider integrity/lifecycle gates and fault canary. Local tests do not prove live delivery or drain timing.
+
+## Current follow-up: FM v2 only, 2026-10-05
+
+Working branch feature/fm-reliability-explorer, baseline f4cd4128e4f0caa33788918692f97603c6061687.
+Previous evidence above describes the original v1 implementation, not the current release candidate.
+User explicitly removed the requirement to support FM v1. List/close use separate fmc/fmr with
+strict v=2 envelopes, mandatory correlated worker-exit close ACK, no RPC listing/close fallback.
+Start/renew and transfers retain RPC 7023/7021 and PB authority. No optional confirmed_close flag.
+Redis/memory same-owner reacquire cannot renew files lease; confirmed stop cannot unlock a newer owner.
+Selected lease/navigation tests: 22 passed; selected ruff/black passed. No deploy or live broker E2E.

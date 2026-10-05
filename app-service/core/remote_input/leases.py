@@ -102,6 +102,8 @@ def lease_blocks_acquire(lease: Lease, now: datetime) -> bool:
     # A files worker may still be finishing I/O after release. Keep the shared
     # slot until its last authorised deadline plus watchdog/commit guard.
     if lease.scope == "files":
+        if lease.stream_state == "fm_stopped" and lease.revoked_reason:
+            return False
         return now < lease.expires_at + timedelta(seconds=FILES_DRAIN_GUARD_SECONDS)
     return lease.is_active(now)
 
@@ -123,6 +125,8 @@ class LeaseRegistryProtocol(Protocol):
         scope: LeaseScope = "input",
         owner_session_id: str = "",
     ) -> Lease: ...
+
+    async def confirm_files_stopped(self, lease_id: UUID) -> bool: ...
 
     async def touch(self, lease_id: UUID, ttl_sec: int) -> Lease | None: ...
 
@@ -194,7 +198,7 @@ class LeaseRegistry:
                     same_session = existing.owner_session_id == owner_session_id
                     if same_user and same_session:
                         require_compatible_scope(existing, scope)
-                        if not existing.is_active(now):
+                        if not existing.is_active(now) or existing.scope == "files":
                             raise LeaseConflictError(existing)
                         # Idempotent re-acquire
                         existing.ttl_sec = ttl_sec
@@ -255,6 +259,16 @@ class LeaseRegistry:
             lease.expires_at.isoformat(),
         )
         return lease
+
+    async def confirm_files_stopped(self, lease_id: UUID) -> bool:
+        async with self._lock:
+            lease = self._leases_by_id.get(lease_id)
+            if lease is None or lease.scope != "files" or not lease.revoked_reason:
+                return False
+            lease.stream_state = "fm_stopped"
+            if self._active_by_sn.get(lease.sn) == lease_id:
+                self._active_by_sn.pop(lease.sn, None)
+            return True
 
     async def touch(self, lease_id: UUID, ttl_sec: int) -> Lease | None:
         now = datetime.now(UTC)
@@ -662,7 +676,10 @@ class RedisLeaseRegistry:
                     existing_id_str = await client.get(active_key)
                     if existing_id_str is not None:
                         existing_hash_key = f"l4d:lease:{existing_id_str}"
-                        raw_data = await client.hgetall(existing_hash_key)
+                        # Revocation mutates the hash while deliberately retaining the
+                        # active slot during FM drain. Watch both before reading.
+                        await pipe.watch(existing_hash_key)
+                        raw_data = await pipe.hgetall(existing_hash_key)
                         if raw_data:
                             existing = _dict_to_lease(
                                 raw_data,
@@ -679,7 +696,10 @@ class RedisLeaseRegistry:
                                 )
                                 if same_user and same_session:
                                     require_compatible_scope(existing, scope)
-                                    if not existing.is_active(now):
+                                    if (
+                                        not existing.is_active(now)
+                                        or existing.scope == "files"
+                                    ):
                                         raise LeaseConflictError(existing)
                                     existing.ttl_sec = ttl_sec
                                     existing.last_keepalive_at = now
@@ -776,6 +796,33 @@ class RedisLeaseRegistry:
                 raise
 
         raise RuntimeError("Failed to acquire lease due to concurrent retries")
+
+    async def confirm_files_stopped(self, lease_id: UUID) -> bool:
+        client = self._client
+        key = f"l4d:lease:{lease_id}"
+        for _ in range(5):
+            try:
+                async with client.pipeline(transaction=True) as pipe:
+                    await pipe.watch(key)
+                    data = await pipe.hgetall(key)
+                    if (
+                        not data
+                        or data.get("scope") != "files"
+                        or not data.get("revoked_reason")
+                    ):
+                        return False
+                    active = f"l4d:lease:active:{data['sn']}"
+                    await pipe.watch(active)
+                    owner = await pipe.get(active)
+                    pipe.multi()
+                    pipe.hset(key, mapping={"stream_state": "fm_stopped"})
+                    if owner == str(lease_id):
+                        pipe.delete(active)
+                    await pipe.execute()
+                    return True
+            except WatchError:
+                continue
+        return False
 
     async def touch(self, lease_id: UUID, ttl_sec: int) -> Lease | None:
         lease_hash_key = f"l4d:lease:{lease_id}"

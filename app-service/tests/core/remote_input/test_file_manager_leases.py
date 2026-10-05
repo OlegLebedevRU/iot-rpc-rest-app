@@ -112,7 +112,7 @@ def test_file_manager_signal_requires_exact_operation_shape():
         Signal(action=action)
         with pytest.raises(ValidationError):
             Signal(action=action, operation_id=uuid4())
-    for action in ("list", "transfer", "cancel"):
+    for action in ("transfer", "cancel"):
         Signal(action=action, operation_id=uuid4())
         with pytest.raises(ValidationError):
             Signal(action=action)

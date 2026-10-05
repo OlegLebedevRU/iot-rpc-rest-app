@@ -19,6 +19,7 @@ from core.topologys.declare import (
     q_ack,
     q_app,
     q_ctl,
+    q_fm,
     q_device_conn_events,
     q_evt,
     q_out,
@@ -66,7 +67,9 @@ async def _publish_billing_for_sn(
             counter_type=counter_type,
             payload_bytes=payload_bytes,
         )
-    except Exception as e:  # noqa: BLE001 - billing failures must not discard device messages
+    except (
+        Exception
+    ) as e:  # noqa: BLE001 - billing failures must not discard device messages
         log.debug("Billing %s publish error (non-critical): %r", counter_type, e)
 
 
@@ -74,6 +77,13 @@ _REGISTER_SUBSCRIBERS = _ensure_single_registration()
 
 
 if _REGISTER_SUBSCRIBERS:
+
+    @fs_router.subscriber(q_fm)
+    async def file_manager_result(msg: RabbitMessage, sn: Sn_dep):
+        from core.file_manager_navigation import accept_result
+
+        await accept_result(sn, msg.body)
+
     # === Регистрация подписчиков ===
     @fs_router.subscriber(q_evt)
     async def add_one_event(
@@ -182,7 +192,9 @@ if _REGISTER_SUBSCRIBERS:
                     await handle_device_ctl_message(
                         routing_key=f"dev.{sn}.res", payload=raw_json
                     )
-            except Exception as error:  # noqa: BLE001 - optional control relay must not undo stored RES
+            except (
+                Exception
+            ) as error:  # noqa: BLE001 - optional control relay must not undo stored RES
                 log.debug(
                     "Optional RES control relay failed: sn=%s error=%r", sn, error
                 )
