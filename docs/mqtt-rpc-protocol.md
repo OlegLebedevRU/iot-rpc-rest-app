@@ -442,3 +442,13 @@ FM start/renew используют RPC7023, transfer —7021. RPC7020/7022/7023
 v=2, command_id/lease_id/TTL, no retain; bytes/URL S3 не идут через MQTT.
 Корреляция pending/reply через Redis общая для app workers; reply до64entries/24КиБ,
 ожидание7с. [Контракт, shared lease, topology и runtime evidence](file-manager-v2.md).
+# Transport-only channel probe
+
+The separately marked orphan REQ/RSP and fresh EVT/EVA extension is described in
+[channel-probe.md](channel-probe.md). It bypasses task/event persistence and
+billing without changing ordinary RPC semantics. No RPC command is accepted.
+
+L4Con capability polling supports7001/7002/7003/7011/7021/7023/7030–7033.
+Retired7020/7022 are not current capabilities. Addressed703x remains in the
+existing <=7099 trigger range. A completed addressed task still returns ordinary
+NOP with zero correlation, so ordinary NOP alone does not provide a nonce barrier.

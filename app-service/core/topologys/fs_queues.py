@@ -12,6 +12,7 @@ from core.remote_input.mqtt_bridge import handle_device_ctl_message
 from core.services.billing_publish import publish_billing_event
 from core.services.billing_utils import evt_billing_counter_type, publish_then_process
 from core.services.device_events_collect import DeviceEventsCollect
+from core.services.channel_probe import dispatch_probe
 from core.services.device_tasks import DeviceTasksService
 from core.services.devices import DeviceService
 from core.services.remote_session_event_service import remote_session_event_service
@@ -93,6 +94,8 @@ if _REGISTER_SUBSCRIBERS:
         corr_id: Corr_id_dep,
     ):
         # log.info("Subscribe event queue")
+        if await dispatch_probe(msg, session, sn, corr_id, event=True):
+            return
         from core import settings
 
         msg_headers = getattr(msg, "headers", {}) or {}
@@ -138,6 +141,8 @@ if _REGISTER_SUBSCRIBERS:
         sn: Sn_dep,
         corr_id: Corr_id_dep,
     ):
+        if await dispatch_probe(msg, session, sn, corr_id, event=False):
+            return
         if corr_id is None:
             log.warning("Ignoring RPC REQ without valid correlation: sn=%s", sn)
             return
