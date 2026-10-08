@@ -31,8 +31,8 @@ def evt_billing_counter_type(
     event_type_code: int,
     gauge_event_types: Iterable[int],
 ) -> str | None:
-    """Resolve EVT billing; certificate/inventory event 75 has no counter."""
-    if event_type_code == 75:
+    """Infrastructure inventory/update events have no billing counter."""
+    if event_type_code in (75, 76):
         return None
     if event_type_code != 0 and event_type_code not in gauge_event_types:
         return "evt"

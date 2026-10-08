@@ -13,10 +13,11 @@ from core.services.billing_utils import evt_billing_counter_type
 def test_certificate_inventory_has_no_billing_counter():
     assert evt_billing_counter_type(75, [44]) is None
     assert evt_billing_counter_type(75, [75]) is None
+    assert evt_billing_counter_type(76, [44]) is None
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("code", [75, 999, 44])
+@pytest.mark.parametrize("code", [75, 76, 999, 44])
 async def test_event_handler_skips_only_75_billing(monkeypatch, code):
     from core.topologys import fs_queues
 
@@ -31,7 +32,7 @@ async def test_event_handler_skips_only_75_billing(monkeypatch, code):
     session = object()
     await fs_queues.add_one_event(message, session, "event-test-device", None)
     collector.add.assert_awaited_once_with(message, corr_id=None)
-    if code == 75:
+    if code in (75, 76):
         publisher.assert_not_awaited()
     else:
         publisher.assert_awaited_once_with(
@@ -57,11 +58,12 @@ async def test_rpc_requires_correlation_before_processing(monkeypatch, handler):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("is_new", [True, False])
-async def test_inventory_payload_and_duplicate_eva(monkeypatch, is_new):
+@pytest.mark.parametrize("code", [75, 76])
+async def test_inventory_payload_and_duplicate_eva(monkeypatch, is_new, code):
     payload = {
         "101": 123,
         "102": "2026-10-01T12:00:00Z",
-        "200": 75,
+        "200": code,
         "300": [
             {
                 "324": "event-test-device",
@@ -74,11 +76,15 @@ async def test_inventory_payload_and_duplicate_eva(monkeypatch, is_new):
             }
         ],
     }
+    if code == 76:
+        payload["300"] = [
+            {"449": {"operation_id": str(uuid4()), "result": "committed"}}
+        ]
     correlation = uuid4()
     payload["correlationData"] = str(correlation)
     message = SimpleNamespace(
         headers={
-            "event_type_code": "75",
+            "event_type_code": str(code),
             "dev_event_id": "123",
             "dev_timestamp": "2026-10-01T12:00:00Z",
         },
@@ -98,13 +104,13 @@ async def test_inventory_payload_and_duplicate_eva(monkeypatch, is_new):
     )
     lookup.assert_awaited_once_with(session=session, sn="event-test-device")
     event = save.await_args.args[1]
-    assert event.device_id == 70001 and event.event_type_code == 75
+    assert event.device_id == 70001 and event.event_type_code == code
     assert event.dev_event_id == 123 and event.payload == payload
     assert event.dev_timestamp == 1790856000
     assert webhook.await_count == int(is_new)
     eva.assert_awaited_once_with(
         sn="event-test-device",
-        event_type_code=75,
+        event_type_code=code,
         dev_event_id=123,
         corr_id=correlation,
         status="success",

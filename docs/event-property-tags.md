@@ -283,3 +283,10 @@
 - [`docs/event-protocol-mqtt.md`](./event-protocol-mqtt.md) — Формат MQTT-сообщений событий, EVA, идемпотентность
 - [`docs/2-events-api-format-description.md`](./2-events-api-format-description.md) — REST API для получения событий
 - [`docs/protocol.md`](./protocol.md) — Форматы JSON-сообщений от контроллера (legacy)
+# Tag449: L4 Tools update operation
+
+Assigned 2026-10-08 exclusively to event76, in `300[0]`. Value is the entire JSON
+operation object (operation_id, kind/phase/result, versions, error and timestamps
+when available). No splitting into extra numeric tags. MQTT correlationData is
+the fresh publication identity, distinct from operation_id. Tags446–448 keep
+their existing user-event meaning. See [event types](event-types-reference.md).

@@ -374,3 +374,19 @@ UUID448 связывает историю с исходной удалённой
 | `423` | `string` | Локальный идентификатор команды (`local_command_id`) внутри Siplite-контроллера. |
 | `424` | `boolean` | Признак наличия внешнего `correlation_id` (`true`/`false`). |
 | `425` | `string` *(optional)* | Внешний идентификатор задачи (`ext_task_id`), если был передан во входном локальном запросе. |
+# Event76: L4 Tools update operation
+
+Assigned 2026-10-08. `event_type_code=76` is an infrastructure event, persisted
+through the ordinary collector (tenant ownership, device-event dedup, webhook,
+successful/error EVA). It is excluded from both evt and activity billing, like75.
+Header correlationData/dev_event_id identify the publication; original RPC7031
+task UUID is `operation_id` inside the single operation object at `300[0]["449"]`.
+Inventory event75 independently complements the result. This is not an orphan
+probe; `iot_probe` must be absent.
+
+```json
+{"101":123,"102":"2026-10-08T12:00:00Z","200":76,"300":[{"449":{"operation_id":"e48d443f-7fc4-4ff1-8d72-807cfe3c3bfb","kind":"suite","result":"committed","requested_version":"latest","resolved_version":"1.13.7","previous_version":"1.13.6","error":0}}]}
+```
+
+Delivery uses bounded producer retries and ordinary EVA; no absolute delivery
+guarantee. The object is preserved by IoT rather than translated into columns.

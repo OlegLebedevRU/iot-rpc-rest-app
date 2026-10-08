@@ -247,7 +247,18 @@ class DeviceTasksService:
                 item.isascii() and item.isdigit() for item in value.split(",")
             ):
                 requested = {int(item) for item in value.split(",")}
-                if requested and requested <= {7001, 7002, 7003, 7011}:
+                if requested and requested <= {
+                    7001,
+                    7002,
+                    7003,
+                    7011,
+                    7021,
+                    7023,
+                    7030,
+                    7031,
+                    7032,
+                    7033,
+                }:
                     method_codes = requested
         method_le = (
             self._get_method_limit(msg)
