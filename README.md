@@ -1,403 +1,91 @@
-[![Build and push images to GHCR](https://github.com/OlegLebedevRU/iot-rpc-rest-app/actions/workflows/build-and-push.yaml/badge.svg?branch=master)](https://github.com/OlegLebedevRU/iot-rpc-rest-app/actions/workflows/build-and-push.yaml)
-![Python](https://img.shields.io/badge/python-3.14-blue.svg?logo=python&logoColor=white)
-![MQTT 5](https://img.shields.io/badge/MQTT-5-purple)
-![Security](https://img.shields.io/badge/security-mTLS-success)
-![deps](https://img.shields.io/badge/deps-uv-orange)
-![Last commit](https://img.shields.io/github/last-commit/OlegLebedevRU/iot-rpc-rest-app)
-# 🌐 Leo4 IoT Platform
+<div align="center">
 
-> Транспортный фреймворк для создания защищённых систем управления и телеметрии распределённой сети кроссплатформенных IoT-устройств.
+# 🌐 LEO4 IoT Platform
 
-```
-[ЛК / App / AI-агент] ←→ [REST API + Core] ←→ [Рой устройств]
-```
+### Управление устройствами · События · Защищённые интеграции
+
+От команды в приложении до ответа устройства и наблюдаемого результата — единый контур взаимодействия для распределённой сети IoT.
+
+![Python](https://img.shields.io/badge/Python-3.14-3776AB?logo=python&logoColor=white)
+![MQTT](https://img.shields.io/badge/MQTT-5-660066)
+![REST](https://img.shields.io/badge/API-REST-009688)
+![Security](https://img.shields.io/badge/Device_security-mTLS-2E7D32)
+
+[📚 Документация](docs/README.md) · [📡 RPC](docs/mqtt-rpc-protocol.md) · [🔌 REST API](docs/rest-api.md) · [📨 События](docs/event-protocol-mqtt.md)
+
+</div>
 
 ---
 
-## 🏗️ Архитектура
+## ✨ Что даёт платформа
+
+LEO4 соединяет бизнес-приложения, серверные сервисы и AI-интеграции с устройствами через REST API и защищённый MQTT 5. Ядро управляет очередью команд, сохраняет результаты и события, предоставляет историю и отправляет уведомления.
+
+| Возможность | Для чего нужна |
+| :--- | :--- |
+| ⚡ **Асинхронные команды** | Приоритеты, ограниченный срок действия и получение результата без удержания HTTP-соединения |
+| 🔄 **Trigger + Polling** | Немедленный анонс команды и выборка очереди устройством после восстановления связи |
+| 📨 **События и телеметрия** | Датчики, действия пользователей, состояние оборудования и история операций |
+| 🔔 **Webhooks** | Передача новых событий и результатов прямо в приложение |
+| 🔐 **Идентичность устройств** | Клиентские сертификаты, mTLS и доступ к топикам своего устройства |
+| 🏢 **Организации и доступ** | API-ключи организаций, разграничение данных и отдельный межсервисный интерфейс |
+| 🖥️ **Удалённое обслуживание** | Диагностика, потоковый вывод, удалённые сеансы и файловый менеджер |
+| 🧩 **Развитие парка устройств** | Контракты для контроллеров и программных агентов, инвентаризация и сопровождение обновлений |
+
+## 🧭 Как это работает
 
 ```mermaid
 flowchart LR
-    subgraph Client["Клиент"]
-        App["App / AI-агент"]
-    end
-
-    subgraph Core["Leo4 Cloud Core"]
-        API["REST API\n+ Webhooks"]
-        Engine["RPC Engine\n+ Task Queue"]
-        Broker["MQTT 5\nBroker"]
-        API --- Engine --- Broker
-    end
-
-    subgraph Devices["IoT-устройства"]
-        D1["FreeRTOS\nESP32 / STM32"]
-        D2["Python / C# Agent\nWindows / Linux / RPi"]
-        D3["Custom MQTT 5\nDevice"]
-    end
-
-    App -->|"HTTP\ntask / events"| API
-    API -->|"Webhook\nresults / events"| App
-    Broker <-->|MQTTS mTLS| D1
-    Broker <-->|MQTTS mTLS| D2
-    Broker <-->|MQTTS mTLS| D3
+    A["Приложения и интеграции"] -->|"REST API"| C["LEO4 Core"]
+    C -->|"Webhooks"| A
+    C <--> B["RabbitMQ · MQTT 5"]
+    B <-->|"mTLS"| D["Устройства и агенты"]
+    C <--> H["История задач и событий"]
 ```
 
----
+**Команда → ответ → факт.** Приложение создаёт задачу, устройство получает её и возвращает результат RPC. Отдельное событие сообщает о наблюдаемом изменении: например, датчик подтверждает открытие двери. Эти сигналы позволяют приложению различать ответ на команду и физический результат.
 
-## ✨ Ключевые принципы
+## 🎯 Где применять
 
-| | |
-|---|---|
-| 🔗 **Loose Coupling** | Событийная модель, слабосвязанные устройства |
-| 🔑 **PKI / x509** | Сквозная адресация устройств через сертификаты |
-| ⚡ **Async RPC** | Очередь задач с приоритетами и TTL |
-| 🔄 **Push + Pull** | Двойная стратегия доставки для нестабильных сетей |
-| 🛡️ **Security** | mutual TLS, JWT (RSA), API-ключи, ACL брокера |
-| 🤖 **AI-ready** | REST + Webhooks совместимы с Function Calling / MCP |
-| 🦾 **Robotics-ready** | Полный стек для роботов: OTA (ESP32 + STM32), NFC / HMI / реле, SIP-голос, RTP-видео, AI-native MCP, физическое подтверждение действий |
-| 🏭 **Serial Production** | Автоматизированный конвейер серийного производства: bulk-выпуск сертификатов, прошивка, регистрация и онбординг устройств |
-| 🔏 **Stand-alone CA / Auth** | Автономные (offline/air-gapped) центры сертификации и авторизации — полный контроль PKI без зависимости от внешних сервисов |
+| Сценарий | Что связывает LEO4 |
+| :--- | :--- |
+| 📦 **Постаматы и системы доступа** | Команды замкам, состояния ячеек, идентификаторы и события датчиков |
+| 🏭 **Распределённое оборудование** | Управление контроллерами, телеметрия и интеграция с прикладными системами |
+| 🛠️ **Обслуживание терминалов** | Диагностика, удалённые сеансы, работа с файлами и инвентаризация ПО |
+| 🤖 **Автоматизация и AI** | Вызовы REST, результаты задач и события для внешних сценариев и ассистентов |
 
----
+Поддержка конкретной команды зависит от прошивки или агента устройства. [Реестр методов](docs/method-codes-reference.md) и [реестр событий](docs/event-types-reference.md) помогают выбрать подходящий контракт.
 
-## 📚 Документация
+## 📚 Начните с нужного маршрута
 
-### Протоколы и API
+| Ваша задача | Документ |
+| :--- | :--- |
+| Познакомиться с интерфейсами платформы | [🧭 Навигатор документации](docs/README.md) |
+| Подключить приложение или сервер | [🔌 Обзор REST API](docs/rest-api.md) · [Руководство интеграции](docs/server-integration-guide.md) |
+| Реализовать обмен на устройстве | [📡 MQTT RPC](docs/mqtt-rpc-protocol.md) · [События MQTT](docs/event-protocol-mqtt.md) |
+| Получать результаты и историю | [📋 Задачи](docs/1-task-workflow-doc.md) · [События REST](docs/2-events-api-format-description.md) · [Webhooks](docs/3-webhooks.md) |
+| Разобраться с удалённым обслуживанием | [🖥️ Диагностика](docs/remote-diagnostics-protocol.md) · [Удалённый ввод](docs/remote-input-protocol.md) · [Файловый менеджер](docs/file-manager-v2.md) |
+| Работать с репозиторием | [🛠️ Участие в разработке](CONTRIBUTING.md) · [Безопасность](SECURITY.md) |
 
-| Документ | Описание |
-|---|---|
-| 📡 [**RPC-протокол (MQTT v5)**](./docs/mqtt-rpc-protocol.md) | Асинхронный RPC поверх MQTT 5: топики, correlation data, Polling & Trigger |
-| 🎮 [**Remote Input & Stream Control Protocol (`ctl`, `l4desk`)**](./docs/remote-input-protocol.md) | Единая монопольная аренда (Unified Lease), управление видеотрансляцией, control-plane `ctl`, инвентарь, presence, ACK/NACK, rate limits |
-| 🔢 [**Справочник method_code**](./docs/method-codes-reference.md) | Единый источник истины по `method_code`, совместимости `Platerra` / `Siplite` / `l4-hmi`, форматам `payload.dt` и ответам `res` |
-| 📋 [**REST API: задачи (task workflow)**](./docs/1-task-workflow-doc.md) | HTTP-интерфейс управления задачами: touch_task, статусы, вебхуки |
-| 📨 [**API событий устройств (events)**](./docs/2-events-api-format-description.md) | Получение асинхронных событий и телеметрии через REST |
-| 🔔 [**Webhooks**](./docs/3-webhooks.md) | Push-уведомления о результатах задач и событиях |
+## 🗂️ Что в репозитории
 
-### Диаграммы и сценарии
+| Каталог | Содержание |
+| :--- | :--- |
+| `app-service/` | Ядро платформы: API, обработка сообщений и доменная логика |
+| `docs/` | Протоколы, интеграции, справочники и эксплуатационные руководства |
+| `rmq/`, `docker-files/`, `deploy/` | Конфигурация брокера, контейнеризация и выпуск сервиса |
+| `l4desk-service/` | Сервис удалённых сеансов и его документация |
+| `examples/`, `device-emulator/` | Примеры клиентов и эмулятор устройства |
+| `mcp/`, `robotics/` | MCP-интеграция и материалы по роботизированным сценариям |
 
-| Документ | Описание |
-|---|---|
-| 🔀 [**Sequence диаграммы**](./docs/sequence.md) | End-to-end сценарии: touch_task → MQTT RPC → result |
-| 🗂️ [**Состояния задачи**](./docs/task_states.md) | State machine задачи: READY → PENDING → LOCK → DONE/FAILED |
-| 📊 [**Граф клиентского потока RPC**](./docs/mqtt-rpc-client-flow.md) | Mermaid-диаграммы: Polling, Trigger, Fail-fast |
-| 🧬 [**Матрица correlation data**](./docs/mqtt-rpc-correlation-matrix.md) | Где и как передаётся `correlationData` в `tsk` / `req` / `rsp` / `res` / `cmt` |
+**Основа ядра:** Python 3.14 · FastAPI · FastStream · PostgreSQL · RabbitMQ · Redis · Docker Compose.
 
-### Интеграция
-
-| Документ | Описание |
-|---|---|
-| 🤖 [**AI-агент: руководство**](./docs/ai-agent-integration-guide.md) | Подключение LLM, MCP-сервера или чат-бота к Leo4 API |
-| 🖥️ [**Серверная интеграция**](./docs/server-integration-guide.md) | Руководство по интеграции серверной стороны с IoT RPC |
-| 🟠 [**Серверная интеграция: Kotlin + Spring Boot**](./docs/server-integration-guide-kotlin-spring.md) | Пример интеграции на Kotlin + Spring Boot |
-| 🤖 [**Robotics**](./robotics/marketing-overview.md) | LEO4 Robotics Platform: управление автономными устройствами и роботами |
-
-### Операции и деплой
-
-| Документ | Описание |
-|---|---|
-| 🚀 [**Runbook: ручной деплой `app1`**](./docs/manual-app1-deploy-runbook.md) | Безопасный деплой `app1`: сборка напрямую на хосте (`docker compose build app1`), альтернативный деплой из GHCR, backup/rollback и проверки |
-| 🛡️ [**Runbook: деплой инфраструктуры RabbitMQ и сетей**](./docs/manual-infra-and-rmq-deploy-runbook.md) | Безопасный деплой инфраструктуры брокера (`rabbitmq.conf`, `definitions.json`), общих Docker-сетей (`iot_rabbitmq_network`), Nginx-прокси и zero-data-loss бэкапы/проверки |
-| 🧭 [**План деплоя**](./docs/deploy-plan.md) | Архитектура деплоя (сборка на хосте / GHCR по запросу), пошаговые сценарии и план автоматизации |
-
-### Обзор платформы
-
-| Документ | Описание |
-|---|---|
-| 🎯 [**Презентация решения**](./docs/solution-presentation.md) | Полный обзор платформы: концепция, архитектура, сценарии |
-| 🕸️ [**Leo4 Autonomous Mesh**](./docs/autonomous-mesh.md) | Автономная отказоустойчивая сеть из N идентичных ARM64-копий платформы (обычно 3–5) с реактивным оркестратором без состояния |
-| ⏱️ [**TTL**](./docs/TTL.md) | Правила декремента TTL, поллинг и поведение при TTL=0 |
-| 🏷️ [**Типы событий**](./docs/event-types-reference.md) | Реестр `event_type_code`, включая `L4HmiEvent` для результата обновления UI-каталога |
-| 🏷️ [**Теги событий**](./docs/event-property-tags.md) | Справочник числовых тегов payload событий устройств |
-
-> ℹ️ Для RPC-интеграций начните со связки: [`mqtt-rpc-protocol.md`](./docs/mqtt-rpc-protocol.md) → [`method-codes-reference.md`](./docs/method-codes-reference.md) → [`mqtt-rpc-client-flow.md`](./docs/mqtt-rpc-client-flow.md).
-> 🆕 Для кейса `l4-hmi` + `method_code=17` (`UI-Catalog`) смотрите также [`event-types-reference.md`](./docs/event-types-reference.md) и [`event-property-tags.md`](./docs/event-property-tags.md).
+Документация основных интерфейсов сверена с кодом `master` 9 октября 2026 года. Правила эксплуатации и выпуска сервиса вынесены в [runbook](docs/manual-app1-deploy-runbook.md).
 
 ---
 
-## ⚙️ Конфигурация FastStream / RabbitMQ
+<div align="center">
 
-### Автозамена хоста брокера (host-rewrite)
+📧 [info@platerra.ru](mailto:info@platerra.ru) · 🌐 [platerra.ru](https://platerra.ru)
 
-При запуске `app1` внутри docker compose, если в `APP_CONFIG__FASTSTREAM__URL` указан
-**внешний** хост (не `rabbitmq`, `localhost`, `127.0.0.1`, `host.docker.internal`),
-сервис автоматически заменяет хост и порт на адрес compose-сервиса.
-Учётные данные, vhost и query-параметры **сохраняются**.
-Пароль **никогда не попадает в логи** (маскируется как `***`).
-
-| Переменная | По умолчанию | Описание |
-|---|---|---|
-| `APP_CONFIG__FASTSTREAM__URL` | — | AMQP URL брокера; пароль задаётся только через env/`.env` |
-| `APP_CONFIG__FASTSTREAM__REWRITE_EXTERNAL_HOST_TO_COMPOSE` | `true` | Включить автозамену внешнего хоста |
-| `APP_CONFIG__FASTSTREAM__COMPOSE_HOST` | `rabbitmq` | Целевой хост после замены |
-| `APP_CONFIG__FASTSTREAM__COMPOSE_PORT` | `5672` | Целевой порт после замены |
-
-### Retry / backoff при подключении к брокеру
-
-`broker.start()` на старте сервиса выполняется в цикле с экспоненциальным
-откатом + jitter, чтобы кратковременная недоступность RabbitMQ не приводила
-к краху воркера gunicorn.
-
-| Переменная | По умолчанию | Описание |
-|---|---|---|
-| `APP_CONFIG__FASTSTREAM__CONNECT_MAX_RETRIES` | `30` | Макс. попыток (`-1` = бесконечно) |
-| `APP_CONFIG__FASTSTREAM__CONNECT_INITIAL_DELAY` | `0.5` | Начальная задержка, с |
-| `APP_CONFIG__FASTSTREAM__CONNECT_MAX_DELAY` | `10.0` | Максимальная задержка, с |
-| `APP_CONFIG__FASTSTREAM__CONNECT_BACKOFF_FACTOR` | `2.0` | Множитель экспоненты |
-| `APP_CONFIG__FASTSTREAM__CONNECT_JITTER` | `0.2` | Коэффициент случайного разброса |
-| `APP_CONFIG__FASTSTREAM__CONNECT_TIMEOUT` | `5.0` | Тайм-аут одной попытки, с (`0` = без тайм-аута) |
-
-> **Учётные данные** (`RABBITMQ_USER`, `RABBITMQ_PASSWORD`) передаются только через
-> переменные окружения или локальный файл `.env` (не коммитится в git).
-
----
-
-## 💻 Примеры и симуляторы
-
-> Все примеры используют двустороннюю SSL-аутентификацию (mutual TLS)
-
-### 🐍 Python
-- [`mqtt5-paho-full-rpc-client-example.py`](./examples/mqtt5-paho-full-rpc-client-example.py) — полный RPC-клиент на paho-mqtt
-- [`mini-native-paho-mqttv5-corrdata-client.py`](./examples/mini-native-paho-mqttv5-corrdata-client.py) — минимальный пример с correlation data
-- [`rpc-client-example.py`](./examples/rpc-client-example.py) — базовый пример клиента
-
-### 🐍 Device emulator (python)
-- [`device-emulator/`](./device-emulator/) — Device emulator (mock RPC method 51 + healthcheck/test events)
-
-### 🔷 C# / .NET
-- [`rpc-client-example.cs`](./examples/rpc-client-example.cs) — RPC-клиент на .NET
-- [`rpc-client-native-correlation-example.cs`](./examples/rpc-client-native-correlation-example.cs) — native correlation data
-- [`rpc-client-extract-SN-from-cert-example.cs`](./examples/rpc-client-extract-SN-from-cert-example.cs) — извлечение SN из сертификата
-
-### ⚙️ C / Windows
-- [`c-win-clion-rpc-client/`](./examples/c-win-clion-rpc-client/) — RPC-клиент для Windows
-
-### ⚙️ C / FreeRTOS
-- Siplite — RPC-клиент + SIP + WebRTC для ESP32/STM32 (по запросу)
-
-### 🎮 Сценарии устройств
-
-| Платформа | Сценарий |
-|---|---|
-| 🖥️ Windows / Linux | Удалённая отправка файла в Telegram, запись экрана (ffmpeg), запуск произвольных команд |
-| 🐍 Python Agent | Удалённый запуск fullscreen-формы (tkinter), выполнение произвольного кода, WebRTC-стриминг с Raspberry Pi |
-| 📟 ESP32 (ESP-IDF) | PWM-управление LED, RS-485, SIP-звонок (ESP-ADF), управление постаматом |
-| 🔬 STM32 | Удалённый запуск измерений с кастомными параметрами, передача массива данных |
-
----
-
-## 📊 Diagrams (some use cases)
-
-### 🔬 STM32 | Cloud Bootloader
-
-> Обновление прошивки STM32 через облако: ESP32 выступает хостом и передаёт прошивку на STM32 по шине I2C / UART / SPI.
-
-```mermaid
-sequenceDiagram
-    participant Cloud as ☁️ Leo4 Cloud
-    participant ESP32 as 📟 ESP32 Host
-    participant STM32 as 🔬 STM32
-
-    Cloud->>ESP32: RPC: flash_firmware(fw_chunk[]) via MQTTS
-    activate ESP32
-    ESP32->>ESP32: Validate & buffer firmware
-    loop I2C / UART / SPI transfer
-        ESP32->>STM32: Bootloader protocol: send chunk
-        STM32-->>ESP32: ACK / NACK
-    end
-    ESP32->>STM32: Boot command (reset to app)
-    STM32-->>ESP32: Boot OK
-    deactivate ESP32
-    ESP32->>Cloud: RPC result: flash_ok / flash_error
-```
-
----
-
-### 🔊 TTS Voice-Terminal | Chat → Cloud AI → TTS.MP3 → Player
-
-> Голосовой терминал: текстовый чат отправляется в облачный AI, ответ синтезируется в MP3 и воспроизводится на устройстве через Leo4 RPC-сигнализацию.
-
-```mermaid
-sequenceDiagram
-    participant User  as 💬 Chat / App
-    participant Leo4  as ☁️ Leo4 API
-    participant AI    as 🤖 Cloud AI (LLM)
-    participant TTS   as 🔉 TTS Service
-    participant Dev   as 🔊 Player Device
-
-    User->>Leo4: POST /task  { method: tts_speak, text: "..." }
-    Leo4->>AI: Chat completion request
-    AI-->>Leo4: AI response text
-    Leo4->>TTS: Synthesize speech → MP3
-    TTS-->>Leo4: audio.mp3 (URL / bytes)
-    Leo4->>Dev: RPC via MQTT: play_audio(url)
-    Dev-->>Leo4: RPC result: playback_done
-    Leo4-->>User: Webhook / poll result
-```
-
----
-
-### 🤖 AI | Bulk Telemetry → Decision → Escalation → Group Task / OTA
-
-> AI массово принимает через Leo4 IoT Platform временные ряды данных и онлайн-показатели от периферии, обрабатывает их, принимает решение и эскалирует важное на ответственного, затем формирует групповое задание (включая новую прошивку MCU) и отправляет его на сегменты устройств.
-
-```mermaid
-sequenceDiagram
-    participant Devs  as 📡 IoT Devices<br/>(periphery segment)
-    participant Leo4  as ☁️ Leo4 IoT Platform
-    participant AI    as 🤖 AI Agent
-    participant Resp  as 👤 Responsible<br/>(operator / manager)
-
-    Note over Devs,Leo4: Continuous telemetry stream
-    loop Time-series & online metrics
-        Devs->>Leo4: MQTT event: sensor_data {ts, values[]}
-        Leo4-->>AI: Webhook / poll: telemetry batch
-    end
-
-    Note over AI: Analyse time-series,<br/>detect anomalies / thresholds
-    AI->>AI: Process & decide
-
-    alt Critical anomaly detected
-        AI->>Resp: Escalation alert<br/>(email / push / messenger)
-        Resp-->>AI: Acknowledge / approve action
-    end
-
-    Note over AI,Leo4: Form group task for device segment
-    AI->>Leo4: POST /task {method: group_command OR flash_firmware,<br/>targets: [segment_id], payload: {fw_chunk[] / params}}
-    Leo4->>Devs: RPC via MQTTS: execute task<br/>(group_command / flash_firmware)
-    activate Devs
-    Devs->>Devs: Execute command or apply OTA firmware
-    Devs-->>Leo4: RPC result: ok / error
-    deactivate Devs
-    Leo4-->>AI: Webhook: task results summary
-    AI->>Resp: Final report (success / failures)
-```
-
----
-
-## 🏭 Сценарий и автоматизация серийного производства
-
-> Платформа поддерживает полный цикл серийного выпуска IoT-устройств: от генерации сертификатов и прошивки на конвейере до автоматической регистрации и онбординга в облаке.
-
-```mermaid
-sequenceDiagram
-    participant Factory  as 🏭 Производственная линия
-    participant CA       as 🔏 Stand-alone CA<br/>(offline / air-gapped)
-    participant Auth     as 🔐 Stand-alone<br/>Auth Center
-    participant Flasher  as ⚡ Прошивальщик
-    participant Device   as 📟 Устройство
-    participant Cloud    as ☁️ Leo4 Cloud
-
-    Note over Factory,CA: Подготовка пакета сертификатов (bulk)
-    Factory->>CA: Запрос на выпуск N сертификатов (device_id, SN)
-    CA-->>Factory: device.crt + device.key (x509, уникальный SN)
-
-    Note over Factory,Flasher: Прошивка и персонализация
-    Factory->>Flasher: Прошивка + сертификат + конфиг (Wi-Fi, broker URL)
-    Flasher->>Device: Flash: firmware + PKI bundle + config
-    Device-->>Flasher: Flash OK
-
-    Note over Device,Auth: Первый запуск — автоматический онбординг
-    Device->>Auth: mTLS-запрос: предъявление device.crt
-    Auth-->>Device: JWT-токен доступа (ограниченные права, onboarding scope)
-
-    Device->>Cloud: POST /register  { sn, fw_version, hw_rev } + JWT
-    Cloud-->>Device: 200 OK — устройство зарегистрировано, получены ACL-правила
-
-    Note over Device,Cloud: Штатная работа
-    Device->>Cloud: MQTTS (mTLS): подключение к брокеру, публикация телеметрии
-    Cloud-->>Device: RPC-команды, OTA-обновления
-```
-
----
-
-## 🕸️ Leo4 Autonomous Mesh
-
-> Автономная архитектура для замкнутых контуров: несколько одинаковых ARM64-копий Leo4, единый VIP-адрес с разными портами, реактивный оркестратор без состояния на каждой копии и идемпотентный RPC на устройствах.
-
-Leo4 Autonomous Mesh ориентирован на сценарии, где важны локальная отказоустойчивость и независимость от внешней инфраструктуры. Копии платформы разворачиваются в усечённом виде (без JWT-контура, без `nginx-mutual`, без `avahi`, без Let's Encrypt/`certbot`) и остаются полностью взаимозаменяемыми.
-Модель рассчитана на изолированный контур с mTLS и закрытым периметром доверия. При отказе от JWT безопасность обеспечивается PKI-подходом и сетевой сегментацией контура (подробнее — в [документе Leo4 Autonomous Mesh](./docs/autonomous-mesh.md)).
-
-Вся устойчивость достигается простой избыточностью: устройство подключено только к одной копии одновременно, при отказе мгновенно переключается на другой порт того же VIP, а идемпотентное исполнение RPC-команд сохраняет детерминированный итоговый эффект.
-
-| Принцип | Выгода |
-|---|---|
-| N идентичных копий + единый VIP | Быстрое восстановление без сложной межузловой координации |
-| Идемпотентный RPC на устройстве | Exactly-once effect на фактическом исполнении |
-| Stateless-оркестратор на каждой копии | Нет зависимости от репликации и общего состояния |
-| Автономный контур | Работа без облака, интернета и внешнего ACME/DNS |
-
-```mermaid
-flowchart TB
-    subgraph FIELD["Полевой слой"]
-        direction LR
-        D["Сотни-тысячи устройств<br/>датчики и актуаторы<br/>идемпотентный RPC"]
-    end
-
-    VIP["Единый VIP-адрес<br/>порты 8883, 8884, 8885..."]
-    CERT["Общие сертификаты и список устройств<br/>для всех копий"]
-
-    subgraph MESH["Leo4 Autonomous Mesh"]
-        direction LR
-        N1["Копия #1<br/>nginx ARM64, Core app,<br/>MQTT-брокер, локальная БД,<br/>оркестратор без состояния"]
-        N2["Копия #2<br/>nginx ARM64, Core app,<br/>MQTT-брокер, локальная БД,<br/>оркестратор без состояния"]
-        N3["Копия #3..N<br/>nginx ARM64, Core app,<br/>MQTT-брокер, локальная БД,<br/>оркестратор без состояния"]
-    end
-
-    D -->|"подключение"| VIP
-    VIP --> N1
-    VIP --> N2
-    VIP --> N3
-    D -. "failover на другой порт VIP" .-> VIP
-    CERT -.-> MESH
-```
-
-Подробнее: [docs/autonomous-mesh.md](./docs/autonomous-mesh.md)
-
----
-
-
-## 🔐 Безопасность
-
-### Транспортная и прикладная защита
-
-- **mutual TLS (mTLS)** — двусторонняя аутентификация: сервер и каждое устройство предъявляют сертификаты
-- **PKI (x509)** — сквозная адресация устройств; серийный номер устройства = CN сертификата
-- **JWT (RSA)** — авторизация API-клиентов и серверных приложений
-- **RabbitMQ ACL** — строгие политики маршрутизации на уровне MQTT-брокера (топики per-device)
-- **nginx** — TLS-терминация, JWT-валидация, rate limiting, IP-фильтрация
-
-### 🔏 Автономные центры сертификации и авторизации (Stand-alone CA / Auth)
-
-Leo4 поддерживает развёртывание полностью автономной PKI-инфраструктуры без зависимости от публичных удостоверяющих центров или облачных сервисов:
-
-| Компонент | Описание |
-|---|---|
-| **Root CA (offline)** | Корневой УЦ хранится в изолированной (air-gapped) среде; используется только для подписания Intermediate CA |
-| **Intermediate CA** | Оперативный УЦ для выпуска сертификатов устройств и серверов; может работать в закрытом сегменте производственной сети |
-| **Device CA** | Выделенный УЦ для массового выпуска клиентских сертификатов на конвейере (bulk provisioning) |
-| **Stand-alone Auth Center** | Сервис авторизации (JWT / OAuth2) без внешних зависимостей; поддерживает scoped-токены для onboarding, телеметрии и управления |
-| **CRL / OCSP (опционально)** | Списки отзыва сертификатов и OCSP-ответчик для своевременного отзыва скомпрометированных устройств |
-
-> Такая архитектура позволяет развернуть платформу в закрытых сетях (промышленные объекты, военная и медицинская техника, критическая инфраструктура) с полным контролем над цепочкой доверия.
-
----
-
-## 🛠️ Технологический стек
-
-`Python 3` · `FastAPI` · `FastStream` · `PostgreSQL` · `RabbitMQ + MQTT 5` · `nginx` · `Docker Compose` · `PKI (x509)`
-
----
-
-## 🎛️ Контроллеры
-
-`STM32` · `ESP32` · `C` · `FreeRTOS` · `ESP-IDF` · `ESP-ADF`
-
----
-
-> 📧 info@platerra.ru · 🌐 https://platerra.ru · © 2026 Leo4
-
-
-### L4FM v2
-
-[Итоговый контракт файлового менеджера](docs/file-manager-v2.md): общий монопольный
-сеанс, RPC7021/7023, отдельные fmc/fmr, bounded Redis correlation и границы runtime evidence.
+</div>

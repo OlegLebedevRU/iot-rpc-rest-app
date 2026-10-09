@@ -1,104 +1,38 @@
-# 📡 MQTT Topic Rules
+# 🗺️ MQTT · Карта топиков
 
-> **Файл:** `docs/mqtt_topic_rules.md`
+> `dev/<SN>/<action>` — от устройства; `srv/<SN>/<action>` — к устройству. SN соответствует CN сертификата.
 
----
+[← Документация](README.md) · [RPC](mqtt-rpc-protocol.md) · [События](event-protocol-mqtt.md)
 
-## ⚠️ Важно
+## 📡 Основной обмен
 
-Правила именования топиков являются обязательными. Определения RabbitMQ накладывают ограничения на доступ устройств к топикам на основе серийных номеров устройств. Серийный номер встроен в сертификат x509 (поле `CN`).
+| От устройства | К устройству | Назначение |
+| :--- | :--- | :--- |
+| `dev/<SN>/req` | `srv/<SN>/rsp` | Выборка задачи и передача полного конверта параметров |
+| `dev/<SN>/ack` | `srv/<SN>/tsk` | ACK анонса; ACK необязателен, TSK публикуется сервером |
+| `dev/<SN>/res` | `srv/<SN>/cmt` | Результат и подтверждение его сохранения |
+| `dev/<SN>/evt` | `srv/<SN>/eva` | Событие и прикладное подтверждение при подходящих headers |
 
----
+MQTT topic `dev/a3b1234567c10221d290825/req` соответствует AMQP routing key `dev.a3b1234567c10221d290825.req`. Не добавляйте начальный `/`. Используйте фактический SN сертификата и согласованные ACL, а не фиксированную длину из примера.
 
-## 🏗️ Шаблон имени топика
+## 🛠️ Обслуживание и управление
 
-### Пример
+| Топик | Назначение | Контракт |
+| :--- | :--- | :--- |
+| `dev/<SN>/out` | Volatile вывод логов, stdout/stderr диагностики | [Remote Diagnostics](remote-diagnostics-protocol.md) |
+| `srv/<SN>/ctl` | Команды удалённого ввода и control plane | [Remote Input](remote-input-protocol.md) |
+| `dev/<SN>/ctl` | Presence и ACK/NACK агента | [Remote Input](remote-input-protocol.md) |
+| `srv/<SN>/fmc` | L4FM v2: навигация и подтверждённая остановка | [Файловый менеджер](file-manager-v2.md) |
+| `dev/<SN>/fmr` | Ограниченный по размеру коррелированный ответ L4FM | [Файловый менеджер](file-manager-v2.md) |
 
-```
-MQTT topic:         dev/a3b0000000c10221d290825/req
-RabbitMQ routing-key: dev.a3b0000000c10221d290825.req
-```
+`out` — поток без истории DeviceEvent. Управление диагностикой остаётся в RPC. `ctl` имеет собственные lease/TTL/ACK правила; presence может быть retained, команды сервера — без retain. `fmc/fmr` — отдельное исключение для L4FM v2, без retain: файлы и S3 URL через эти топики не передаются.
 
-> Символы `/` в MQTT-топике транслируются в `.` при передаче в RabbitMQ routing-key.
+## 🔐 Идентичность и ограничения
 
-### Структура
+Используйте только топики своего SN. Идентичность задаётся сертификатом и маршрутизацией брокера; SN в payload не заменяет transport identity. MQTT client ID совпадает с SN.
 
-```mermaid
----
-title: "Topic name template"
----
-packet
-+3: "Direction prefix"
-+1: "/"
-+23: "Device Serial number"
-+1: "/"
-+3: "Action type suffix"
-```
+У разных planes разные гарантии доставки, сроки и корреляция. Не переносите правила `ctl` или `fmc/fmr` на RPC. Суффиксы `app/svc` не описывают публичный RPC-контракт.
 
-| Поле | Длина | Описание |
-|------|:-----:|---------|
-| `Direction prefix` | 3 | Направление сообщения: `srv` или `dev` |
-| `/` | 1 | Разделитель |
-| `Device Serial Number` | 23 | Уникальный серийный номер устройства из CN сертификата |
-| `/` | 1 | Разделитель |
-| `Action type suffix` | 3 | Тип сообщения/действия |
+[Channel Probe](channel-probe.md) работает на существующих `req/rsp/evt/eva` с обязательным marker `iot_probe=1`; новые топики для него не вводятся.
 
----
-
-## 🔼 Префиксы направления
-
-| Префикс | Направление | Описание |
-|---------|:-----------:|---------|
-| `dev` | Device → Server | Сообщения от **устройства** к серверу |
-| `srv` | Server → Device | Сообщения от **сервера** к устройству |
-
----
-
-## 📨 Суффиксы действий
-
-### Device → Server (`dev/<SN>/...`)
-
-| Суффикс | Топик | Описание |
-|---------|-------|---------|
-| `evt` | `dev/<SN>/evt` | 📢 Событие от устройства (вне RPC-цикла) |
-| `ack` | `dev/<SN>/ack` | ✅ Подтверждение получения команды от устройства (опционально) |
-| `req` | `dev/<SN>/req` | 🔍 Запрос устройства на получение задачи из очереди |
-| `res` | `dev/<SN>/res` | 📤 Отправка результата после выполнения задачи |
-| `fmr` | `dev/<SN>/fmr` | L4FM v2: коррелированный bounded result list/stop, no retain, не file bytes |
-| `out` | `dev/<SN>/out` | 🖥️ Volatile потоковый вывод устройства: live logs, diagnostic stdout/stderr, agent output |
-| `ctl` | `dev/<SN>/ctl` | 🎮 ACK/NACK и presence агента удалённого ввода `l4desk` (retained presence) |
-
-### Server → Device (`srv/<SN>/...`)
-
-| Суффикс | Топик | Описание |
-|---------|-------|---------|
-| `fmc` | `srv/<SN>/fmc` | L4FM v2: list/stop, command_id + lease_id + expiry, no retain |
-| `tsk` | `srv/<SN>/tsk` | 🔔 Мгновенное уведомление устройства о новой задаче (без payload) |
-| `rsp` | `srv/<SN>/rsp` | 📥 Ответ сервера с параметрами задачи (payload) |
-| `eva` | `srv/<SN>/eva` | 🔁 Опциональное подтверждение сервером получения события (`evt`) |
-| `ctl` | `srv/<SN>/ctl` | 🎮 Оперативные команды удалённого ввода: pointer_move/mouse_click/mouse_drag/mouse_wheel и клавиатура, QoS 1, без retain |
-
-> Для remote diagnostics, live logs и ограниченной диагностической консоли не вводятся дополнительные
-> server→device топики. Управление потоками и диагностическими командами выполняется через существующий
-> RPC lifecycle (`tsk`/`req`/`rsp`/`res`). Потоковый вывод устройства публикуется в `dev/<SN>/out`.
-> 
-> **Внимание:** Инфраструктура удалённого управления вводом (Remote Input, агент `l4desk`) вынесена в отдельный
-> выделенный канал управления `srv/<SN>/ctl` и `dev/<SN>/ctl`. Она **не** использует RPC (`tsk/req/rsp/res`),
-> не проходит через потоковый лог `out` и не порождает событий `DeviceEvent`.
-
----
-
-## 📚 Связанные документы
-
-| Файл | Назначение |
-| :-- | :-- |
-| [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md) | Полная спецификация RPC-протокола на базе MQTT v5 |
-| [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md) | Live logs и remote diagnostics через `dev/<SN>/out` без новых server→device топиков |
-| [`remote-input-protocol.md`](./remote-input-protocol.md) | Спецификация протокола удалённого ввода `l4desk` (`srv/<SN>/ctl`, `dev/<SN>/ctl`) |
-| [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) | 📊 Mermaid-диаграммы: Polling, Trigger, Fail-fast |
-| [`event-protocol-mqtt.md`](./event-protocol-mqtt.md) | Протокол асинхронных событий: топики `evt`/`eva` |
-
-
-FM имеет отдельное согласованное исключение из правила «без новых server→device
-топиков» для консоли: [L4FM v2](file-manager-v2.md). Console out не изменён;
-start/renew/transfer FM сохраняют RPC7023/7021, navigation/stop идут fmc/fmr.
+**Реализация:** [конфигурация](../app-service/core/config.py) · [подписчики](../app-service/core/topologys/fs_queues.py) · [публикация RPC](../app-service/core/services/device_task_processing.py). Сверено с `master` на 09.10.2026.

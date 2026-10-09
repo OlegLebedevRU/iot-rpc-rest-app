@@ -1,35 +1,48 @@
-# Task TTL in MQTT RPC
+# ⏱️ TTL · Срок действия задачи
 
-`ttl` is measured in minutes and remains part of the REST and MQTT task header.
-The server stores an internal `expires_at` deadline in PostgreSQL. A periodic job
-marks overdue active tasks `EXPIRED`; repeated or delayed job runs do not change
-the deadline. REQ checks the deadline itself, so an overdue task cannot be
-dispatched while waiting for that job.
+> Минуты во внешнем контракте, абсолютный deadline на сервере.
 
-For `ttl > 0`, the deadline is task creation plus `ttl` minutes. REST GET and
-LIST report the remaining minutes rounded up while the task is active. Polling uses
-the following order: `priority DESC`, remaining minutes `ASC`, creation time
-`ASC`. Polling excludes `ttl=0` tasks and expired deadlines.
+[← Документация](README.md) · [RPC](mqtt-rpc-protocol.md) · [Состояния](task_states.md)
 
-`ttl=0` is a trigger-only, short-lived task. It can be requested by its task
-UUID following `tsk` for at most one minute after creation. The external TTL
-field stays `0`; the minute is an internal trigger window. Polling with the
-zero UUID never selects it. A late REQ receives the normal no-task response.
+## 🧭 Два режима
 
-An incoming RES is stored and acknowledged even if its task has become
-`EXPIRED`; the status stays `EXPIRED`. A new result received no later than three
-minutes after `expires_at` creates the normal `msg-task-result` webhook message.
-A later result is stored and acknowledged without creating a webhook. Delivery
-of a webhook already created follows the webhook subsystem's own rules. A
-duplicate RES receives the original `result_id` in CMT and creates no new
-result or webhook. After DELETE, RES is stored and acknowledged; status stays
-`DELETED` and no webhook is created.
+| TTL при создании | Выборка | Срок |
+| :--- | :--- | :--- |
+| `> 0` | Trigger и Polling | Создание + TTL в минутах |
+| `0` | Только адресный REQ после TSK | Не более одной минуты после создания; внешний TTL остаётся `0` |
 
-For tasks already `EXPIRED` before the deadline migration, the historical
-expiration instant cannot be reconstructed from the old minute counter. Their
-deadline is left unknown; late results on these records are still stored and
-acknowledged, but do not create a new webhook.
+Сервер хранит `expires_at` в PostgreSQL. Фоновая проверка переводит просроченные активные задачи в EXPIRED; задержка или повтор запуска не продлевают срок. REQ сам проверяет deadline и не выдаёт просроченную задачу.
 
-RabbitMQ message expiration is separate from task TTL. The AMQP publisher API
-takes seconds or `timedelta`; it must receive the remaining transport lifetime,
-not a millisecond count passed as seconds.
+Для renewal `7011` TTL положителен и не превышает остаток жизни PIN. При сохранении deadline дополнительно ограничивается `pin_expires_at`.
+
+## 🔎 Оставшееся время и порядок polling
+
+Пока задача активна, REST GET/LIST показывают оставшиеся минуты с округлением вверх. Выборка polling исключает задачи с начальным TTL `0` и просроченным deadline.
+
+Порядок выбора:
+
+1. `priority DESC` — сначала более высокий приоритет.
+2. Оставшиеся минуты `ASC` — затем ближе к сроку истечения.
+3. Время создания `ASC` — затем более старая задача.
+
+Статус LOCK остаётся доступным для повторной выборки. Ограничения по методам и capability polling описаны в [RPC-протоколе](mqtt-rpc-protocol.md).
+
+## 📤 Поздние результаты
+
+| Когда принят новый RES | Сохранение и CMT | Статус | Новый result webhook |
+| :--- | :--- | :--- | :--- |
+| До deadline активной задачи | Да | DONE | При активной подписке |
+| До 3 минут включительно после deadline | Да | EXPIRED | При активной подписке |
+| Позже 3 минут после deadline | Да | EXPIRED | Нет |
+| После soft delete | Да | DELETED | Нет |
+| Повтор логического результата | Исходный result_id в CMT | Не переоткрывается | Нет |
+
+Время сравнения — время приёма результата сервером. Уже созданная webhook-доставка следует собственному сроку и правилам retry.
+
+Для старых EXPIRED-записей без восстановимого deadline поздний результат сохраняется и подтверждается, но новый webhook не создаётся.
+
+## 📡 TTL задачи и срок сообщения
+
+Deadline задачи и broker expiration — разные ограничения. Повторная публикация сообщения не продлевает жизнь задачи. Публикации TSK/RSP ограничиваются оставшимся сроком; NOP имеет transport expiration 180 секунд. AMQP publisher принимает секунды или timedelta.
+
+**Реализация:** [репозиторий задач](../app-service/core/crud/dev_tasks_repo.py) · [доставка](../app-service/core/services/device_tasks.py). Сверено с `master` на 09.10.2026.

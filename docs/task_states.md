@@ -1,71 +1,47 @@
-# Статусы задач
+# 🚦 Состояния задачи
 
-Перечисление `TaskStatus` используется для отслеживания жизненного цикла задачи в системе.
+> Статус описывает жизненный цикл в IoT. Успех команды определяется результатом, физический эффект — событием устройства.
 
-## Значения статусов
+[← Документация](README.md) · [REST задач](1-task-workflow-doc.md) · [TTL](TTL.md)
 
-| Код | Константа | Описание                                            |
-|-----|-----------|-----------------------------------------------------|
-| `0` | READY     | Задача создана, ожидает выборки устройством         |
-| `1` | PENDING   | Устройство подтвердило получение (ACK)              |
-| `2` | LOCK      | Устройство выбрало задачу (REQ) и начало выполнение |
-| `3` | DONE      | Задача завершена — устройство прислало результат    |
-| `4` | EXPIRED   | Истёк TTL, задача снята с выполнения                |
-| `5` | DELETED   | Задача удалена через DELETE API                     |
-| `6` | FAILED    | Ошибка выполнения *(зарезервировано)*               |
-| `7` | UNDEFINED | Неопределённое состояние *(зарезервировано)*        |
+## 🧭 Значения
 
-## Диаграмма переходов состояний
+| Код | Статус | Что произошло |
+| :--- | :--- | :--- |
+| `0` | `READY` | Задача сохранена; один анонс TSK не меняет этот статус |
+| `1` | `PENDING` | Принят адресный ACK устройства |
+| `2` | `LOCK` | Сервер обработал REQ и выдал задачу в RSP |
+| `3` | `DONE` | Сохранён результат RES, включая ответ с ошибкой |
+| `4` | `EXPIRED` | Истёк внутренний deadline |
+| `5` | `DELETED` | Выполнен soft delete через API |
+| `6` | `FAILED` | Зарезервирован; обычный RES с ошибкой не переводит сюда |
+| `7` | `UNDEFINED` | Зарезервирован |
+
+## 🔄 Переходы
 
 ```mermaid
 stateDiagram-v2
-    [*]     --> READY   : touch_task
-
-    READY   --> PENDING : ACK от устройства
-    READY   --> LOCK    : REQ от устройства
-    PENDING --> LOCK    : REQ от устройства
-
-    READY   --> DONE    : RES от устройства
-    PENDING --> DONE    : RES от устройства
-    LOCK    --> DONE    : RES от устройства
-
-    READY   --> EXPIRED : TTL = 0
-    PENDING --> EXPIRED : TTL = 0
-    LOCK    --> EXPIRED : TTL = 0
-
-    READY   --> DELETED : DELETE API
-    PENDING --> DELETED : DELETE API
-    LOCK    --> DELETED : DELETE API
-    DONE    --> DELETED : DELETE API
-    EXPIRED --> DELETED : DELETE API
-
-    DONE    --> [*]
-    EXPIRED --> [*]
-    DELETED --> [*]
-    FAILED  --> [*]
+    [*] --> READY: Создание
+    READY --> PENDING: ACK
+    READY --> LOCK: REQ
+    PENDING --> LOCK: REQ
+    READY --> DONE: Сохранён RES до deadline
+    PENDING --> DONE: Сохранён RES до deadline
+    LOCK --> DONE: Сохранён RES до deadline
+    READY --> EXPIRED: Deadline
+    PENDING --> EXPIRED: Deadline
+    LOCK --> EXPIRED: Deadline
+    READY --> DELETED: DELETE
+    PENDING --> DELETED: DELETE
+    LOCK --> DELETED: DELETE
+    DONE --> DELETED: DELETE
+    EXPIRED --> DELETED: DELETE
 ```
 
-## Описание переходов
+ACK необязателен. `LOCK` означает выдачу параметров сервером и допускает повторную выдачу; факт начала исполнения этим статусом не подтверждается. RSP содержит снимок состояния до обновления LOCK.
 
-| Событие              | Переход                          | Инициатор   |
-|----------------------|----------------------------------|-------------|
-| `POST /` touch_task  | `[*] → READY`                    | API-клиент  |
-| `ack` по MQTT        | `READY → PENDING`                | Устройство  |
-| `req` по MQTT        | `READY/PENDING → LOCK`           | Устройство  |
-| `res` по MQTT        | `READY/PENDING/LOCK → DONE`      | Устройство  |
-| TTL достиг 0         | `READY/PENDING/LOCK → EXPIRED`   | Планировщик |
-| `DELETE /{id}`       | Любой статус `→ DELETED`         | API-клиент  |
+Повторный RES получает исходный `result_id`. Поздний RES для EXPIRED/DELETED сохраняется и подтверждается CMT, не возвращая задачу в DONE. Новый RES, поступивший после deadline, переводит ещё активную задачу в EXPIRED, даже если фоновая проверка срока ещё не сработала.
 
-> **Примечание.** Статусы `FAILED` (6) и `UNDEFINED` (7) зарезервированы в перечислении, но не используются текущим кодом.
+`ttl=0` при создании — отдельный Trigger-only режим с внутренним окном до одной минуты, а не немедленный EXPIRED. [Правила TTL](TTL.md).
 
-Поздний `res` после `EXPIRED` или `DELETED` сохраняется и получает `cmt`, не
-меняя терминальный статус. Повторный `res` получает исходный `result_id`.
-Внешнее `ttl=0` допускает внутреннее trigger-окно не более одной минуты;
-polling такую задачу не выбирает. См. [`TTL.md`](./TTL.md).
-
----
-
-**См. также:**
-- [`TTL.md`](./TTL.md) — механизм TTL и стратегия поллинга
-- [`sequence.md`](./sequence.md) — сценарии взаимодействия
-- [`1-task-workflow-doc.md`](./1-task-workflow-doc.md) — API workflow
+**Реализация:** [TaskStatus](../app-service/core/models/common.py) · [переходы и сохранение](../app-service/core/crud/dev_tasks_repo.py). Сверено с `master` на 09.10.2026.

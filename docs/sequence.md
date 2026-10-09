@@ -1,180 +1,62 @@
-# Сценарии взаимодействия (Sequence)
+# 🔀 Сквозной сценарий · От команды к факту
 
-> **Файл:** `docs/sequence.md`
-> **Версия:** 2.0
-> **Дата:** 2026
-> **См. также:** [`1-task-workflow-doc.md`](./1-task-workflow-doc.md), [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md), [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md), [`task_states.md`](./task_states.md), [`TTL.md`](./TTL.md)
+[← Документация](README.md) · [REST задач](1-task-workflow-doc.md) · [RPC](mqtt-rpc-protocol.md) · [События](event-protocol-mqtt.md)
 
-Диаграммы ниже отражают полный жизненный цикл задачи устройства: от REST-инициации клиентом до доставки результата (через polling или webhook). Используются реальные имена топиков и этапов RPC по MQTT v5: `tsk`, `ack`, `req`, `rsp`, `res`, `cmt`, а также статусы задач из [`task_states.md`](./task_states.md).
-
-> **Замечание о цвете.** Эти диаграммы намеренно не используют `box`/`rect rgb(...)` с произвольной заливкой: на GitHub текст внутри Mermaid использует цвет темы (тёмный в светлой / светлый в тёмной), и плотные RGB-фоны делают подписи нечитаемыми хотя бы в одной из тем. Поэтому для группировки используются нейтральные конструкции `alt`/`opt`/`par`/`loop` и `Note`, которые корректно отрисовываются в обеих темах GitHub.
-
----
-
-## 1. Создание задачи через REST API (touch_task)
-
-Клиентское приложение создаёт задачу по `POST /api/v1/device-tasks/`. API валидирует запрос, Core сохраняет задачу в статусе `READY`, затем параллельно ставит её в очередь устройства и (опционально) триггерит устройство по MQTT.
+## ⚡ Команда и результат
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor ClientApp as Client App
-    participant API as REST API
-    participant Core as Cloud Core
-    participant Queue as Task Queue
-    participant Broker as MQTT Broker
-    participant Device
-
-    ClientApp->>+API: POST /device-tasks (device_id, method_code, priority, ttl, payload)
-    Note over API: Auth (api-key/JWT/cert), validate headers and body
-
-    alt Valid request
-        API->>+Core: Create task
-        Core-->>-API: task_id (UUID4), status = READY
-        API-->>-ClientApp: 200 OK { id, created_at }
-
-        par Persist for polling
-            Core->>Queue: Enqueue task (priority, ttl, created_at)
-        and Optional trigger (push)
-            alt Device is online
-                Core->>Broker: PUBLISH srv/<SN>/tsk [correlationData = task_id, method_code]
-                Broker->>Device: DELIVER tsk
-                opt Optional ACK
-                    Device->>Broker: PUBLISH dev/<SN>/ack
-                    Broker->>Core: DELIVER ack
-                    Core->>Core: status = PENDING
-                end
-            else Device is offline
-                Note over Core,Broker: Push не доставлен — задача остаётся в очереди и будет выдана при следующем polling запросе устройства
-            end
-        end
-    else Invalid request
-        API-->>ClientApp: 4xx Error (validation / auth)
+    participant A as Приложение
+    participant C as LEO4 Core
+    participant D as Устройство
+    A->>C: POST /api/v1/device-tasks/
+    C->>C: Создать READY и deadline
+    C->>D: srv/SN/tsk · UUID задачи
+    C-->>A: 200 · id, created_at
+    opt Подтверждение анонса
+        D->>C: dev/SN/ack · UUID
+        C->>C: PENDING
+    end
+    D->>C: dev/SN/req · UUID
+    C->>C: Проверить срок, выбрать задачу, установить LOCK
+    C->>D: srv/SN/rsp · header + payload
+    D->>D: Выполнить с защитой от повторов
+    D->>C: dev/SN/res · status_code + result_uid
+    C->>C: Сохранить результат и план webhook
+    C->>D: srv/SN/cmt · result_id
+    alt Активная подписка
+        C-->>A: POST registered_url/task_uuid · msg-task-result
+    else Чтение результата
+        A->>C: GET /api/v1/device-tasks/id
+        C-->>A: status, payload, results
     end
 ```
 
----
+Активная задача с результатом до deadline становится DONE, включая результат с ошибкой. Просроченная остаётся/становится EXPIRED. Поздний CMT и webhook регулируются [TTL](TTL.md).
 
-## 2. Выполнение задачи устройством (RPC по MQTT v5)
-
-Устройство забирает задачу одним из двух способов: **Trigger** (после `tsk` от сервера) или **Polling** (периодический `req` с нулевым UUID). Дальнейший конвейер `req → rsp → res → cmt` идентичен.
-
-Стратегия выбора задачи при polling-запросе с `correlationData = UUID(0)` (см. [`1-task-workflow-doc.md`](./1-task-workflow-doc.md)):
-
-1. участвуют только задачи устройства со `status < DONE`
-2. задачи с `ttl = 0` исключаются из выборки
-3. сортировка: `priority DESC` → `ttl ASC` (положительный) → `created_at ASC`
+## 📨 Наблюдаемый эффект
 
 ```mermaid
 sequenceDiagram
-    autonumber
-    participant Core as Cloud Core
-    participant Queue as Task Queue
-    participant Broker as MQTT Broker
-    participant Device
-
-    alt Trigger (server-initiated)
-        Note over Core,Device: correlationData = task_id (назначен сервером)
-        Core->>Broker: PUBLISH srv/<SN>/tsk [method_code]
-        Broker->>Device: DELIVER tsk
-        Device->>Broker: PUBLISH dev/<SN>/req [correlationData = task_id]
-    else Polling (device-initiated)
-        Note over Device: Периодический тик req_poll_timer — пустые ответы тихо игнорируются
-        Device->>Broker: PUBLISH dev/<SN>/req [correlationData = UUID(0)]
-    end
-
-    Broker->>Core: DELIVER req
-    Core->>Queue: Select next task (priority/ttl/created_at)
-    alt No eligible task
-        Note over Core: Тихо игнорируется — устройство ждёт следующего тика
-    else Task selected
-        Core->>Core: status = LOCK (locked_at)
-        Core->>Broker: PUBLISH srv/<SN>/rsp [method_code, payload.dt]
-        Broker->>Device: DELIVER rsp
-
-        Note over Device: Worker выполняет задачу
-
-        Device->>Broker: PUBLISH dev/<SN>/res [status_code = 200/4xx/500, ext_id]
-        Broker->>Core: DELIVER res
-        Core->>Core: Save result, status = DONE / FAILED
-        Core->>Broker: PUBLISH srv/<SN>/cmt [result_id]
-        Broker->>Device: DELIVER cmt
-        Note over Core,Device: RPC lifecycle complete
+    participant D as Устройство
+    participant C as LEO4 Core
+    participant A as Приложение
+    D->>C: dev/SN/evt · например CellOpenEvent 13
+    C->>C: Сохранить новое событие или распознать дубликат
+    C->>D: srv/SN/eva · success, если требуется
+    alt Новое событие и подписка
+        C-->>A: POST registered_url/device_id · msg-event
+    else Чтение истории
+        A->>C: GET /api/v1/device-events/
+        C-->>A: Сохранённые события
     end
 ```
 
-> Истечение TTL обрабатывается отдельно: задача с истёкшим сроком переводится в `EXPIRED` и больше не выдаётся устройству. Подробнее — [`TTL.md`](./TTL.md), [`task_states.md`](./task_states.md).
+Порядок прихода RES и события не фиксирован. Прикладной сценарий проверяет успешность результата и соответствующий свежий факт. Без correlation исходной операции в событии привязка по устройству/ячейке/времени не является строгим доказательством причинности.
 
----
+## 🔄 Восстановление связи
 
-## 3. Получение результата клиентом: polling vs webhook
+После reconnect устройство может выполнить polling REQ с нулевым UUID. Сервер выдаёт допустимую непросроченную задачу либо NOP. Выполненная ранее задача не исполняется второй раз: клиент возвращает сохранённый результат с прежним UID.
 
-Клиент может либо периодически опрашивать статус задачи через REST, либо подписаться на webhook `msg-task-result` и получать результат push-нотификацией (рекомендуется для нагруженных систем).
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor ClientApp as Client App
-    participant API as REST API
-    participant Core as Cloud Core
-    participant Hook as Client Webhook Endpoint
-
-    alt Polling (pull)
-        loop Until status in {DONE, FAILED, EXPIRED, DELETED}
-            ClientApp->>+API: GET /device-tasks/{id}
-            Note over API: Auth + headers validation
-            API->>Core: Read task data
-            Core-->>API: task { status, results[] }
-            API-->>-ClientApp: 200 OK (status, results)
-        end
-    else Webhook (push)
-        Note over ClientApp,Hook: Webhook предварительно зарегистрирован<br/>через PUT /api/v1/webhooks/msg-task-result
-        Core->>+Hook: POST /hooks/task-result/{task_id}<br/>X-Msg-Type, X-Device-Id, X-Ext-Id, X-Result-Id, X-Status-Code
-        Hook-->>-Core: 2xx ack
-        Note over Hook,ClientApp: Несколько результатов одной задачи<br/>доставляются отдельными хуками
-    end
-```
-
----
-
-## 4. Сводный сценарий end-to-end
-
-Связка всех трёх диаграмм в одном потоке для удобства: `touch_task` → доставка устройству → выполнение → доставка результата клиенту.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor ClientApp as Client App
-    participant API as REST API
-    participant Core as Cloud Core
-    participant Broker as MQTT Broker
-    participant Device
-
-    ClientApp->>API: POST /device-tasks (touch_task)
-    API->>Core: Create task (status = READY)
-    API-->>ClientApp: 200 OK { task_id }
-
-    opt Trigger
-        Core->>Broker: srv/<SN>/tsk
-        Broker->>Device: tsk
-        opt ACK
-            Device->>Core: dev/<SN>/ack  (status = PENDING)
-        end
-    end
-
-    Device->>Core: dev/<SN>/req  (status = LOCK)
-    Core->>Device: srv/<SN>/rsp [payload]
-    Note over Device: Execute
-    Device->>Core: dev/<SN>/res [status_code]
-    Core->>Core: Save result (status = DONE / FAILED)
-    Core->>Device: srv/<SN>/cmt [result_id]
-
-    alt Webhook subscribed
-        Core-->>ClientApp: POST webhook msg-task-result
-    else Polling
-        loop
-            ClientApp->>API: GET /device-tasks/{id}
-            API-->>ClientApp: task { status, results[] }
-        end
-    end
-```
+Сверено с `master` на 09.10.2026.

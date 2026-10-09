@@ -1,386 +1,96 @@
-# 🖥️ Remote Diagnostics / Live Output Protocol
+# 🖥️ Remote Diagnostics · RPC и потоковый вывод
 
-> **Файл:** `docs/remote-diagnostics-protocol.md`  
-> **Версия:** 1.0  
-> **Дата:** 2026-08-06  
-> **Статус:** спецификация MVP для live logs, stdout/stderr и remote diagnostics через существующий MQTT RPC lifecycle.
+> Live logs, диагностические команды и console output через RPC и volatile-канал `out`.
 
----
+[← Документация](README.md) · [RPC](mqtt-rpc-protocol.md) · [Удалённые сеансы](remote-input-protocol.md) · [Методы](method-codes-reference.md)
 
-## 1. Назначение
+## 🧭 Архитектура
 
-Remote Diagnostics добавляет единый механизм для:
-
-- live logs с ESP32;
-- console-like output;
-- stdout/stderr от Linux-agent и Windows-agent;
-- диагностических команд из заранее заданного allowlist;
-- доставки потока в браузер через цепочку `device → mqtt → backend → websocket → browser`.
-
-Авторизация и владение устройствами остаются в существующей backend-инфраструктуре. Этот протокол не вводит новую модель авторизации: браузерный WebSocket проходит через `nginx-jwt`, где валидируется существующий JWT access-token, а backend дополнительно проверяет принадлежность устройства организации из JWT.
-
----
-
-## 2. Главные правила
-
-1. **Не добавлять новые server→device топики.** Управление diagnostics/logs идёт только через существующий RPC lifecycle:
-
-   ```text
-   srv/<SN>/tsk
-   dev/<SN>/req
-   srv/<SN>/rsp
-   dev/<SN>/res
-   ```
-
-2. **Добавить один device→backend топик для потокового вывода:**
-
-   ```text
-   dev/<SN>/out
-   ```
-
-3. `dev/<SN>/out` — volatile stream. Он не является event, не подтверждается через `eva`, не участвует в event deduplication и не заменяет финальный `dev/<SN>/res`.
-
-4. Remote diagnostics — это не интерактивная shell. Команды передаются как `command_id` из allowlist агента, а не как произвольная shell-строка.
-
----
-
-## 3. MQTT topics
-
-### Device → Server
-
-| Топик | Назначение |
-| :-- | :-- |
-| `dev/<SN>/req` | Запрос устройства на получение RPC-задачи |
-| `dev/<SN>/res` | Финальный RPC result / метаинформация выполнения |
-| `dev/<SN>/evt` | Асинхронное событие устройства |
-| `dev/<SN>/ack` | Опциональное подтверждение получения task announcement |
-| `dev/<SN>/out` | Volatile потоковый вывод: logs, stdout, stderr, status chunks |
-
-### Server → Device
-
-| Топик | Назначение |
-| :-- | :-- |
-| `srv/<SN>/tsk` | Анонс новой RPC-задачи |
-| `srv/<SN>/rsp` | Тело RPC-задачи |
-| `srv/<SN>/eva` | Подтверждение события |
-| `srv/<SN>/cmt` | Commit результата RPC |
-
-RabbitMQ routing key для output stream:
-
-```text
-dev.<SN>.out
+```mermaid
+flowchart LR
+    B["Браузер / доверенный gateway"] <-->|"WebSocket"| C["LEO4 Core"]
+    C -->|"RPC 7000 / 7001 / 7002"| D["Агент устройства"]
+    D -->|"dev/SN/out"| C
+    D -->|"dev/SN/res"| C
 ```
 
-Backend MVP подписывается wildcard-binding:
+Команды используют `tsk/req/rsp/res/cmt`. `out` передаёт chunks и не заменяет финальный RES. Поток не сохраняется как DeviceEvent, не участвует в event dedup и не получает EVA.
 
-```text
-dev.*.out
-```
+## 📡 Методы и параметры
 
----
+Task payload содержит только `dt`. `7000/7001` требуют один объект; `7002` допускает один адресный объект или пустой массив для отмены текущей монопольной команды.
 
-## 4. Параметры публикации `dev/<SN>/out`
-
-Рекомендации:
-
-| Сценарий | QoS | retain |
-| :-- | :--: | :--: |
-| ESP32 live logs | `0` | `false` |
-| diagnostic stdout/stderr | `0` или `1` | `false` |
-| progress/status | `0` или `1` | `false` |
-
-Если браузерной сессии нет, устройство не должно слать live stream. Backend включает и выключает поток через RPC-команды.
-
----
-
-## 5. Method codes
-
-Диапазон:
-
-```text
-7000..7099 — Remote Diagnostics / Output Streams
-```
-
-| method_code | Константа | Назначение |
-| ---: | :-- | :-- |
-| `7000` | `CMD_DIAG_STREAM_CONTROL` | Start/stop volatile output stream, включая ESP32 live logs |
-| `7001` | `CMD_DIAG_EXEC` | Выполнить predefined diagnostic command из allowlist |
-| `7002` | `CMD_DIAG_CANCEL` | Отменить активную diagnostic session |
-
----
-
-## 6. RPC payloads
-
-Все примеры ниже показывают значение `payload.dt`.
-
-### 6.1. Start ESP32 live logs
-
-```json
-[
-  {
-    "action": "start",
-    "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
-    "stream": "esp32-log",
-    "level": "debug",
-    "ttl_sec": 300,
-    "max_rate_bps": 8192,
-    "topic": "dev/<SN>/out"
-  }
-]
-```
-
-- `method_code = 7000`
-- устройство начинает публиковать logs в `dev/<SN>/out`;
-- поток ограничивается `ttl_sec` и, если поддерживается, `max_rate_bps`;
-- финальный/стартовый статус возвращается через `dev/<SN>/res`.
-
-### 6.2. Stop ESP32 live logs
-
-```json
-[
-  {
-    "action": "stop",
-    "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
-    "stream": "esp32-log"
-  }
-]
-```
-
-- `method_code = 7000`
-
-### 6.3. Execute predefined diagnostic command
-
-```json
-[
-  {
-    "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
-    "command_id": "system_info",
-    "args": {},
-    "ttl_sec": 60,
-    "max_output_bytes": 1048576,
-    "topic": "dev/<SN>/out"
-  }
-]
-```
-
-- `method_code = 7001`
-- `command_id` должен существовать в локальном allowlist агента;
-- произвольные shell-команды запрещены;
-- большой stdout/stderr отправляется в `dev/<SN>/out`;
-- финальная метаинформация отправляется в `dev/<SN>/res`.
-
-### 6.4. Cancel diagnostic session
-
-```json
-[
-  {
-    "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
-    "reason": "browser_closed"
-  }
-]
-```
-
-- `method_code = 7002`
-
----
-
-## 7. Output envelope для `dev/<SN>/out`
-
-Единый JSON-envelope:
+| Метод | Назначение | Поля `dt[0]` |
+| :--- | :--- | :--- |
+| `7000` | Start/stop output stream | `action`, `session_id`, `stream`; параметры start: `level`, `ttl_sec`, `max_rate_bps`, `topic` |
+| `7001` | Diagnostic Exec | `session_id`, `command_id`, `args`, `ttl_sec`, `max_output_bytes`, `topic`; console: `command_line`, `shell` |
+| `7002` | Cancel | `session_id`, необязательный `reason`; либо `{"dt":[]}` |
 
 ```json
 {
-  "v": 1,
-  "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
-  "seq": 42,
-  "ts": "2026-08-05T12:34:56.789Z",
-  "kind": "log",
-  "stream": "esp32-log",
-  "encoding": "utf-8",
-  "data": "WiFi connected, ip=192.168.1.10\n",
-  "eof": false
+  "dt": [
+    {
+      "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
+      "command_id": "system_info",
+      "args": {},
+      "ttl_sec": 60,
+      "max_output_bytes": 1048576,
+      "topic": "dev/<SN>/out"
+    }
+  ]
 }
 ```
 
-| Поле | Тип | Обязательное | Описание |
-| :-- | :-- | :--: | :-- |
-| `v` | int | да | Версия envelope |
-| `session_id` | string UUID | да | ID browser/diagnostic/log session |
-| `seq` | int | да | Монотонный номер chunk внутри session |
-| `ts` | string datetime/null | нет | Timestamp на устройстве/агенте |
-| `kind` | string | да | `log`, `stdout`, `stderr`, `status`, `result`, `error` |
-| `stream` | string | да | Логический stream: `esp32-log`, `stdout`, `stderr`, `system`, `agent` |
-| `encoding` | string | да | `utf-8` или `base64` |
-| `data` | string | да | Текст или base64 chunk |
-| `eof` | bool | нет | Признак завершения stream |
-| `exit_code` | int/null | нет | Код завершения diagnostic command |
-| `truncated` | bool | нет | Вывод был обрезан по лимиту |
+Подставьте фактический SN. `session_id` диагностики отличается от task UUID. Неизвестные поля запрещены. Для Exec: session TTL `1..3600` секунд, command line до 4096 символов, output limit не менее 1 байта.
 
-Base64 допускается для бинарных или не-UTF8 данных:
+Backend знает predefined command IDs и raw aliases, включая `raw_cmd/raw_command`. Текущий console-контракт допускает `command_line` и `shell`; разрешение конкретного действия определяет агент. [Перечень backend IDs](../app-service/core/diagnostics/commands.py).
+
+Пустой 7002 получает `payload_required=false` в TSK. Адресный Cancel и Exec ждут RSP. Финальный RES содержит metadata и transport `status_code/result_uid`, большой вывод идёт через `out`.
+
+## 📦 Output envelope
 
 ```json
 {
   "v": 1,
   "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
-  "seq": 43,
+  "seq": 1,
+  "ts": "2026-10-09T08:00:00Z",
   "kind": "stdout",
   "stream": "stdout",
-  "encoding": "base64",
-  "data": "SGVsbG8NCg==",
-  "eof": false
-}
-```
-
----
-
-## 8. Финальный RPC result в `dev/<SN>/res`
-
-Большой вывод не отправляется в `/res`. `/res` содержит только итоговую метаинформацию.
-
-Успешный пример:
-
-```json
-{
-  "status": "OK",
-  "method_code": 7001,
-  "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
-  "command_id": "system_info",
-  "exit_code": 0,
-  "output_topic": "dev/<SN>/out",
+  "encoding": "utf-8",
+  "data": "diagnostic output",
+  "eof": false,
+  "exit_code": null,
   "truncated": false
 }
 ```
 
-Ошибка:
+`seq` — неотрицательный номер chunk. `kind`: log/stdout/stderr/status/result/error; encoding: utf-8/base64. EOF и exit code сообщают о завершении, truncated — об ограничении вывода. Legacy envelope без kind адаптируется по stream/eof/exit_code. Маршрутизация использует routing SN + session_id; без активной сессии chunk не доставляется браузеру.
 
-```json
-{
-  "status": "ERROR",
-  "method_code": 7001,
-  "session_id": "8baf0d49-3e35-4210-87a8-111111111111",
-  "command_id": "system_info",
-  "exit_code": 1,
-  "output_topic": "dev/<SN>/out",
-  "error": "timeout",
-  "truncated": true
-}
-```
+## 🔌 WebSocket control plane
 
----
+Текущий backend endpoint: `/api/internal/v1/diagnostics/ws/devices/{sn}`. Он скрыт из публичной OpenAPI-схемы. Browser URL, JWT validation и rewrite задаёт внешний доверенный gateway, управляемый отдельно. Браузер не должен назначать доверенные org/role/user headers.
 
-## 9. Backend bridge overview
+Backend проверяет роль superuser или l4desk_owner, effective org и принадлежность SN. Явная lease проверяется по активности, SN, tenant, scope=console, владельцу и session. l4desk_owner требует явную lease; конфигурация может разрешать implicit lease для superuser.
 
-MVP реализуется внутри `app-service`:
+| Browser message | Действие |
+| :--- | :--- |
+| `start_log` | Создать session и RPC7000 start |
+| `stop_log` | RPC7000 stop |
+| `exec` | Создать session и RPC7001 |
+| `cancel` | RPC7002 для session |
 
-```text
-app-service/
-  api/api_v1/diagnostics.py
-  core/diagnostics/
-    schemas.py
-    sessions.py
-    mqtt_bridge.py
-    service.py
-    commands.py
-```
+Ответы backend: output/status/error; при implicit acquire — lease с её UUID. Lease errors закрывают WS с 4409. Неподходящие org/device/role отклоняются до работы с сессией.
 
-### WebSocket endpoint
+## ⏱️ Срок, остановка и доставка вывода
 
-Публичный browser endpoint через `nginx-jwt`:
+Console использует общую монопольную lease с stream/input/view/files. [Ownership и сроки](remote-input-protocol.md) · [Files lease](file-manager-v2.md).
 
-```text
-GET /api/jwt/v1/diagnostics/ws/devices/{sn}
-```
+После Cancel forwarder сохраняется до terminal EOF либо исходного срока session. WS отправка ограничена пятью секундами или оставшимся временем. При disconnect backend отмечает lease disconnected, отменяет локальные forwarders и закрывает диагностические сессии; grace и cleanup применяются по модели lease.
 
-Внутренний backend endpoint после rewrite/proxy:
+Registry использует Redis-backed metadata и локальные очереди сессий. Уже переданные chunks не являются архивом, произвольный reconnect между workers с replay не гарантируется. [Redis topology](redis/redis-integration-guide.md).
 
-```text
-GET /api/v1/diagnostics/ws/devices/{sn}
-```
+RPC-логи и история рекурсивно маскируют секретные поля, включая чувствительные command lines; delivery payload остаётся исходным.
 
-### WebSocket auth и ownership
-
-Для браузерного подключения используется существующий JWT-контур:
-
-1. frontend открывает `wss://dev.leo4.ru/api/jwt/v1/diagnostics/ws/devices/{sn}`;
-2. JWT передаётся как cookie `accessToken` — это важно, потому что browser WebSocket API не позволяет надёжно выставлять произвольный `Authorization` header;
-3. `nginx-jwt` валидирует JWT (`RS256`) и извлекает claim `orgId`;
-4. `nginx-jwt` прокидывает в backend только доверенный заголовок `orgId: <jwt_claim_orgId>`;
-5. backend до `websocket.accept()` проверяет, что `{sn}` существует, не удалён и привязан к `orgId`;
-6. при отсутствии валидного JWT, отсутствии/невалидном `orgId` или чужом `{sn}` соединение отклоняется (`1008 Policy Violation` на backend-уровне; nginx может вернуть `401/403` до upgrade).
-
-Клиенту запрещено самостоятельно задавать заголовок `orgId`: внешний nginx-конфиг отклоняет такие запросы, чтобы исключить подмену организации.
-
-### Browser → Backend messages
-
-| `type` | Назначение |
-| :-- | :-- |
-| `start_log` | Создать session и отправить RPC `7000 start` |
-| `stop_log` | Отправить RPC `7000 stop` и закрыть live log session |
-| `exec` | Создать session и отправить RPC `7001` |
-| `cancel` | Отправить RPC `7002` |
-
-### Backend → Browser messages
-
-| `type` | Назначение |
-| :-- | :-- |
-| `output` | Chunk из `dev/<SN>/out` |
-| `status` | Состояние session |
-| `error` | Ошибка backend/session/device |
-
-Маршрутизация output chunks выполняется по ключу:
-
-```text
-SN + session_id
-```
-
-Chunks без активной session дропаются.
-
----
-
-## 10. Поведение при закрытии браузера
-
-При закрытии WebSocket backend должен:
-
-1. пометить session как closing;
-2. для active live log отправить `CMD_DIAG_STREAM_CONTROL stop`;
-3. для active diagnostic exec отправить `CMD_DIAG_CANCEL`, если команда ещё выполняется;
-4. удалить session из registry;
-5. дропать новые chunks с таким `session_id`.
-
-MVP может хранить registry in-memory. Для горизонтального масштабирования потребуется общий session state или sticky routing.
-
----
-
-## 11. Консоль под монопольной арендой (Console Under Lease)
-
-В рамках единой монопольной модели аренды терминала (Prompt 3.1) диагностическая сессия Console объединена с `LeaseRegistry`.
-
-### 11.1. Правила взаимодействия
-1. **Взаимное исключение**: Console доступна только роли `superuser`. При активной сессии Console блокируются любые попытки запустить трансляцию или дистанционное управление (`stream`, `input`, `view`). И наоборот: активная сессия `stream` или `input` блокирует открытие Console.
-2. **Идентификация сессии**: WebSocket принимает `lease_id` (через query-параметр) и заголовки `X-User-Id` / `X-Session-Id` (либо query `session_id`). При несовпадении владельца или неактивной аренде соединение закрывается с кодом `4409` (`lease_inactive`, `scope_mismatch`, `lease_not_owner`).
-3. **Разрыв соединения**: При закрытии WebSocket вызывается `mark_ws_disconnected`. Запускается grace-таймер (10 секунд). Если переподключения не произошло, аренда отзывается фоновой задачей `cleanup_expired`.
-
-### 11.2. Переходный режим (Implicit Console Lease)
-Для обратной совместимости с текущим фронтендом MenuBuilder (до обновления BFF) предусмотрен переходный режим:
-- Флаг настроек: `settings.diagnostics.implicit_console_lease` (по умолчанию `true`).
-- Если `lease_id` не передан в запросе, backend для пользователя с ролью `superuser` автоматически пытается неявно захватить аренду `scope: console`.
-- Первым сообщением в WebSocket клиенту отправляется идентификатор аренды:
-  ```json
-  {"type": "lease", "lease_id": "<uuid4>"}
-  ```
-- Если терминал занят другим пользователем, соединение закрывается с кодом `4409` (`lease_busy`).
-- После обновления MenuBuilder флаг `implicit_console_lease` будет переведён в `false`.
-
----
-
-## 12. Связанные документы
-
-| Файл | Назначение |
-| :-- | :-- |
-| [`remote-input-protocol.md`](./remote-input-protocol.md) | Единая модель аренды (Lease Model), control-plane `ctl` |
-| [`mqtt_topic_rules.md`](./mqtt_topic_rules.md) | Правила топиков, включая `dev/<SN>/out` |
-| [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md) | Базовый RPC lifecycle `tsk`/`req`/`rsp`/`res`/`cmt` |
-| [`method-codes-reference.md`](./method-codes-reference.md) | Реестр `method_code`, включая `7000..7002` |
-| [`correlation-data-guide.md`](./correlation-data-guide.md) | Correlation Data для RPC-задач |
-| [`1-task-workflow-doc.md`](./1-task-workflow-doc.md) | REST workflow задач |
+**Реализация:** [WS](../app-service/api/internal_v1/diagnostics.py) · [схемы](../app-service/core/diagnostics/schemas.py) · [service](../app-service/core/diagnostics/service.py) · [registry](../app-service/core/diagnostics/sessions.py). Сверено с master на 09.10.2026.
 

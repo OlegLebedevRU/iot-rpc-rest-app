@@ -1,190 +1,86 @@
-# Internal API Contract v1 (Межсервисный протокол взаимодействия)
+# 🛡️ Internal API v1 · Межсервисный контракт
 
-Данный документ описывает контракт взаимодействия внутренних сервисов экосистемы (включая `etranprocessing`, `MenuBuilder`, биллинг-воркеры и инженерные консоли) с сервисом ядра платформы Leo4 (`app1`).
+> Control plane доверенных сервисов экосистемы. Базовый путь backend: `/api/internal/v1`.
 
----
+[← Документация](README.md) · [Публичный REST API](rest-api.md) · [События](2-events-api-format-description.md)
 
-## 1. Архитектура и сетевая изоляция
+## 🧭 Граница интерфейсов
 
-В рамках архитектуры строгого разделения:
-* **Public B2B API** доступен по префиксу `/api/v1/*` через внешний Nginx (`https://dev.leo4.ru/api/v1/`). Авторизация выполняется исключительно по ключам организаций (`x-api-key`). Включает только разделы: `Device tasks`, `Device events`, `Devices`, `Gauges`, `Webhooks`.
-* **Internal Control Plane API** доступен по префиксу `/api/internal/v1/*` **только внутри закрытой Docker-сети** проекта (`http://app1:8000/api/internal/v1/...`).
-* **Защита периметра**: Внешний Nginx блокирует любые входящие запросы к `/api/internal/*` с кодом `403 Forbidden`, а также сбрасывает любые входящие служебные заголовки `X-Internal-Service-Key` и `X-Org-Id` на публичных маршрутах.
+| Интерфейс | Назначение | Авторизация |
+| :--- | :--- | :--- |
+| `/api/v1/*` | Публичные задачи, события, устройства, gauges и webhooks | Ключ организации |
+| `/api/internal/v1/*` | Tenant операции, provisioning, billing, diagnostics и удалённые сеансы | Доверенная межсервисная identity и контекст |
 
----
+Пример внутреннего URL: `http://app1:8000/api/internal/v1/device-tasks/`. Internal routers скрыты из публичной OpenAPI-схемы.
 
-## 2. Стандарты аутентификации и контекста
+Доступность извне, блокировка internal paths и очистка доверенных headers — обязанности внешнего gateway. Его конфигурация управляется отдельно; Nginx-файлы репозитория не подтверждают фактическую конфигурацию периметра.
 
-При каждом вызове внутреннего API смежный сервис обязан передавать следующие HTTP-заголовки:
+## 🔑 Credentials и tenant
 
-| Заголовок | Тип | Обязательность | Описание |
-|---|---|---|---|
-| `X-Internal-Service-Key` | String | **Обязательно** | Секретный ключ сервиса (соответствует значению `APP_CONFIG__AUTH__INTERNAL_SERVICE_KEY` в `.env`). Также поддерживается формат `Authorization: Bearer <secret>`. |
-| `X-Org-Id` | Integer | Обязательно для tenant-запросов | Идентификатор организации, от имени которой выполняется операция. (Также поддерживается `?org_id=<id>` в query). |
-| `X-Role` | String | Опционально (MenuBuilder/Gateway) | Роль пользователя (`superuser`, `admin`, `user`). При роли `superuser`/`admin` query-параметр `?org_id=<id>` переопределяет заголовок `X-Org-Id`, позволяя администратору инспектировать любой тенант. Для обычных пользователей жестко используется `X-Org-Id` из токена. |
-| `Content-Type` | String | Для POST/PUT | `application/json` |
+| Заголовок | Назначение |
+| :--- | :--- |
+| `X-Internal-Service-Key` | Настроенный секрет сервиса; альтернатива — `Authorization: Bearer <secret>` |
+| `X-Org-Id` | Effective tenant для tenant-запросов |
+| `X-Role` | Доверенная роль superuser/admin/user |
+| `Content-Type` | application/json для JSON body |
 
----
+HTTP dependency поддерживает X-Service-Key и fallback статических ключей конфигурации. Когда вообще не настроены internal secret и static API keys, присутствует локальный режим без проверки credentials с предупреждением. Рабочая интеграция должна иметь настроенный secret.
 
-## 3. Каталог маршрутов Internal API
+Для superuser/admin непустой `org_id` query имеет приоритет над header. Для обычного caller header имеет приоритет, query используется только при его отсутствии. Gateway сам формирует контекст и ограничивает пользовательские overrides. Event API требует положительный effective org.
 
-### 3.1. Управление устройствами и реестром (`/api/internal/v1/devices`)
-* `GET /api/internal/v1/devices/?device_id=<id>` — Получение реестра устройств целевой организации (`X-Org-Id`).
-* `PUT /api/internal/v1/devices/{device_id}` — Добавление/обновление тегов устройства (location, zone и т.п.).
+WebSocket endpoints имеют собственные проверки роли, org, lease и ownership; правила HTTP dependency не заменяют их.
 
-### 3.2. Задачи и команды устройствам (`/api/internal/v1/device-tasks`)
-* `POST /api/internal/v1/device-tasks/` — Создание задачи/команды для устройства (body: `TaskCreate`).
-* `GET /api/internal/v1/device-tasks/{id}` — Получение статуса и полного результата выполнения задачи по UUID.
-* `GET /api/internal/v1/device-tasks/?device_id=<id>` — Пагинированный список задач устройства.
-* `DELETE /api/internal/v1/device-tasks/{id}` — Мягкое удаление задачи.
+## 🗂️ Ресурсы
 
-### 3.3. Телеметрия и события (`/api/internal/v1/device-events`)
-* `GET /api/internal/v1/device-events/?device_id=<id>` — Пагинированная выборка событий устройства.
-* `GET /api/internal/v1/device-events/incremental?device_id=<id>&last_event_id=<id>` — Инкрементальная выборка, обновляющая общий offset устройства, в том числе при явном курсоре. Для независимого чтения MCP использовать search.
-* `GET /api/internal/v1/device-events/fields/?device_id=<id>&event_type_code=<code>&tag=<tag>` — Выборка и агрегация полей событий (например, polling датчиков).
-* `GET /api/internal/v1/device-events/search?device_id=<id>` — Read-only поиск пользовательских событий900–999, без изменения offsets.
+| Группа | Возможности / контракт |
+| :--- | :--- |
+| Devices / tasks / events / gauges / webhooks | Tenant-варианты основных [REST ресурсов](rest-api.md) |
+| Provisioning / device provisioning | Регистрация, привязка терминалов, org/API-ключи |
+| Billing / administrator | Служебные и административные операции |
+| Diagnostics | [Logs/console WS](remote-diagnostics-protocol.md) |
+| Remote input / sessions | [Lease, ввод, stream/view lifecycle](remote-input-protocol.md) |
+| File manager | [L4FM v2](file-manager-v2.md) |
+| Archive | Архивные операции |
 
-Все пути чтения проверяют текущую привязку устройства и сохранённый tenant
-события. Tenant фиксируется по серверной привязке при приёме, не берётся из
-payload и не меняется при повторе. При переносе A→B прежние событияA
-не выдаютсяB. История до миграции0011_event_tenants остаётся org_id=NULL
-и скрыта из tenant API; автоматического backfill нет.
+Полный состав — [internal routers](../app-service/api/internal_v1/__init__.py). Task CRUD использует те же TaskCreate и result schemas. Не отправляйте устаревшее `params` вместо `payload`.
 
-Search требует внутреннюю авторизацию и положительный effective org_id.
-MenuBuilder строит X-Org-Id после проверки токена/терминала; для MCP reader
-не передаёт superuser или пользовательский tenant override.
-UUID — фильтр, не разрешение доступа.
-
-| Параметр search | Правило |
-|---|---|
-| device_id | Обязательный положительный ID одного устройства |
-| correlation_id | Опциональный UUID8-4-4-4-12; сравнение300[0]["448"] без учёта регистра |
-| events_include | Повторяемый параметр, только900–999; отсутствие — весь диапазон |
-| after_event_id | Положительный серверный ID, id > cursor |
-| created_from /created_to | Время с TZ, нормализуется в UTC; created_at >= from и < to |
-| limit | 1–100, default50 |
-
-Ответ: `{"items": [...DevEventOut], "next_after_event_id": 123, "has_more": false}`.
-Items идут по id ASC, filters применяются в SQL до limit. Пустой ответ
-сохраняет заданный cursor (NULL, если не задан). Чтение не требует online
-или console lease. Невалидные параметры дают422, отсутствующий tenant400,
-неверные credentials403. Недоступное устройство/чужая история дают пустую
-выборку. Нет верхнего поля correlation_id события: внешний UUID находится
-в оригинальном payload448. Текст446 и int32-код447 передаются без изменения.
-
-Курсор не гарантирует порядок commit параллельных транзакций/exactly-once.
-Для проверки конкретной операции допустим повторный поиск по UUID с
-дедупликацией серверного id. Нет автоматического повторного запуска команды
-по отсутствию события. Источник истории — основная БД; архив и срок хранения
-этим контрактом не гарантируются.
-
-### 3.4. Показания датчиков (`/api/internal/v1/gauges`)
-* `GET /api/internal/v1/gauges/?device_id=<id>&type=<type>` — Пагинированный список показаний датчиков организации.
-
-### 3.5. Вебхуки (`/api/internal/v1/webhooks`)
-* `GET /api/internal/v1/webhooks/` — Список всех настроенных вебхуков организации.
-* `POST /api/internal/v1/webhooks/` — Создание нового вебхука организации.
-* `PUT /api/internal/v1/webhooks/{event_type}` — Создание или обновление вебхука для типа события (`msg-event`, `msg-task-result`).
-* `DELETE /api/internal/v1/webhooks/{event_type}` — Удаление вебхука по типу события.
-
-### 3.6. Провиженинг и учетные записи (`/api/internal/v1/provisioning`)
-* `POST /api/internal/v1/provisioning/terminals` — Провиженинг одиночного терминала в БД и RabbitMQ.
-* `POST /api/internal/v1/provisioning/terminals/batch` — Пакетный провиженинг терминалов.
-* `POST /api/internal/v1/provisioning/terminals/status` — Проверка статуса регистрации и связи устройств.
-* `POST /api/internal/v1/provisioning/api-keys` — Создание или обновление API-ключа организации.
-* `GET /api/internal/v1/provisioning/api-keys/{org_id}` — Получение API-ключа организации (параметр `?mask=true`).
-* `DELETE /api/internal/v1/provisioning/api-keys/{org_id}` — Удаление/отзыв API-ключа организации.
-* `POST /api/internal/v1/provisioning/organizations/reserve` — Атомарно резервирует свободный `org_id` для MenuBuilder до создания tenant. Требует `X-Internal-Service-Key`; `X-Org-Id` не нужен, поскольку tenant ещё не существует. Тело: `{"operation_id":"l4desk-registration:123","minimum_org_id":1}`; для административного выбора допускается `requested_org_id`. Ответ: `{"operation_id":"...","org_id":1001,"replayed":false}`. Повтор с тем же `operation_id` возвращает прежний ID (`replayed=true`), даже если нижняя граница выросла. Занятый явно запрошенный ID или повтор операции с другим явно запрошенным ID возвращает `409`; недоступность сервиса должна останавливать создание локального tenant. Резерв сохраняется в `tb_orgs` и `tb_org_reservations`; при неуспехе локальной транзакции он остаётся для безопасного повтора операции и не освобождается автоматически.
-
-### 3.7. Управление биллингом (`/api/internal/v1/billing`)
-* `GET /api/internal/v1/billing/coefficients` — Получение действующих коэффициентов биллинга.
-* `PUT /api/internal/v1/billing/coefficients` — Установка тарифных коэффициентов.
-* `GET /api/internal/v1/billing/consumption?target_org_id=<id>&period=YYYY-MM-01` — Запрос потребления организации за месяц.
-* `GET /api/internal/v1/billing/consumption/history?target_org_id=<id>` — История потребления организации.
-* `POST /api/internal/v1/billing/recalculate` — Принудительный перерасчет биллинга за период.
-
-### 3.8. Инженерная диагностика и Live Logs (`/api/internal/v1/diagnostics`)
-* `WebSocket /api/internal/v1/diagnostics/ws/devices/{sn}` — Двусторонний сокет для live-логов и команд (`START_LOG`, `STOP_LOG`, `EXEC`, `CANCEL`). Требует заголовки суперпользователя (`X-Role: superuser`, `X-Org-Id: <id>`).
-
-### 3.9. Системный администратор (`/api/internal/v1/admin`)
-* `POST /api/internal/v1/admin/?action=get_d` — Репликация реестра устройств.
-* `POST /api/internal/v1/admin/?action=get_u` — Репликация определений пользователей RabbitMQ.
-
-### 3.10. Удалённое управление вводом Remote Input (`/api/internal/v1/remote-input`)
-Предназначено для интеграции с MenuBuilder (операторский интерфейс удалённого рабочего стола терминала). Управление разрешено ролям `superuser`, `admin`, `user` (роли 1–3); роль `viewer` (4) отклоняется с кодом `403`.
-
-#### Маршруты REST:
-* `GET /api/internal/v1/remote-input/devices/{sn}/status` — Получение текущего статуса присутствия агента `l4desk` и активной аренды (`200 StatusResponse`).
-* `POST /api/internal/v1/remote-input/devices/{sn}/lease` — Запрос на получение эксклюзивной аренды управления терминалом (`201 LeaseResponse`; при занятости `409 Conflict {"detail":"lease busy","owner_user_id":"...","expires_at":"..."}`).
-* `POST /api/internal/v1/remote-input/lease/{lease_id}/keepalive` — Продление срока действия аренды на 60 секунд (`200 LeaseResponse`).
-* `DELETE /api/internal/v1/remote-input/lease/{lease_id}` — Досрочный отзыв аренды и отмена ожидающих команд (`204 No Content`).
-* `POST /api/internal/v1/remote-input/lease/{lease_id}/pointer-move` — Отправка перемещения указателя мыши best-effort (`202 Accepted {"accepted":true}`).
-* `POST /api/internal/v1/remote-input/lease/{lease_id}/mouse-click` — Отправка клика мыши с синхронным ожиданием подтверждения ACK/NACK (`200 ClickResult`).
-
-#### WebSocket командный канал:
-* `WebSocket /api/internal/v1/remote-input/ws/lease/{lease_id}` — Полнодуплексный командный канал управления для оператора.
-  * **Аутентификация при подключении**: проверка `X-Internal-Service-Key`, соответствие `X-Org-Id` и `X-User-Id` владельцу аренды.
-  * **Сразу после подключения**: сервер отправляет сообщение `hello` с параметрами лимитов и текущий `presence`.
-  * **Входящие сообщения (BFF → app1)**: `pointer_move` (`x`, `y`), `mouse_click` (`x`, `y`, `button`, `client_ref`), `keepalive`, `release`.
-  * **Исходящие сообщения (app1 → BFF)**: `hello`, `presence`, `click_result`, `error` (`rate_limited`, `invalid_message`, `payload_too_large`), `lease_revoked`.
-  * При закрытии соединения аренда автоматически отзывается с причиной `released`.
-
----
-
-Реализация tenant history, проверки и условия выпуска:
-[IoT handoff](user-event-history-iot-handoff.md).
-
-## 4. Примеры вызовов из смежных сервисов
-
-### 4.1. Создание задачи для устройства (через внутренний API)
-```bash
-curl -X POST "http://app1:8000/api/internal/v1/device-tasks/" \
-     -H "X-Internal-Service-Key: <APP_CONFIG__AUTH__INTERNAL_SERVICE_KEY>" \
-     -H "X-Org-Id: 12" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "device_id": 773,
-       "method_code": 1,
-       "params": {"action": "open_door", "channel": 1}
-     }'
+```http
+POST /api/internal/v1/device-tasks/
+X-Internal-Service-Key: <configured-service-secret>
+X-Org-Id: 12
+Content-Type: application/json
 ```
 
-### 4.2. Провиженинг API-ключа для организации
-```bash
-curl -X POST "http://app1:8000/api/internal/v1/provisioning/api-keys" \
-     -H "X-Internal-Service-Key: <APP_CONFIG__AUTH__INTERNAL_SERVICE_KEY>" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "org_id": 12,
-       "api_key": "leo4_sec_custom_org12_key",
-       "name": "Production Partner Key",
-       "is_active": true
-     }'
+```json
+{
+  "ext_task_id": "open-cell-5",
+  "device_id": 773,
+  "method_code": 51,
+  "priority": 1,
+  "ttl": 5,
+  "payload": {"dt": [{"cl": 5}]}
+}
 ```
 
-### 4.3. Пример на Python (`httpx.AsyncClient`)
-```python
-import httpx
+## 📨 Независимый поиск пользовательской истории
 
-INTERNAL_API_BASE = "http://app1:8000/api/internal/v1"
-INTERNAL_SECRET = "your_configured_internal_service_key"
+`GET /api/internal/v1/device-events/search` читает только события 900–999, не меняет offsets и не требует online или console lease.
 
-async def send_command_to_device(org_id: int, device_id: int, method_code: int, params: dict):
-    headers = {
-        "X-Internal-Service-Key": INTERNAL_SECRET,
-        "X-Org-Id": str(org_id),
-        "Content-Type": "application/json",
-    }
-    async with httpx.AsyncClient(base_url=INTERNAL_API_BASE) as client:
-        response = await client.post(
-            "/device-tasks/",
-            headers=headers,
-            json={
-                "device_id": device_id,
-                "method_code": method_code,
-                "params": params,
-            },
-        )
-        response.raise_for_status()
-        return response.json()
-```
+| Query | Правило |
+| :--- | :--- |
+| `device_id` | Обязательный положительный ID одного устройства |
+| `correlation_id` | UUID 8-4-4-4-12; сравнение с `300[0]["448"]` без учёта регистра |
+| `events_include` | Повторяемый параметр, только 900–999; отсутствие — весь диапазон |
+| `after_event_id` | Положительный server ID; выборка id > cursor |
+| `created_from / created_to` | Время с TZ; created_at >= from и < to |
+| `limit` | 1–100, default 50 |
+
+Ответ содержит items (DevEventOut), next_after_event_id, has_more. Порядок id ASC; пустой ответ сохраняет заданный cursor либо null. UUID — фильтр, не разрешение.
+
+Все event reads требуют совпадения tenant записи и текущей привязки устройства. Перенос A → B не раскрывает историю A организации B. История до tenant migration с org_id=NULL скрыта; автоматического backfill нет.
+
+Невалидные query дают 422, отсутствующий tenant — 400, неверные HTTP credentials — 403. Чужое устройство/история дают пустую выдачу. Cursor не гарантирует порядок commit параллельных транзакций или exactly-once. Для сверки операции допустим повторный поиск по UUID с дедупликацией server ID; отсутствие события не запускает команду заново.
+
+MenuBuilder/MCP reader формирует tenant после проверки caller и не передаёт пользовательский override или superuser-контекст для обычного чтения.
+
+**Реализация:** [HTTP auth](../app-service/api/internal_v1/internal_depends.py) · [event router](../app-service/api/internal_v1/device_events.py) · [repository](../app-service/core/crud/dev_events_repo.py) · [history handoff](user-event-history-iot-handoff.md). Сверено с master на 09.10.2026.

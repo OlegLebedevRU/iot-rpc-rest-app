@@ -1,11 +1,10 @@
-# 📘 Справочник MQTT RPC `method_code`
+# 🔢 RPC · Реестр методов
 
-> **Файл:** `docs/method-codes-reference.md`
-> **Версия:** 1.1
-> **Дата:** 2026
-> **Статус:** ⭐ Единый источник истины по `method_code`, форматам `payload.dt` и документированной совместимости RPC-вызовов
+> Документированные команды устройств и специальные контракты служебных агентов. Реестр расширяется и не является автоматической проверкой возможностей прошивки.
 
-> 📡 **Форматы применимы как для MQTT RPC, так и для REST API.** Поля `payload.dt`, `method_code` и структуры ответов `res` идентичны в обоих случаях. Отличается только транспортный конверт: для MQTT он описан в [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md), для REST — в [`1-task-workflow-doc.md`](./1-task-workflow-doc.md).
+[← Документация](README.md) · [RPC](mqtt-rpc-protocol.md) · [REST задач](1-task-workflow-doc.md)
+
+> 📡 **Параметры команды применимы к MQTT и REST.** В REST передавайте `method_code` и `payload`; в MQTT RSP они находятся в `header.method_code` и `payload`. Примеры `res` ниже показывают содержимое результата. Transport User Properties `status_code` и `result_uid` передаются отдельно; поле статуса внутри JSON их не заменяет. REST-история нормализует результаты и маскирует чувствительные поля. [MQTT-конверт](mqtt-rpc-protocol.md) · [REST-конверт](1-task-workflow-doc.md).
 
 > 🧩 **Матрица совместимости ниже отражает документированные варианты устройств:** `Platerra`, `Siplite`, `l4-hmi`.
 > `✅` — `method_code` задокументирован для данного варианта; `—` — совместимость не зафиксирована в текущем RPC-контракте.
@@ -17,7 +16,7 @@
 - `method_code` определяет действие, которое устройство должно выполнить в рамках RPC-запроса от сервера.
 - Для всех RPC-сообщений обязательна сквозная передача `correlationData`.
 - Для `Platerra` в текущем публичном контракте задокументирован только `method_code = 51`.
-- Для `Siplite` задокументированы все `method_code`, перечисленные в этом реестре.
+- Матрица `Platerra` / `Siplite` / `l4-hmi` ниже относится к документированным контроллерным командам. Служебные методы L4 Tools имеют отдельные контракты агента.
 - Для `l4-hmi` в текущем публичном контракте задокументированы `17`, `21`, `23`.
 - Если ответ `/res` не содержит специальных полей, используется стандартный ответ:
 
@@ -36,7 +35,7 @@
 | :-- | :-- | :-- |
 | `1..2999` | ⚙️ Стандартные | Обрабатываются во внутренних подсистемах прошивки: OTA, NVS, UART, загрузка и сброс данных |
 | `3000..3999` | 🌐 Интерактивные | Сквозная передача запросов во внешние шлюзы через WebSocket |
-| `7000..7099` | 🖥️ Remote Diagnostics / Output Streams | Управление live logs, выполнение predefined diagnostic command и отмена diagnostic session; потоковый вывод идёт в `dev/<SN>/out` |
+| `7000..7099` | 🖥️ Служебные методы | Диагностика, renewal, файловый менеджер и сопровождение L4 Tools; поддержка зависит от агента |
 | `0xFFFF` / `65535` | 🚨 Терминальный | Fail-fast код для завершения вызова при ошибке структуры или валидации |
 
 > ⚠️ Для интерактивных `method_code` из диапазона `3000..3999` устройство обязано завершать вызов в терминальное состояние, то есть сразу публиковать `/res` со статусом `500`, даже если внешний WS-клиент недоступен.
@@ -69,7 +68,7 @@
 | `512` | `CMD_STM32_BIN_DOWNLOAD` | Скачивание бинарного образа для STM32 с запуском задачи | — | ✅ | — | — |
 | `3000..3999` | *(интерактивные коды)* | Роутинг для локальных шлюзов / WS-клиентов | — | ✅ | — | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) |
 | `7000` | `CMD_DIAG_STREAM_CONTROL` | Start/stop volatile output stream, включая ESP32 live logs | — | ✅ | — | [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md) |
-| `7001` | `CMD_DIAG_EXEC` | Выполнение predefined diagnostic command из allowlist агента | — | ✅ | — | [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md) |
+| `7001` | `CMD_DIAG_EXEC` | Выполнение diagnostic command, включая поддерживаемые агентом raw-команды | — | ✅ | — | [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md) |
 | `7002` | `CMD_DIAG_CANCEL` | Отмена активной diagnostic session | — | ✅ | — | [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md) |
 | `65535` (`0xFFFF`) | `CMD_INVALID_JSON` | Ошибка структуры / валидации, fail-fast завершение | — | ✅ | — | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) |
 
@@ -316,11 +315,11 @@
 - **Назначение:** сквозные вызовы, где `payload` и структура определяются подключённым клиентом.
 - **Особенность:** fail-fast при недоступности WS-канала.
 
-### 🔸 `7000..7099` — Remote Diagnostics / Output Streams
+### 🔸 `7000–7002` — Remote Diagnostics / Output Streams
 - **Совместимость:** агенты/прошивки с поддержкой [`remote-diagnostics-protocol.md`](./remote-diagnostics-protocol.md).
 - **Транспорт управления:** только существующий RPC lifecycle (`srv/<SN>/tsk`, `dev/<SN>/req`, `srv/<SN>/rsp`, `dev/<SN>/res`).
 - **Потоковый вывод:** публикуется устройством в `dev/<SN>/out`; не является event и не заменяет финальный `/res`.
-- **Безопасность:** backend и агент используют allowlist `command_id`; произвольные shell-команды не передаются.
+- **Команды:** backend поддерживает predefined `command_id` и raw aliases. Текущий console-контракт допускает `command_line` и `shell`; разрешение конкретного действия определяет агент.
 
 #### `7000` — `CMD_DIAG_STREAM_CONTROL`
 
@@ -387,8 +386,8 @@ Stop stream:
 - Перед публикацией задачи проверяйте совместимость `method_code` с вариантом устройства по матрице выше.
 - Всегда передавайте `correlationData` сквозным образом.
 - Для `3000..3999` обрабатывайте недоступность WS-клиента через fail-fast.
-- Для ошибок структуры или валидации используйте `CMD_INVALID_JSON` (`65535` / `0xFFFF`).
-- Если команда не требует специального ответа, возвращайте стандартный `res` с `status` и `method_code`.
+- `CMD_INVALID_JSON` (`65535` / `0xFFFF`) — документированный firmware marker ошибки. REST TaskCreate его не принимает (`method_code < 65535`), адресный Trigger ограничен `7099`. Ошибку исполнения передавайте результатом с корректным transport `status_code`.
+- Если команда не требует специального JSON-ответа, возвращайте стандартный `res` с `status` и `method_code`, добавляя transport `status_code` и стабильный `result_uid`.
 - Для кейса `l4-hmi` + `method_code = 17` дополнительно планируйте обработку асинхронного события `event_type_code = 70`, если бизнес-сценарию нужен детализированный итог обновления UI-каталога.
 
 ---
@@ -406,26 +405,45 @@ Stop stream:
 | [`event-types-reference.md`](./event-types-reference.md) | Реестр типов событий, включая `event_type_code = 70` для `l4-hmi` |
 | [`event-property-tags.md`](./event-property-tags.md) | Реестр тегов событий, включая `401`–`410` для результата обновления UI-каталога |
 
-## 7011 — authenticated certificate renewal
+## 🖥️ Служебные методы L4 Tools
 
-payload.dt has one item: {"pin":"000000","pin_expires_at":4102444800,"ttl_sec":120}.
-The shown PIN is a fixture. Purpose is renew; only PB's verified-live-certificate
-POST /api/certificates/renew may consume it. 7003 accepts empty dt and answers
-pong. 7004/7005 accept canonical empty dt but native l4con returns unsupported;
-no false keepalive acknowledgment. Historical7010 is not reinterpreted.
+| Код | Назначение | Контракт / ограничение |
+| :--- | :--- | :--- |
+| `7003` | Ping | Ровно `{"dt":[]}`, consumer отвечает pong |
+| `7004/7005` | Пустые служебные вызовы | API принимает `{"dt":[]}`; native l4con возвращает unsupported, а не ложный keepalive ACK |
+| `7010` | Legacy | Существующий контракт не переопределяется валидатором renewal |
+| `7011` | Authenticated certificate renewal | Один объект PIN; правила ниже |
+| `7021` | L4FM transfer | `session_id`, `action=transfer`, `operation_id`, `expires_at`, `ttl_sec` |
+| `7023` | L4FM start/renew | `session_id`, `action`, `expires_at`, `ttl_sec`, без `operation_id` |
+| `7020/7022` | Retired FM v1 | Отклоняются текущим FM; list/stop идут через `fmc/fmr` |
+| `7030–7033` | Методы контура обновлений L4 Tools | Допущены в capability polling IoT; payload и поддержка задаются consumer-контрактом |
 
+Это дополнение не расширяет матрицу совместимости контроллеров автоматически. Валидаторы API не заменяют проверку поддержки методом конкретного агента.
 
-## FM v2 — выпущенный контракт, 2026-10-05
+### 🔐 `7011` · Обновление сертификата
 
-| method_code | Назначение | Payload dt[0] |
-|---|---|---|
-| 7020 | Retired FM v1 list | Отклоняется; navigation только через fmc/fmr |
-| 7021 | transfer | session_id, action=transfer, operation_id, expires_at, ttl_sec |
-| 7022 | Retired FM v1 cancel | Отклоняется; stop/cancel через подтверждённый fmc/fmr stop |
-| 7023 | start/renew | session_id, action, expires_at, ttl_sec; без operation_id |
+Полный task payload содержит ровно один объект:
 
-Files монополизирует общую lease с console/stream/input/view, включая того же owner.
-Start/renew требуют PB ticket/agent ACK. Close revokes first и освобождает слот
-раньше deadline+5с только после worker-exit ACK. Байты только agent–S3–browser,
-agent HTTPS только через Leo4Proxy в PB/S3. FM v1 fallback отсутствует.
-app1 production6209faf; [полный текущий контракт, конфигурация и evidence](file-manager-v2.md).
+```json
+{
+  "dt": [
+    {"pin":"000000","pin_expires_at":4102444800,"ttl_sec":120}
+  ]
+}
+```
+
+PIN в примере условный. Реальный `pin` — шесть ASCII-цифр; `pin_expires_at` — UTC epoch seconds из срока PIN, выданного PB. Неизвестные поля запрещены. TTL задачи положителен и не превышает остаток срока PIN; сервер также ограничивает deadline этим сроком.
+
+7011 всегда ждёт RSP. Только согласованный renew flow PB с проверенным действующим сертификатом использует PIN. Выдача сертификата не доказывает его установку: для сверки используются свежие наблюдения mTLS и инвентаризация event75. RES и события не должны содержать PIN.
+
+REST-история и результат рекурсивно маскируются. Исходный PIN остаётся в delivery payload до очистки при результате, удалении или expiration. [Схема renewal](../app-service/core/schemas/certificate_renewal.py).
+
+### 📂 L4FM v2
+
+Старт/продление и transfer используют существующий RPC lifecycle. Navigation и подтверждённый stop вынесены в `srv/<SN>/fmc` → `dev/<SN>/fmr`; файлы передаются через S3. Общая lease монопольна с console/stream/input/view, включая того же владельца. [Полный контракт файлового менеджера](file-manager-v2.md).
+
+### 🔄 Capability polling
+
+Служебный consumer передаёт непустое подмножество `7001,7002,7003,7011,7021,7023,7030,7031,7032,7033` в `rpc_methods`. Отсутствующий или невалидный header оставляет legacy-ограничения. [Алгоритм выбора](mqtt-rpc-protocol.md).
+
+Сверено с валидаторами и выборкой IoT в `master` на 09.10.2026. Поддержка и смысл device-specific команд определяются контрактом прошивки/агента.

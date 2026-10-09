@@ -1,41 +1,10 @@
-# Справочник MQTT-событий (evt) и типов (тег 200)
+# 🏷️ События · Реестр типов
 
-> **Файл:** `docs/event-types-reference.md`
-> **Назначение:** Референсный документ (источник истины) по типам событий (поле `200`), отправляемым устройством в облако.
-> **Важно:** В этом файле не приводится полная расшифровка числовых тегов внутри массива `300` (теги `3xx`, `4xx`). Их назначения вынесены в единый референс-документ: [`event-property-tags.md`](./event-property-tags.md).
+> Коды `event_type_code` и документированные форматы. Метаданные MQTT и правила хранения описаны в протоколе событий.
 
----
+[← Документация](README.md) · [События MQTT](event-protocol-mqtt.md) · [Теги](event-property-tags.md) · [REST истории](2-events-api-format-description.md)
 
 ## 1. Общий формат события
-
-### Системное событие75: сертификат и инвентаризация l4con
-
-`TerminalCertificateConnected` — наблюдаемое подключение l4con под SN
-активного сертификата Leo4Proxy и снимок установленных EXE. Перед отправкой
-producer сверяет SN/отпечаток активного сертификата с локальным. Это не
-подтверждение выпуска сертификата CA и не доказательство исправности всего ПО.
-
-Транспорт текущего l4con: MQTT5, dev/{SN}/evt, QoS1, без retain. Метаданные
-event_type_code=75, dev_event_id и dev_timestamp передаются User Properties;
-JSON содержит101/102/200/300 и correlationData. Теги300[0]:324 и440–445.
-Снимок публикуется после CONNACK и при изменении сертификата/инвентаризации;
-проверка изменений каждые60 секунд, повтор при ошибке публикации через15 секунд.
-
-IoT сохраняет payload обычным event collector, применяет tenant binding,
-dedup, webhook и EVA. Для75 не публикуется ни evt-, ни activity-счётчик
-биллинга. Код не является gauge. Правила900–999 не меняются.
-Старая ветка feat/cert-activation-event предполагала MQTT3 и fallback JSON
-вместо заголовков; этот альтернативный decoder не перенесён в master.
-
-### Кастомные пользовательские/MCP-события900–999
-
-l4con1.9.3 отправляет эти события через существующее dev/{SN}/evt,
-QoS1/retain=false. Default-код999. Отдельных зарегистрированных смыслов
-«успех», «ошибка», «этап» за кодами не закреплено; их определяет сценарий.
-В300[0] доступны текст446, int32-код447 и опциональный внешний UUID448.
-Подробности в [справочнике тегов](event-property-tags.md).
-UUID448 связывает историю с исходной удалённой командой, но не предоставляет
-доступ к истории. Принадлежность tenant определяет сервер при приёме.
 
 Все события от устройства (в топик `dev/<SN>/evt`) публикуются в виде JSON-объекта со следующей базовой структурой:
 
@@ -43,14 +12,14 @@ UUID448 связывает историю с исходной удалённой
 {
   "101": 12345,
   "102": "2026-04-22T13:48:02+03:00",
-  "200": 0,
+  "200": 13,
   "300": [
-    { ... }
+    {"304": 5}
   ]
 }
 ```
 
-- **`101`** (uint32): Уникальный идентификатор события на ��стройстве (в пределах сессии/аптайма).
+- **`101`** (uint32): Уникальный идентификатор события на устройстве (в пределах сессии/аптайма).
 - **`102`** (string): Временная метка ISO 8601 (с часовым поясом).
 - **`200`** (int): Код типа события (см. таблицу ниже). Полностью определяет структуру вложенных параметров.
 - **`300`** (array): Массив объектов с параметрами события. Структура содержимого зависит от типа `200`.
@@ -76,10 +45,15 @@ UUID448 связывает историю с исходной удалённой
 | **46** | `UartToCloud` | Входные данные с внешнего порта в конфигурации «Шлюз UART -> MQTT». | `Siplite` |
 | **53** | `Stm32FwUpdateResult`| Результат прошивки сопроцессора STM32 по локальной шине. | `Siplite` |
 | **54** | `SipRegStateChange`| Факт входа или выхода из состояния SIP `REGISTERED` (с фильтрацией штатных переподключений). | `Siplite` |
-| **63** | `FullStateNotify` | **(НОВОЕ)** Текущее бинарное состояние всех ячеек (слотов, внешних GPIO и т.п.). | `Platerra`, `Siplite` |
-| **65** | `SeedInitDone` | **(НОВОЕ)** Завершение seed-инициализации NVS-конфигурации (первый запуск или factory-reset). Несёт слепок записанных дефолтов в теге `370` (`seed_data`). | `Siplite` |
-| **70** | `L4HmiEvent` | **(НОВОЕ)** Результат задания по обновлению UI-каталога устройств варианта совместимости `l4-hmi`. | `l4-hmi` |
-| **73** | `SIPLITE_COMMAND_ACCEPTED` | **(НОВОЕ)** Локальное подтверждение приёма/доставки команды в активный long-poll канал Client1 (`GET /task`) в Siplite. Не подтверждает физическое выполнение команды. | `Siplite` |
+| **63** | `FullStateNotify` | Текущее бинарное состояние всех ячеек (слотов, внешних GPIO и т.п.). | `Platerra`, `Siplite` |
+| **65** | `SeedInitDone` | Завершение seed-инициализации NVS-конфигурации (первый запуск или factory-reset). Несёт слепок записанных дефолтов в теге `370` (`seed_data`). | `Siplite` |
+| **70** | `L4HmiEvent` | Результат задания по обновлению UI-каталога устройств варианта совместимости `l4-hmi`. | `l4-hmi` |
+| **73** | `SIPLITE_COMMAND_ACCEPTED` | Локальное подтверждение приёма/доставки команды в активный long-poll канал Client1 (`GET /task`) в Siplite. Не подтверждает физическое выполнение команды. | `Siplite` |
+| **75** | `TerminalCertificateConnected` | Наблюдаемое подключение и инвентаризация сертификата / L4 Tools. | `l4con` |
+| **76** | L4 Tools update operation | Объект результата обновления в теге `449`. | `l4con` / L4Update |
+| **900–999** | Пользовательские события | Значение кода задаёт прикладной/MCP-сценарий. | `l4con` |
+
+> 📊 По умолчанию `44` — gauge: текущий снимок без истории, webhook и EVA. События `75/76` сохраняются и подтверждаются обычным способом, но исключены из evt/activity billing.
 
 ---
 
@@ -374,19 +348,49 @@ UUID448 связывает историю с исходной удалённой
 | `423` | `string` | Локальный идентификатор команды (`local_command_id`) внутри Siplite-контроллера. |
 | `424` | `boolean` | Признак наличия внешнего `correlation_id` (`true`/`false`). |
 | `425` | `string` *(optional)* | Внешний идентификатор задачи (`ext_task_id`), если был передан во входном локальном запросе. |
-# Event76: L4 Tools update operation
+### Код 75 · Сертификат и инвентаризация
 
-Assigned 2026-10-08. `event_type_code=76` is an infrastructure event, persisted
-through the ordinary collector (tenant ownership, device-event dedup, webhook,
-successful/error EVA). It is excluded from both evt and activity billing, like75.
-Header correlationData/dev_event_id identify the publication; original RPC7031
-task UUID is `operation_id` inside the single operation object at `300[0]["449"]`.
-Inventory event75 independently complements the result. This is not an orphan
-probe; `iot_probe` must be absent.
+`TerminalCertificateConnected` сообщает о наблюдаемом подключении l4con под SN активного сертификата Leo4Proxy и снимке установленных EXE. Это наблюдение не доказывает выпуск CA или исправность всего ПО.
+
+MQTT 5: `dev/<SN>/evt`, QoS 1, без retain; User Properties `event_type_code=75`, `dev_event_id`, `dev_timestamp`. JSON содержит `101/102/200/300`, свойства снимка — `324` и `440–445`. Текущий producer публикует после CONNACK и изменений сертификата/инвентаря; проверка изменений — раз в 60 секунд, retry ошибки публикации — через 15 секунд.
+
+IoT использует обычные tenant binding, dedup, webhook и EVA, без обоих счётчиков evt/activity. Metadata берутся из transport headers, а не подменяются JSON. [Теги снимка](event-property-tags.md).
+
+### Код 76 · Результат обновления L4 Tools
 
 ```json
-{"101":123,"102":"2026-10-08T12:00:00Z","200":76,"300":[{"449":{"operation_id":"e48d443f-7fc4-4ff1-8d72-807cfe3c3bfb","kind":"suite","result":"committed","requested_version":"latest","resolved_version":"1.13.7","previous_version":"1.13.6","error":0}}]}
+{
+  "101": 123,
+  "102": "2026-10-08T12:00:00Z",
+  "200": 76,
+  "300": [
+    {
+      "449": {
+        "operation_id": "e48d443f-7fc4-4ff1-8d72-807cfe3c3bfb",
+        "kind": "suite",
+        "result": "committed",
+        "requested_version": "latest",
+        "resolved_version": "1.13.7",
+        "previous_version": "1.13.6",
+        "error": 0
+      }
+    }
+  ]
+}
 ```
 
-Delivery uses bounded producer retries and ordinary EVA; no absolute delivery
-guarantee. The object is preserved by IoT rather than translated into columns.
+`449` хранит целый объект операции без преобразования в колонки. `operation_id` — UUID исходной RPC7031-задачи; Correlation Data и `dev_event_id` идентифицируют публикацию и независимы от операции. Event75 дополняет результат свежим снимком инвентаря.
+
+Событие сохраняется с tenant ownership, dedup, webhook и EVA. Из evt/activity billing исключено; gauge не является. Producer использует ограниченные retries, поэтому абсолютная доставка не гарантируется. Marker `iot_probe` отсутствует: это обычное хранимое событие.
+
+### Коды 900–999 · Пользовательские события
+
+Смысл кода задаёт пользователь или MCP-сценарий; фиксированных значений «успех», «ошибка», «этап» нет. Default producer code — `999`. В `300[0]`: текст `446`, пользовательский int32-код `447`, необязательный внешний UUID `448`.
+
+Несколько событий могут относиться к одному внешнему UUID. Он связывает историю, но не предоставляет доступ и не заменяет transport correlation. [Теги](event-property-tags.md) · [Поиск истории](2-events-api-format-description.md).
+
+---
+
+[События MQTT](event-protocol-mqtt.md) · [Реестр тегов](event-property-tags.md) · [REST истории](2-events-api-format-description.md).
+
+Контракты хранения и обработки сверены с `master` на 09.10.2026; совместимость контроллеров отражает документированные контракты прошивок.

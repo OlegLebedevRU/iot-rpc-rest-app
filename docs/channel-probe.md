@@ -1,48 +1,61 @@
-# Orphan transport-probe v1
+# 🧪 Channel Probe · Проверка канала
 
-Accepted 2026-10-08 for L4Update and future bounded channel diagnostics. This is
-an explicit transport branch on existing MQTT topics, not a task or durable event.
-It cannot execute RPC, consume queued tasks, change task state, publish billing or
-webhooks, or create PostgreSQL rows. Device/active tenant lookup is read-only;
-database identity lookup failure prevents success. Transport authorization remains
-the broker's certificate-CN and device topic ACL. Payload cannot choose SN/tenant.
+> Transport-probe v1: свежий обмен REQ/RSP и EVT/EVA на существующих MQTT-топиках. Принят 08.10.2026.
 
-All four messages carry User Property `iot_probe=1`. Unknown marker values and
-malformed marked messages are dropped without falling through to ordinary RPC or
-event processing. Native correlationData remains mandatory, nonzero canonical UUID.
+[← Документация](README.md) · [MQTT RPC](mqtt-rpc-protocol.md) · [События](event-protocol-mqtt.md)
 
-| Direction | Correlation | JSON body | Additional User Properties |
-|---|---|---|---|
-| dev/SN/req | fresh N | `{"v":1,"type":"channel_probe"}` | none |
-| srv/SN/rsp | N | `{"v":1,"type":"channel_probe","status":"success"}` | method_code=0 |
-| dev/SN/evt | fresh M, M!=N | `{"v":1,"type":"channel_probe","request_nonce":"N"}` | event_type_code=0, dev_event_id=nonzero uint32 |
-| srv/SN/eva | M | `{"v":1,"type":"channel_probe","status":"success","request_nonce":"N"}` | event_type_code=0, matching dev_event_id |
+## 🧭 Что проверяется
 
-The table's N is the actual UUID text, not the letter N. Body fields are exact;
-extra/duplicate JSON fields, numeric-string version and oversized messages fail.
-Valid CN-scoped messages receive generic `status=error` for unknown/unbound
-identity or identity lookup failure; this reports that IoT answered while keeping
-the barrier closed. Both RSP and EVA use the same exact fields for error; no tenant
-or database detail is exposed. Invalid schema/marker and rate rejection are dropped.
-Both replies
-expire after 10 seconds and are not retained. Request body limit is 512 bytes.
+Probe проверяет transport handlers и read-only lookup зарегистрированного устройства с активной tenant-привязкой. Он не исполняет RPC, не выбирает очередь задач, не меняет task state, не создаёт PostgreSQL-записи, webhook или billing. Payload не может выбрать SN или tenant; идентичность задают CN сертификата и ACL брокера.
 
-Client requires RSP with matching N before generating M/EVT, then checks M, N,
-event ID, marker, event code and successful EVA within a monotonic deadline. A
-response from a previous stage/connection cannot satisfy a fresh barrier. Server
-does not maintain a cross-worker session or prove that N was previously processed:
-ordering and freshness are client gate requirements. Each reply authenticates the
-routing SN's current registered device/active tenant binding independently.
+Все четыре сообщения имеют User Property `iot_probe=1`. Неизвестный marker и невалидное маркированное сообщение отбрасываются, без перехода в обычный RPC/event handler. Native MQTT Correlation Data обязательна: ненулевой canonical UUID.
 
-Limits per application process: 64 marked messages per SN per 10 seconds, 128 per
-second globally, at most 4096 live rate-limit identities. Entries expire in 10s;
-new identities fail closed at capacity. Deployment totals scale with worker count.
-Identity lookup is capped at 2s within a single 10s lookup-and-publish deadline.
-Expired total budget produces no reply. This tests channel/handlers and identity lookup,
-not durable event insertion or webhook delivery; use ordinary persistent events
-when testing those guarantees. A downlevel server cannot satisfy the probe. No
-automatic fallback may waive the required update communication barrier.
+## 🔄 Два свежих этапа
 
-Implementation: `core/services/channel_probe.py`, `schemas/channel_probe.py`,
-early dispatch in `topologys/fs_queues.py`; native consumer is l4con. No new MQTT
-client connection or duplicated production client ID is used.
+```mermaid
+sequenceDiagram
+    participant D as l4con
+    participant S as LEO4 Core
+    D->>S: REQ · fresh N · iot_probe=1
+    S->>D: RSP · N · success
+    Note over D: После проверки RSP создать M, M != N
+    D->>S: EVT · M · request_nonce=N
+    S->>D: EVA · M · request_nonce=N · success
+    Note over D: Проверить UUID, nonce, marker и deadline
+```
+
+| Топик | Корреляция | Точный JSON body | Дополнительные User Properties |
+| :--- | :--- | :--- | :--- |
+| `dev/<SN>/req` | Fresh N | `{"v":1,"type":"channel_probe"}` | — |
+| `srv/<SN>/rsp` | N | `{"v":1,"type":"channel_probe","status":"success"}` | `method_code=0` |
+| `dev/<SN>/evt` | Fresh M, M ≠ N | `{"v":1,"type":"channel_probe","request_nonce":"N"}` | `event_type_code=0`, `dev_event_id` — ненулевой uint32 |
+| `srv/<SN>/eva` | M | `{"v":1,"type":"channel_probe","status":"success","request_nonce":"N"}` | `event_type_code=0`, совпадающий `dev_event_id` |
+
+N в таблице заменяется фактическим текстом UUID. Дополнительные или дублирующиеся JSON-поля, строковая версия `"1"` и превышение размера недопустимы. User Properties передаются строками.
+
+## 🚦 Успех, ошибка и timeout
+
+Для валидных CN-scoped запросов неизвестное/непривязанное устройство или ошибка lookup дают тот же конверт с `status=error`, без раскрытия tenant/DB деталей. Ответ означает, что IoT доступен, но барьер успешной проверки остаётся закрытым. Невалидная схема/marker и превышение rate limit дают drop.
+
+Клиент сначала проверяет RSP с N, затем генерирует M и EVT. Успешный EVA должен совпадать по M, N, event ID, marker и event code в пределах monotonic deadline. Ответ прежней сессии или этапа не удовлетворяет свежей проверке.
+
+Сервер не хранит общую сессию между workers и не доказывает, что N был обработан раньше. Последовательность этапов контролирует клиент; каждый ответ независимо проверяет актуальную identity/tenant-привязку SN.
+
+## ⏱️ Ограничения
+
+| Ограничение | Значение |
+| :--- | :--- |
+| Request body | До 512 байт |
+| Broker expiration ответа | 10 секунд, без retain |
+| Lookup identity | До 2 секунд |
+| Общий lookup + publish budget | 10 секунд; после истечения ответ не отправляется |
+| На один SN в одном процессе | 64 marked messages за 10 секунд |
+| Глобально в одном процессе | 128 сообщений в секунду |
+| Live rate-limit identities | До 4096; новые identity при заполнении отбрасываются |
+| Жизнь rate-limit entry | 10 секунд |
+
+Суммарные лимиты развёртывания растут с количеством процессов. Проверка не доказывает запись обычного EVT или доставку webhook. Для этого нужна проверка обычного хранимого события. Старый сервер не может выполнить probe; автоматический fallback не снимает обязательный барьер обновления.
+
+Новый MQTT client и дублирующий production client ID не создаются: native consumer использует существующее соединение l4con.
+
+**Реализация:** [probe service](../app-service/core/services/channel_probe.py) · [схемы](../app-service/core/schemas/channel_probe.py) · [early dispatch](../app-service/core/topologys/fs_queues.py). Сверено с `master` на 09.10.2026.
