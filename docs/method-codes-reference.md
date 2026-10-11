@@ -133,6 +133,16 @@ Revision вычисляется по всем approved config полям, а н�
 validated без applied_fields. POST при неоднозначном ответе не повторяется:
 один GET readback устанавливает ok/partial_apply/verify_failed/outcome_unknown.
 
+Совместимость writer выбирается явно через siplite cfg_cam/writer:
+`post-json` (default, POST /api/v1/config) или `legacy-set`
+(один GET /api/v1/set?<approved.path>=<validated.value>). Это **не** автоматический
+fallback после неудачного POST: каждый RPC использует только выбранный endpoint,
+с теми же revision, validation, lifecycle guard и обязательным readback/gauge.
+Legacy-профиль допускает ровно одно изменяемое поле; multi-field patch получает
+501 batch_unsupported до записи. Gauge capabilities содержит writer_profile и
+max_patch_fields; неизвестный профиль блокирует запись. RES/last_operation могут
+содержать camera_http_status, без сырых ответов/секретов камеры.
+
 Сначала GET конфигурации и схемы, сравнение revision, проверка **всех** полей,
 только затем минимальный POST patch. Неподдерживаемое поле отклоняет весь
 patch до первого write: никаких silently skipped полей и best-effort успехов.
