@@ -301,6 +301,9 @@ Only a redirect/unsupported response permits fixed /cgi-bin/dashboard.cgi
 fallback; auth failures do not. Extract only bounded printable Firmware/Version
 and Majestic definition-list text. Never publish raw HTML, scripts or secrets.
 camera.firmware may mirror a confirmed OpenIPC version; missing stays null.
+Version text accepts normalized ASCII whitespace and commas from Majestic -v,
+at most96 characters after normalization. Nested HTML, entities, duplicate
+version labels and overlong text remain invalid; no raw status page is published.
 
 Optional telemetry.health `{source:"/metrics",status,observed_at,metrics,
 uptime_sec?,majestic_uptime_sec?}` keeps exact unlabelled finite scalar names:
@@ -316,6 +319,26 @@ Derive uptime only from consistent camera time/boot readings, never ESP time;
 do not invent zero, available-memory sums, CPU load or measured encoder FPS.
 Snapshot/probe age is calculated by consumers from observed_at; configured
 FPS/bitrate and observed ISP FPS/counters remain distinct measurements.
+
+Diagnostics extension adds snapshot `freshness_max_age_sec=330`, covering the
+300s periodic poll plus jitter and bounded probe time. Consumers compute age
+from snapshot/probe observed_at using their own trusted UTC clock: null or
+failed probe means unknown; age>330 or camera.stale means stale; timestamp more
+than5s in the future means clock_invalid. A stored gauge never remains fresh
+merely because its original stale=false. This does not change gauge storage.
+health.clock is `{status:"within_tolerance"|"skewed"|"unknown",
+offset_sec?,tolerance_sec:300,reference:"esp_utc"}`. Offset is camera time minus
+ESP UTC only when both clocks are valid; within_tolerance does not assert NTP
+synchronization. Uptime continues to use camera clock differences independently.
+
+Optional camera.power is `{source:"tca6408a_output",signal:"EN_1_12V",
+state:"on"|"off"|"unknown",enabled:boolean|null,observed_at:UTC|null}`.
+It describes verified P3 output configuration/latch, not measured supply voltage
+or camera readiness. It is readable even with unavailable camera/network/config.
+capabilities.power advertises fixed on/off/restart, restart_off_ms=3000, and
+requires_idle=true. RPC164 last_operation includes requested_action; RES and
+gauge contain the same output readback. Powered-off snapshots have config=null,
+no fabricated identity/health, and status=unavailable with power.state=off.
 
 capabilities.quality may contain presets with id, patch, available and
 unavailable_reason, validation="schema_and_policy". Availability means the
