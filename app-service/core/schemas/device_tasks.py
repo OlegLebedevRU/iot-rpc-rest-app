@@ -12,6 +12,7 @@ from pydantic import (
 )
 from core.diagnostics.schemas import validate_diagnostic_payload
 from core.schemas.certificate_renewal import CertificateRenewalPayload
+from core.schemas.ip_camera import validate_ip_camera_payload
 
 
 # Pydantic model for tasks
@@ -90,6 +91,8 @@ class TaskCreate(TaskHeader):
                     "RPC TTL must be positive and no longer than remaining PIN lifetime"
                 )
             self.payload = payload.model_dump(mode="json")
+        elif self.method_code in (160, 161):
+            self.payload = validate_ip_camera_payload(self.method_code, self.payload)
         return self
 
 

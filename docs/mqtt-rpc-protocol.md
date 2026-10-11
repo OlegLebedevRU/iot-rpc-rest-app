@@ -47,6 +47,11 @@ sequenceDiagram
 
 Без capability header polling ограничен `method_code <= 2999`; при `slave_ws > 0` — `<= 3999`. Адресный Trigger допускает методы до `7099`.
 
+RPC160/161 управления OpenIPC выполняются локально siplite и порождают
+обязательный gauge84 + RES; WebSocket/STM32 не участвуют. Unsupported —
+явный терминальный RES, без пропуска полей и ложного успеха.
+Envelope/capability/readback contract — [реестр методов](method-codes-reference.md#управление-ip-камерой-160--161).
+
 ### 🧩 Capability polling
 
 Нулевой REQ может передать User Property `rpc_methods`: список через запятую, без пробелов, длиной до 64 символов. Допустимо непустое подмножество:

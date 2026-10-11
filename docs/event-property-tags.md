@@ -213,6 +213,55 @@
 
 ## Диапазоны тегов
 
+### Тег `450`: gauge IPCamera (84)
+
+Тип `object`, producer `Siplite`. Контракт версии 1:
+
+```json
+{
+  "450": {
+    "schema_version": 1,
+    "snapshot_id": "739a5702-409a-4b59-b48b-35f91e9ee830",
+    "reason": "rpc",
+    "operation_id": "5c75b4ed-2488-4769-b23a-2afae64ea22d",
+    "observed_at": "2026-10-11T14:00:00Z",
+    "cameras": [{
+      "camera_id": "cam:ip000001",
+      "status": "read_only",
+      "stale": false,
+      "ip": "192.168.77.2",
+      "mac": null,
+      "firmware": null,
+      "revision": null,
+      "config": {"video0": {"fps": 15, "bitrate": 1024}},
+      "capabilities": {"read": true, "write": false, "fields": []},
+      "telemetry": null,
+      "last_operation": {"status": "unsupported", "error": "schema_unavailable"}
+    }]
+  }
+}
+```
+
+`reason`: `discovered`, `availability_changed`, `periodic`, `rpc`.
+`operation_id`: UUID RPC или null для фонового снимка. `observed_at`: UTC
+последнего чтения, null если чтения не было (время публикации остаётся в 102).
+`status`: `ready`, `read_only`, `unavailable`, `auth_failed`.
+`config`: нормализованные управляемые параметры; null при отсутствии чтения.
+`stale=true` обозначает last-known, не текущее состояние. revision может быть
+null если нормализация/типизация не подтверждены; иначе SHA-256 по RPC-контракту.
+`capabilities.fields`: объекты с `path`, `type`, `writable`, `disruptive` и
+доступными `min`, `max`, `enum`, `unit`. Наличие schema поля не разрешает
+запись за пределами approved allowlist. `telemetry` — только отдельно
+измеренные значения с источником и временем наблюдения. `last_operation`
+повторяет outcome соответствующего RPC, включая unsupported/unknown.
+
+Снимок до 16384 UTF-8 bytes, не более четырёх камер; config/capabilities
+содержат только approved параметры, без secrets, raw YAML и полного schema.
+Превышение лимита нельзя исправлять молчаливым обрезанием настроек: producer
+возвращает явный `snapshot_too_large` и не объявляет успешную доставку.
+Тип/схема gauge на сервере v1 сохраняются без интерпретации; producer отвечает
+за shape и редактирование secrets. На сервере доступ ограничивается tenant.
+
 | Диапазон | Назначение |
 |---------|-----------|
 | `301`–`303` | Данные события ввода идентификатора (`IdInput`) |
@@ -232,6 +281,7 @@
 | `440`–`445` | Инвентаризация сертификата и L4 Tools, событие `75` |
 | `446`–`448` | Пользовательские события `900–999` |
 | `449` | Объект операции обновления L4 Tools, событие `76` |
+| `450` | Объект состояния IP-камер, gauge `84` |
 
 ---
 
