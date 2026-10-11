@@ -66,6 +66,7 @@
 | `51` | `CMD_OPERATE_CELL` | Управление ячейкой / замком / актуатором | ✅ | ✅ | — | [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md), [`1-task-workflow-doc.md`](./1-task-workflow-doc.md) |
 | `160` | `CMD_IP_CAMERA_GET_STATE` | Прочитать OpenIPC и опубликовать gauge 84 | — | ✅ | — | Раздел «Управление IP-камерой» ниже |
 | `161` | `CMD_IP_CAMERA_SET_CONFIG` | Проверить patch, применить и подтвердить чтением; gauge 84 + RES | — | ✅ | — | Раздел «Управление IP-камерой» ниже |
+| `162` | `CMD_IP_CAMERA_SET_DAY_NIGHT` | Установить software Auto/Day/Night с readback; gauge84 + RES | — | ✅ | — | Только siplite ↔ OpenIPC, без STM32 |
 | `411` | `CMD_STM32_MCU_UPDATE` | Обновление прошивки сопроцессора STM32 | — | ✅ | — | — |
 | `512` | `CMD_STM32_BIN_DOWNLOAD` | Скачивание бинарного образа для STM32 с запуском задачи | — | ✅ | — | — |
 | `3000..3999` | *(интерактивные коды)* | Роутинг для локальных шлюзов / WS-клиентов | — | ✅ | — | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) |
@@ -121,6 +122,39 @@ Patch содержит 1..12 scalar значений; null, вложенные �
 Сервер проверяет envelope/allowlist, устройство повторяет эти проверки и
 проверяет типы/ranges/enums по обнаруженным capabilities. Разрешённый путь
 не является обещанием поддержки камерой.
+
+Day/night extension: RPC161 additionally permits `nightMode.lightMonitor`
+(strict boolean); the installed schema must confirm its boolean writer.
+Pins, thresholds, colorToGray and actuator modes remain read-only.
+
+RPC162 is a high-level **siplite ↔ OpenIPC** transaction, no sip_periph/STM32:
+`{"dt":[{"expected_revision":"<64 lowercase hex>","mode":"auto|day|night",
+"allow_disruptive":true,"dry_run":false,"timeout_ms":15000}]}`.
+camera_id/timeout defaults and bounds are the same as160; revision/mode are
+required; only these fields and strict boolean consent/dry-run are permitted.
+Every result must correlate with event84/tag450, including unsupported/failure.
+
+Auto sets and verifies lightMonitor=true. Day/night disables the auto monitor
+with the selected explicit config writer, then invokes **one** fixed
+GET /night/off or /night/on and verifies the exact night_enabled gauge. Config
+and software state are separate readbacks. Revision/prevalidation/consent and
+the existing exclusive RTP guard cover the complete transaction. No toggles,
+arbitrary URLs, GPIO writes or new camera power/I2C operations are allowed.
+Already matching monitor/software state returns unchanged; dry-run returns
+validated, with no mutation/applied_fields. Active/stopping video returns busy.
+
+Missing schema or usable night_enabled telemetry yields explicit unsupported
+before mutation. A command404/405/501 is unsupported, never success. If this
+definite rejection followed disabling auto, restore the original monitor using
+a fresh revision and verify it; failure to reconcile returns partial_apply or
+outcome_unknown with the latest snapshot. Ambiguous commands are never blindly
+replayed. Successful mutation requires verified monitor and software mode;
+unavailable readback is outcome_unknown, mismatch is verify_failed/partial_apply.
+RES/last_operation may include requested_mode and command_http_status.
+applied_fields uses nightMode.lightMonitor and day_night.mode for confirmed
+final changes; rolled-back monitor changes are excluded. Physical filter/lamp
+motion is unverified even when software flags change. Capability advertisement
+distinguishes software modes from verified physical actuators.
 
 Первый writer-профиль siplite (quality-controls) включает только
 `video0.fps`, `video0.bitrate`, `video0.rcMode`, когда установленные schema
