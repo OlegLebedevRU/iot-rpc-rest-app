@@ -64,6 +64,8 @@
 | `49` | `CMD_SET_NVS_RECORD` | Запись значений конфигурации в NVS-хранилище | — | ✅ | — | [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md) |
 | `50` | `CMD_GET_NVS_RECORD` | Чтение значений конфигурации из NVS, возвращает массив | — | ✅ | — | [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md) |
 | `51` | `CMD_OPERATE_CELL` | Управление ячейкой / замком / актуатором | ✅ | ✅ | — | [`mqtt-rpc-protocol.md`](./mqtt-rpc-protocol.md), [`1-task-workflow-doc.md`](./1-task-workflow-doc.md) |
+| `160` | `CMD_IP_CAMERA_GET_STATE` | Прочитать OpenIPC и опубликовать gauge 84 | — | ✅ | — | Раздел «Управление IP-камерой» ниже |
+| `161` | `CMD_IP_CAMERA_SET_CONFIG` | Проверить patch, применить и подтвердить чтением; gauge 84 + RES | — | ✅ | — | Раздел «Управление IP-камерой» ниже |
 | `411` | `CMD_STM32_MCU_UPDATE` | Обновление прошивки сопроцессора STM32 | — | ✅ | — | — |
 | `512` | `CMD_STM32_BIN_DOWNLOAD` | Скачивание бинарного образа для STM32 с запуском задачи | — | ✅ | — | — |
 | `3000..3999` | *(интерактивные коды)* | Роутинг для локальных шлюзов / WS-клиентов | — | ✅ | — | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) |
@@ -75,6 +77,106 @@
 ---
 
 ## 🧩 3. Форматы `payload.dt` и ответы `res`
+
+### Управление IP-камерой: `160` / `161`
+
+Контракт v1, producer — siplite, исполнитель — OpenIPC/Majestic по внутреннему
+Ethernet. STM32/sip_periph не участвует. Это локальные RPC из диапазона
+`1..2999`, без зависимости от WebSocket и без изменения video ctl/lease.
+Наличие метода в реестре не означает поддержку установленной прошивкой.
+
+`160` принимает ровно один объект в `payload.dt`:
+
+```json
+{"dt":[{"camera_id":"cam:ip000001","timeout_ms":5000}]}
+```
+
+Оба поля имеют показанные defaults. `camera_id` соответствует `cam:ip` + шесть
+цифр; `timeout_ms` — целое `1000..15000`, общий бюджет операции, включая очередь
+и HTTP. Deadline ограничивается оставшимся TTL задачи; часы ожидания не
+продлеваются при retry. Неизвестные поля запрещены.
+
+`161` добавляет обязательные `expected_revision` (64 lowercase hex SHA-256) и
+`patch`, необязательные boolean `allow_disruptive=false`, `dry_run=false`:
+
+```json
+{"dt":[{"camera_id":"cam:ip000001","timeout_ms":5000,
+  "expected_revision":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "patch":{"video0":{"fps":15,"bitrate":1024}},
+  "allow_disruptive":false,"dry_run":false}]}
+```
+
+Допустимые пути v1: `video0.fps`, `video0.bitrate`, `video0.gopSize`,
+`video0.rcMode`, `video0.size`, `isp.mirror`, `isp.flip`, `isp.rotate`,
+`isp.luminance`, `isp.contrast`, `isp.saturation`, `isp.hue`.
+Patch содержит 1..12 scalar значений; null, вложенные объекты/массивы, NaN/Inf,
+пустые секции запрещены. Строка до 64 символов, весь исходный payload до
+4096 UTF-8 bytes. Значения и единицы определяет схема конкретной камеры.
+Сервер проверяет envelope/allowlist, устройство повторяет эти проверки и
+проверяет типы/ranges/enums по обнаруженным capabilities. Разрешённый путь
+не является обещанием поддержки камерой.
+
+Сначала GET конфигурации и схемы, сравнение revision, проверка **всех** полей,
+только затем минимальный POST patch. Неподдерживаемое поле отклоняет весь
+patch до первого write: никаких silently skipped полей и best-effort успехов.
+Если схема недоступна или семантика writer не подтверждена, камера read-only;
+устройство не угадывает команды, не переписывает YAML и не запускает shell.
+HTTP 404/405/501 или явный отказ камеры превращается в `unsupported`, а не
+в crash, бесконечный retry, timeout или успешный ACK. HTTP 401/403 — отдельный
+`auth_failed`. Если ответ writer неоднозначен, выполняется GET reconciliation,
+повторный POST вслепую запрещён.
+
+Изменения `video0.*` консервативно считаются disruptive и требуют
+`allow_disruptive=true`; исключение допустимо лишь для проверенной capability
+конкретной сборки. Во время активной трансляции encoder reload должен быть
+согласован с video owner; если корректный переход не реализован, возвращается
+`busy`, а не выполняется скрытое прерывание. Кодек, RTP destination, сетевые
+настройки, credentials и питание вне allowlist v1. `dry_run` выполняет все
+проверки и возвращает diff, без записи и без заявления «применено».
+
+После записи обязателен GET readback и сравнение всех запрошенных полей.
+HTTP 200 не является подтверждением применения; атомарность writer не
+предполагается. Несовпадение возвращает `verify_failed` / `partial_apply`;
+снимок отражает фактическое состояние, откат не обещается. При недоступном
+readback результат `outcome_unknown`, с unknown полями и stale предыдущим
+снимком, без ложного успеха.
+
+Для **каждой принятой устройством операции** `160/161`, включая unsupported,
+dry-run и ошибки камеры, producer готовит gauge 84 (тег 450), ставит его в
+ограниченную очередь QoS1, затем отправляет RES с тем же `snapshot_id`.
+Недоступное состояние обозначается явно: `config=null` либо last-known с
+`stale=true` и временем исходного чтения. Ошибка enqueue не маскируется:
+`snapshot_publish_failed`, сохранённый outcome применения остаётся в RES.
+Ошибка серверной валидации POST не создаёт задачу, поэтому gauge не ожидается.
+
+RES содержит `status`, `camera_id`, `snapshot_id`, `revision` (null при unknown),
+`applied_fields`, `field_errors` (path, reason), `event_delivery="queued"` либо
+`"not_queued"`; на ошибке дополнительно `error` и безопасный detail.
+
+| Transport `status_code` | `status` / `error` | Семантика |
+| :--- | :--- | :--- |
+| 200 | `ok`, `validated`, `unchanged` | readback подтверждён; validated — только dry-run |
+| 400 | `invalid_request` | Не прошла локальная проверка envelope/значений |
+| 409 | `revision_conflict`, `busy` | Конфликт состояния; записи не было |
+| 501 | `unsupported` | Ожидаемый терминальный отказ по capability, без аварии |
+| 502 | `camera_unavailable`, `auth_failed`, `verify_failed`, `partial_apply`, `outcome_unknown` | Причины различаются в JSON |
+| 503 | `queue_full`, `snapshot_publish_failed` | Исчерпан локальный ресурс/доставка; outcome записи указан отдельно |
+| 504 | `deadline_exceeded` | Deadline до записи; после возможной записи — `outcome_unknown` |
+
+Сервер сохраняет отрицательный RES и закрывает задачу обычным DONE: клиент
+проверяет transport status и JSON, а не только task status. Correlation Data —
+UUID задачи; result_uid стабилен при повторе. Gauge transport correlation
+идентифицирует публикацию; `operation_id` внутри 450 связывает с RPC.
+MQTT очередь/PUBACK и CMT результата не подтверждают запись gauge в БД:
+потребитель сверяет `snapshot_id` через `GET /api/v1/gauges/?device_id=4619&type=84`.
+
+Ревизия — SHA-256 канонического JSON управляемого config (отсортированные ключи,
+UTF-8 без пробелов, scalar по схеме; без telemetry, capabilities и secrets).
+Снимок включает config, по которому рассчитана revision. Повтор UUID задачи
+в текущем boot возвращает прежний логический результат, без второго write;
+кэш минимум 16 записей, вытеснение только завершённых. После reboot/вытеснения
+сначала reconciliation: если patch уже совпадает, `unchanged`; иначе обязательна
+проверка expected_revision. Неизвестный результат не повторяется вслепую.
 
 ### 🔹 `15` — `CMD_LOAD_CELLS_FROM_CLOUD`
 - **Совместимость:** `Siplite`
