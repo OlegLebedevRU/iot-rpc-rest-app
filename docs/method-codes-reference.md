@@ -116,6 +116,23 @@ Patch содержит 1..12 scalar значений; null, вложенные �
 проверяет типы/ranges/enums по обнаруженным capabilities. Разрешённый путь
 не является обещанием поддержки камерой.
 
+Первый writer-профиль siplite (quality-controls) включает только
+`video0.fps`, `video0.bitrate`, `video0.rcMode`, когда установленные schema
+descriptors подтверждают integer/integer/string+enum и не содержат readOnly
+или неподдерживаемых validation keywords. Неподдерживаемые поля (включая
+size/GOP без достаточной типизации) отклоняют весь patch до POST.
+Отдельные локальные ограничения транспорта/продукта: FPS1..30, bitrate128..2048
+(в шкале camera API; профиль Majestic использует kbit/s). Это **не** обнаруженные
+аппаратные пределы камеры; в gauge они передаются как `policy_min/policy_max`,
+отдельно от schema `min/max`. Ограничения схемы дополнительно обязательны.
+Любая фактическая запись требует allow_disruptive=true и отсутствия активного
+или ещё не завершившегося RTP relay. Общий lifecycle guard исключает гонку со
+stream_start. Несогласованное изменение возвращает409 busy без записи.
+Revision вычисляется по всем approved config полям, а не только writable subset.
+Совпадающий patch возвращает200 unchanged без POST; dry_run возвращает200
+validated без applied_fields. POST при неоднозначном ответе не повторяется:
+один GET readback устанавливает ok/partial_apply/verify_failed/outcome_unknown.
+
 Сначала GET конфигурации и схемы, сравнение revision, проверка **всех** полей,
 только затем минимальный POST patch. Неподдерживаемое поле отклоняет весь
 patch до первого write: никаких silently skipped полей и best-effort успехов.
