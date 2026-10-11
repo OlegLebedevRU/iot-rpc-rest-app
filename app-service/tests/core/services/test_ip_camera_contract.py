@@ -129,6 +129,30 @@ def test_monitor_requires_strict_boolean(value):
         task(161, write_payload(patch={"nightMode": {"lightMonitor": value}}))
 
 
+@pytest.mark.parametrize("preset", ["medium", "hd"])
+def test_quality_preset_envelope(preset):
+    request = task(163, {"dt": [{"preset": preset, "expected_revision": "a" * 64}]})
+    item = request.payload["dt"][0]
+    assert item["timeout_ms"] == 15000 and item["preset"] == preset
+    assert item["dry_run"] is False and item["allow_disruptive"] is False
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"preset": "custom"},
+        {"preset": 1},
+        {"patch": {"video0": {"codec": "h265"}}},
+        {"allow_disruptive": "true"},
+        {"expected_revision": "A" * 64},
+        {"url": "http://camera"},
+    ],
+)
+def test_quality_preset_rejects_unapproved_input(extra):
+    with pytest.raises(ValidationError):
+        task(163, {"dt": [{"preset": "hd", "expected_revision": "a" * 64, **extra}]})
+
+
 @pytest.mark.anyio
 async def test_camera_snapshot_updates_gauge_without_history_webhook_or_eva(
     monkeypatch,

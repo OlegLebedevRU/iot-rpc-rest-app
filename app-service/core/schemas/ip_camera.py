@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 IP_CAMERA_GET_STATE = 160
 IP_CAMERA_SET_CONFIG = 161
 IP_CAMERA_SET_DAY_NIGHT = 162
+IP_CAMERA_SET_QUALITY_PRESET = 163
 IP_CAMERA_EVENT = 84
 IP_CAMERA_STATE_TAG = "450"
 
@@ -93,6 +94,19 @@ class CameraDayNightPayload(BaseModel):
     dt: list[CameraDayNightRequest] = Field(min_length=1, max_length=1)
 
 
+class CameraQualityPresetRequest(CameraReadRequest):
+    timeout_ms: int = Field(default=15000, ge=1000, le=15000)
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    preset: Literal["medium", "hd"]
+    allow_disruptive: bool = False
+    dry_run: bool = False
+
+
+class CameraQualityPresetPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    dt: list[CameraQualityPresetRequest] = Field(min_length=1, max_length=1)
+
+
 def validate_ip_camera_payload(method_code: int, payload: Any) -> dict[str, Any]:
     # Count incoming bytes before normalization, including escaped/non-ASCII data.
     try:
@@ -105,6 +119,7 @@ def validate_ip_camera_payload(method_code: int, payload: Any) -> dict[str, Any]
         IP_CAMERA_GET_STATE: CameraReadPayload,
         IP_CAMERA_SET_CONFIG: CameraWritePayload,
         IP_CAMERA_SET_DAY_NIGHT: CameraDayNightPayload,
+        IP_CAMERA_SET_QUALITY_PRESET: CameraQualityPresetPayload,
     }
     if method_code not in models:
         raise ValueError("unknown camera RPC method")
