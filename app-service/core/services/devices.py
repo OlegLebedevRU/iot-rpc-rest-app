@@ -588,6 +588,8 @@ class DeviceService:
             if result is None or len(result.items) == 0:
                 raise HTTPException(status_code=404, detail="No gauges found")
             return result
+        except HTTPException:
+            raise
         except Exception as e:
             log.error("Error fetching gauges: %s", e)
             raise HTTPException(status_code=500, detail="Internal server error")
