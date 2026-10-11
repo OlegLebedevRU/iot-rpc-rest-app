@@ -93,6 +93,42 @@ def test_write_requires_revision_and_legacy_methods_are_unchanged():
     assert task(51, {"dt": [{"cl": 1}]}).payload == {"dt": [{"cl": 1}]}
 
 
+@pytest.mark.parametrize("mode", ["auto", "day", "night"])
+def test_day_night_envelope_and_defaults(mode):
+    payload = task(
+        162, {"dt": [{"expected_revision": "a" * 64, "mode": mode}]}
+    ).payload["dt"][0]
+    assert payload["mode"] == mode
+    assert payload["camera_id"] == "cam:ip000001"
+    assert payload["allow_disruptive"] is False and payload["dry_run"] is False
+    assert task(
+        161, write_payload(patch={"nightMode": {"lightMonitor": True}})
+    ).payload["dt"][0]["patch"] == {"nightMode": {"lightMonitor": True}}
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"mode": "toggle"},
+        {"mode": True},
+        {"expected_revision": "A" * 64},
+        {"allow_disruptive": "true"},
+        {"dry_run": 1},
+        {"url": "/night/toggle"},
+        {"patch": {"nightMode": {"irCutPin1": 12}}},
+    ],
+)
+def test_day_night_rejects_unsafe_or_invalid_envelopes(extra):
+    with pytest.raises(ValidationError):
+        task(162, {"dt": [{"expected_revision": "a" * 64, "mode": "day", **extra}]})
+
+
+@pytest.mark.parametrize("value", ["true", 1, None])
+def test_monitor_requires_strict_boolean(value):
+    with pytest.raises(ValidationError):
+        task(161, write_payload(patch={"nightMode": {"lightMonitor": value}}))
+
+
 @pytest.mark.anyio
 async def test_camera_snapshot_updates_gauge_without_history_webhook_or_eva(
     monkeypatch,

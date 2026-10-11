@@ -285,6 +285,16 @@ unknown samples, credentials or labels enter the snapshot. Observed software
 mode/filter/lamp flags do not prove physical actuator wiring or movement.
 Discovery alone advertises no day/night writer or action support.
 
+With RPC162 implemented, optional capabilities.day_night is
+`{write, modes, physical_actuators_verified:false, unavailable_reason?}`.
+Software modes auto/day/night require a confirmed boolean lightMonitor schema,
+usable night_enabled telemetry and an approved config writer. This is software
+mode control, not proof of installed filter/lamp actuators. Missing readings
+keep the control unavailable with an explicit reason; physical GPIO controls
+remain excluded. last_operation may contain requested_mode and
+command_http_status; RPC162's RES applied_fields reports confirmed final
+nightMode.lightMonitor and/or day_night.mode changes, excluding rollback.
+
 Снимок до 16384 UTF-8 bytes, не более четырёх камер; config/capabilities
 содержат только approved параметры, без secrets, raw YAML и полного schema.
 Превышение лимита нельзя исправлять молчаливым обрезанием настроек: producer

@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import math
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 IP_CAMERA_GET_STATE = 160
 IP_CAMERA_SET_CONFIG = 161
+IP_CAMERA_SET_DAY_NIGHT = 162
 IP_CAMERA_EVENT = 84
 IP_CAMERA_STATE_TAG = "450"
 
@@ -28,6 +29,7 @@ CAMERA_WRITABLE_FIELDS = frozenset(
         "isp.contrast",
         "isp.saturation",
         "isp.hue",
+        "nightMode.lightMonitor",
     }
 )
 
@@ -55,6 +57,8 @@ class CameraWriteRequest(CameraReadRequest):
                 path = f"{section}.{field}"
                 if path not in CAMERA_WRITABLE_FIELDS:
                     raise ValueError(f"camera field is not permitted: {path}")
+                if path == "nightMode.lightMonitor" and type(value) is not bool:
+                    raise ValueError("lightMonitor must be a boolean")
                 if type(value) not in (bool, int, float, str):
                     raise ValueError(f"camera value must be a scalar: {path}")
                 if isinstance(value, float) and not math.isfinite(value):
@@ -77,6 +81,18 @@ class CameraWritePayload(BaseModel):
     dt: list[CameraWriteRequest] = Field(min_length=1, max_length=1)
 
 
+class CameraDayNightRequest(CameraReadRequest):
+    expected_revision: str = Field(pattern=r"^[0-9a-f]{64}$")
+    mode: Literal["auto", "day", "night"]
+    allow_disruptive: bool = False
+    dry_run: bool = False
+
+
+class CameraDayNightPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    dt: list[CameraDayNightRequest] = Field(min_length=1, max_length=1)
+
+
 def validate_ip_camera_payload(method_code: int, payload: Any) -> dict[str, Any]:
     # Count incoming bytes before normalization, including escaped/non-ASCII data.
     try:
@@ -85,9 +101,11 @@ def validate_ip_camera_payload(method_code: int, payload: Any) -> dict[str, Any]
         raise ValueError("camera payload must be finite JSON") from exc
     if size > 4096:
         raise ValueError("camera payload exceeds 4096 bytes")
-    model = (
-        CameraReadPayload if method_code == IP_CAMERA_GET_STATE else CameraWritePayload
-    )
-    if method_code not in (IP_CAMERA_GET_STATE, IP_CAMERA_SET_CONFIG):
+    models = {
+        IP_CAMERA_GET_STATE: CameraReadPayload,
+        IP_CAMERA_SET_CONFIG: CameraWritePayload,
+        IP_CAMERA_SET_DAY_NIGHT: CameraDayNightPayload,
+    }
+    if method_code not in models:
         raise ValueError("unknown camera RPC method")
-    return model.model_validate(payload).model_dump(mode="json")
+    return models[method_code].model_validate(payload).model_dump(mode="json")
