@@ -264,6 +264,27 @@ JSON Schema `minimum`/`maximum` нормализуются в `min`/`max`; `type
 и его значения ограничиваются по размеру; пропущенные обязательные для writer
 ограничения запрещают запись, а не включают permissive fallback.
 
+Day/night discovery adds **read-only** approved configuration paths:
+`nightMode.lightMonitor`, `colorToGray`, `irCut`, `backlight`, `irCutPin1`,
+`irCutPin2`, `backlightPin`, `minThreshold`, `maxThreshold`, `monitorDelay`
+(all prefixed by `nightMode.`). Pins and thresholds are diagnostics, not user
+write controls. RPC161's existing write allowlist is unchanged. These observed
+configuration fields participate in the canonical configuration revision.
+Missing fields remain absent; their type/unit/support must not be guessed.
+
+Optional `telemetry` from a bounded authenticated read of `/metrics/night` is
+`{source, observed_at, status, metrics, error?}`. Status is `ok`, `unsupported`,
+`auth_failed`, `unavailable`, `timed_out` or `invalid_metrics`. Only exact
+unlabelled gauges `night_enabled`, `ircut_enabled`, `light_enabled`,
+`night_ircut`, `night_light` with numeric0/1 values are retained under their
+original names. Missing gauges are absent (not zero); duplicate/invalid known
+gauges invalidate the metric sample instead of manufacturing a state.
+Read-only `/metrics` fallback is permitted only when the group endpoint returns
+404/405/501, with the same auth/interface/size/deadline limits. No raw metrics,
+unknown samples, credentials or labels enter the snapshot. Observed software
+mode/filter/lamp flags do not prove physical actuator wiring or movement.
+Discovery alone advertises no day/night writer or action support.
+
 Снимок до 16384 UTF-8 bytes, не более четырёх камер; config/capabilities
 содержат только approved параметры, без secrets, raw YAML и полного schema.
 Превышение лимита нельзя исправлять молчаливым обрезанием настроек: producer
