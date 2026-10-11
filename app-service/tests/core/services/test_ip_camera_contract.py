@@ -153,6 +153,41 @@ def test_quality_preset_rejects_unapproved_input(extra):
         task(163, {"dt": [{"preset": "hd", "expected_revision": "a" * 64, **extra}]})
 
 
+@pytest.mark.parametrize("action", ["on", "off", "restart"])
+def test_power_envelope_without_camera_config_revision(action):
+    item = task(164, {"dt": [{"action": action, "expected_power_on": True}]}).payload[
+        "dt"
+    ][0]
+    assert item["timeout_ms"] == 10000
+    assert item["expected_power_on"] is True
+    assert item["allow_disruptive"] is False and item["dry_run"] is False
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"action": "toggle"},
+        {"action": 1},
+        {"expected_power_on": 1},
+        {"expected_power_on": "true"},
+        {"expected_revision": "a" * 64},
+        {"pin": 3},
+        {"off_ms": 3000},
+        {"url": "http://camera"},
+        {"allow_disruptive": 1},
+        {"dry_run": "true"},
+    ],
+)
+def test_power_rejects_unsafe_input(extra):
+    with pytest.raises(ValidationError):
+        task(164, {"dt": [{"action": "restart", "expected_power_on": True, **extra}]})
+
+
+def test_power_requires_observed_output_state():
+    with pytest.raises(ValidationError):
+        task(164, {"dt": [{"action": "on"}]})
+
+
 @pytest.mark.anyio
 async def test_camera_snapshot_updates_gauge_without_history_webhook_or_eva(
     monkeypatch,

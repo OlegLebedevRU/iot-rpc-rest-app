@@ -68,6 +68,7 @@
 | `161` | `CMD_IP_CAMERA_SET_CONFIG` | Проверить patch, применить и подтвердить чтением; gauge 84 + RES | — | ✅ | — | Раздел «Управление IP-камерой» ниже |
 | `162` | `CMD_IP_CAMERA_SET_DAY_NIGHT` | Установить software Auto/Day/Night с readback; gauge84 + RES | — | ✅ | — | Только siplite ↔ OpenIPC, без STM32 |
 | `163` | `CMD_IP_CAMERA_SET_QUALITY_PRESET` | Полностью проверить preset качества, применить и сверить; gauge84 + RES | — | ✅ | — | Только siplite ↔ OpenIPC |
+| `164` | `CMD_IP_CAMERA_SET_POWER` | EN_1_12V on/off/restart с readback; gauge84 + RES | — | ✅ | — | ESP32 → собственный TCA6408A P3, без STM32 |
 | `411` | `CMD_STM32_MCU_UPDATE` | Обновление прошивки сопроцессора STM32 | — | ✅ | — | — |
 | `512` | `CMD_STM32_BIN_DOWNLOAD` | Скачивание бинарного образа для STM32 с запуском задачи | — | ✅ | — | — |
 | `3000..3999` | *(интерактивные коды)* | Роутинг для локальных шлюзов / WS-клиентов | — | ✅ | — | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) |
@@ -79,6 +80,39 @@
 ---
 
 ## 🧩 3. Форматы `payload.dt` и ответы `res`
+
+### Управление питанием камеры: `164`
+
+Согласованная транзакция: **RES + обязательный коррелированный gauge84/tag450**.
+Исполнение только в siplite: ESP32 управляет существующим выходом EN_1_12V
+(TCA6408A P3, active HIGH); STM32/sip_periph не участвует. Это питание камеры,
+не ИК-подсветка. Другие биты экспандера не изменяются.
+
+```json
+{"dt":[{"camera_id":"cam:ip000001","action":"restart","expected_power_on":true,"allow_disruptive":true,"dry_run":false,"timeout_ms":10000}]}
+```
+
+action строго on/off/restart; expected_power_on — обязательный boolean,
+сравнивается с текущим аппаратным readback под эксклюзивным relay guard.
+Ревизия OpenIPC не требуется: питание должно включаться и при недоступной камере.
+Только фиксированный P3, без произвольных pin/mask/url/delay. timeout1000..15000ms.
+Активный relay →409 busy без изменения выхода; несовпадение состояния →409
+power_state_conflict; отсутствие allow_disruptive для изменения →409
+disruptive_consent_required. dry_run валидирует без переключения.
+restart требует исходное питание on и не менее4000ms остатка deadline до начала;
+фиксированный интервал off3000ms, после выключения включение выполняется даже
+при наступившем shutdown/deadline. Ошибки readback/включения явные
+power_read_failed/power_verify_failed/power_restore_failed, outcome_unknown
+при неоднозначной записи, без слепого повторения restart.
+on/off с уже требуемым состоянием →200 unchanged. Повтор той же correlation
+возвращает сохранённый result_uid и не повторяет цикл в пределах RAM cache;
+между перезагрузками дедупликация не обещается.
+
+RES содержит requested_action, power, applied_fields ["power.enabled"] только
+для подтверждённого изменения и ["power.restart"] для подтверждённого цикла.
+Успех подтверждает направление/защёлку P3, а не напряжение12V, загрузку камеры
+или изображение. После on/restart камера может ещё загружаться; readiness
+проверяется отдельным RPC160/gauge84. Начальное поведение bootstrap остаётся on.
 
 ### Управление IP-камерой: `160` / `161`
 

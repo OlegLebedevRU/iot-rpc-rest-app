@@ -91,7 +91,7 @@ class TaskCreate(TaskHeader):
                     "RPC TTL must be positive and no longer than remaining PIN lifetime"
                 )
             self.payload = payload.model_dump(mode="json")
-        elif self.method_code in (160, 161, 162, 163):
+        elif self.method_code in (160, 161, 162, 163, 164):
             self.payload = validate_ip_camera_payload(self.method_code, self.payload)
         return self
 

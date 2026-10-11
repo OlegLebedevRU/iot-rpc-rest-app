@@ -12,6 +12,7 @@ IP_CAMERA_GET_STATE = 160
 IP_CAMERA_SET_CONFIG = 161
 IP_CAMERA_SET_DAY_NIGHT = 162
 IP_CAMERA_SET_QUALITY_PRESET = 163
+IP_CAMERA_SET_POWER = 164
 IP_CAMERA_EVENT = 84
 IP_CAMERA_STATE_TAG = "450"
 
@@ -107,6 +108,19 @@ class CameraQualityPresetPayload(BaseModel):
     dt: list[CameraQualityPresetRequest] = Field(min_length=1, max_length=1)
 
 
+class CameraPowerRequest(CameraReadRequest):
+    timeout_ms: int = Field(default=10000, ge=1000, le=15000)
+    action: Literal["on", "off", "restart"]
+    expected_power_on: bool
+    allow_disruptive: bool = False
+    dry_run: bool = False
+
+
+class CameraPowerPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    dt: list[CameraPowerRequest] = Field(min_length=1, max_length=1)
+
+
 def validate_ip_camera_payload(method_code: int, payload: Any) -> dict[str, Any]:
     # Count incoming bytes before normalization, including escaped/non-ASCII data.
     try:
@@ -120,6 +134,7 @@ def validate_ip_camera_payload(method_code: int, payload: Any) -> dict[str, Any]
         IP_CAMERA_SET_CONFIG: CameraWritePayload,
         IP_CAMERA_SET_DAY_NIGHT: CameraDayNightPayload,
         IP_CAMERA_SET_QUALITY_PRESET: CameraQualityPresetPayload,
+        IP_CAMERA_SET_POWER: CameraPowerPayload,
     }
     if method_code not in models:
         raise ValueError("unknown camera RPC method")
