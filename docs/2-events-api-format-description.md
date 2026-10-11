@@ -94,6 +94,10 @@ x-api-key: <organization-api-key>
 
 Gauges `44` и `84` по умолчанию обновляют текущий снимок и не создают запись события; читайте `/api/v1/gauges/`. Для IPCamera используйте `?device_id=4619&type=84` и сверяйте `snapshot_id` в теге `450`. Явный environment override списка gauge-типов должен включать оба кода. Служебные `75/76` и пользовательские `900–999` сохраняются как обычные события. Маркированный Channel Probe в историю не входит.
 
+Если снимок ещё не поступил, `/api/v1/gauges/` возвращает HTTP 404
+`{"detail":"No gauges found"}`. Это отсутствие данных, а не ошибка камеры
+или сервера; после первого gauge запрос должен вернуть снимок.
+
 Для независимого поиска пользовательских событий `900–999` существует **внутренний** `GET /api/internal/v1/device-events/search`: фильтры по внешнему UUID `448`, кодам, времени и cursor; он не изменяет offsets. Это отдельный [межсервисный контракт](user-event-history-iot-handoff.md), без публичного аналога `/api/v1/device-events/search`.
 
 **Реализация:** [роутер](../app-service/api/api_v1/device_events.py) · [схемы](../app-service/core/schemas/device_events.py) · [выборки](../app-service/core/crud/dev_events_repo.py). Сверено с `master` на 09.10.2026.
