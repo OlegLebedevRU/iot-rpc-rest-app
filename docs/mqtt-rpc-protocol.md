@@ -145,6 +145,7 @@ RES без валидной ненулевой корреляции или дл�
 | :--- | :--- |
 | Диагностика и live logs | RPC `7000–7002`, вывод `dev/<SN>/out`: [Remote Diagnostics](remote-diagnostics-protocol.md) |
 | Ping и renewal | `7003`, `7011`: [Реестр методов](method-codes-reference.md) |
+| IP-камера и питание | RPC `160–164`, RES + обязательный gauge84/tag450: [Реестр методов](method-codes-reference.md), [снимок камеры](event-property-tags.md); RPC164 — ESP32/TCA6408A, без STM32 |
 | Файловый менеджер v2 | `7021/7023`, управление `fmc/fmr`: [L4FM v2](file-manager-v2.md); `7020/7022` retired |
 | Обновления L4 Tools | Capability polling `7030–7033`, результаты обновления — [событие 76](event-types-reference.md) |
 | Удалённый ввод | Отдельный `ctl`: [Remote Input](remote-input-protocol.md) |
