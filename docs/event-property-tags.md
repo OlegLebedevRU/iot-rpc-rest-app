@@ -295,6 +295,35 @@ remain excluded. last_operation may contain requested_mode and
 command_http_status; RPC162's RES applied_fields reports confirmed final
 nightMode.lightMonitor and/or day_night.mode changes, excluding rollback.
 
+Firmware0017 adds optional camera.identity `{source,status,observed_at,
+openipc_version?,majestic_version?}` from bounded fixed GET /cgi-bin/status.cgi.
+Only a redirect/unsupported response permits fixed /cgi-bin/dashboard.cgi
+fallback; auth failures do not. Extract only bounded printable Firmware/Version
+and Majestic definition-list text. Never publish raw HTML, scripts or secrets.
+camera.firmware may mirror a confirmed OpenIPC version; missing stays null.
+
+Optional telemetry.health `{source:"/metrics",status,observed_at,metrics,
+uptime_sec?,majestic_uptime_sec?}` keeps exact unlabelled finite scalar names:
+node_time_seconds, node_boot_time_seconds, app_boot_time_seconds,
+node_memory_MemTotal_bytes, node_memory_MemFree_bytes,
+node_memory_MemAvailable_bytes, node_memory_Active_file_bytes,
+node_memory_Inactive_file_bytes, node_memory_SReclaimable_bytes,
+node_hwmon_temp_celsius, isp_fps, venc0_rcvd_bytes, venc0_rcvd_frames.
+Counters/bytes are nonnegative and <=2^53; temperature -40..150C, FPS0..240.
+Duplicate/invalid known samples invalidate this probe; unknown names and labels
+are not published. Status values follow the existing bounded metrics probe.
+Derive uptime only from consistent camera time/boot readings, never ESP time;
+do not invent zero, available-memory sums, CPU load or measured encoder FPS.
+Snapshot/probe age is calculated by consumers from observed_at; configured
+FPS/bitrate and observed ISP FPS/counters remain distinct measurements.
+
+capabilities.quality may contain presets with id, patch, available and
+unavailable_reason, validation="schema_and_policy". Availability means the
+adapter can validate the preset, not physical video verification. Report
+policy_values/policy_unit separately from the camera's enum/unit/ranges.
+RPC163 last_operation may contain requested_preset; status and applied_fields
+follow the method contract. Event84 format and existing consumers remain v1.
+
 Снимок до 16384 UTF-8 bytes, не более четырёх камер; config/capabilities
 содержат только approved параметры, без secrets, raw YAML и полного schema.
 Превышение лимита нельзя исправлять молчаливым обрезанием настроек: producer

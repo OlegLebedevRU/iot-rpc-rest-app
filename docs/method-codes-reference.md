@@ -67,6 +67,7 @@
 | `160` | `CMD_IP_CAMERA_GET_STATE` | Прочитать OpenIPC и опубликовать gauge 84 | — | ✅ | — | Раздел «Управление IP-камерой» ниже |
 | `161` | `CMD_IP_CAMERA_SET_CONFIG` | Проверить patch, применить и подтвердить чтением; gauge 84 + RES | — | ✅ | — | Раздел «Управление IP-камерой» ниже |
 | `162` | `CMD_IP_CAMERA_SET_DAY_NIGHT` | Установить software Auto/Day/Night с readback; gauge84 + RES | — | ✅ | — | Только siplite ↔ OpenIPC, без STM32 |
+| `163` | `CMD_IP_CAMERA_SET_QUALITY_PRESET` | Полностью проверить preset качества, применить и сверить; gauge84 + RES | — | ✅ | — | Только siplite ↔ OpenIPC |
 | `411` | `CMD_STM32_MCU_UPDATE` | Обновление прошивки сопроцессора STM32 | — | ✅ | — | — |
 | `512` | `CMD_STM32_BIN_DOWNLOAD` | Скачивание бинарного образа для STM32 с запуском задачи | — | ✅ | — | — |
 | `3000..3999` | *(интерактивные коды)* | Роутинг для локальных шлюзов / WS-клиентов | — | ✅ | — | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) |
@@ -80,6 +81,44 @@
 ## 🧩 3. Форматы `payload.dt` и ответы `res`
 
 ### Управление IP-камерой: `160` / `161`
+
+#### Quality preset extension (firmware0017)
+
+RPC163 is a siplite ↔ OpenIPC transaction completed by **RES plus mandatory
+correlated gauge84/tag450**, with no STM32/sip_periph involvement:
+`{"dt":[{"expected_revision":"<64 lowercase hex>","preset":"medium|hd",
+"allow_disruptive":true,"dry_run":false,"timeout_ms":15000}]}`.
+Only camera_id, timeout_ms, expected_revision, preset and strict boolean flags
+are accepted. Default timeout15000ms, range1000..15000; other camera defaults
+and revision rules are unchanged. Presets are product policy, not a claim
+that every camera sensor/SDK supports the resolutions:
+
+| preset | video0.size (string) | fps | bitrate (Majestic kbit/s profile) | rcMode | gopSize (string, seconds) |
+|---|---|---|---|---|---|
+| medium | 640x360 | 10 | 768 | vbr | "1.0" |
+| hd | 1280x720 | 15 | 1024 | vbr | "1.0" |
+
+RPC161 may write size only as these two explicit strings and gopSize as
+"0.5", "1.0" or "2.0". Their Majestic string descriptors must be supported;
+declared enum/readOnly/constraints remain binding. Policy values/unit are
+reported separately from camera-declared limits. No arbitrary resolution,
+codec, destination, numeric-to-string coercion or guessed hardware range.
+
+163 compares live revision and validates **every** preset field before any
+mutation. The existing RTP guard covers the whole sequence; active/stopping
+video is busy. Dry-run/no-op never reports applied_fields. Post-json uses one
+patch; legacy-set performs sequential single-field writes with fresh revisions
+and readback, under the same guard. It is not atomic: stop at the first failure,
+never blindly retry, and report partial_apply/outcome_unknown with the current
+snapshot when appropriate. No automatic rollback over ambiguous state.
+RES/last_operation may include requested_preset. applied_fields lists only
+confirmed FINAL differences from the pre-operation baseline, not equal values.
+Config readback verifies settings; it does not prove video delivery. Hardware
+acceptance uses the operator's explicit stream confirmation for each preset.
+
+Identity/health and snapshot freshness are defined under gauge84/tag450.
+Physical IR filter acceptance is an operator observation of sound/image during
+coordinated RPC162 transitions. IR illumination is outside this release scope.
 
 Контракт v1, producer — siplite, исполнитель — OpenIPC/Majestic по внутреннему
 Ethernet. STM32/sip_periph не участвует. Это локальные RPC из диапазона
