@@ -96,6 +96,12 @@ Ethernet. STM32/sip_periph не участвует. Это локальные RP
 и HTTP. Deadline ограничивается оставшимся TTL задачи; часы ожидания не
 продлеваются при retry. Неизвестные поля запрещены.
 
+RPC160 day/night discovery may additionally return the read-only `nightMode`
+configuration and bounded current-state telemetry documented under gauge84/tag450.
+The request envelope and RPC161 write allowlist remain unchanged. Desired auto
+monitoring, observed software night state and physical filter/lamp support are
+separate readings; discovery does not imply availability of action endpoints.
+
 `161` добавляет обязательные `expected_revision` (64 lowercase hex SHA-256) и
 `patch`, необязательные boolean `allow_disruptive=false`, `dry_run=false`:
 
