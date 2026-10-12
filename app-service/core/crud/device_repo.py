@@ -1,25 +1,24 @@
+import builtins
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
+from fastapi import HTTPException
 from fastapi_pagination.ext.sqlalchemy import apaginate
-
-from core.logging_config import setup_module_logger
-from typing import Any, List
-
-from sqlalchemy import select, not_, func, update, text, case, cast, String, or_, and_
+from sqlalchemy import String, and_, case, cast, func, not_, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio.session import AsyncSession
-from sqlalchemy.orm import selectinload, contains_eager
-from fastapi import HTTPException
+from sqlalchemy.orm import contains_eager, selectinload
 
+from core.logging_config import setup_module_logger
 from core.models import (
     Device,
-    DeviceConnection,
     DeviceAuditLog,
-    Org,
-    DeviceTag,
-    DeviceOrgBind,
+    DeviceConnection,
     DeviceGauge,
+    DeviceOrgBind,
+    DeviceTag,
+    Org,
 )
 from core.schemas.devices import (
     DeviceConnectStatus,
@@ -281,7 +280,7 @@ class DeviceRepo:
         return result.scalar_one_or_none()
 
     @classmethod
-    async def find_missing_devices(cls, session, sn_list) -> List[str]:
+    async def find_missing_devices(cls, session, sn_list) -> builtins.list[str]:
         """
         Возвращает список серийных номеров из `sn_list`, которых НЕТ в базе.
         На самом деле — логика противоположная названию.
@@ -439,7 +438,7 @@ class DeviceRepo:
                 )
                 res_dev = await session.execute(stmt_by_dev)
                 conn_row = res_dev.scalar_one_or_none()
-                now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+                now_dt = datetime.now(UTC).replace(tzinfo=None)
                 if conn_row is not None:
                     conn_row.client_id = sn
                     setattr(conn_row, flag_name, value)
@@ -460,7 +459,7 @@ class DeviceRepo:
         session: AsyncSession,
         sn: str,
         conn_name: str | None = None,
-        connected_at: datetime | int | float | None = None,
+        connected_at: datetime | float | None = None,
         details: dict | None = None,
     ) -> bool:
         """
@@ -473,12 +472,12 @@ class DeviceRepo:
         if isinstance(connected_at, (int, float)):
             if connected_at > 1e11:
                 dt_connected_at = datetime.fromtimestamp(
-                    connected_at / 1000, tz=timezone.utc
+                    connected_at / 1000, tz=UTC
                 ).replace(tzinfo=None)
             else:
-                dt_connected_at = datetime.fromtimestamp(
-                    connected_at, tz=timezone.utc
-                ).replace(tzinfo=None)
+                dt_connected_at = datetime.fromtimestamp(connected_at, tz=UTC).replace(
+                    tzinfo=None
+                )
         elif isinstance(connected_at, datetime):
             dt_connected_at = (
                 connected_at.replace(tzinfo=None)
@@ -507,7 +506,7 @@ class DeviceRepo:
                 res_dev = await session.execute(stmt_dev)
                 conn_row = res_dev.scalar_one_or_none()
 
-        now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+        now_dt = datetime.now(UTC).replace(tzinfo=None)
 
         if conn_row is not None:
             if conn_row.is_blocked:
@@ -556,7 +555,7 @@ class DeviceRepo:
         session: AsyncSession,
         sn: str,
         conn_name: str | None = None,
-        closed_at: datetime | int | float | None = None,
+        closed_at: datetime | float | None = None,
         details: dict | None = None,
     ) -> bool:
         """
@@ -582,7 +581,7 @@ class DeviceRepo:
         if conn_row is None:
             return False
 
-        now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+        now_dt = datetime.now(UTC).replace(tzinfo=None)
 
         if conn_row.last_checked_result:
             current_details = (
@@ -635,7 +634,7 @@ class DeviceRepo:
         return {sn for sn in result.scalars().all() if sn}
 
     @classmethod
-    async def list(cls, session: AsyncSession) -> List[str]:
+    async def list(cls, session: AsyncSession) -> builtins.list[str]:
         """
         Возвращает SN незаблокированных устройств для восстановления MQTT-доступа.
         """
@@ -646,7 +645,7 @@ class DeviceRepo:
         return list(result.scalars().all())
 
     @classmethod
-    async def list_blocked(cls, session: AsyncSession) -> List[str]:
+    async def list_blocked(cls, session: AsyncSession) -> builtins.list[str]:
         """Возвращает SN устройств, которые не должны иметь пользователя RabbitMQ."""
         stmt = select(DeviceConnection.client_id).where(
             DeviceConnection.is_blocked.is_(True)
@@ -904,7 +903,7 @@ class DeviceRepo:
             return None, None
 
         org_id = await cls.get_org_id_by_device_id(session, dev_id) or 0
-        now_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+        now_dt = datetime.now(UTC).replace(tzinfo=None)
 
         was_blocked = conn_row.is_blocked if conn_row else False
         prev_violation = conn_row.violation_type if conn_row else None
@@ -979,6 +978,7 @@ class DeviceRepo:
             select(
                 Device.device_id,
                 Device.sn,
+                DeviceConnection.is_blocked,
                 DeviceOrgBind.org_id,
                 DeviceConnection.client_id,
                 DeviceConnection.last_checked_result,
@@ -994,13 +994,14 @@ class DeviceRepo:
 
         found_map: dict[int, dict[str, Any]] = {}
         for row in rows:
-            dev_id, sn, org_id, _client_id, is_conn, conn_at, chk_at = row
+            dev_id, sn, blocked, org_id, _client_id, is_conn, conn_at, chk_at = row
             found_map[dev_id] = {
                 "device_id": dev_id,
                 "sn": sn,
                 "org_id": org_id,
                 "is_provisioned": True,
                 "is_online": bool(is_conn),
+                "is_blocked": bool(blocked),
                 "connected_at": conn_at,
                 "checked_at": chk_at,
             }

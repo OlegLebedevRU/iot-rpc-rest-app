@@ -10,10 +10,9 @@ from core import settings
 from core.crud.dev_events_repo import EventRepository
 from core.crud.device_repo import DeviceRepo
 from core.logging_config import setup_module_logger
-
 from core.schemas.device_events import DevEventBody
 from core.services.device_task_processing import send_eva
-from core.topologys.declare import topic_publisher, direct_exchange
+from core.topologys.declare import direct_exchange, topic_publisher
 
 log = setup_module_logger(__name__, "srv_dev_evnt_collect.log")
 
@@ -118,7 +117,9 @@ class DeviceEventsCollect:
                 payload=payload_dict,
             )
             try:
-                is_new = await EventRepository.add_event(self.session, event)
+                is_new = await EventRepository.add_event(
+                    self.session, event, correlation_data=corr_id
+                )
             except Exception as e:
                 log.error(
                     "EVT processing error: <dev.%s.evt>, dev_event_id=%d, error=%s",

@@ -2,13 +2,31 @@ import asyncio
 import importlib
 import logging
 import random
-from contextlib import suppress
-from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager, suppress
 
+# Импортируем маршруты и конфигурацию
+from api import router as api_router
 from apscheduler.jobstores.memory import MemoryJobStore
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
+
+# Импортируем теги и константы из нового файла
+from config.tags import TAGS_METADATA
+from core import settings
+from core.config import mask_amqp_url
+from core.fs_broker import fs_router
+from core.logging_config import setup_module_logger
+from core.models import db_helper
+from core.redis_helper import redis_helper
+from core.services.billing import BillingService
+from core.services.device_task_processing import act_ttl
+from core.services.devices import DeviceService
+from core.services.rpc_result_webhooks import delivery_loop
+from core.services.terminal_inventory_delivery import (
+    delivery_loop as inventory_delivery_loop,
+)
+from core.topologys.declare import declare_x_q
 from fastapi import FastAPI
 from fastapi.openapi.docs import (
     get_redoc_html,
@@ -18,23 +36,6 @@ from fastapi.openapi.docs import (
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi_pagination import add_pagination
 from sqlalchemy import text
-
-# Импортируем маршруты и конфигурацию
-from api import router as api_router
-from core import settings
-from core.config import mask_amqp_url
-from core.fs_broker import fs_router
-from core.logging_config import setup_module_logger
-from core.redis_helper import redis_helper
-from core.models import db_helper
-from core.services.device_task_processing import act_ttl
-from core.services.rpc_result_webhooks import delivery_loop
-from core.services.devices import DeviceService
-from core.services.billing import BillingService
-from core.topologys.declare import declare_x_q
-
-# Импортируем теги и константы из нового файла
-from config.tags import TAGS_METADATA
 
 log = setup_module_logger(__name__, "app_create_app.log")
 logging.getLogger("logger_proxy").disabled = True
@@ -290,7 +291,7 @@ async def _remote_input_cleanup_loop() -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     if settings.gunicorn.workers > 1:
         log.warning(
             "Memory-only state (remote_input, diagnostics) requires a single gunicorn worker (WEB_CONCURRENCY=1). "
@@ -318,6 +319,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     cold_boot_task = asyncio.create_task(_initial_device_connections_sync_cold_boot())
     remote_input_cleanup_task = asyncio.create_task(_remote_input_cleanup_loop())
     rpc_webhook_task = asyncio.create_task(delivery_loop())
+    inventory_delivery_task = asyncio.create_task(inventory_delivery_loop())
     scheduler = AsyncIOScheduler()
     scheduler.configure(jobstores={"default": MemoryJobStore()})
     try:
@@ -349,9 +351,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         )
         scheduler.start()
     except Exception as e:
-        log.info(f"Исключение scheduler: {str(e)}")
+        log.info(f"Исключение scheduler: {e!s}")
 
     yield
+
+    inventory_delivery_task.cancel()
+    with suppress(asyncio.CancelledError, Exception):
+        await inventory_delivery_task
 
     rpc_webhook_task.cancel()
     with suppress(asyncio.CancelledError, Exception):

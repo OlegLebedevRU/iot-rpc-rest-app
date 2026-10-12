@@ -1,4 +1,5 @@
 from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -34,6 +35,7 @@ class TerminalStatusQuery(BaseModel):
 
 
 class TerminalStatusResult(BaseModel):
+    is_blocked: bool = False
     device_id: int
     sn: str | None = None
     org_id: int | None = None

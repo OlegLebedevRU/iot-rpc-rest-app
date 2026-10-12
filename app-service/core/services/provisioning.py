@@ -1,4 +1,5 @@
 from typing import Any
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.crud.device_repo import DeviceRepo
@@ -83,7 +84,7 @@ class ProvisioningService:
             is_online = online_info is not None
             conn_at = None
             if online_info and getattr(online_info, "connected_at", None):
-                from datetime import datetime, UTC
+                from datetime import UTC, datetime
 
                 conn_at = datetime.fromtimestamp(
                     online_info.connected_at / 1000, tz=UTC
@@ -122,6 +123,7 @@ class ProvisioningService:
                 org_id=s["org_id"],
                 is_provisioned=s["is_provisioned"],
                 is_online=s["is_online"],
+                is_blocked=s.get("is_blocked", False),
                 connected_at=s["connected_at"],
                 checked_at=s["checked_at"],
             )
@@ -142,10 +144,11 @@ class ProvisioningService:
         session: AsyncSession,
         request: OrgApiKeyProvisionRequest,
     ) -> OrgApiKeyResponse:
-        from core.models import Org, OrgApiKey
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
-        from sqlalchemy import select, func
         from fastapi import HTTPException, status
+        from sqlalchemy import func, select
+        from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+        from core.models import Org, OrgApiKey
 
         existing_key_owner = await session.scalar(
             select(OrgApiKey.org_id).where(
@@ -211,8 +214,9 @@ class ProvisioningService:
         org_id: int,
         mask: bool = False,
     ) -> OrgApiKeyResponse | None:
-        from core.models import OrgApiKey
         from sqlalchemy import select
+
+        from core.models import OrgApiKey
 
         stmt = select(OrgApiKey).where(OrgApiKey.org_id == org_id)
         record = await session.scalar(stmt)
@@ -233,8 +237,9 @@ class ProvisioningService:
         session: AsyncSession,
         org_id: int,
     ) -> bool:
-        from core.models import OrgApiKey
         from sqlalchemy import delete
+
+        from core.models import OrgApiKey
 
         stmt = delete(OrgApiKey).where(OrgApiKey.org_id == org_id)
         result = await session.execute(stmt)

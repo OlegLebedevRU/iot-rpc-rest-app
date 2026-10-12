@@ -3,12 +3,19 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from typing import Literal, Dict, Any
+from typing import Any, Literal
 from urllib.parse import urlparse, urlunparse
 
-from pydantic import AmqpDsn, UUID4, HttpUrl, Field, model_validator, field_validator
-from pydantic import BaseModel
-from pydantic import PostgresDsn
+from pydantic import (
+    UUID4,
+    AmqpDsn,
+    BaseModel,
+    Field,
+    HttpUrl,
+    PostgresDsn,
+    field_validator,
+    model_validator,
+)
 from pydantic_settings import (
     BaseSettings,
     SettingsConfigDict,
@@ -169,7 +176,7 @@ class FastStreamConfig(BaseModel):
     topology_watchdog_interval: float = 60.0
 
     @model_validator(mode="after")
-    def _maybe_rewrite_host(self) -> "FastStreamConfig":
+    def _maybe_rewrite_host(self) -> FastStreamConfig:
         """Rewrite broker URL host when it looks like an external address."""
         if not self.rewrite_external_host_to_compose:
             return self
@@ -361,7 +368,7 @@ class Leo4CloudConfig(BaseModel):
 
 
 # === Парсер API-ключей ===
-def parse_api_keys(raw: str) -> Dict[str, int]:
+def parse_api_keys(raw: str) -> dict[str, int]:
     keys_map = {}
     if not raw.strip():
         return keys_map
@@ -395,6 +402,11 @@ class WebhookConfigModel(BaseModel):
         44,
         84,
     ]  # Список event_type_code, которые считаются гаузами
+
+
+class InventoryDeliveryConfig(BaseModel):
+    url: str = ""
+    token: str = ""
 
 
 class BillingConfig(BaseModel):
@@ -446,7 +458,7 @@ class RedisConfig(BaseModel):
     compose_port: int = 6379
 
     @model_validator(mode="after")
-    def _maybe_rewrite_host(self) -> "RedisConfig":
+    def _maybe_rewrite_host(self) -> RedisConfig:
         if not self.auto_rewrite_docker:
             return self
         if os.path.exists("/.dockerenv"):
@@ -509,6 +521,7 @@ class Settings(BaseSettings):
     # Сырая строка с API-ключами
     auth: AuthConfig
     webhook: WebhookConfigModel = WebhookConfigModel()
+    inventory_delivery: InventoryDeliveryConfig = InventoryDeliveryConfig()
     billing: BillingConfig = BillingConfig()
     remote_input: RemoteInputConfig = RemoteInputConfig()
     diagnostics: DiagnosticsConfig = DiagnosticsConfig()
@@ -516,7 +529,7 @@ class Settings(BaseSettings):
     redis: RedisConfig = RedisConfig()
 
     @property
-    def api_keys(self) -> Dict[str, int]:
+    def api_keys(self) -> dict[str, int]:
         return parse_api_keys(self.auth.api_keys_raw)
 
 

@@ -1,12 +1,11 @@
-from core.logging_config import setup_module_logger
-from typing import Optional, List
-
 from fastapi_pagination import Page
+from fastapi_pagination.ext.sqlalchemy import apaginate
+from sqlalchemy import and_, func, or_, select, text
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy import text, and_, or_, select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from fastapi_pagination.ext.sqlalchemy import apaginate
+
+from core.logging_config import setup_module_logger
 from core.models import DevEvent, DeviceOrgBind
 from core.models.device_events import DeviceEventOffset
 from core.schemas.device_events import (
@@ -21,7 +20,9 @@ log = setup_module_logger(__name__, "repo_dev_events.log")
 
 class EventRepository:
     @classmethod
-    async def add_event(cls, session: AsyncSession, event: DevEventBody) -> bool:
+    async def add_event(
+        cls, session: AsyncSession, event: DevEventBody, *, correlation_data=None
+    ) -> bool:
         """
         Сохраняет событие. Возвращает True если событие новое,
         False если дубликат по (device_id, dev_event_id) — идемпотентная обработка.
@@ -41,11 +42,34 @@ class EventRepository:
                 dev_timestamp=func.to_timestamp(event.dev_timestamp),
             )
             session.add(evt_q)
+            if event.event_type_code == 75:
+                from core.services.terminal_inventory_delivery import enqueue_inventory
+
+                await enqueue_inventory(
+                    session,
+                    device_id=event.device_id,
+                    payload=event.payload,
+                    correlation_data=correlation_data,
+                )
             await session.commit()
             return True
         except IntegrityError as e:
             await session.rollback()
             if "uq_dev_event_idempotent" in str(e.orig):
+                if event.event_type_code == 75:
+                    # The legacy 31-bit event number can collide. Private inventory
+                    # idempotency uses the full UUID independently of the public feed.
+                    from core.services.terminal_inventory_delivery import (
+                        enqueue_inventory,
+                    )
+
+                    await enqueue_inventory(
+                        session,
+                        device_id=event.device_id,
+                        payload=event.payload,
+                        correlation_data=correlation_data,
+                    )
+                    await session.commit()
                 log.info(
                     "Idempotent duplicate: device_id=%d dev_event_id=%d — skipped",
                     event.device_id,
@@ -182,10 +206,10 @@ class EventRepository:
         cls,
         session: AsyncSession,
         org_id: int,
-        device_id: Optional[int] = None,
-        last_event_id: Optional[int] = None,
+        device_id: int | None = None,
+        last_event_id: int | None = None,
         limit: int = 50,
-    ) -> List[DevEventOut]:
+    ) -> list[DevEventOut]:
         """
         Возвращает новые события (id > last_event_id или сохранённого offset).
         Автоматически обновляет смещение в tb_device_event_offsets.
