@@ -69,6 +69,9 @@
 | `162` | `CMD_IP_CAMERA_SET_DAY_NIGHT` | Установить software Auto/Day/Night с readback; gauge84 + RES | — | ✅ | — | Только siplite ↔ OpenIPC, без STM32 |
 | `163` | `CMD_IP_CAMERA_SET_QUALITY_PRESET` | Полностью проверить preset качества, применить и сверить; gauge84 + RES | — | ✅ | — | Только siplite ↔ OpenIPC |
 | `164` | `CMD_IP_CAMERA_SET_POWER` | EN_1_12V on/off/restart с readback; gauge84 + RES | — | ✅ | — | ESP32 → собственный TCA6408A P3, без STM32 |
+| `170` | `CMD_AUDIO_GET_STATE` | Audio state and capabilities; RES only | ? | ? | ? | [`Audio control`](audio-control.md) |
+| `171` | `CMD_AUDIO_SET_CONFIG` | Verified independent audio configuration; RES only | ? | ? | ? | [`Audio control`](audio-control.md) |
+| `172` | `CMD_AUDIO_SESSION` | Leased LAN one-way/duplex audio debugging; RES only | ? | ? | ? | [`Audio control`](audio-control.md) |
 | `411` | `CMD_STM32_MCU_UPDATE` | Обновление прошивки сопроцессора STM32 | — | ✅ | — | — |
 | `512` | `CMD_STM32_BIN_DOWNLOAD` | Скачивание бинарного образа для STM32 с запуском задачи | — | ✅ | — | — |
 | `3000..3999` | *(интерактивные коды)* | Роутинг для локальных шлюзов / WS-клиентов | — | ✅ | — | [`mqtt-rpc-client-flow.md`](./mqtt-rpc-client-flow.md) |
