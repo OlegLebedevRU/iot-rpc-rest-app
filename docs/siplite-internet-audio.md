@@ -59,7 +59,9 @@ outcomes. RPC task TTL (minutes) is distinct from playback duration (seconds).
 ## Admission and SIP
 
 One short admission lock and token/epoch covers SIP transitions/calls, Internet
-playback, active audio diagnostics (P2P/capture/test playback), and tone output.
+playback and active audio diagnostics (P2P/capture/test playback). Tone output
+checks admission and is stopped synchronously under its mutex before a newly
+admitted owner touches the hardware.
 Passive status/levels do not claim the hardware. No network, Flash, SIP teardown,
 registration wait or task join under the admission lock.
 
