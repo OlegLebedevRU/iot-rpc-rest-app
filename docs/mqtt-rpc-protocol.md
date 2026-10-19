@@ -154,3 +154,10 @@ RES без валидной ненулевой корреляции или дл�
 Probe использует существующие `req/rsp/evt/eva`, но имеет собственный контракт и fresh UUID. Обычные сообщения RPC и событий не должны иметь `iot_probe`.
 
 **Реализация:** [обработка задач](../app-service/core/services/device_tasks.py) · [публикация](../app-service/core/services/device_task_processing.py) · [хранение](../app-service/core/crud/dev_tasks_repo.py). Сверено с `master` на 09.10.2026.
+
+
+## Siplite audio control
+
+RPC170/171/172 use the existing correlated RES path without new events or topics.
+See [live audio control](audio-control.md) for config/readback, two-device leases,
+local HTTP parity and authenticated LAN media framing.
