@@ -37,7 +37,7 @@ cancel diagnostics. No auto-resume after reboot or maintenance.
 
 Responses: schema_version=1, method_code=174, hardware_id, boot_id, status,
 session_id, state (idle/preparing/ready/calling/incoming/connected/stopping/error),
-remaining_sec, duration_remaining_sec, reason, peer_ip, local_port, peer_port,
+remaining_sec, duration_remaining_sec, reason, local_ip, peer_ip, local_port, peer_port,
 local_user, peer_user. Secrets and persistent SIP credentials are not returned.
 200: status/idempotent stop/renew; 202: accepted asynchronous transition;
 400: invalid schema/range; 409: ownership/session/state conflict; 403: policy;
@@ -47,3 +47,7 @@ not a blind replay. Active-session prepare returns 409.
 ESP-RTC native address parsing limits each user to15 characters; the UI creates
 12-character random users. Firmware constructs `peer_user@peer_ip:peer_port`
 for `esp_rtc_call`, rather than passing the bare username.
+
+`local_ip` advertises the SIP-selected management interface (wired preferred).
+The controller uses each endpoint's local_ip as its opposite peer_ip; the HTTP
+management address may differ when Ethernet and Wi-Fi are both active.
