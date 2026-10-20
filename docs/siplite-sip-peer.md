@@ -12,7 +12,7 @@ payload: {"dt":[{...}]} exactly one object. Actions:
 - status: {"action":"status"}.
 - prepare: action, session_id (32 lowercase hex), peer_ip (unicast LAN IPv4),
   local_port and peer_port (1024..65535), local_user and peer_user
-  (1..32 ASCII letters/digits/_/-), lease_sec (30..60), duration_sec (10..3600).
+  (1..15 ASCII letters/digits/_/-), lease_sec (30..60), duration_sec (10..3600).
   The UI uses unpredictable session-specific endpoint users. The peer identifier
   must match before explicit answer; this is a trusted-LAN diagnostic, not SIP
   digest authentication. No global auto-answer.
@@ -43,3 +43,7 @@ local_user, peer_user. Secrets and persistent SIP credentials are not returned.
 400: invalid schema/range; 409: ownership/session/state conflict; 403: policy;
 503: service unavailable. Failed or ambiguous commands require fresh status,
 not a blind replay. Active-session prepare returns 409.
+
+ESP-RTC native address parsing limits each user to15 characters; the UI creates
+12-character random users. Firmware constructs `peer_user@peer_ip:peer_port`
+for `esp_rtc_call`, rather than passing the bare username.
