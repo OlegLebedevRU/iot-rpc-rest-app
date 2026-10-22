@@ -8,6 +8,7 @@ import re
 import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 def run(*args, capture=False):
@@ -28,12 +29,34 @@ def source_archive_sha256():
     return digest.hexdigest()
 
 
+def build_proxy_args(proxy):
+    if not proxy:
+        return []
+    parsed = urlsplit(proxy)
+    if (
+        parsed.scheme != "http"
+        or parsed.hostname not in {"127.0.0.1", "localhost"}
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+        or not parsed.port
+    ):
+        raise ValueError(
+            "Build transport requires an unauthenticated loopback HTTP proxy"
+        )
+    return ["--build-arg", "HTTPS_PROXY=" + proxy]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--registry", required=True)
     parser.add_argument("--artifact-dir", type=Path, required=True)
     parser.add_argument("--builder", default="etran-beta")
+    parser.add_argument("--https-proxy", default="")
     args = parser.parse_args()
+    proxy_args = build_proxy_args(args.https_proxy)
 
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._:/-]*", args.registry):
         raise ValueError("Invalid registry path")
@@ -91,6 +114,7 @@ def main():
         "--metadata-file",
         str(metadata),
         "--provenance=mode=min",
+        *proxy_args,
         "--push",
         ".",
     )
