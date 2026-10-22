@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime
 from typing import Protocol
+from uuid import uuid4
 
 from redis.exceptions import (
     ConnectionError as RedisConnectionError,
+)
+from redis.exceptions import (
     TimeoutError as RedisTimeoutError,
 )
 
@@ -26,6 +30,7 @@ log = setup_module_logger(__name__, "remote_input.log")
 
 
 class PresenceRegistryProtocol(Protocol):
+    async def notify_video_event(self, event: CtlStreamEvent) -> None: ...
     async def update(
         self, sn: str, presence: CtlPresence
     ) -> tuple[bool, AgentStatusView]: ...
@@ -65,6 +70,19 @@ def _parse_timestamp(ts: str | None) -> datetime | None:
 
 
 class PresenceRegistry:
+    async def notify_video_event(self, event: CtlStreamEvent) -> None:
+        """Invalidate video consumers without storing HEVC in a legacy stream record."""
+        notification = WsStreamState(
+            stream_instance_id=event.stream_instance_id,
+            state=event.state,
+            reason=event.reason,
+            timestamp=event.timestamp,
+        )
+        async with self._lock:
+            queues = list(self._stream_listeners.get(event.sn, []))
+        for queue in queues:
+            queue.put_nowait(notification)
+
     def __init__(self) -> None:
         self._presence: dict[str, tuple[CtlPresence, datetime]] = {}
         self._last_inventory: dict[str, InventoryInfo] = {}
@@ -450,7 +468,56 @@ class _CompatibilityStreamDict(dict):
 
 
 class RedisPresenceRegistry:
+    async def notify_video_event(self, event: CtlStreamEvent) -> None:
+        notification = WsStreamState(
+            stream_instance_id=event.stream_instance_id,
+            state=event.state,
+            reason=event.reason,
+            timestamp=event.timestamp,
+        )
+        async with self._lock:
+            queues = list(self._stream_listeners.get(event.sn, []))
+        for queue in queues:
+            queue.put_nowait(notification)
+        await self._client.publish(
+            "l4d:video:v2:events",
+            json.dumps(
+                {
+                    "origin": self._video_origin,
+                    "sn": event.sn,
+                    "event": notification.model_dump(mode="json"),
+                }
+            ),
+        )
+
+    async def _ensure_video_relay(self) -> None:
+        if self._video_relay is not None and not self._video_relay.done():
+            return
+        pubsub = self._client.pubsub()
+        await pubsub.subscribe("l4d:video:v2:events")
+        self._video_relay = asyncio.create_task(self._run_video_relay(pubsub))
+
+    async def _run_video_relay(self, pubsub) -> None:
+        try:
+            while True:
+                message = await pubsub.get_message(
+                    ignore_subscribe_messages=True, timeout=1.0
+                )
+                if message and message.get("type") == "message":
+                    data = json.loads(message["data"])
+                    if data["origin"] != self._video_origin:
+                        notification = WsStreamState.model_validate(data["event"])
+                        async with self._lock:
+                            queues = list(self._stream_listeners.get(data["sn"], []))
+                        for queue in queues:
+                            queue.put_nowait(notification)
+                await asyncio.sleep(0.01)
+        finally:
+            await pubsub.aclose()
+
     def __init__(self) -> None:
+        self._video_origin = str(uuid4())
+        self._video_relay: asyncio.Task | None = None
         self._presence: dict[str, tuple[CtlPresence, datetime]] = (
             _CompatibilityPresenceDict(self)
         )
@@ -947,6 +1014,7 @@ class RedisPresenceRegistry:
                     self._listeners.pop(sn, None)
 
     async def subscribe_stream(self, sn: str) -> asyncio.Queue[WsStreamState]:
+        await self._ensure_video_relay()
         q: asyncio.Queue[WsStreamState] = asyncio.Queue()
         async with self._lock:
             self._stream_listeners.setdefault(sn, []).append(q)

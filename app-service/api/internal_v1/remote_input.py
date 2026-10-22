@@ -6,28 +6,13 @@ from contextlib import suppress
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import (
-    APIRouter,
-    HTTPException,
-    Request,
-    Response,
-    WebSocket,
-    WebSocketDisconnect,
-    status,
-)
-from pydantic import ValidationError
-
-from api.internal_v1.internal_depends import (
-    Internal_Auth_dep,
-    Internal_Org_dep,
-    Session_dep,
-    is_request_superuser,
-)
 from core.config import settings
+from core.crud.device_repo import DeviceRepo
 from core.logging_config import setup_module_logger
 from core.models import db_helper
 from core.remote_input.leases import lease_registry
 from core.remote_input.presence import presence_registry
+from core.remote_input.publisher import send_ctl_command
 from core.remote_input.schemas import (
     ALLOWED_VK_CODES,
     ClickRequest,
@@ -66,6 +51,31 @@ from core.remote_input.schemas import (
     WsShortcutResult,
 )
 from core.remote_input.service import remote_input_service
+from core.remote_input.video_api import (
+    VideoCapabilityView,
+    VideoControlRoute,
+    VideoStateView,
+)
+from core.remote_input.video_control import video_control
+from core.remote_input.video_models import Start as VideoStart
+from core.remote_input.video_models import Stop as VideoStop
+from fastapi import (
+    APIRouter,
+    HTTPException,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from pydantic import ValidationError
+
+from api.internal_v1.internal_depends import (
+    Internal_Auth_dep,
+    Internal_Org_dep,
+    Session_dep,
+    is_request_superuser,
+)
 
 log = setup_module_logger(__name__, "remote_input.log")
 
@@ -73,6 +83,7 @@ router = APIRouter(
     prefix=settings.api.internal_v1.remote_input,
     tags=["Internal Remote Input"],
     include_in_schema=False,
+    route_class=VideoControlRoute,
 )
 
 
@@ -334,17 +345,31 @@ async def get_device_inventory(
 
 @router.post(
     "/lease/{lease_id}/stream/start",
-    response_model=StreamStartResponse,
+    response_model=StreamStartResponse | VideoStateView,
 )
 async def post_stream_start(
     lease_id: UUID,
-    body: StreamStartRequest,
+    body: StreamStartRequest | VideoStart,
     org_id: Internal_Org_dep,
     _: Internal_Auth_dep,
     request: Request,
-) -> StreamStartResponse:
+) -> StreamStartResponse | VideoStateView:
     session_id = extract_caller_session_id(request)
     caller_user_id = extract_caller_user_id(request)
+
+    if isinstance(body, VideoStart):
+        if body.lease_id != str(lease_id):
+            raise HTTPException(status_code=409, detail={"code": "lease_mismatch"})
+        record = await video_control.start(
+            remote_input_service,
+            body,
+            org_id,
+            caller_user_id,
+            session_id,
+            send_ctl_command,
+            is_request_superuser(request),
+        )
+        return VideoStateView.from_record(record)
 
     return await remote_input_service.stream_start(
         lease_id=lease_id,
@@ -356,6 +381,67 @@ async def post_stream_start(
         caller_session_id=session_id,
         is_superuser=is_request_superuser(request),
     )
+
+
+@router.get("/devices/{sn}/video-capabilities", response_model=VideoCapabilityView)
+async def get_video_capability(
+    sn: str,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    session: Session_dep,
+    refresh: bool = False,
+) -> VideoCapabilityView:
+    if await DeviceRepo.get_device_id(session, sn=sn, org_id=org_id) is None:
+        raise HTTPException(
+            status_code=403, detail="device not available for organization"
+        )
+    return VideoCapabilityView.model_validate(
+        await video_control.capability(sn, presence_registry, send_ctl_command, refresh)
+    )
+
+
+@router.get("/lease/{lease_id}/video-state", response_model=VideoStateView)
+async def get_video_state(
+    lease_id: UUID,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    request: Request,
+) -> VideoStateView:
+    lease = await video_control.authorize(
+        remote_input_service,
+        lease_id,
+        org_id,
+        extract_caller_user_id(request),
+        extract_caller_session_id(request),
+        is_request_superuser(request),
+        require_active=False,
+    )
+    record = (await video_control.store.get(lease.sn)).get("stream")
+    if not record or record["start"]["lease_id"] != str(lease_id):
+        raise HTTPException(status_code=404, detail="video_state_not_found")
+    return VideoStateView.from_record(record)
+
+
+@router.post("/lease/{lease_id}/video-stop", response_model=VideoStateView)
+async def post_video_stop(
+    lease_id: UUID,
+    body: VideoStop,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    request: Request,
+) -> VideoStateView:
+    if body.lease_id != str(lease_id):
+        raise HTTPException(status_code=409, detail={"code": "lease_mismatch"})
+    record = await video_control.stop(
+        remote_input_service,
+        body,
+        org_id,
+        extract_caller_user_id(request),
+        extract_caller_session_id(request),
+        send_ctl_command,
+        is_request_superuser(request),
+    )
+    return VideoStateView.from_record(record)
 
 
 @router.post(

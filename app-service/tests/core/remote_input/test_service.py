@@ -645,36 +645,23 @@ async def test_stream_start_sequential_switch(service_env):
         )
         assert resp1.result == "started"
 
-    # 2. Sequential switch to disp:2 should send new command to terminal
+    # A live shared publisher cannot change source behind existing viewers.
     with patch(
         "core.remote_input.service.send_ctl_command", new_callable=AsyncMock
-    ) as mock_send_switch:
-
-        async def ack_switch():
-            await asyncio.sleep(0.01)
-            async with pending._lock:
-                cmd_id = next(iter(pending._pending.keys()))
-            await pending.resolve(
-                cmd_id,
-                PendingResult(result="switched", state="running"),
+    ) as send:
+        with pytest.raises(HTTPException) as exc:
+            await srv.stream_start(
+                lease_id=lease.lease_id,
+                org_id=1,
+                mode="desktop",
+                source_id="disp:2",
+                caller_user_id="user1",
+                caller_session_id="sess_1",
             )
-
-        asyncio.create_task(ack_switch())
-
-        resp2 = await srv.stream_start(
-            lease_id=lease.lease_id,
-            org_id=1,
-            mode="desktop",
-            source_id="disp:2",
-            caller_user_id="user1",
-            caller_session_id="sess_1",
-        )
-
-        assert resp2.result == "switched"
-        assert resp2.stream_instance_id != resp1.stream_instance_id
-        assert lease.stream_instance_id == resp2.stream_instance_id
-        assert lease.selected_desktop_id == "disp:2"
-        assert mock_send_switch.call_count == 1
+        assert exc.value.status_code == 409
+        assert lease.stream_instance_id == resp1.stream_instance_id
+        assert lease.selected_desktop_id == "disp:1"
+        send.assert_not_called()
 
 
 @pytest.mark.asyncio
