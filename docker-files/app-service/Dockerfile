@@ -20,7 +20,7 @@ ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 COPY pyproject.toml uv.lock ./
 # Install the project's dependencies using the lockfile and settings
-RUN uv sync --frozen --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv --mount=type=tmpfs,target=/tmp uv sync --frozen --no-install-project
 
 # Then, add the rest of the project source code and install it
 # Installing separately from its dependencies allows optimal layer caching
@@ -28,7 +28,7 @@ COPY app-service /app
 # The archive provider resolves this versioned contract outside /app.
 # Include only its data files, never the documentation tree or private config.
 COPY l4desk-service/docs/prompts/contracts/archive-manifest-v1/archive-manifest.schema.json l4desk-service/docs/prompts/contracts/archive-manifest-v1/examples.json /l4desk-service/docs/prompts/contracts/archive-manifest-v1/
-RUN uv sync --frozen
+RUN --mount=type=cache,target=/root/.cache/uv --mount=type=tmpfs,target=/tmp uv sync --frozen
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"
