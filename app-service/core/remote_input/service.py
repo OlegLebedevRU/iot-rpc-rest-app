@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
 import json
 import time
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from core.config import settings
 from core.crud.device_repo import DeviceRepo
 from core.logging_config import setup_module_logger
+from core.remote_input import video_models as video_wire
 from core.remote_input.leases import (
     Lease,
     LeaseConflictError,
@@ -58,6 +59,7 @@ from core.remote_input.schemas import (
     StreamStopCommand,
     StreamStopResponse,
 )
+from core.remote_input.video_control import video_control
 
 log = setup_module_logger(__name__, "remote_input.log")
 
@@ -349,6 +351,43 @@ class RemoteInputService:
         touched = await self.leases.touch(lease_id, ttl_sec)
         if touched is None:
             raise HTTPException(status_code=404, detail="lease not found or expired")
+
+        video_state = (await video_control.store.get(touched.sn)).get("stream")
+        if (
+            video_state
+            and video_state["state"] in ("starting", "running")
+            and video_state["start"]["lease_id"] == str(touched.lease_id)
+        ):
+            start = video_state["start"]
+            current_ms = int(time.time() * 1000)
+            deadline = int(touched.expires_at.timestamp() * 1000)
+            command = video_wire.LeaseRenew(
+                v=2,
+                type="lease_renew",
+                command_id=str(uuid4()),
+                sn=touched.sn,
+                lease_id=str(touched.lease_id),
+                stream_instance_id=start["stream_instance_id"],
+                agent_instance_id=start["agent_instance_id"],
+                descriptor_revision=start["descriptor"]["descriptor_revision"],
+                issued_at_ms=current_ms,
+                expires_at_ms=min(current_ms + 5000, deadline),
+                lease_expires_at_ms=deadline,
+            )
+            await send_ctl_command(
+                touched.sn, command, ttl_ms=command.expires_at_ms - current_ms
+            )
+
+            def renew(doc: dict[str, Any]) -> None:
+                state = doc.get("stream", {})
+                if state.get("start") == start and state.get("state") in (
+                    "starting",
+                    "running",
+                ):
+                    state["start"]["lease_expires_at_ms"] = deadline
+
+            await video_control.store.change(touched.sn, renew)
+            return self._build_lease_response(touched, renew_status="server_accepted")
 
         cmd = CtlLeaseRenew(
             command_id=uuid4(),
@@ -670,6 +709,27 @@ class RemoteInputService:
         if lease.scope not in ("stream", "input"):
             raise HTTPException(status_code=403, detail="scope_not_allowed")
 
+        async with video_control.legacy_start(lease, mode, source_id, profile):
+            return await self._start_legacy_stream(lease, mode, source_id, profile)
+
+    async def _start_legacy_stream(
+        self,
+        lease: Lease,
+        mode: Literal["desktop", "usb-camera"],
+        source_id: str,
+        profile: str,
+    ) -> StreamStartResponse:
+        lease_id = lease.lease_id
+        current_lease = await self.leases.get(lease_id)
+        if current_lease is None or not current_lease.is_active():
+            raise HTTPException(status_code=409, detail="lease inactive")
+        lease = current_lease
+        if lease.scope not in ("stream", "input"):
+            raise HTTPException(status_code=403, detail="scope_not_allowed")
+        video_state = (await video_control.store.get(lease.sn)).get("stream")
+        if video_state and video_state["state"] in ("starting", "running", "stopping"):
+            raise HTTPException(status_code=409, detail="stream_conflict")
+
         if lease.stream_instance_id is not None and lease.stream_mode == mode:
             # Если источник совпадает с текущим работающим источником:
             current_source = (
@@ -677,7 +737,9 @@ class RemoteInputService:
                 if mode == "desktop"
                 else getattr(lease, "selected_camera_id", None)
             )
-            if current_source == source_id or not source_id:
+            if (
+                current_source == source_id or not source_id
+            ) and lease.stream_profile == profile:
                 log.info(
                     "stream_start idempotent: stream already running for lease %s (instance %s)",
                     lease_id,
@@ -688,6 +750,9 @@ class RemoteInputService:
                     result="already_running",
                     state="running",
                 )
+
+        if lease.stream_instance_id is not None:
+            raise HTTPException(status_code=409, detail="stream_conflict")
 
         stream_instance_id = uuid4()
         cmd_id = uuid4()
@@ -737,6 +802,9 @@ class RemoteInputService:
                 else (res.stream_instance_id or stream_instance_id)
             )
             lease.stream_instance_id = final_instance_id
+            lease.stream_profile = profile
+            lease.stream_contract_version = 1
+            lease.stream_state = res.state or "running"
             lease.stream_mode = mode
             if mode == "desktop":
                 inv = await self.presence.get_inventory(lease.sn)
@@ -752,6 +820,11 @@ class RemoteInputService:
                 lease.selected_desktop_id = None
                 lease.selected_session_id = None
                 lease.selected_camera_id = source_id
+
+            await self.leases.save_stream(lease, None)
+
+        else:
+            raise HTTPException(status_code=504, detail="terminal_unconfirmed")
 
         return StreamStartResponse(
             stream_instance_id=final_instance_id,
@@ -784,6 +857,15 @@ class RemoteInputService:
 
         if lease.scope not in ("stream", "input"):
             raise HTTPException(status_code=403, detail="scope_not_allowed")
+
+        if await video_control.stop_for_lease(
+            lease, send_ctl_command, "user_requested"
+        ):
+            old_stream = lease.stream_instance_id
+            lease.stream_instance_id = None
+            lease.stream_state = "stopped"
+            await self.leases.save_stream(lease, old_stream)
+            return StreamStopResponse(result="stopped", state="stopped")
 
         if lease.stream_instance_id is None:
             log.info("stream_stop idempotent: no active stream for lease %s", lease_id)

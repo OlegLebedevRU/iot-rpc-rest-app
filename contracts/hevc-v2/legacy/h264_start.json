@@ -1,0 +1,16 @@
+{
+  "model": "StreamStartCommand",
+  "payload": {
+    "v": 1,
+    "type": "stream_start",
+    "command_id": "00000000-0000-4000-8000-000000000006",
+    "lease_id": "00000000-0000-4000-8000-000000000001",
+    "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+    "sn": "hevc-fixture",
+    "mode": "desktop",
+    "source_id": "display-0",
+    "profile": "low",
+    "issued_at_ms": 1792663200000,
+    "expires_at_ms": 1792663210000
+  }
+}

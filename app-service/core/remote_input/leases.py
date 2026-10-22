@@ -10,7 +10,11 @@ from uuid import UUID, uuid4
 
 from redis.exceptions import (
     ConnectionError as RedisConnectionError,
+)
+from redis.exceptions import (
     TimeoutError as RedisTimeoutError,
+)
+from redis.exceptions import (
     WatchError,
 )
 
@@ -55,6 +59,8 @@ class Lease:
     selected_camera_id: str | None = None
     ttl_sec: int = 60
     stream_state: str | None = None
+    stream_profile: str = "default"
+    stream_contract_version: int = 1
 
     @property
     def issued_at(self) -> datetime:
@@ -114,6 +120,7 @@ def require_compatible_scope(lease: Lease, scope: LeaseScope) -> None:
 
 
 class LeaseRegistryProtocol(Protocol):
+    async def save_stream(self, lease: Lease, expected_stream: UUID | None) -> bool: ...
     async def acquire(
         self,
         org_id: int,
@@ -172,6 +179,16 @@ class LeaseRegistry:
         self._active_by_sn: dict[str, UUID] = {}
         self._active_ws_leases: set[UUID] = set()
         self._lock = asyncio.Lock()
+
+    async def save_stream(self, lease: Lease, expected_stream: UUID | None) -> bool:
+        async with self._lock:
+            current = self._leases_by_id.get(lease.lease_id)
+            if current is None or not current.is_active():
+                return False
+            if current is not lease and current.stream_instance_id != expected_stream:
+                return False
+            self._leases_by_id[lease.lease_id] = lease
+            return True
 
     async def acquire(
         self,
@@ -316,7 +333,14 @@ class LeaseRegistry:
                 pass
 
         # Side effects for revoked lease
-        if lease.scope in ("stream", "input") and lease.stream_instance_id is not None:
+        from core.remote_input.video_control import video_control
+
+        await video_control.stop_for_lease(lease, send_ctl_command, reason)
+        if (
+            lease.scope in ("stream", "input")
+            and lease.stream_instance_id is not None
+            and lease.stream_contract_version == 1
+        ):
             try:
                 now_ms = int(time.time() * 1000)
                 stop_cmd = StreamStopCommand(
@@ -519,6 +543,8 @@ def _lease_to_dict(lease: Lease) -> dict[str, str]:
         "selected_camera_id": lease.selected_camera_id or "",
         "ttl_sec": str(lease.ttl_sec),
         "stream_state": lease.stream_state or "",
+        "stream_profile": lease.stream_profile,
+        "stream_contract_version": str(lease.stream_contract_version),
     }
 
 
@@ -556,6 +582,8 @@ def _dict_to_lease(
         selected_camera_id=d.get("selected_camera_id") or None,
         ttl_sec=int(d.get("ttl_sec", 60)),
         stream_state=d.get("stream_state") or None,
+        stream_profile=d.get("stream_profile", "default"),
+        stream_contract_version=int(d.get("stream_contract_version", 1)),
     )
 
 
@@ -588,6 +616,38 @@ class _CompatibilityActiveSnDict(dict):
 
 
 class RedisLeaseRegistry:
+    async def save_stream(self, lease: Lease, expected_stream: UUID | None) -> bool:
+        key = f"l4d:lease:{lease.lease_id}"
+        async with self._client.pipeline(transaction=True) as pipe:
+            try:
+                await pipe.watch(key)
+                raw = await pipe.hgetall(key)
+                if not raw:
+                    return False
+                current = _dict_to_lease(raw)
+                if (
+                    not current.is_active()
+                    or current.stream_instance_id != expected_stream
+                ):
+                    return False
+                fields = (
+                    "stream_instance_id",
+                    "stream_mode",
+                    "stream_state",
+                    "stream_profile",
+                    "stream_contract_version",
+                    "selected_desktop_id",
+                    "selected_session_id",
+                    "selected_camera_id",
+                )
+                data = _lease_to_dict(lease)
+                pipe.multi()
+                pipe.hset(key, mapping={k: data[k] for k in fields})
+                await pipe.execute()
+                return True
+            except WatchError:
+                return False
+
     def __init__(self) -> None:
         self._leases_by_id: dict[UUID, Lease] = _CompatibilityLeasesDict(self)
         self._active_by_sn: dict[str, UUID] = _CompatibilityActiveSnDict(self)
@@ -969,6 +1029,9 @@ class RedisLeaseRegistry:
                 except Exception:
                     pass
 
+            from core.remote_input.video_control import video_control
+
+            await video_control.stop_for_lease(lease, send_ctl_command, reason)
             if (
                 lease.scope
                 in (
@@ -976,6 +1039,7 @@ class RedisLeaseRegistry:
                     "input",
                 )
                 and lease.stream_instance_id is not None
+                and lease.stream_contract_version == 1
             ):
                 try:
                     now_ms = int(time.time() * 1000)

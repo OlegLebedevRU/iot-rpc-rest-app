@@ -1,0 +1,31 @@
+{
+  "properties": {
+    "stream_instance_id": {
+      "format": "uuid",
+      "title": "Stream Instance Id",
+      "type": "string"
+    },
+    "result": {
+      "title": "Result",
+      "type": "string"
+    },
+    "state": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "State"
+    }
+  },
+  "required": [
+    "stream_instance_id",
+    "result"
+  ],
+  "title": "StreamStartResponse",
+  "type": "object"
+}

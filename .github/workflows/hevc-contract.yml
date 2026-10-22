@@ -1,0 +1,26 @@
+name: HEVC frozen contract
+on:
+  pull_request:
+    paths:
+      - 'contracts/hevc-v2/**'
+      - 'contracts/hevc-v2.lock.json'
+      - '.github/workflows/hevc-contract.yml'
+      - '.gitattributes'
+      - 'app-service/core/remote_input/schemas.py'
+  push:
+    paths:
+      - 'contracts/hevc-v2/**'
+      - 'contracts/hevc-v2.lock.json'
+      - '.github/workflows/hevc-contract.yml'
+      - '.gitattributes'
+      - 'app-service/core/remote_input/schemas.py'
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python -m pip install jsonschema==4.26.0 pydantic==2.12.3
+      - name: Check schemas, golden vectors and frozen revision
+        run: python contracts/hevc-v2/verify.py --expected-digest f065b967cd10c2c709fb394ef9e6c2ecf74f77de060d88c9a821cc9069766ac4 --iot-source app-service/core/remote_input/schemas.py

@@ -1,0 +1,13 @@
+{
+  "definition": "nack",
+  "valid": true,
+  "payload": {
+    "v": 2,
+    "type": "nack",
+    "command_id": "00000000-0000-4000-8000-000000000006",
+    "sn": "hevc-fixture",
+    "code": "unsupported",
+    "message": "HEVC is unavailable",
+    "terminal_time_ms": 1792663200000
+  }
+}

@@ -1,0 +1,3864 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Internal IoT video control",
+    "version": "hevc-contract/2.0.0",
+    "description": "Service authentication and trusted X-Org-Id/X-User-Id/X-Session-Id headers are required. V2 starts require video_v2_enabled; HEVC also requires video_hevc_chain_ready. Legacy requests and responses retain their original shapes. Agent-ready does not prove decoded frames."
+  },
+  "paths": {
+    "/remote-input/lease/{lease_id}/stream/start": {
+      "post": {
+        "tags": [
+          "Internal Remote Input"
+        ],
+        "summary": "Post Stream Start",
+        "operationId": "post_stream_start_remote_input_lease__lease_id__stream_start_post",
+        "parameters": [
+          {
+            "name": "lease_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lease Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/StreamStartRequest"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Start"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/StreamStartResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/VideoStateView"
+                    }
+                  ],
+                  "title": "Response Post Stream Start Remote Input Lease  Lease Id  Stream Start Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote-input/devices/{sn}/video-capabilities": {
+      "get": {
+        "tags": [
+          "Internal Remote Input"
+        ],
+        "summary": "Get Video Capability",
+        "operationId": "get_video_capability_remote_input_devices__sn__video_capabilities_get",
+        "parameters": [
+          {
+            "name": "sn",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Sn"
+            }
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Refresh"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoCapabilityView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote-input/lease/{lease_id}/video-state": {
+      "get": {
+        "tags": [
+          "Internal Remote Input"
+        ],
+        "summary": "Get Video State",
+        "operationId": "get_video_state_remote_input_lease__lease_id__video_state_get",
+        "parameters": [
+          {
+            "name": "lease_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lease Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoStateView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote-input/lease/{lease_id}/video-stop": {
+      "post": {
+        "tags": [
+          "Internal Remote Input"
+        ],
+        "summary": "Post Video Stop",
+        "operationId": "post_video_stop_remote_input_lease__lease_id__video_stop_post",
+        "parameters": [
+          {
+            "name": "lease_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lease Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Stop"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoStateView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/remote-input/lease/{lease_id}/stream/stop": {
+      "post": {
+        "tags": [
+          "Internal Remote Input"
+        ],
+        "summary": "Post Stream Stop",
+        "operationId": "post_stream_stop_remote_input_lease__lease_id__stream_stop_post",
+        "parameters": [
+          {
+            "name": "lease_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lease Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamStopResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Backend": {
+        "type": "string",
+        "enum": [
+          "media_foundation",
+          "openh264",
+          "ffmpeg",
+          "camera"
+        ],
+        "title": "Backend"
+      },
+      "Backend1": {
+        "type": "string",
+        "enum": [
+          "media_foundation",
+          "openh264",
+          "ffmpeg",
+          "camera",
+          "unknown"
+        ],
+        "title": "Backend1"
+      },
+      "Capabilities": {
+        "properties": {
+          "agent_instance_id": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Agent Instance Id"
+          },
+          "capability_revision": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Capability Revision"
+          },
+          "checked_at_ms": {
+            "type": "integer",
+            "maximum": 5000000000000.0,
+            "minimum": 1.0,
+            "title": "Checked At Ms"
+          },
+          "valid_until_ms": {
+            "type": "integer",
+            "maximum": 5000000000000.0,
+            "minimum": 1.0,
+            "title": "Valid Until Ms"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "title": "Source Id"
+          },
+          "binding": {
+            "$ref": "#/components/schemas/ProbeBinding"
+          },
+          "video": {
+            "items": {
+              "$ref": "#/components/schemas/CapabilityEntry"
+            },
+            "type": "array",
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Video"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "agent_instance_id",
+          "capability_revision",
+          "checked_at_ms",
+          "valid_until_ms",
+          "source_id",
+          "binding",
+          "video"
+        ],
+        "title": "Capabilities"
+      },
+      "CapabilityEntry": {
+        "properties": {
+          "codec": {
+            "$ref": "#/components/schemas/Codec"
+          },
+          "backend": {
+            "$ref": "#/components/schemas/Backend"
+          },
+          "hardware": {
+            "type": "boolean",
+            "title": "Hardware"
+          },
+          "status": {
+            "$ref": "#/components/schemas/Status"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReasonCode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/ProbeProfile"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "minItems": 0,
+            "title": "Profiles"
+          },
+          "probe_evidence": {
+            "$ref": "#/components/schemas/ProbeEvidence"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "codec",
+          "backend",
+          "hardware",
+          "status",
+          "reason_code",
+          "profiles",
+          "probe_evidence"
+        ],
+        "title": "CapabilityEntry"
+      },
+      "Code": {
+        "type": "string",
+        "enum": [
+          "no_hardware_mft",
+          "os_api_unavailable",
+          "input_format_unsupported",
+          "profile_unsupported",
+          "encoder_busy",
+          "probe_timeout",
+          "encoded_output_invalid",
+          "driver_reset",
+          "capture_path_unavailable",
+          "conversion_failed",
+          "policy_disabled",
+          "device_lost",
+          "encoder_hung",
+          "codec_mismatch",
+          "producer_lost",
+          "network_failure",
+          "unknown"
+        ],
+        "title": "Code"
+      },
+      "Codec": {
+        "type": "string",
+        "enum": [
+          "h264",
+          "h265"
+        ],
+        "title": "Codec"
+      },
+      "CodecPolicy": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "h264",
+          "h265"
+        ],
+        "title": "CodecPolicy"
+      },
+      "Delivery": {
+        "properties": {
+          "host": {
+            "type": "string",
+            "maxLength": 253,
+            "minLength": 1,
+            "title": "Host"
+          },
+          "rtp_port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Rtp Port"
+          },
+          "rtcp_port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Rtcp Port"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "host",
+          "rtp_port",
+          "rtcp_port"
+        ],
+        "title": "Delivery"
+      },
+      "Descriptor": {
+        "properties": {
+          "descriptor_revision": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Descriptor Revision"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/SourceType"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "title": "Source Id"
+          },
+          "geometry_generation": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Geometry Generation"
+          },
+          "profile_id": {
+            "$ref": "#/components/schemas/ProfileId"
+          },
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/Track"
+            },
+            "type": "array",
+            "maxItems": 1,
+            "minItems": 1,
+            "title": "Tracks"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "descriptor_revision",
+          "source_type",
+          "source_id",
+          "geometry_generation",
+          "profile_id",
+          "tracks"
+        ],
+        "title": "Descriptor"
+      },
+      "Descriptor1": {
+        "properties": {
+          "descriptor_revision": {
+            "type": "string",
+            "maxLength": 36,
+            "minLength": 36,
+            "title": "Descriptor Revision"
+          },
+          "source_type": {
+            "$ref": "#/components/schemas/SourceType"
+          },
+          "source_id": {
+            "type": "string",
+            "maxLength": 63,
+            "minLength": 1,
+            "title": "Source Id"
+          },
+          "geometry_generation": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Geometry Generation"
+          },
+          "profile_id": {
+            "$ref": "#/components/schemas/ProfileId"
+          },
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/Track"
+            },
+            "type": "array",
+            "maxItems": 1,
+            "minItems": 1,
+            "title": "Tracks"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "descriptor_revision",
+          "source_type",
+          "source_id",
+          "geometry_generation",
+          "profile_id",
+          "tracks"
+        ],
+        "title": "Descriptor1"
+      },
+      "Domain": {
+        "type": "string",
+        "enum": [
+          "encoder",
+          "capture",
+          "conversion",
+          "transport",
+          "camera",
+          "producer"
+        ],
+        "title": "Domain"
+      },
+      "ErrorDetail": {
+        "properties": {
+          "domain": {
+            "$ref": "#/components/schemas/Domain"
+          },
+          "code": {
+            "$ref": "#/components/schemas/Code"
+          },
+          "scope": {
+            "type": "string",
+            "const": "stream",
+            "title": "Scope"
+          },
+          "codec": {
+            "$ref": "#/components/schemas/Codec"
+          },
+          "backend": {
+            "$ref": "#/components/schemas/Backend1"
+          },
+          "stage": {
+            "$ref": "#/components/schemas/Stage"
+          },
+          "current_stream_terminated": {
+            "type": "boolean",
+            "const": true,
+            "title": "Current Stream Terminated"
+          },
+          "recovery_class": {
+            "$ref": "#/components/schemas/RecoveryClass"
+          },
+          "suggested_action": {
+            "$ref": "#/components/schemas/SuggestedAction"
+          },
+          "auto_restart_allowed": {
+            "type": "boolean",
+            "const": false,
+            "title": "Auto Restart Allowed"
+          },
+          "attempt": {
+            "type": "integer",
+            "const": 0,
+            "title": "Attempt"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "domain",
+          "code",
+          "scope",
+          "codec",
+          "backend",
+          "stage",
+          "current_stream_terminated",
+          "recovery_class",
+          "suggested_action",
+          "auto_restart_allowed",
+          "attempt"
+        ],
+        "title": "ErrorDetail"
+      },
+      "Feedback": {
+        "properties": {
+          "pli": {
+            "type": "boolean",
+            "title": "Pli"
+          },
+          "fir": {
+            "type": "boolean",
+            "title": "Fir"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "pli",
+          "fir"
+        ],
+        "title": "Feedback"
+      },
+      "H264Track": {
+        "properties": {
+          "track_id": {
+            "type": "string",
+            "const": "video-main",
+            "title": "Track Id"
+          },
+          "kind": {
+            "type": "string",
+            "const": "video",
+            "title": "Kind"
+          },
+          "direction": {
+            "type": "string",
+            "const": "producer_to_viewers",
+            "title": "Direction"
+          },
+          "bit_depth": {
+            "type": "integer",
+            "const": 8,
+            "title": "Bit Depth"
+          },
+          "chroma": {
+            "type": "string",
+            "const": "420",
+            "title": "Chroma"
+          },
+          "clock_rate": {
+            "type": "integer",
+            "const": 90000,
+            "title": "Clock Rate"
+          },
+          "payload_type": {
+            "type": "integer",
+            "maximum": 127.0,
+            "minimum": 96.0,
+            "title": "Payload Type"
+          },
+          "width": {
+            "type": "integer",
+            "multipleOf": 2.0,
+            "maximum": 1920.0,
+            "minimum": 2.0,
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "multipleOf": 2.0,
+            "maximum": 1080.0,
+            "minimum": 2.0,
+            "title": "Height"
+          },
+          "fps": {
+            "type": "integer",
+            "maximum": 25.0,
+            "minimum": 1.0,
+            "title": "Fps"
+          },
+          "feedback": {
+            "$ref": "#/components/schemas/Feedback"
+          },
+          "max_b_frames": {
+            "type": "integer",
+            "const": 0,
+            "title": "Max B Frames"
+          },
+          "keyframe_interval_ms": {
+            "type": "integer",
+            "maximum": 5000.0,
+            "minimum": 250.0,
+            "title": "Keyframe Interval Ms"
+          },
+          "repeat_parameter_sets": {
+            "type": "boolean",
+            "const": true,
+            "title": "Repeat Parameter Sets"
+          },
+          "codec": {
+            "type": "string",
+            "const": "h264",
+            "title": "Codec"
+          },
+          "codec_profile": {
+            "type": "string",
+            "const": "baseline",
+            "title": "Codec Profile"
+          },
+          "packetization": {
+            "type": "string",
+            "const": "rfc6184",
+            "title": "Packetization"
+          },
+          "profile_level_id": {
+            "type": "string",
+            "pattern": "^42[0-9a-f]{4}$",
+            "title": "Profile Level Id"
+          },
+          "packetization_mode": {
+            "type": "integer",
+            "const": 1,
+            "title": "Packetization Mode"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "track_id",
+          "kind",
+          "direction",
+          "bit_depth",
+          "chroma",
+          "clock_rate",
+          "payload_type",
+          "width",
+          "height",
+          "fps",
+          "feedback",
+          "max_b_frames",
+          "keyframe_interval_ms",
+          "repeat_parameter_sets",
+          "codec",
+          "codec_profile",
+          "packetization",
+          "profile_level_id",
+          "packetization_mode"
+        ],
+        "title": "H264Track"
+      },
+      "H265Track": {
+        "properties": {
+          "track_id": {
+            "type": "string",
+            "const": "video-main",
+            "title": "Track Id"
+          },
+          "kind": {
+            "type": "string",
+            "const": "video",
+            "title": "Kind"
+          },
+          "direction": {
+            "type": "string",
+            "const": "producer_to_viewers",
+            "title": "Direction"
+          },
+          "bit_depth": {
+            "type": "integer",
+            "const": 8,
+            "title": "Bit Depth"
+          },
+          "chroma": {
+            "type": "string",
+            "const": "420",
+            "title": "Chroma"
+          },
+          "clock_rate": {
+            "type": "integer",
+            "const": 90000,
+            "title": "Clock Rate"
+          },
+          "payload_type": {
+            "type": "integer",
+            "maximum": 127.0,
+            "minimum": 96.0,
+            "title": "Payload Type"
+          },
+          "width": {
+            "type": "integer",
+            "multipleOf": 2.0,
+            "maximum": 1920.0,
+            "minimum": 2.0,
+            "title": "Width"
+          },
+          "height": {
+            "type": "integer",
+            "multipleOf": 2.0,
+            "maximum": 1080.0,
+            "minimum": 2.0,
+            "title": "Height"
+          },
+          "fps": {
+            "type": "integer",
+            "maximum": 25.0,
+            "minimum": 1.0,
+            "title": "Fps"
+          },
+          "feedback": {
+            "$ref": "#/components/schemas/Feedback"
+          },
+          "max_b_frames": {
+            "type": "integer",
+            "const": 0,
+            "title": "Max B Frames"
+          },
+          "keyframe_interval_ms": {
+            "type": "integer",
+            "maximum": 5000.0,
+            "minimum": 250.0,
+            "title": "Keyframe Interval Ms"
+          },
+          "repeat_parameter_sets": {
+            "type": "boolean",
+            "const": true,
+            "title": "Repeat Parameter Sets"
+          },
+          "codec": {
+            "type": "string",
+            "const": "h265",
+            "title": "Codec"
+          },
+          "codec_profile": {
+            "type": "string",
+            "const": "main",
+            "title": "Codec Profile"
+          },
+          "packetization": {
+            "type": "string",
+            "const": "rfc7798",
+            "title": "Packetization"
+          },
+          "profile_space": {
+            "type": "integer",
+            "const": 0,
+            "title": "Profile Space"
+          },
+          "profile_id": {
+            "type": "integer",
+            "const": 1,
+            "title": "Profile Id"
+          },
+          "tier_flag": {
+            "type": "integer",
+            "const": 0,
+            "title": "Tier Flag"
+          },
+          "level_id": {
+            "$ref": "#/components/schemas/LevelId"
+          },
+          "sprop_max_don_diff": {
+            "type": "integer",
+            "const": 0,
+            "title": "Sprop Max Don Diff"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "track_id",
+          "kind",
+          "direction",
+          "bit_depth",
+          "chroma",
+          "clock_rate",
+          "payload_type",
+          "width",
+          "height",
+          "fps",
+          "feedback",
+          "max_b_frames",
+          "keyframe_interval_ms",
+          "repeat_parameter_sets",
+          "codec",
+          "codec_profile",
+          "packetization",
+          "profile_space",
+          "profile_id",
+          "tier_flag",
+          "level_id",
+          "sprop_max_don_diff"
+        ],
+        "title": "H265Track"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LevelId": {
+        "type": "integer",
+        "enum": [
+          30,
+          60,
+          63,
+          90,
+          93,
+          120
+        ],
+        "title": "LevelId"
+      },
+      "ProbeBinding": {
+        "properties": {
+          "process_arch": {
+            "$ref": "#/components/schemas/ProcessArch"
+          },
+          "adapter_id": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Adapter Id"
+          },
+          "driver_revision": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Driver Revision"
+          },
+          "component_revision": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Component Revision"
+          },
+          "interactive_session_id": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Interactive Session Id"
+          },
+          "geometry_generation": {
+            "type": "integer",
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
+            "title": "Geometry Generation"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "process_arch",
+          "adapter_id",
+          "driver_revision",
+          "component_revision",
+          "interactive_session_id",
+          "geometry_generation"
+        ],
+        "title": "ProbeBinding"
+      },
+      "ProbeEvidence": {
+        "type": "string",
+        "enum": [
+          "none",
+          "encoded_sequence"
+        ],
+        "title": "ProbeEvidence"
+      },
+      "ProbeProfile": {
+        "properties": {
+          "profile_id": {
+            "$ref": "#/components/schemas/ProfileId"
+          },
+          "track": {
+            "$ref": "#/components/schemas/Track"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "profile_id",
+          "track"
+        ],
+        "title": "ProbeProfile"
+      },
+      "ProcessArch": {
+        "type": "string",
+        "enum": [
+          "x86",
+          "x64"
+        ],
+        "title": "ProcessArch"
+      },
+      "ProfileId": {
+        "type": "string",
+        "enum": [
+          "default",
+          "low"
+        ],
+        "title": "ProfileId"
+      },
+      "ReasonCode": {
+        "type": "string",
+        "enum": [
+          "no_hardware_mft",
+          "os_api_unavailable",
+          "input_format_unsupported",
+          "profile_unsupported",
+          "encoder_busy",
+          "probe_timeout",
+          "encoded_output_invalid",
+          "driver_reset",
+          "capture_path_unavailable",
+          "conversion_failed",
+          "policy_disabled",
+          "device_lost",
+          "encoder_hung",
+          "codec_mismatch",
+          "producer_lost",
+          "network_failure",
+          "unknown"
+        ],
+        "title": "ReasonCode"
+      },
+      "RecoveryClass": {
+        "type": "string",
+        "enum": [
+          "reprobe_required",
+          "manual_action_required",
+          "unknown"
+        ],
+        "title": "RecoveryClass"
+      },
+      "ResolvedCodec": {
+        "type": "string",
+        "enum": [
+          "h264",
+          "h265"
+        ],
+        "title": "ResolvedCodec"
+      },
+      "SourceType": {
+        "type": "string",
+        "enum": [
+          "desktop",
+          "usb-camera",
+          "camera",
+          "test"
+        ],
+        "title": "SourceType"
+      },
+      "Stage": {
+        "type": "string",
+        "enum": [
+          "probe",
+          "capture",
+          "convert",
+          "init",
+          "encode",
+          "packetize",
+          "forward",
+          "network",
+          "unknown"
+        ],
+        "title": "Stage"
+      },
+      "Start": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "const": 2
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "issued_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "expires_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "type": {
+            "const": "stream_start"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "agent_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "capability_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lease_expires_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "codec_policy": {
+            "enum": [
+              "auto",
+              "h264",
+              "h265"
+            ]
+          },
+          "resolved_codec": {
+            "enum": [
+              "h264",
+              "h265"
+            ]
+          },
+          "descriptor": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/G0_descriptor"
+              },
+              {
+                "properties": {
+                  "source_type": {
+                    "enum": [
+                      "desktop",
+                      "usb-camera"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/G0_delivery"
+          },
+          "recovery_policy": {
+            "const": "stop_on_failure"
+          }
+        },
+        "required": [
+          "v",
+          "command_id",
+          "sn",
+          "issued_at_ms",
+          "expires_at_ms",
+          "lease_id",
+          "stream_instance_id",
+          "type",
+          "operation_id",
+          "agent_instance_id",
+          "capability_revision",
+          "lease_expires_at_ms",
+          "codec_policy",
+          "resolved_codec",
+          "descriptor",
+          "delivery",
+          "recovery_policy"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "resolved_codec": {
+                  "const": "h264"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "descriptor": {
+                  "properties": {
+                    "tracks": {
+                      "items": {
+                        "$ref": "#/components/schemas/G0_h264_track"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "resolved_codec": {
+                  "const": "h265"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "descriptor": {
+                  "properties": {
+                    "tracks": {
+                      "items": {
+                        "$ref": "#/components/schemas/G0_h265_track"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Status": {
+        "type": "string",
+        "enum": [
+          "unknown",
+          "probing",
+          "ready",
+          "unsupported",
+          "temporarily_unavailable",
+          "disabled_by_policy"
+        ],
+        "title": "Status"
+      },
+      "Stop": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "const": 2
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "issued_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "expires_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "type": {
+            "const": "stream_stop"
+          },
+          "agent_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "descriptor_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        },
+        "required": [
+          "v",
+          "command_id",
+          "sn",
+          "issued_at_ms",
+          "expires_at_ms",
+          "lease_id",
+          "stream_instance_id",
+          "type",
+          "agent_instance_id",
+          "descriptor_revision"
+        ],
+        "additionalProperties": false
+      },
+      "StreamStartRequest": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "desktop",
+              "usb-camera"
+            ],
+            "title": "Mode"
+          },
+          "source_id": {
+            "type": "string",
+            "title": "Source Id"
+          },
+          "profile": {
+            "type": "string",
+            "title": "Profile",
+            "default": "default"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "source_id"
+        ],
+        "title": "StreamStartRequest"
+      },
+      "StreamStartResponse": {
+        "properties": {
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Stream Instance Id"
+          },
+          "result": {
+            "type": "string",
+            "title": "Result"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "stream_instance_id",
+          "result"
+        ],
+        "title": "StreamStartResponse"
+      },
+      "StreamStopResponse": {
+        "properties": {
+          "result": {
+            "type": "string",
+            "title": "Result"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          }
+        },
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "title": "StreamStopResponse"
+      },
+      "SuggestedAction": {
+        "type": "string",
+        "enum": [
+          "retry_same_codec",
+          "check_source",
+          "check_transport",
+          "none"
+        ],
+        "title": "SuggestedAction"
+      },
+      "Track": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/H264Track"
+          },
+          {
+            "$ref": "#/components/schemas/H265Track"
+          }
+        ],
+        "title": "Track"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "VideoCapabilityView": {
+        "properties": {
+          "negotiated_v2": {
+            "type": "boolean",
+            "title": "Negotiated V2"
+          },
+          "video_capabilities": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Capabilities"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "negotiated_v2",
+          "video_capabilities"
+        ],
+        "title": "VideoCapabilityView"
+      },
+      "VideoStateView": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "const": 2,
+            "title": "Version",
+            "default": 2
+          },
+          "sn": {
+            "type": "string",
+            "title": "Sn"
+          },
+          "lease_id": {
+            "type": "string",
+            "title": "Lease Id"
+          },
+          "agent_instance_id": {
+            "type": "string",
+            "title": "Agent Instance Id"
+          },
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "command_id": {
+            "type": "string",
+            "title": "Command Id"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "agent_ready"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation"
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "title": "Stream Instance Id"
+          },
+          "result": {
+            "type": "string",
+            "title": "Result"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "resolved_codec": {
+            "type": "string",
+            "enum": [
+              "h264",
+              "h265"
+            ],
+            "title": "Resolved Codec"
+          },
+          "descriptor": {
+            "$ref": "#/components/schemas/Descriptor"
+          },
+          "actual_descriptor": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Descriptor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorDetail"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sn",
+          "lease_id",
+          "agent_instance_id",
+          "operation_id",
+          "command_id",
+          "stream_instance_id",
+          "result",
+          "state",
+          "resolved_codec",
+          "descriptor"
+        ],
+        "title": "VideoStateView"
+      },
+      "G0_h264_track": {
+        "type": "object",
+        "properties": {
+          "track_id": {
+            "const": "video-main"
+          },
+          "kind": {
+            "const": "video"
+          },
+          "direction": {
+            "const": "producer_to_viewers"
+          },
+          "bit_depth": {
+            "const": 8
+          },
+          "chroma": {
+            "const": "420"
+          },
+          "clock_rate": {
+            "const": 90000
+          },
+          "payload_type": {
+            "type": "integer",
+            "minimum": 96,
+            "maximum": 127
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 1920,
+            "multipleOf": 2
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 1080,
+            "multipleOf": 2
+          },
+          "fps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          },
+          "feedback": {
+            "type": "object",
+            "properties": {
+              "pli": {
+                "type": "boolean"
+              },
+              "fir": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "pli",
+              "fir"
+            ],
+            "additionalProperties": false
+          },
+          "max_b_frames": {
+            "const": 0
+          },
+          "keyframe_interval_ms": {
+            "type": "integer",
+            "minimum": 250,
+            "maximum": 5000
+          },
+          "repeat_parameter_sets": {
+            "const": true
+          },
+          "codec": {
+            "const": "h264"
+          },
+          "codec_profile": {
+            "const": "baseline"
+          },
+          "packetization": {
+            "const": "rfc6184"
+          },
+          "profile_level_id": {
+            "type": "string",
+            "pattern": "^42[0-9a-f]{4}$"
+          },
+          "packetization_mode": {
+            "const": 1
+          }
+        },
+        "required": [
+          "track_id",
+          "kind",
+          "direction",
+          "bit_depth",
+          "chroma",
+          "clock_rate",
+          "payload_type",
+          "width",
+          "height",
+          "fps",
+          "feedback",
+          "max_b_frames",
+          "keyframe_interval_ms",
+          "repeat_parameter_sets",
+          "codec",
+          "codec_profile",
+          "packetization",
+          "profile_level_id",
+          "packetization_mode"
+        ],
+        "additionalProperties": false
+      },
+      "G0_h265_track": {
+        "type": "object",
+        "properties": {
+          "track_id": {
+            "const": "video-main"
+          },
+          "kind": {
+            "const": "video"
+          },
+          "direction": {
+            "const": "producer_to_viewers"
+          },
+          "bit_depth": {
+            "const": 8
+          },
+          "chroma": {
+            "const": "420"
+          },
+          "clock_rate": {
+            "const": 90000
+          },
+          "payload_type": {
+            "type": "integer",
+            "minimum": 96,
+            "maximum": 127
+          },
+          "width": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 1920,
+            "multipleOf": 2
+          },
+          "height": {
+            "type": "integer",
+            "minimum": 2,
+            "maximum": 1080,
+            "multipleOf": 2
+          },
+          "fps": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 25
+          },
+          "feedback": {
+            "type": "object",
+            "properties": {
+              "pli": {
+                "type": "boolean"
+              },
+              "fir": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "pli",
+              "fir"
+            ],
+            "additionalProperties": false
+          },
+          "max_b_frames": {
+            "const": 0
+          },
+          "keyframe_interval_ms": {
+            "type": "integer",
+            "minimum": 250,
+            "maximum": 5000
+          },
+          "repeat_parameter_sets": {
+            "const": true
+          },
+          "codec": {
+            "const": "h265"
+          },
+          "codec_profile": {
+            "const": "main"
+          },
+          "packetization": {
+            "const": "rfc7798"
+          },
+          "profile_space": {
+            "const": 0
+          },
+          "profile_id": {
+            "const": 1
+          },
+          "tier_flag": {
+            "const": 0
+          },
+          "level_id": {
+            "enum": [
+              30,
+              60,
+              63,
+              90,
+              93,
+              120
+            ]
+          },
+          "sprop_max_don_diff": {
+            "const": 0
+          }
+        },
+        "required": [
+          "track_id",
+          "kind",
+          "direction",
+          "bit_depth",
+          "chroma",
+          "clock_rate",
+          "payload_type",
+          "width",
+          "height",
+          "fps",
+          "feedback",
+          "max_b_frames",
+          "keyframe_interval_ms",
+          "repeat_parameter_sets",
+          "codec",
+          "codec_profile",
+          "packetization",
+          "profile_space",
+          "profile_id",
+          "tier_flag",
+          "level_id",
+          "sprop_max_don_diff"
+        ],
+        "additionalProperties": false
+      },
+      "G0_track": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/G0_h264_track"
+          },
+          {
+            "$ref": "#/components/schemas/G0_h265_track"
+          }
+        ]
+      },
+      "G0_descriptor": {
+        "type": "object",
+        "properties": {
+          "descriptor_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "source_type": {
+            "enum": [
+              "desktop",
+              "usb-camera",
+              "camera",
+              "test"
+            ]
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63
+          },
+          "geometry_generation": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "profile_id": {
+            "enum": [
+              "default",
+              "low"
+            ]
+          },
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/G0_track"
+            },
+            "minItems": 1,
+            "maxItems": 1
+          }
+        },
+        "required": [
+          "descriptor_revision",
+          "source_type",
+          "source_id",
+          "geometry_generation",
+          "profile_id",
+          "tracks"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "profile_id": {
+                  "const": "low"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "tracks": {
+                  "items": {
+                    "properties": {
+                      "fps": {
+                        "maximum": 15
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "G0_probe_binding": {
+        "type": "object",
+        "properties": {
+          "process_arch": {
+            "enum": [
+              "x86",
+              "x64"
+            ]
+          },
+          "adapter_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "driver_revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "component_revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "interactive_session_id": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          },
+          "geometry_generation": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 2147483647
+          }
+        },
+        "required": [
+          "process_arch",
+          "adapter_id",
+          "driver_revision",
+          "component_revision",
+          "interactive_session_id",
+          "geometry_generation"
+        ],
+        "additionalProperties": false
+      },
+      "G0_probe_profile": {
+        "type": "object",
+        "properties": {
+          "profile_id": {
+            "enum": [
+              "default",
+              "low"
+            ]
+          },
+          "track": {
+            "$ref": "#/components/schemas/G0_track"
+          }
+        },
+        "required": [
+          "profile_id",
+          "track"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "profile_id": {
+                  "const": "low"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "track": {
+                  "properties": {
+                    "fps": {
+                      "maximum": 15
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "G0_capability_entry": {
+        "type": "object",
+        "properties": {
+          "codec": {
+            "enum": [
+              "h264",
+              "h265"
+            ]
+          },
+          "backend": {
+            "enum": [
+              "media_foundation",
+              "openh264",
+              "ffmpeg",
+              "camera"
+            ]
+          },
+          "hardware": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "unknown",
+              "probing",
+              "ready",
+              "unsupported",
+              "temporarily_unavailable",
+              "disabled_by_policy"
+            ]
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "no_hardware_mft",
+                  "os_api_unavailable",
+                  "input_format_unsupported",
+                  "profile_unsupported",
+                  "encoder_busy",
+                  "probe_timeout",
+                  "encoded_output_invalid",
+                  "driver_reset",
+                  "capture_path_unavailable",
+                  "conversion_failed",
+                  "policy_disabled",
+                  "device_lost",
+                  "encoder_hung",
+                  "codec_mismatch",
+                  "producer_lost",
+                  "network_failure",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "profiles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/G0_probe_profile"
+            },
+            "minItems": 0,
+            "maxItems": 8
+          },
+          "probe_evidence": {
+            "enum": [
+              "none",
+              "encoded_sequence"
+            ]
+          }
+        },
+        "required": [
+          "codec",
+          "backend",
+          "hardware",
+          "status",
+          "reason_code",
+          "profiles",
+          "probe_evidence"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "ready"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "profiles": {
+                  "minItems": 1
+                },
+                "probe_evidence": {
+                  "const": "encoded_sequence"
+                },
+                "reason_code": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "codec": {
+                  "const": "h265"
+                },
+                "backend": {
+                  "const": "media_foundation"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "hardware": {
+                  "const": true
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "codec": {
+                  "const": "h265"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "backend": {
+                  "enum": [
+                    "media_foundation",
+                    "camera"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "codec": {
+                  "const": "h264"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "profiles": {
+                  "items": {
+                    "properties": {
+                      "track": {
+                        "$ref": "#/components/schemas/G0_h264_track"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "codec": {
+                  "const": "h265"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "profiles": {
+                  "items": {
+                    "properties": {
+                      "track": {
+                        "$ref": "#/components/schemas/G0_h265_track"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "G0_capabilities": {
+        "type": "object",
+        "properties": {
+          "agent_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "capability_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "checked_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "valid_until_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "source_id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 63
+          },
+          "binding": {
+            "$ref": "#/components/schemas/G0_probe_binding"
+          },
+          "video": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/G0_capability_entry"
+            },
+            "minItems": 1,
+            "maxItems": 4
+          }
+        },
+        "required": [
+          "agent_instance_id",
+          "capability_revision",
+          "checked_at_ms",
+          "valid_until_ms",
+          "source_id",
+          "binding",
+          "video"
+        ],
+        "additionalProperties": false
+      },
+      "G0_inventory_get": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "const": 2
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "issued_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "expires_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "type": {
+            "const": "inventory_get"
+          }
+        },
+        "required": [
+          "v",
+          "command_id",
+          "sn",
+          "issued_at_ms",
+          "expires_at_ms",
+          "type"
+        ],
+        "additionalProperties": false
+      },
+      "G0_capabilities_ack": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "const": 2
+          },
+          "type": {
+            "const": "ack"
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "result": {
+            "const": "inventory"
+          },
+          "video_capabilities": {
+            "$ref": "#/components/schemas/G0_capabilities"
+          }
+        },
+        "required": [
+          "v",
+          "type",
+          "command_id",
+          "sn",
+          "result",
+          "video_capabilities"
+        ],
+        "additionalProperties": false
+      },
+      "G0_delivery": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 253
+          },
+          "rtp_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "rtcp_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          }
+        },
+        "required": [
+          "host",
+          "rtp_port",
+          "rtcp_port"
+        ],
+        "additionalProperties": false
+      },
+      "G0_start": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "const": 2
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "issued_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "expires_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "type": {
+            "const": "stream_start"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "agent_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "capability_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lease_expires_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "codec_policy": {
+            "enum": [
+              "auto",
+              "h264",
+              "h265"
+            ]
+          },
+          "resolved_codec": {
+            "enum": [
+              "h264",
+              "h265"
+            ]
+          },
+          "descriptor": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/G0_descriptor"
+              },
+              {
+                "properties": {
+                  "source_type": {
+                    "enum": [
+                      "desktop",
+                      "usb-camera"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          "delivery": {
+            "$ref": "#/components/schemas/G0_delivery"
+          },
+          "recovery_policy": {
+            "const": "stop_on_failure"
+          }
+        },
+        "required": [
+          "v",
+          "command_id",
+          "sn",
+          "issued_at_ms",
+          "expires_at_ms",
+          "lease_id",
+          "stream_instance_id",
+          "type",
+          "operation_id",
+          "agent_instance_id",
+          "capability_revision",
+          "lease_expires_at_ms",
+          "codec_policy",
+          "resolved_codec",
+          "descriptor",
+          "delivery",
+          "recovery_policy"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "resolved_codec": {
+                  "const": "h264"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "descriptor": {
+                  "properties": {
+                    "tracks": {
+                      "items": {
+                        "$ref": "#/components/schemas/G0_h264_track"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "resolved_codec": {
+                  "const": "h265"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "descriptor": {
+                  "properties": {
+                    "tracks": {
+                      "items": {
+                        "$ref": "#/components/schemas/G0_h265_track"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "G0_ready": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "const": 2
+          },
+          "type": {
+            "const": "stream_event"
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "agent_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "state": {
+            "const": "running"
+          },
+          "confirmation": {
+            "const": "agent_ready"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "maxLength": 35
+          },
+          "actual_descriptor": {
+            "$ref": "#/components/schemas/G0_descriptor"
+          }
+        },
+        "required": [
+          "v",
+          "type",
+          "sn",
+          "lease_id",
+          "stream_instance_id",
+          "command_id",
+          "operation_id",
+          "agent_instance_id",
+          "state",
+          "confirmation",
+          "timestamp",
+          "actual_descriptor"
+        ],
+        "additionalProperties": false
+      },
+      "G0_error_detail": {
+        "type": "object",
+        "properties": {
+          "domain": {
+            "enum": [
+              "encoder",
+              "capture",
+              "conversion",
+              "transport",
+              "camera",
+              "producer"
+            ]
+          },
+          "code": {
+            "enum": [
+              "no_hardware_mft",
+              "os_api_unavailable",
+              "input_format_unsupported",
+              "profile_unsupported",
+              "encoder_busy",
+              "probe_timeout",
+              "encoded_output_invalid",
+              "driver_reset",
+              "capture_path_unavailable",
+              "conversion_failed",
+              "policy_disabled",
+              "device_lost",
+              "encoder_hung",
+              "codec_mismatch",
+              "producer_lost",
+              "network_failure",
+              "unknown"
+            ]
+          },
+          "scope": {
+            "const": "stream"
+          },
+          "codec": {
+            "enum": [
+              "h264",
+              "h265"
+            ]
+          },
+          "backend": {
+            "enum": [
+              "media_foundation",
+              "openh264",
+              "ffmpeg",
+              "camera",
+              "unknown"
+            ]
+          },
+          "stage": {
+            "enum": [
+              "probe",
+              "capture",
+              "convert",
+              "init",
+              "encode",
+              "packetize",
+              "forward",
+              "network",
+              "unknown"
+            ]
+          },
+          "current_stream_terminated": {
+            "const": true
+          },
+          "recovery_class": {
+            "enum": [
+              "reprobe_required",
+              "manual_action_required",
+              "unknown"
+            ]
+          },
+          "suggested_action": {
+            "enum": [
+              "retry_same_codec",
+              "check_source",
+              "check_transport",
+              "none"
+            ]
+          },
+          "auto_restart_allowed": {
+            "const": false
+          },
+          "attempt": {
+            "const": 0
+          }
+        },
+        "required": [
+          "domain",
+          "code",
+          "scope",
+          "codec",
+          "backend",
+          "stage",
+          "current_stream_terminated",
+          "recovery_class",
+          "suggested_action",
+          "auto_restart_allowed",
+          "attempt"
+        ],
+        "additionalProperties": false
+      },
+      "G0_error": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "const": 2
+          },
+          "type": {
+            "const": "stream_event"
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "agent_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "state": {
+            "const": "failed"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "maxLength": 35
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96
+          },
+          "descriptor_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "error": {
+            "$ref": "#/components/schemas/G0_error_detail"
+          }
+        },
+        "required": [
+          "v",
+          "type",
+          "sn",
+          "lease_id",
+          "stream_instance_id",
+          "agent_instance_id",
+          "state",
+          "timestamp",
+          "reason",
+          "descriptor_revision",
+          "error"
+        ],
+        "additionalProperties": false
+      },
+      "G0_media_start": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "publisher": {
+            "type": "object",
+            "properties": {
+              "sn": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              },
+              "stream_instance_id": {
+                "type": "string",
+                "format": "uuid",
+                "minLength": 36,
+                "maxLength": 36
+              }
+            },
+            "required": [
+              "sn",
+              "stream_instance_id"
+            ],
+            "additionalProperties": false
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lease_expires_at": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000
+          },
+          "descriptor": {
+            "$ref": "#/components/schemas/G0_descriptor"
+          },
+          "pin": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "contract_version",
+          "session_id",
+          "operation_id",
+          "publisher",
+          "lease_id",
+          "lease_expires_at",
+          "descriptor"
+        ],
+        "additionalProperties": false
+      },
+      "G0_media_identity": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "descriptor_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        },
+        "required": [
+          "contract_version",
+          "sn",
+          "session_id",
+          "lease_id",
+          "stream_instance_id",
+          "descriptor_revision"
+        ],
+        "additionalProperties": false
+      },
+      "G0_media_renew": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "descriptor_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lease_expires_at": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000
+          }
+        },
+        "required": [
+          "contract_version",
+          "sn",
+          "session_id",
+          "lease_id",
+          "stream_instance_id",
+          "descriptor_revision",
+          "lease_expires_at"
+        ],
+        "additionalProperties": false
+      },
+      "G0_media_stop": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "descriptor_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96
+          }
+        },
+        "required": [
+          "contract_version",
+          "sn",
+          "session_id",
+          "lease_id",
+          "stream_instance_id",
+          "descriptor_revision",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "G0_media_response": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "route_generation": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "state": {
+            "enum": [
+              "starting",
+              "active",
+              "stopped",
+              "failed"
+            ]
+          },
+          "descriptor": {
+            "$ref": "#/components/schemas/G0_descriptor"
+          },
+          "publisher": {
+            "type": "object",
+            "properties": {
+              "sn": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              },
+              "stream_instance_id": {
+                "type": "string",
+                "format": "uuid",
+                "minLength": 36,
+                "maxLength": 36
+              }
+            },
+            "required": [
+              "sn",
+              "stream_instance_id"
+            ],
+            "additionalProperties": false
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "mountpoint_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "rtp_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "rtcp_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "janus_ws": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^/"
+          },
+          "pin": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "required": [
+          "contract_version",
+          "session_id",
+          "stream_instance_id",
+          "route_generation",
+          "state",
+          "descriptor",
+          "publisher",
+          "lease_id",
+          "operation_id",
+          "mountpoint_id",
+          "rtp_port",
+          "rtcp_port",
+          "janus_ws"
+        ],
+        "additionalProperties": false
+      },
+      "G0_media_health": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "route_generation": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "state": {
+            "enum": [
+              "starting",
+              "active",
+              "stopped",
+              "failed"
+            ]
+          },
+          "descriptor": {
+            "$ref": "#/components/schemas/G0_descriptor"
+          },
+          "publisher": {
+            "type": "object",
+            "properties": {
+              "sn": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9._-]+$"
+              },
+              "stream_instance_id": {
+                "type": "string",
+                "format": "uuid",
+                "minLength": 36,
+                "maxLength": 36
+              }
+            },
+            "required": [
+              "sn",
+              "stream_instance_id"
+            ],
+            "additionalProperties": false
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "mountpoint_id": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2147483647
+          },
+          "rtp_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "rtcp_port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "janus_ws": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^/"
+          },
+          "pin": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "transport": {
+            "type": "object",
+            "properties": {
+              "connected": {
+                "type": "boolean"
+              },
+              "rtp_packets": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "bytes": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "last_rtp_at_ms": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5000000000000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "rtp_fresh": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "connected",
+              "rtp_packets",
+              "bytes",
+              "last_rtp_at_ms",
+              "rtp_fresh"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "contract_version",
+          "session_id",
+          "stream_instance_id",
+          "route_generation",
+          "state",
+          "descriptor",
+          "publisher",
+          "lease_id",
+          "operation_id",
+          "mountpoint_id",
+          "rtp_port",
+          "rtcp_port",
+          "janus_ws",
+          "transport"
+        ],
+        "additionalProperties": false
+      },
+      "G0_media_capabilities": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "media_contract_versions": {
+            "type": "array",
+            "items": {
+              "enum": [
+                1,
+                2
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true
+          },
+          "server_revision": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "dependencies_ready": {
+            "type": "boolean"
+          },
+          "hevc_runtime_verified": {
+            "type": "boolean"
+          },
+          "codecs": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "h264",
+                "h265"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true
+          },
+          "formats": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "codec": {
+                      "const": "h264"
+                    },
+                    "codec_profile": {
+                      "const": "baseline"
+                    },
+                    "packetization": {
+                      "const": "rfc6184"
+                    },
+                    "clock_rate": {
+                      "const": 90000
+                    }
+                  },
+                  "required": [
+                    "codec",
+                    "codec_profile",
+                    "packetization",
+                    "clock_rate"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "codec": {
+                      "const": "h265"
+                    },
+                    "codec_profile": {
+                      "const": "main"
+                    },
+                    "packetization": {
+                      "const": "rfc7798"
+                    },
+                    "clock_rate": {
+                      "const": 90000
+                    }
+                  },
+                  "required": [
+                    "codec",
+                    "codec_profile",
+                    "packetization",
+                    "clock_rate"
+                  ],
+                  "additionalProperties": false
+                }
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true
+          },
+          "max_video_tracks": {
+            "const": 1
+          },
+          "audio_supported": {
+            "const": false
+          },
+          "reverse_rtcp": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "contract_version",
+          "media_contract_versions",
+          "server_revision",
+          "dependencies_ready",
+          "hevc_runtime_verified",
+          "codecs",
+          "formats",
+          "max_video_tracks",
+          "audio_supported",
+          "reverse_rtcp"
+        ],
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "codecs": {
+                  "contains": {
+                    "const": "h265"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "hevc_runtime_verified": {
+                  "const": true
+                },
+                "dependencies_ready": {
+                  "const": true
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "codecs": {
+                  "contains": {
+                    "const": "h264"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "properties": {
+                      "codec": {
+                        "const": "h264"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "properties": {
+                      "codec": {
+                        "const": "h264"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "codecs": {
+                  "contains": {
+                    "const": "h264"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "codecs": {
+                  "contains": {
+                    "const": "h265"
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "properties": {
+                      "codec": {
+                        "const": "h265"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "formats": {
+                  "contains": {
+                    "properties": {
+                      "codec": {
+                        "const": "h265"
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "codecs": {
+                  "contains": {
+                    "const": "h265"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "G0_rejection": {
+        "type": "object",
+        "properties": {
+          "contract_version": {
+            "const": 2
+          },
+          "code": {
+            "enum": [
+              "invalid_payload",
+              "unauthorized",
+              "forbidden",
+              "lease_invalid",
+              "lease_mismatch",
+              "expired",
+              "stale_capability",
+              "capability_mismatch",
+              "unsupported",
+              "codec_mismatch",
+              "descriptor_mismatch",
+              "conflict",
+              "busy",
+              "producer_lost",
+              "janus_unavailable",
+              "capacity_exhausted"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        },
+        "required": [
+          "contract_version",
+          "code",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "G0_stop": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "const": 2
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "issued_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "expires_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "type": {
+            "const": "stream_stop"
+          },
+          "agent_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "descriptor_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        },
+        "required": [
+          "v",
+          "command_id",
+          "sn",
+          "issued_at_ms",
+          "expires_at_ms",
+          "lease_id",
+          "stream_instance_id",
+          "type",
+          "agent_instance_id",
+          "descriptor_revision"
+        ],
+        "additionalProperties": false
+      },
+      "G0_lease_renew": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "const": 2
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "issued_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "expires_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "type": {
+            "const": "lease_renew"
+          },
+          "agent_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "descriptor_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "lease_expires_at_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          }
+        },
+        "required": [
+          "v",
+          "command_id",
+          "sn",
+          "issued_at_ms",
+          "expires_at_ms",
+          "lease_id",
+          "stream_instance_id",
+          "type",
+          "agent_instance_id",
+          "descriptor_revision",
+          "lease_expires_at_ms"
+        ],
+        "additionalProperties": false
+      },
+      "G0_start_ack": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "const": 2
+          },
+          "type": {
+            "const": "ack"
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "lease_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "stream_instance_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "result": {
+            "const": "accepted"
+          },
+          "state": {
+            "const": "starting"
+          },
+          "descriptor_revision": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          }
+        },
+        "required": [
+          "v",
+          "type",
+          "command_id",
+          "sn",
+          "lease_id",
+          "stream_instance_id",
+          "result",
+          "state",
+          "descriptor_revision"
+        ],
+        "additionalProperties": false
+      },
+      "G0_nack": {
+        "type": "object",
+        "properties": {
+          "v": {
+            "const": 2
+          },
+          "type": {
+            "const": "nack"
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid",
+            "minLength": 36,
+            "maxLength": 36
+          },
+          "sn": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[A-Za-z0-9._-]+$"
+          },
+          "code": {
+            "enum": [
+              "invalid_payload",
+              "unauthorized",
+              "forbidden",
+              "lease_invalid",
+              "lease_mismatch",
+              "expired",
+              "stale_capability",
+              "capability_mismatch",
+              "unsupported",
+              "codec_mismatch",
+              "descriptor_mismatch",
+              "conflict",
+              "busy",
+              "producer_lost",
+              "janus_unavailable",
+              "capacity_exhausted"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "terminal_time_ms": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5000000000000
+          }
+        },
+        "required": [
+          "v",
+          "type",
+          "command_id",
+          "sn",
+          "code",
+          "message",
+          "terminal_time_ms"
+        ],
+        "additionalProperties": false
+      }
+    }
+  }
+}

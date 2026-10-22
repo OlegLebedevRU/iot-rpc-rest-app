@@ -420,6 +420,9 @@ class BillingConfig(BaseModel):
 
 
 class RemoteInputConfig(BaseModel):
+    video_v2_enabled: bool = False
+    video_test_camera_sns: list[str] = []
+    video_hevc_chain_ready: bool = False
     lease_ttl_sec: int = 60
     lease_keepalive_sec: int = 15
     click_ack_timeout_ms: int = 5000

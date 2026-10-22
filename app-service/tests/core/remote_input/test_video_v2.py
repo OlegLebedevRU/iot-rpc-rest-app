@@ -1,0 +1,806 @@
+from __future__ import annotations
+
+import asyncio
+import copy
+import json
+from datetime import UTC, datetime
+from pathlib import Path
+from unittest.mock import AsyncMock
+from uuid import uuid4
+
+import pytest
+from core.config import settings
+from core.remote_input import video_models as wire
+from core.remote_input.leases import (
+    LeaseRegistry,
+    _dict_to_lease,
+    _lease_to_dict,
+)
+from core.remote_input.mqtt_bridge import decode_ctl_payload, handle_device_ctl_message
+from core.remote_input.presence import PresenceRegistry
+from core.remote_input.schemas import CtlPresence, DisplayInfo, InventoryInfo
+from core.remote_input.service import RemoteInputService
+from core.remote_input.video_api import VideoStateView
+from core.remote_input.video_control import (
+    now_ms,
+    select_codec,
+    video_control,
+)
+from fastapi import HTTPException
+from pydantic import ValidationError
+
+ROOT = Path(__file__).resolve().parents[4]
+PACKAGE = ROOT / "contracts/hevc-v2"
+
+
+def fixture(name):
+    return json.loads((PACKAGE / "fixtures" / f"{name}.json").read_text())["payload"]
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        p
+        for p in sorted((PACKAGE / "fixtures").glob("*.json"))
+        if json.loads(p.read_text())["definition"]
+        in {
+            "start",
+            "ready",
+            "error",
+            "inventory_get",
+            "capabilities_ack",
+            "stop",
+            "lease_renew",
+            "start_ack",
+            "nack",
+        }
+    ],
+    ids=lambda p: p.stem,
+)
+def test_actual_v2_models(path):
+    case = json.loads(path.read_text())
+    model = {
+        "start": wire.Start,
+        "ready": wire.Ready,
+        "error": wire.Error,
+        "inventory_get": wire.InventoryGet,
+        "capabilities_ack": wire.CapabilitiesAck,
+        "stop": wire.Stop,
+        "lease_renew": wire.LeaseRenew,
+        "start_ack": wire.StartAck,
+        "nack": wire.Nack,
+    }.get(case["definition"])
+    assert model is not None
+    if case["valid"]:
+        assert (
+            model.model_validate(case["payload"]).model_dump(mode="json")
+            == case["payload"]
+        )
+    else:
+        with pytest.raises(ValidationError):
+            model.model_validate(case["payload"])
+
+
+def test_runtime_schema_matches_frozen_package():
+    assert (ROOT / "app-service/core/remote_input/video.schema.json").read_bytes() == (
+        PACKAGE / "hevc.schema.json"
+    ).read_bytes()
+
+
+@pytest.mark.parametrize(
+    "case",
+    json.loads((PACKAGE / "scenarios.json").read_text()),
+    ids=lambda c: c["name"],
+)
+def test_prepare_vectors_use_production_decision(case):
+    assert select_codec(case["start"], case["context"]) == case["expected"]
+
+
+def test_camera_backend_requires_server_test_context():
+    cases = json.loads((PACKAGE / "scenarios.json").read_text())
+    case = copy.deepcopy(next(item for item in cases if item["expected"] == "h265"))
+    start, context = case["start"], case["context"]
+    start["codec_policy"] = "h265"
+    start["descriptor"].update(source_type="usb-camera", source_id="test-rtsp-camera")
+    context["capabilities"]["source_id"] = "test-rtsp-camera"
+    context["capabilities"]["video"][0].update(backend="camera", hardware=False)
+    assert select_codec(start, context) == "unsupported"
+    context["test_camera_source"] = True
+    assert select_codec(start, context) == "h265"
+    start["descriptor"]["source_type"] = "desktop"
+    assert select_codec(start, context) == "unsupported"
+
+
+def test_wire_rejects_duplicates_oversize_and_unknown_nested():
+    with pytest.raises(ValueError):
+        decode_ctl_payload('{"v":2,"v":1}')
+    with pytest.raises(ValueError):
+        decode_ctl_payload(b" " * 32769 + b'{"v":2}')
+    ready = fixture("hevc_ready")
+    ready["actual_descriptor"]["tracks"][0]["unknown"] = 1
+    with pytest.raises(ValidationError):
+        decode_ctl_payload(ready)
+
+
+@pytest.fixture
+async def env(monkeypatch):
+    monkeypatch.setattr(settings.remote_input, "video_v2_enabled", True)
+    monkeypatch.setattr(settings.remote_input, "video_hevc_chain_ready", True)
+    leases, presence = LeaseRegistry(), PresenceRegistry()
+    service = RemoteInputService(leases=leases, presence=presence)
+    lease = await leases.acquire(
+        org_id=1,
+        device_id=10,
+        sn="hevc-fixture",
+        owner_user_id="owner",
+        owner_session_id="session",
+        owner_role="admin",
+        ttl_sec=60,
+        scope="input",
+    )
+    await video_control.store.client.delete(
+        *(
+            await video_control.store.client.keys(
+                video_control.store.key(lease.sn) + "*"
+            )
+        )
+        or ["unused-test-key"]
+    )
+    await presence.update(
+        lease.sn,
+        CtlPresence(
+            timestamp=datetime.now(UTC).isoformat(),
+            capabilities=["video_contract_v2"],
+            session_id=1,
+            desktop_available=True,
+        ),
+    )
+    await presence.update_inventory(
+        lease.sn,
+        InventoryInfo(
+            displays=[
+                DisplayInfo(
+                    desktop_id="display-0",
+                    name="display",
+                    width=1280,
+                    height=720,
+                    session_id=1,
+                )
+            ]
+        ),
+    )
+    start = fixture("hevc_start")
+    start.update(
+        lease_id=str(lease.lease_id),
+        issued_at_ms=now_ms(),
+        expires_at_ms=now_ms() + 2000,
+        lease_expires_at_ms=int(lease.expires_at.timestamp() * 1000),
+    )
+    cap = fixture("capabilities")["video_capabilities"]
+    cap.update(checked_at_ms=now_ms(), valid_until_ms=now_ms() + 59000)
+    server_epoch = await video_control.store.current_epoch()
+    await video_control.store.change(
+        lease.sn, lambda doc: doc.update(capability=cap, server_epoch=server_epoch)
+    )
+    yield service, lease, start, cap
+    await video_control.store.client.delete(
+        *(
+            await video_control.store.client.keys(
+                video_control.store.key(lease.sn) + "*"
+            )
+        )
+        or ["unused-test-key"]
+    )
+
+
+async def ready_for(service, start):
+    event = fixture("hevc_ready")
+    event["sn"] = start["sn"]
+    for key in (
+        "lease_id",
+        "stream_instance_id",
+        "command_id",
+        "operation_id",
+        "agent_instance_id",
+    ):
+        event[key] = start[key]
+    event["actual_descriptor"] = copy.deepcopy(start["descriptor"])
+    return await handle_device_ctl_message(
+        routing_key=f"dev.{start['sn']}.ctl",
+        payload=event,
+        p_registry=service.presence,
+        l_registry=service.leases,
+    )
+
+
+@pytest.mark.anyio
+async def test_start_ready_duplicate_failure_and_all_subscribers(env):
+    service, lease, start, _cap = env
+    queues = [await service.presence.subscribe_stream(lease.sn) for _ in range(3)]
+
+    async def send(sn, command, **kwargs):
+        assert command.v == 2
+        if command.type == "stream_start":
+            assert await ready_for(service, start)
+
+    sender = AsyncMock(side_effect=send)
+    command = wire.Start.model_validate(start)
+    state = await video_control.start(service, command, 1, "owner", "session", sender)
+    assert state["state"] == "running"
+    assert (await video_control.start(service, command, 1, "owner", "session", sender))[
+        "result"
+    ] == "already_running"
+    assert sender.await_count == 1
+    event = fixture("runtime_error")
+    event["lease_id"] = str(lease.lease_id)
+    assert await handle_device_ctl_message(
+        routing_key=f"dev.{lease.sn}.ctl",
+        payload=event,
+        p_registry=service.presence,
+        l_registry=service.leases,
+    )
+    doc = await video_control.store.get(lease.sn)
+    view = VideoStateView.from_record(doc["stream"])
+    assert view.model_dump(mode="json")["error"] == event["error"]
+    assert doc["capability"]["video"][0]["status"] == "temporarily_unavailable"
+    assert lease.stream_instance_id is None
+    assert sender.await_count == 1  # no recovery or codec fallback
+    for queue in queues:
+        assert (await queue.get()).state == "running"
+        assert (await queue.get()).state == "failed"
+    assert not await video_control.event(
+        lease.sn, wire.Error.model_validate(event), service, sender
+    )
+
+
+@pytest.mark.anyio
+async def test_concurrent_duplicate_sends_only_one_start(env):
+    service, _lease, start, _ = env
+
+    async def send(*args, **kwargs):
+        await asyncio.sleep(0.02)
+        await ready_for(service, start)
+
+    sender = AsyncMock(side_effect=send)
+    results = await asyncio.gather(
+        *[
+            video_control.start(
+                service, wire.Start.model_validate(start), 1, "owner", "session", sender
+            )
+            for _ in range(3)
+        ]
+    )
+    assert sender.await_count == 1
+    assert sorted(r["result"] for r in results) == [
+        "already_running",
+        "already_running",
+        "started",
+    ]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "alter,expected",
+    [
+        ("tenant", "forbidden"),
+        ("owner", "forbidden"),
+        ("session", "forbidden"),
+        ("source", "forbidden"),
+        ("deadline", "lease_mismatch"),
+        ("expired", "expired"),
+        ("stale", "stale_capability"),
+        ("unsupported", "unsupported"),
+        ("chain", "unsupported"),
+        ("epoch", "capability_mismatch"),
+        ("geometry", "capability_mismatch"),
+    ],
+)
+async def test_admission_rejects_before_dispatch(env, monkeypatch, alter, expected):
+    service, lease, start, cap = env
+    start["codec_policy"] = "h265"
+    org, user, session = 1, "owner", "session"
+    if alter == "tenant":
+        org = 2
+    if alter == "owner":
+        user = "other"
+    if alter == "session":
+        session = "other"
+    if alter == "source":
+        start["descriptor"]["source_id"] = "denied"
+    if alter == "deadline":
+        start["lease_expires_at_ms"] += 1000
+    if alter == "expired":
+        start.update(issued_at_ms=now_ms() - 2000, expires_at_ms=now_ms() - 1)
+    if alter == "stale":
+        cap.update(checked_at_ms=now_ms() - 60000, valid_until_ms=now_ms() - 1)
+    if alter == "unsupported":
+        cap["video"][0].update(
+            status="unsupported", profiles=[], reason_code="no_hardware_mft"
+        )
+    if alter == "chain":
+        monkeypatch.setattr(settings.remote_input, "video_hevc_chain_ready", False)
+    if alter == "epoch":
+        start["agent_instance_id"] = str(uuid4())
+    if alter == "geometry":
+        start["descriptor"]["geometry_generation"] += 1
+    await video_control.store.change(lease.sn, lambda doc: doc.update(capability=cap))
+    sender = AsyncMock()
+    with pytest.raises(HTTPException) as exc:
+        await video_control.start(
+            service, wire.Start.model_validate(start), org, user, session, sender
+        )
+    assert exc.value.detail["code"] == expected
+    sender.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_capability_correlated_nonce_and_old_cached_ready(env):
+    service, lease, _, cap = env
+    ack = fixture("capabilities")
+    ack["video_capabilities"] = cap
+    assert not await video_control.accept_capability(
+        lease.sn, wire.CapabilitiesAck.model_validate(ack)
+    )
+    await video_control.invalidate(lease.sn)
+
+    async def send(sn, query, **kwargs):
+        ack["command_id"] = query.command_id
+        ack["video_capabilities"].update(
+            checked_at_ms=now_ms(), valid_until_ms=now_ms() + 59000
+        )
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+
+    result = await video_control.capability(lease.sn, service.presence, send)
+    assert result["negotiated_v2"]
+    assert not await video_control.accept_capability(
+        lease.sn, wire.CapabilitiesAck.model_validate(ack)
+    )
+    await video_control.store.change(
+        lease.sn, lambda doc: doc.update(server_epoch="previous-server")
+    )
+    assert not (
+        await video_control.capability(lease.sn, service.presence, AsyncMock())
+    )["negotiated_v2"]
+
+
+@pytest.mark.anyio
+async def test_ready_mismatch_terminal_and_stale_error_isolation(env):
+    service, lease, start, _ = env
+    sender = AsyncMock()
+    task = asyncio.create_task(
+        video_control.start(
+            service, wire.Start.model_validate(start), 1, "owner", "session", sender
+        )
+    )
+    while not sender.await_count:
+        await asyncio.sleep(0)
+    event = fixture("hevc_ready")
+    event["lease_id"] = str(lease.lease_id)
+    event["actual_descriptor"]["tracks"][0]["width"] = 640
+    assert await video_control.event(
+        lease.sn, wire.Ready.model_validate(event), service, sender
+    )
+    result = await task
+    assert result["state"] == "failed" and result["reason"] == "descriptor_mismatch"
+    assert [call.args[1].type for call in sender.await_args_list] == [
+        "stream_start",
+        "stream_stop",
+    ]
+
+
+@pytest.mark.anyio
+async def test_redis_workers_receive_same_terminal_event_without_legacy_storage(env):
+    from core.remote_input.presence import RedisPresenceRegistry
+    from core.remote_input.schemas import CtlStreamEvent
+
+    _, lease, _, _ = env
+    workers = [RedisPresenceRegistry(), RedisPresenceRegistry()]
+    queues = [await worker.subscribe_stream(lease.sn) for worker in workers]
+    event = CtlStreamEvent(
+        sn=lease.sn,
+        stream_instance_id=uuid4(),
+        state="failed",
+        reason="producer_lost",
+        timestamp=datetime.now(UTC).isoformat(),
+    )
+    try:
+        await workers[0].notify_video_event(event)
+        received = await asyncio.gather(
+            *[asyncio.wait_for(q.get(), 1.0) for q in queues]
+        )
+        assert received[0].model_dump() == received[1].model_dump()
+        assert not await video_control.store.client.exists(f"l4d:stream:{lease.sn}")
+    finally:
+        for worker in workers:
+            worker._video_relay.cancel()
+        await asyncio.gather(*[w._video_relay for w in workers], return_exceptions=True)
+
+
+@pytest.mark.anyio
+async def test_stop_old_epoch_and_watcher_leave_preserve_publisher(env):
+    service, lease, start, _ = env
+
+    async def send(sn, command, **kwargs):
+        if command.type == "stream_start":
+            await ready_for(service, start)
+
+    sender = AsyncMock(side_effect=send)
+    await video_control.start(
+        service, wire.Start.model_validate(start), 1, "owner", "session", sender
+    )
+    queue = await service.presence.subscribe_stream(lease.sn)
+    await service.presence.unsubscribe_stream(lease.sn, queue)
+    assert (await video_control.store.get(lease.sn))["stream"]["state"] == "running"
+    old = fixture("stop")
+    old.update(
+        lease_id=str(lease.lease_id),
+        issued_at_ms=now_ms(),
+        expires_at_ms=now_ms() + 1000,
+        stream_instance_id=str(uuid4()),
+    )
+    with pytest.raises(HTTPException):
+        await video_control.stop(
+            service, wire.Stop.model_validate(old), 1, "owner", "session", sender
+        )
+    error = fixture("runtime_error")
+    error.update(lease_id=str(lease.lease_id), stream_instance_id=str(uuid4()))
+    assert not await video_control.event(
+        lease.sn, wire.Error.model_validate(error), service, sender
+    )
+    assert (await video_control.store.get(lease.sn))["stream"]["state"] == "running"
+    old["stream_instance_id"] = start["stream_instance_id"]
+    command = wire.Stop.model_validate(old)
+    first = await video_control.stop(service, command, 1, "owner", "session", sender)
+    second = await video_control.stop(service, command, 1, "owner", "session", sender)
+    assert first["state"] == second["state"] == "stopped"
+    assert first["reason"] == second["reason"] == "user_requested"
+    assert [c.args[1].type for c in sender.await_args_list] == [
+        "stream_start",
+        "stream_stop",
+    ]
+
+
+@pytest.mark.anyio
+async def test_timeout_stops_once_keeps_error_and_never_falls_back(env):
+    service, lease, start, _ = env
+    start["expires_at_ms"] = now_ms() + 80
+    sender = AsyncMock()
+    with pytest.raises(HTTPException) as exc:
+        await video_control.start(
+            service, wire.Start.model_validate(start), 1, "owner", "session", sender
+        )
+    assert exc.value.status_code == 502
+    doc = await video_control.store.get(lease.sn)
+    assert doc["stream"]["state"] == "failed"
+    assert doc["stream"]["error"]["code"] == "producer_lost"
+    assert lease.stream_instance_id is None
+    assert [c.args[1].type for c in sender.await_args_list] == [
+        "stream_start",
+        "stream_stop",
+    ]
+
+
+@pytest.mark.anyio
+async def test_live_profile_change_conflicts_before_dispatch(env):
+    service, _, start, _ = env
+
+    async def send(*args, **kwargs):
+        await ready_for(service, start)
+
+    sender = AsyncMock(side_effect=send)
+    await video_control.start(
+        service, wire.Start.model_validate(start), 1, "owner", "session", sender
+    )
+    changed = copy.deepcopy(start)
+    changed["descriptor"]["profile_id"] = "default"
+    with pytest.raises(HTTPException) as exc:
+        await video_control.start(
+            service, wire.Start.model_validate(changed), 1, "owner", "session", sender
+        )
+    assert exc.value.detail["code"] == "conflict"
+    assert sender.await_count == 1
+
+
+@pytest.mark.anyio
+async def test_explicit_opt_in_h264_uses_v2_and_legacy_agent_gets_no_v2(env):
+    service, lease, start, _cap = env
+    h264 = fixture("h264_v2_start")
+    for key in ("lease_id", "issued_at_ms", "expires_at_ms", "lease_expires_at_ms"):
+        h264[key] = start[key]
+
+    async def send(*args, **kwargs):
+        assert await ready_for(service, h264)
+
+    sender = AsyncMock(side_effect=send)
+    state = await video_control.start(
+        service, wire.Start.model_validate(h264), 1, "owner", "session", sender
+    )
+    assert state["state"] == "running" and state["start"]["resolved_codec"] == "h264"
+    await service.presence.update(
+        lease.sn, CtlPresence(timestamp=datetime.now(UTC).isoformat(), version="999.0")
+    )
+    sender.reset_mock()
+    result = await video_control.capability(
+        lease.sn, service.presence, sender, refresh=True
+    )
+    assert result == {"negotiated_v2": False, "video_capabilities": None}
+    sender.assert_not_called()
+
+
+def test_additive_lease_serialization(env=None):
+    # Legacy hashes preserve their defaults; v2 fields survive a Redis round trip.
+    from core.remote_input.leases import Lease
+
+    lease = Lease(uuid4(), 1, 10, "fixture", "owner", "admin")
+    raw = _lease_to_dict(lease)
+    raw.pop("stream_contract_version")
+    raw.pop("stream_profile")
+    assert _dict_to_lease(raw).stream_contract_version == 1
+    lease.stream_contract_version, lease.stream_profile = 2, "low"
+    assert _dict_to_lease(_lease_to_dict(lease)).stream_profile == "low"
+
+
+@pytest.mark.anyio
+async def test_real_http_v2_response_error_and_legacy_validation(env, monkeypatch):
+    from api.internal_v1 import remote_input as api
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    service, lease, start, _ = env
+    monkeypatch.setattr(api, "remote_input_service", service)
+    monkeypatch.setattr(settings.auth, "internal_service_key", "test-secret")
+
+    async def send(*args, **kwargs):
+        await ready_for(service, start)
+
+    monkeypatch.setattr(api, "send_ctl_command", send)
+    app = FastAPI()
+    app.include_router(api.router)
+    base = f"{api.router.prefix}/lease/{lease.lease_id}"
+    headers = {
+        "X-Internal-Service-Key": "test-secret",
+        "X-Org-Id": "1",
+        "X-User-Id": "owner",
+        "X-Session-Id": "session",
+        "X-Role": "user",
+    }
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test", headers=headers
+    ) as client:
+        invalid = copy.deepcopy(start)
+        invalid["descriptor"]["unknown"] = True
+        assert (
+            await client.post(base + "/stream/start", json=invalid)
+        ).status_code == 400
+        assert (
+            await client.post(
+                base + "/stream/start", json={"mode": "desktop", "unknown": True}
+            )
+        ).status_code == 422
+        raw = json.dumps(start).replace('"v": 2', '"v": 2, "v": 2')
+        assert (
+            await client.post(
+                base + "/stream/start",
+                content=raw,
+                headers={"Content-Type": "application/json"},
+            )
+        ).status_code == 400
+        # Router imports/negative cases must not consume this command's live TTL.
+        start.update(issued_at_ms=now_ms(), expires_at_ms=now_ms() + 2000)
+        response = await client.post(base + "/stream/start", json=start)
+        assert response.status_code == 200, response.text
+        assert response.json()["resolved_codec"] == "h265"
+        assert response.json()["descriptor"] == start["descriptor"]
+        assert response.json()["agent_instance_id"] == start["agent_instance_id"]
+        assert response.json()["lease_id"] == str(lease.lease_id)
+        assert response.json()["confirmation"] == "agent_ready"
+        event = fixture("runtime_error")
+        event["lease_id"] = str(lease.lease_id)
+        assert await video_control.event(
+            lease.sn, wire.Error.model_validate(event), service, AsyncMock()
+        )
+        state = await client.get(base + "/video-state")
+        assert state.status_code == 200
+        assert state.json()["error"] == event["error"]
+        denied = await client.get(base + "/video-state", headers={"X-Org-Id": "2"})
+        assert denied.status_code == 403
+
+
+@pytest.mark.anyio
+async def test_restarted_worker_invalidates_capability_for_all_workers(env):
+    from core.remote_input.video_control import VideoControl
+
+    service, _, start, _ = env
+    await VideoControl().store.reset_server_epoch()
+    sender = AsyncMock()
+    with pytest.raises(HTTPException) as exc:
+        await video_control.start(
+            service, wire.Start.model_validate(start), 1, "owner", "session", sender
+        )
+    assert exc.value.detail["code"] == "unsupported"
+    sender.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_capability_timeout_and_prequery_cache_do_not_negotiate(env, monkeypatch):
+    import core.remote_input.video_control as control_module
+
+    service, lease, _, cap = env
+    await video_control.invalidate(lease.sn)
+    clock = now_ms()
+    monkeypatch.setattr(control_module, "now_ms", lambda: clock)
+
+    async def send(sn, query, **kwargs):
+        nonlocal clock
+        ack = fixture("capabilities")
+        ack["command_id"] = query.command_id
+        cap.update(checked_at_ms=clock - 1000, valid_until_ms=clock + 59000)
+        ack["video_capabilities"] = cap
+        assert not await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+        clock += 5001
+
+    result = await video_control.capability(lease.sn, service.presence, send)
+    assert result == {"negotiated_v2": False, "video_capabilities": None}
+    assert "pending" not in await video_control.store.get(lease.sn)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "case",
+    [
+        c
+        for c in json.loads((PACKAGE / "lifecycle.json").read_text())
+        if c["action"] != "media_start"
+    ],
+    ids=lambda c: c["name"],
+)
+async def test_g0_lifecycle_vectors_against_handlers(env, case):
+    service, lease, start, _ = env
+
+    async def send(*args, **kwargs):
+        if case["action"] != "ready":
+            await ready_for(service, start)
+
+    sender = AsyncMock(side_effect=send)
+    task = asyncio.create_task(
+        video_control.start(
+            service, wire.Start.model_validate(start), 1, "owner", "session", sender
+        )
+    )
+    for _ in range(100):
+        if sender.await_count:
+            break
+        await asyncio.sleep(0.001)
+    assert sender.await_count
+    if case["action"] == "ready":
+        ready = copy.deepcopy(case["ready"])
+        ready["lease_id"] = str(lease.lease_id)
+        assert await video_control.event(
+            lease.sn, wire.Ready.model_validate(ready), service, sender
+        )
+        result = await asyncio.wait_for(task, 1)
+        assert (
+            "agent_ready_only" if result["state"] == "running" else result["reason"]
+        ) == case["expected"]
+        return
+    await asyncio.wait_for(task, 1)
+    if case["action"] == "watcher_leave":
+        queue = await service.presence.subscribe_stream(lease.sn)
+        await service.presence.unsubscribe_stream(lease.sn, queue)
+        outcome = "detach_only"
+    elif case["action"] == "event":
+        event = copy.deepcopy(case["event"])
+        event["lease_id"] = str(lease.lease_id)
+        if case.get("stale_stream"):
+            event["stream_instance_id"] = "00000000-0000-4000-8000-000000000099"
+        accepted = await video_control.event(
+            lease.sn, wire.Error.model_validate(event), service, sender
+        )
+        outcome = "terminate_and_invalidate_capability" if accepted else "ignore"
+    else:
+        stop = fixture("stop")
+        stop.update(
+            lease_id=str(lease.lease_id),
+            issued_at_ms=now_ms(),
+            expires_at_ms=now_ms() + 1000,
+        )
+        if case.get("stale_stream"):
+            stop["stream_instance_id"] = "00000000-0000-4000-8000-000000000099"
+        try:
+            await video_control.stop(
+                service, wire.Stop.model_validate(stop), 1, "owner", "session", sender
+            )
+            outcome = "stop_owned_publisher"
+        except HTTPException as exc:
+            assert exc.detail["code"] == "conflict"
+            outcome = "ignore"
+    assert outcome == case["expected"]
+
+
+def test_new_agent_v1_bootstrap_is_readable_by_old_server():
+    from core.remote_input.schemas import CtlInboundAdapter, StreamStartCommand
+    from jsonschema import Draft202012Validator
+
+    legacy = json.loads((PACKAGE / "legacy/presence.json").read_text())["payload"]
+    legacy["capabilities"] = [*(legacy.get("capabilities") or []), "video_contract_v2"]
+    snapshot = json.loads((PACKAGE / "legacy/CtlPresence.schema.json").read_text())
+    Draft202012Validator(snapshot).validate(legacy)
+    assert CtlInboundAdapter.validate_python(legacy).v == 1
+    # With no v2 query from the old server, both command and reply stay v1.
+    start = json.loads((PACKAGE / "legacy/h264_start.wire.json").read_text())
+    assert StreamStartCommand.model_validate(start).v == 1
+
+
+@pytest.mark.anyio
+async def test_redis_v2_lease_persists_profile_and_revocation_sends_only_v2_stop(
+    env, monkeypatch
+):
+    from core.remote_input import leases as lease_module
+    from core.remote_input.leases import RedisLeaseRegistry
+
+    service, _, start, _ = env
+    service.leases = RedisLeaseRegistry()
+    # Use a distinct serial so existing legacy regression records cannot interfere.
+    sn = "hevc-redis-fixture"
+    lease = await service.leases.acquire(
+        org_id=1,
+        device_id=10,
+        sn=sn,
+        owner_user_id="owner",
+        owner_session_id="session",
+        owner_role="admin",
+        scope="input",
+        ttl_sec=60,
+    )
+    document = await video_control.store.get(start["sn"])
+    await video_control.store.client.set(
+        video_control.store.key(sn), json.dumps(document), ex=300
+    )
+    await service.presence.update(
+        sn,
+        CtlPresence(
+            timestamp=datetime.now(UTC).isoformat(),
+            capabilities=["video_contract_v2"],
+            session_id=1,
+            desktop_available=True,
+        ),
+    )
+    await service.presence.update_inventory(
+        sn, await service.presence.get_inventory(start["sn"])
+    )
+    start.update(
+        sn=sn,
+        lease_id=str(lease.lease_id),
+        lease_expires_at_ms=int(lease.expires_at.timestamp() * 1000),
+    )
+
+    async def send(sn, command, **kwargs):
+        if command.type == "stream_start":
+            await ready_for(service, start)
+
+    sender = AsyncMock(side_effect=send)
+    monkeypatch.setattr(lease_module, "send_ctl_command", sender)
+    try:
+        await video_control.start(
+            service, wire.Start.model_validate(start), 1, "owner", "session", sender
+        )
+        loaded = await RedisLeaseRegistry().get(lease.lease_id)
+        assert loaded.stream_contract_version == 2 and loaded.stream_profile == "low"
+        assert str(loaded.stream_instance_id) == start["stream_instance_id"]
+        await service.leases.revoke(lease.lease_id, "owner_logout")
+        record = (await video_control.store.get(sn))["stream"]
+        assert record["state"] == "stopped" and record["reason"] == "owner_logout"
+        assert [c.args[1].v for c in sender.await_args_list] == [2, 2]
+        assert [c.args[1].type for c in sender.await_args_list] == [
+            "stream_start",
+            "stream_stop",
+        ]
+    finally:
+        keys = await video_control.store.client.keys(video_control.store.key(sn) + "*")
+        await video_control.store.client.delete(
+            *keys, f"l4d:lease:{lease.lease_id}", f"l4d:lease:active:{sn}"
+        )

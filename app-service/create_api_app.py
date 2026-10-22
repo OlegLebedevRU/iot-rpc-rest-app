@@ -307,6 +307,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         log.warning("Failed to initialize Redis pool on startup: %s", exc)
 
     await _start_broker_with_retry()
+    if settings.remote_input.video_v2_enabled:
+        from core.remote_input.video_control import video_control
+
+        await video_control.store.reset_server_epoch()
     await declare_x_q()
     await _sync_rmq_device_definitions_on_startup()
     topology_watchdog_task: asyncio.Task | None = None

@@ -57,7 +57,12 @@ async def send_ctl_command(
     payload_json = json.dumps(message_dict, ensure_ascii=False).encode("utf-8")
     payload_len = len(payload_json)
 
-    if payload_len > settings.remote_input.max_command_payload_bytes:
+    limit = (
+        32768
+        if getattr(command, "v", 1) == 2
+        else settings.remote_input.max_command_payload_bytes
+    )
+    if payload_len > limit:
         raise ValueError(
             f"Command payload size {payload_len} bytes exceeds limit of "
             f"{settings.remote_input.max_command_payload_bytes} bytes"
