@@ -1,0 +1,12 @@
+{
+  "model": "CtlStreamEvent",
+  "payload": {
+    "v": 1,
+    "type": "stream_event",
+    "sn": "hevc-fixture",
+    "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+    "state": "failed",
+    "reason": "encoder_hardware_failure",
+    "timestamp": "2026-10-22T10:00:10Z"
+  }
+}

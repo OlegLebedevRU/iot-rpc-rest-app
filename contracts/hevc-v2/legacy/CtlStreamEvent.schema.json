@@ -1,0 +1,78 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "const": 1,
+      "default": 1,
+      "title": "V",
+      "type": "integer"
+    },
+    "type": {
+      "const": "stream_event",
+      "default": "stream_event",
+      "title": "Type",
+      "type": "string"
+    },
+    "sn": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sn"
+    },
+    "stream_instance_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stream Instance Id"
+    },
+    "state": {
+      "enum": [
+        "stopped",
+        "starting",
+        "running",
+        "stopping",
+        "restarting",
+        "failed",
+        "source_unavailable",
+        "session_unavailable"
+      ],
+      "title": "State",
+      "type": "string"
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Reason"
+    },
+    "timestamp": {
+      "title": "Timestamp",
+      "type": "string"
+    }
+  },
+  "required": [
+    "state",
+    "timestamp"
+  ],
+  "title": "CtlStreamEvent",
+  "type": "object"
+}

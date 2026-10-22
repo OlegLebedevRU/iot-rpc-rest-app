@@ -1,0 +1,14 @@
+{
+  "model": "CtlPresence",
+  "payload": {
+    "v": 1,
+    "type": "presence",
+    "agent": "l4desk",
+    "status": "online",
+    "desktop_available": true,
+    "capabilities": [
+      "video_contract_v2"
+    ],
+    "timestamp": "2026-10-22T10:00:00Z"
+  }
+}

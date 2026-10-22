@@ -1,0 +1,25 @@
+{
+  "properties": {
+    "result": {
+      "title": "Result",
+      "type": "string"
+    },
+    "state": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "State"
+    }
+  },
+  "required": [
+    "result"
+  ],
+  "title": "StreamStopResponse",
+  "type": "object"
+}

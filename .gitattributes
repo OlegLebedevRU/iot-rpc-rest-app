@@ -6,3 +6,5 @@
 *.svg binary
 uv.lock linguist-generated=true
 examples/** linguist-vendored=true
+
+contracts/hevc-v2/** text eol=lf
