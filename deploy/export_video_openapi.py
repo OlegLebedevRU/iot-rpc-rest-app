@@ -5,9 +5,12 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import logging
+import logging.handlers
 import os
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 
 def main() -> None:
@@ -26,7 +29,19 @@ def main() -> None:
     }.items():
         os.environ.setdefault(f"APP_CONFIG__{key}", value)
     sys.path.insert(0, str(root / "app-service"))
-    from api.internal_v1.remote_input import router
+    from core import logging_config
+
+    # Router imports configure application file handlers. This offline exporter
+    # must also run as an unprivileged builder without /var/log/app.
+    with (
+        patch.object(logging_config, "_get_log_dir", return_value=root),
+        patch.object(
+            logging.handlers,
+            "RotatingFileHandler",
+            side_effect=lambda *args, **kwargs: logging.NullHandler(),
+        ),
+    ):
+        from api.internal_v1.remote_input import router
     from core.remote_input.video_wire import SCHEMA
     from fastapi.openapi.utils import get_openapi
 

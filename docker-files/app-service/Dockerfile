@@ -5,6 +5,9 @@ FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343
 COPY --from=ghcr.io/astral-sh/uv:0.12.5@sha256:db2d5999728c5837e1bf9ba278ee6b05cef1e95e82a20e27b0c915cb4478b9d7 /uv /uvx /bin/
 ARG SOURCE_REVISION
 ARG SOURCE_ARCHIVE_SHA256
+# BuildKit also normalizes image/layer timestamps from this argument. Exposing
+# it to RUN makes Python's compiled bytecode use deterministic hash invalidation.
+ARG SOURCE_DATE_EPOCH
 LABEL org.opencontainers.image.revision=$SOURCE_REVISION \
       io.l4desk.source-archive-sha256=$SOURCE_ARCHIVE_SHA256
 # Install the project into `/app`
