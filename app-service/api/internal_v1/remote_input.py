@@ -54,6 +54,7 @@ from core.remote_input.service import remote_input_service
 from core.remote_input.video_api import (
     VideoCapabilityView,
     VideoControlRoute,
+    VideoLeaseView,
     VideoStateView,
 )
 from core.remote_input.video_control import video_control
@@ -397,6 +398,32 @@ async def get_video_capability(
         )
     return VideoCapabilityView.model_validate(
         await video_control.capability(sn, presence_registry, send_ctl_command, refresh)
+    )
+
+
+@router.get("/lease/{lease_id}/video-lease", response_model=VideoLeaseView)
+async def get_video_lease(
+    lease_id: UUID,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    request: Request,
+) -> VideoLeaseView:
+    # A publisher context is bound to the exact caller, including superusers.
+    lease = await video_control.authorize(
+        remote_input_service,
+        lease_id,
+        org_id,
+        extract_caller_user_id(request),
+        extract_caller_session_id(request),
+    )
+    return VideoLeaseView(
+        sn=lease.sn,
+        lease_id=str(lease.lease_id),
+        active=lease.is_active(),
+        scope=lease.scope,
+        owner_user_id=lease.owner_user_id,
+        owner_session_id=lease.owner_session_id,
+        expires_at=lease.expires_at,
     )
 
 
