@@ -1,0 +1,13 @@
+{
+  "definition": "media_renew",
+  "valid": true,
+  "payload": {
+    "contract_version": 2,
+    "sn": "hevc-fixture",
+    "session_id": "00000000-0000-4000-8000-000000000008",
+    "lease_id": "00000000-0000-4000-8000-000000000001",
+    "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+    "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+    "lease_expires_at": 1792663290
+  }
+}

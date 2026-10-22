@@ -1,0 +1,404 @@
+{
+  "$defs": {
+    "CameraInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "camera_id": {
+          "title": "Camera Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "available": {
+          "default": true,
+          "title": "Available",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "camera_id",
+        "name"
+      ],
+      "title": "CameraInfo",
+      "type": "object"
+    },
+    "DisplayInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "desktop_id": {
+          "title": "Desktop Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "primary": {
+          "default": false,
+          "title": "Primary",
+          "type": "boolean"
+        },
+        "x": {
+          "default": 0,
+          "title": "X",
+          "type": "integer"
+        },
+        "y": {
+          "default": 0,
+          "title": "Y",
+          "type": "integer"
+        },
+        "width": {
+          "title": "Width",
+          "type": "integer"
+        },
+        "height": {
+          "title": "Height",
+          "type": "integer"
+        },
+        "session_id": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Session Id"
+        },
+        "policy": {
+          "default": "input",
+          "enum": [
+            "input",
+            "view",
+            "denied"
+          ],
+          "title": "Policy",
+          "type": "string"
+        }
+      },
+      "required": [
+        "desktop_id",
+        "name",
+        "width",
+        "height"
+      ],
+      "title": "DisplayInfo",
+      "type": "object"
+    },
+    "InventoryInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "displays": {
+          "items": {
+            "$ref": "#/$defs/DisplayInfo"
+          },
+          "title": "Displays",
+          "type": "array"
+        },
+        "cameras": {
+          "items": {
+            "$ref": "#/$defs/CameraInfo"
+          },
+          "title": "Cameras",
+          "type": "array"
+        }
+      },
+      "title": "InventoryInfo",
+      "type": "object"
+    },
+    "ScreenInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "virtual_x": {
+          "default": 0,
+          "title": "Virtual X",
+          "type": "integer"
+        },
+        "virtual_y": {
+          "default": 0,
+          "title": "Virtual Y",
+          "type": "integer"
+        },
+        "virtual_width": {
+          "title": "Virtual Width",
+          "type": "integer"
+        },
+        "virtual_height": {
+          "title": "Virtual Height",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "virtual_width",
+        "virtual_height"
+      ],
+      "title": "ScreenInfo",
+      "type": "object"
+    },
+    "StreamInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "default": "stopped",
+          "enum": [
+            "stopped",
+            "starting",
+            "running",
+            "stopping",
+            "restarting",
+            "failed",
+            "source_unavailable",
+            "session_unavailable"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "mode": {
+          "anyOf": [
+            {
+              "enum": [
+                "desktop",
+                "usb-camera",
+                "stopped"
+              ],
+              "type": "string"
+            },
+            {
+              "const": "",
+              "type": "string"
+            }
+          ],
+          "default": "stopped",
+          "title": "Mode"
+        },
+        "source_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Id"
+        },
+        "stream_instance_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "const": "",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stream Instance Id"
+        },
+        "profile": {
+          "default": "default",
+          "title": "Profile",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "ffmpeg_pid": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ffmpeg Pid"
+        },
+        "started_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Started At"
+        },
+        "restart_count": {
+          "default": 0,
+          "title": "Restart Count",
+          "type": "integer"
+        }
+      },
+      "title": "StreamInfo",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "const": 1,
+      "default": 1,
+      "title": "V",
+      "type": "integer"
+    },
+    "type": {
+      "const": "presence",
+      "default": "presence",
+      "title": "Type",
+      "type": "string"
+    },
+    "agent": {
+      "anyOf": [
+        {
+          "const": "l4desk",
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "default": "l4desk",
+      "title": "Agent"
+    },
+    "version": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Version"
+    },
+    "capabilities": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Capabilities"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "enum": [
+            "online",
+            "offline"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "default": "online",
+      "title": "Status"
+    },
+    "online": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Online"
+    },
+    "desktop_available": {
+      "default": false,
+      "title": "Desktop Available",
+      "type": "boolean"
+    },
+    "session_id": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Session Id"
+    },
+    "screen": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ScreenInfo"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "inventory": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/InventoryInfo"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "stream": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/StreamInfo"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "timestamp": {
+      "title": "Timestamp",
+      "type": "string"
+    }
+  },
+  "required": [
+    "timestamp"
+  ],
+  "title": "CtlPresence",
+  "type": "object"
+}

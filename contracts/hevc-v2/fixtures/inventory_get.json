@@ -1,0 +1,12 @@
+{
+  "definition": "inventory_get",
+  "valid": true,
+  "payload": {
+    "v": 2,
+    "type": "inventory_get",
+    "command_id": "00000000-0000-4000-8000-000000000009",
+    "sn": "hevc-fixture",
+    "issued_at_ms": 1792663200000,
+    "expires_at_ms": 1792663210000
+  }
+}

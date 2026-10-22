@@ -1,0 +1,11 @@
+{
+  "revision": "hevc-contract/2.0.0",
+  "sha256": "f065b967cd10c2c709fb394ef9e6c2ecf74f77de060d88c9a821cc9069766ac4",
+  "canonical_repository": "OlegLebedevRU/etranprocessing",
+  "canonical_path": "contracts/hevc-v2/manifest.json",
+  "sources": {
+    "etranprocessing": "4d4be68d45a197b4390af6e0c29e7bb6225c0789",
+    "iot_rpc_rest_app": "36814a1705216520bb841b6e52e57bdde07f9de7",
+    "l4tools": "8fb1e730779d0544b97ba8fb3c1ebebe2bd0ca06"
+  }
+}

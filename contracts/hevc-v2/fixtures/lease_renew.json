@@ -1,0 +1,17 @@
+{
+  "definition": "lease_renew",
+  "valid": true,
+  "payload": {
+    "v": 2,
+    "type": "lease_renew",
+    "command_id": "00000000-0000-4000-8000-000000000010",
+    "sn": "hevc-fixture",
+    "lease_id": "00000000-0000-4000-8000-000000000001",
+    "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+    "issued_at_ms": 1792663200000,
+    "expires_at_ms": 1792663210000,
+    "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+    "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+    "lease_expires_at_ms": 1792663290000
+  }
+}

@@ -1,0 +1,61 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "const": 1,
+      "default": 1,
+      "title": "V",
+      "type": "integer"
+    },
+    "type": {
+      "const": "stream_stop",
+      "default": "stream_stop",
+      "title": "Type",
+      "type": "string"
+    },
+    "command_id": {
+      "format": "uuid",
+      "title": "Command Id",
+      "type": "string"
+    },
+    "lease_id": {
+      "format": "uuid",
+      "title": "Lease Id",
+      "type": "string"
+    },
+    "sn": {
+      "title": "Sn",
+      "type": "string"
+    },
+    "stream_instance_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Stream Instance Id"
+    },
+    "issued_at_ms": {
+      "title": "Issued At Ms",
+      "type": "integer"
+    },
+    "expires_at_ms": {
+      "title": "Expires At Ms",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "command_id",
+    "lease_id",
+    "sn",
+    "issued_at_ms",
+    "expires_at_ms"
+  ],
+  "title": "StreamStopCommand",
+  "type": "object"
+}

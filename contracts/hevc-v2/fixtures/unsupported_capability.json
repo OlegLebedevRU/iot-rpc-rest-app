@@ -1,0 +1,37 @@
+{
+  "definition": "capabilities_ack",
+  "valid": true,
+  "payload": {
+    "v": 2,
+    "type": "ack",
+    "command_id": "00000000-0000-4000-8000-000000000009",
+    "sn": "hevc-fixture",
+    "result": "inventory",
+    "video_capabilities": {
+      "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+      "capability_revision": "00000000-0000-4000-8000-000000000005",
+      "checked_at_ms": 1792663199000,
+      "valid_until_ms": 1792663259000,
+      "source_id": "display-0",
+      "binding": {
+        "process_arch": "x86",
+        "adapter_id": "fixture-adapter",
+        "driver_revision": "fixture-driver",
+        "component_revision": "fixture-component",
+        "interactive_session_id": 1,
+        "geometry_generation": 1
+      },
+      "video": [
+        {
+          "codec": "h265",
+          "backend": "media_foundation",
+          "hardware": true,
+          "status": "unsupported",
+          "reason_code": "no_hardware_mft",
+          "profiles": [],
+          "probe_evidence": "none"
+        }
+      ]
+    }
+  }
+}

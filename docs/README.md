@@ -57,3 +57,5 @@
 [Выпуск app1](manual-app1-deploy-runbook.md) · [Инфраструктура RabbitMQ](manual-infra-and-rmq-deploy-runbook.md) · [Восстановление ACL](rabbitmq-acl-recovery.md) · [Отладка RPC](server-rpc-debug-runbook.md) · [Безопасность](../SECURITY.md) · [Разработка](../CONTRIBUTING.md).
 
 Handoff, планы реализации, RFC и материалы в `exceptions/` сохраняют контекст отдельных работ. Для интеграции начинайте с текущих контрактов выше; исторические SHA и результаты проверок в handoff относятся к указанному в них выпуску.
+
+- [HEVC TASK-00 contracts and local pin](hevc-contracts-p0.md).
