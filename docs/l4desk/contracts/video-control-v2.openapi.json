@@ -1536,6 +1536,38 @@
             "title": "Version",
             "default": 2
           },
+          "sn": {
+            "type": "string",
+            "title": "Sn"
+          },
+          "lease_id": {
+            "type": "string",
+            "title": "Lease Id"
+          },
+          "agent_instance_id": {
+            "type": "string",
+            "title": "Agent Instance Id"
+          },
+          "operation_id": {
+            "type": "string",
+            "title": "Operation Id"
+          },
+          "command_id": {
+            "type": "string",
+            "title": "Command Id"
+          },
+          "confirmation": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "agent_ready"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation"
+          },
           "stream_instance_id": {
             "type": "string",
             "title": "Stream Instance Id"
@@ -1594,6 +1626,11 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "sn",
+          "lease_id",
+          "agent_instance_id",
+          "operation_id",
+          "command_id",
           "stream_instance_id",
           "result",
           "state",

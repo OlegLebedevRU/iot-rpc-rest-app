@@ -187,8 +187,15 @@ def select_codec(start: dict[str, Any], context: dict[str, Any]) -> str:
         return "h264" if start["codec_policy"] == "auto" else "stale_capability"
     supported = context["server_hevc_ready"] and any(
         entry["codec"] == "h265"
-        and entry["backend"] == "media_foundation"
-        and entry["hardware"]
+        and (
+            (entry["backend"] == "media_foundation" and entry["hardware"])
+            or (
+                context.get("test_camera_source", False)
+                and entry["backend"] == "camera"
+                and start["descriptor"]["source_type"] == "usb-camera"
+                and start["descriptor"]["source_id"].startswith("test-")
+            )
+        )
         and entry["status"] == "ready"
         and entry["probe_evidence"] == "encoded_sequence"
         and any(
@@ -412,6 +419,11 @@ class VideoControl:
         view = await service.presence.get(lease.sn)
         inv = await service.presence.get_inventory(lease.sn)
         descriptor = start["descriptor"]
+        test_camera = (
+            lease.sn in settings.remote_input.video_test_camera_sns
+            and descriptor["source_type"] == "usb-camera"
+            and descriptor["source_id"].startswith("test-")
+        )
         server_epoch = await self.store.current_epoch()
         if descriptor["source_type"] == "desktop":
             source_allowed = view.desktop_available and any(
@@ -454,7 +466,9 @@ class VideoControl:
                 "capabilities": cap,
                 "agent_instance_id": cap["agent_instance_id"] if cap else None,
                 "binding": binding,
-                "server_hevc_ready": settings.remote_input.video_hevc_chain_ready,
+                "server_hevc_ready": settings.remote_input.video_hevc_chain_ready
+                or test_camera,
+                "test_camera_source": test_camera,
             }
             result = select_codec(start, context)
             if result == "already_running":

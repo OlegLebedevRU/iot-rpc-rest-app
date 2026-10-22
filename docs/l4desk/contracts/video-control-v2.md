@@ -17,6 +17,18 @@ Both flags default to false:
   Set it only after TASK-40 verifies the actual server chain. This flag is a
   server operator assertion, never accepted as a client request field.
 
+A separate `APP_CONFIG__REMOTE_INPUT__VIDEO_TEST_CAMERA_SNS` allowlist (empty by
+ default) permits only explicitly provisioned test SNs with a `usb-camera`
+ descriptor whose source ID starts with `test-`, and a live `camera` backend
+ capability. Hardware remains false for this RTSP passthrough. This exception
+ establishes server transport readiness only; desktop hardware readiness still
+ requires the global chain flag and the hardware Media Foundation probe.
+
+`VideoStateView` carries the stored START's `sn`, `lease_id`, `agent_instance_id`,
+`operation_id` and `command_id` alongside `stream_instance_id`. The HTTP projection
+sets `confirmation: "agent_ready"` only for a running record whose exact READY
+has persisted an actual descriptor. It does not change the frozen CTL schema.
+
 Base path: `/api/internal/v1/remote-input`. Existing internal service authentication,
 tenant header, trusted caller user/session headers and the one active lease/SN
 admission remain in force. V2 rejects missing user/session identity, except for

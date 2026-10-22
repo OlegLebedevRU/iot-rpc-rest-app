@@ -58,6 +58,12 @@ class VideoCapabilityView(BaseModel):
 class VideoStateView(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: Literal[2] = 2
+    sn: str
+    lease_id: str
+    agent_instance_id: str
+    operation_id: str
+    command_id: str
+    confirmation: Literal["agent_ready"] | None = None
     stream_instance_id: str
     result: str
     state: str
@@ -71,6 +77,17 @@ class VideoStateView(BaseModel):
     def from_record(cls, record: dict) -> VideoStateView:
         start = record["start"]
         return cls(
+            sn=start["sn"],
+            lease_id=start["lease_id"],
+            agent_instance_id=start["agent_instance_id"],
+            operation_id=start["operation_id"],
+            command_id=start["command_id"],
+            confirmation=(
+                "agent_ready"
+                if record["state"] == "running"
+                and record.get("actual_descriptor") is not None
+                else None
+            ),
             stream_instance_id=start["stream_instance_id"],
             result=record["result"],
             state=record["state"],

@@ -96,6 +96,21 @@ def test_prepare_vectors_use_production_decision(case):
     assert select_codec(case["start"], case["context"]) == case["expected"]
 
 
+def test_camera_backend_requires_server_test_context():
+    cases = json.loads((PACKAGE / "scenarios.json").read_text())
+    case = copy.deepcopy(next(item for item in cases if item["expected"] == "h265"))
+    start, context = case["start"], case["context"]
+    start["codec_policy"] = "h265"
+    start["descriptor"].update(source_type="usb-camera", source_id="test-rtsp-camera")
+    context["capabilities"]["source_id"] = "test-rtsp-camera"
+    context["capabilities"]["video"][0].update(backend="camera", hardware=False)
+    assert select_codec(start, context) == "unsupported"
+    context["test_camera_source"] = True
+    assert select_codec(start, context) == "h265"
+    start["descriptor"]["source_type"] = "desktop"
+    assert select_codec(start, context) == "unsupported"
+
+
 def test_wire_rejects_duplicates_oversize_and_unknown_nested():
     with pytest.raises(ValueError):
         decode_ctl_payload('{"v":2,"v":1}')
@@ -572,10 +587,15 @@ async def test_real_http_v2_response_error_and_legacy_validation(env, monkeypatc
                 headers={"Content-Type": "application/json"},
             )
         ).status_code == 400
+        # Router imports/negative cases must not consume this command's live TTL.
+        start.update(issued_at_ms=now_ms(), expires_at_ms=now_ms() + 2000)
         response = await client.post(base + "/stream/start", json=start)
         assert response.status_code == 200, response.text
         assert response.json()["resolved_codec"] == "h265"
         assert response.json()["descriptor"] == start["descriptor"]
+        assert response.json()["agent_instance_id"] == start["agent_instance_id"]
+        assert response.json()["lease_id"] == str(lease.lease_id)
+        assert response.json()["confirmation"] == "agent_ready"
         event = fixture("runtime_error")
         event["lease_id"] = str(lease.lease_id)
         assert await video_control.event(
