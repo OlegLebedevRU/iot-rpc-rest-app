@@ -5,6 +5,9 @@ FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343
 COPY --from=ghcr.io/astral-sh/uv:0.12.5@sha256:db2d5999728c5837e1bf9ba278ee6b05cef1e95e82a20e27b0c915cb4478b9d7 /uv /uvx /bin/
 ARG SOURCE_REVISION
 ARG SOURCE_ARCHIVE_SHA256
+# BuildKit also normalizes image/layer timestamps from this argument. Exposing
+# it to RUN makes Python's compiled bytecode use deterministic hash invalidation.
+ARG SOURCE_DATE_EPOCH
 LABEL org.opencontainers.image.revision=$SOURCE_REVISION \
       io.l4desk.source-archive-sha256=$SOURCE_ARCHIVE_SHA256
 # Install the project into `/app`
@@ -17,7 +20,7 @@ ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 COPY pyproject.toml uv.lock ./
 # Install the project's dependencies using the lockfile and settings
-RUN uv sync --frozen --no-install-project
+RUN --mount=type=cache,target=/root/.cache/uv --mount=type=tmpfs,target=/tmp uv sync --frozen --no-install-project
 
 # Then, add the rest of the project source code and install it
 # Installing separately from its dependencies allows optimal layer caching
@@ -25,7 +28,7 @@ COPY app-service /app
 # The archive provider resolves this versioned contract outside /app.
 # Include only its data files, never the documentation tree or private config.
 COPY l4desk-service/docs/prompts/contracts/archive-manifest-v1/archive-manifest.schema.json l4desk-service/docs/prompts/contracts/archive-manifest-v1/examples.json /l4desk-service/docs/prompts/contracts/archive-manifest-v1/
-RUN uv sync --frozen
+RUN --mount=type=cache,target=/root/.cache/uv --mount=type=tmpfs,target=/tmp uv sync --frozen
 
 # Place executables in the environment at the front of the path
 ENV PATH="/app/.venv/bin:$PATH"

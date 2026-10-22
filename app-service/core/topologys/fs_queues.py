@@ -9,20 +9,21 @@ from core.diagnostics.mqtt_bridge import handle_device_output_message
 from core.fs_broker import fs_router
 from core.logging_config import log_rpc_debug, setup_module_logger
 from core.remote_input.mqtt_bridge import handle_device_ctl_message
+from core.remote_input.video_control import video_control
 from core.services.billing_publish import publish_billing_event
 from core.services.billing_utils import evt_billing_counter_type, publish_then_process
-from core.services.device_events_collect import DeviceEventsCollect
 from core.services.channel_probe import dispatch_probe
+from core.services.device_events_collect import DeviceEventsCollect
 from core.services.device_tasks import DeviceTasksService
-from core.services.devices import DeviceService
+from core.services.devices import DeviceService, extract_device_sn
 from core.services.remote_session_event_service import remote_session_event_service
 from core.topologys.declare import (
     q_ack,
     q_app,
     q_ctl,
-    q_fm,
     q_device_conn_events,
     q_evt,
+    q_fm,
     q_out,
     q_req,
     q_result,
@@ -342,6 +343,13 @@ if _REGISTER_SUBSCRIBERS:
         except AttributeError, TypeError, ValueError:
             payload = {}
 
+        # Transport identity changes invalidate runtime video negotiation only;
+        # no inventory event, certificate, billing or EVA extension is involved.
+        device_sn = extract_device_sn(payload, headers)
+        if device_sn and routing_key.endswith(
+            ("connection.created", "connection.closed")
+        ):
+            await video_control.invalidate(device_sn)
         await DeviceService.handle_connection_event(
             session=session,
             routing_key=routing_key,

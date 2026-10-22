@@ -1,0 +1,15 @@
+{
+  "definition": "start_ack",
+  "valid": true,
+  "payload": {
+    "v": 2,
+    "type": "ack",
+    "command_id": "00000000-0000-4000-8000-000000000006",
+    "sn": "hevc-fixture",
+    "lease_id": "00000000-0000-4000-8000-000000000001",
+    "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+    "result": "accepted",
+    "state": "starting",
+    "descriptor_revision": "00000000-0000-4000-8000-000000000003"
+  }
+}

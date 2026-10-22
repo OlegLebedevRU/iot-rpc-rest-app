@@ -1,0 +1,9 @@
+{
+  "definition": "rejection",
+  "valid": true,
+  "payload": {
+    "contract_version": 2,
+    "code": "unsupported",
+    "message": "HEVC is unavailable"
+  }
+}

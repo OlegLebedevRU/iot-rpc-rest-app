@@ -5,6 +5,7 @@ from typing import Any
 
 from core.config import settings
 from core.logging_config import setup_module_logger
+from core.remote_input import video_models as video_wire
 from core.remote_input.leases import (
     LeaseRegistryProtocol,
     lease_registry,
@@ -26,8 +27,19 @@ from core.remote_input.schemas import (
     CtlPresence,
     CtlStreamEvent,
 )
+from core.remote_input.video_control import video_control
+from core.remote_input.video_wire import load_object
 
 log = setup_module_logger(__name__, "remote_input.log")
+
+type DecodedCtlMessage = (
+    CtlInboundMessage
+    | video_wire.CapabilitiesAck
+    | video_wire.StartAck
+    | video_wire.Ready
+    | video_wire.Error
+    | video_wire.Nack
+)
 
 
 class AgentOnlineStatus:
@@ -111,7 +123,32 @@ def _extract_malformed_ctl_diagnostics(
     }
 
 
-def decode_ctl_payload(payload: bytes | str | dict[str, Any]) -> CtlInboundMessage:
+def decode_ctl_payload(payload: bytes | str | dict[str, Any]) -> DecodedCtlMessage:
+    # Select a version before the strict v1 discriminator; never ignore v2 extras.
+    raw = load_object(payload, settings.remote_input.max_inbound_payload_bytes)
+    if raw.get("v") == 2:
+        raw = load_object(payload)
+        kind = raw.get("type")
+        model = (
+            video_wire.CapabilitiesAck
+            if kind == "ack" and raw.get("result") == "inventory"
+            else (
+                video_wire.StartAck
+                if kind == "ack"
+                else (
+                    video_wire.Ready
+                    if kind == "stream_event" and raw.get("state") == "running"
+                    else (
+                        video_wire.Error
+                        if kind == "stream_event"
+                        else video_wire.Nack if kind == "nack" else None
+                    )
+                )
+            )
+        )
+        if model is None:
+            raise ValueError("unsupported CTL v2 envelope")
+        return model.model_validate(raw)
     if isinstance(payload, bytes):
         if len(payload) > settings.remote_input.max_inbound_payload_bytes:
             raise ValueError(
@@ -158,6 +195,36 @@ async def handle_device_ctl_message(
                 exc,
             )
             return False
+
+        if isinstance(
+            envelope,
+            (
+                video_wire.CapabilitiesAck,
+                video_wire.Ready,
+                video_wire.Error,
+                video_wire.StartAck,
+                video_wire.Nack,
+            ),
+        ):
+            from core.remote_input.publisher import send_ctl_command
+            from core.remote_input.service import RemoteInputService
+
+            if envelope.sn != sn:
+                return False
+            if isinstance(envelope, video_wire.CapabilitiesAck):
+                if not settings.remote_input.video_v2_enabled:
+                    return False
+                return await video_control.accept_capability(sn, envelope)
+            service = RemoteInputService(
+                leases=l_registry, presence=p_registry, pending=cmd_registry
+            )
+            if isinstance(envelope, (video_wire.Ready, video_wire.Error)):
+                return await video_control.event(
+                    sn, envelope, service, send_ctl_command
+                )
+            return await video_control.command_reply(
+                sn, envelope, service, send_ctl_command
+            )
 
         if isinstance(envelope, (CtlAck, CtlNack)):
             if envelope.sn != sn:
@@ -257,6 +324,19 @@ async def handle_device_ctl_message(
                 return resolved
 
         elif isinstance(envelope, CtlPresence):
+            v2_state = (await video_control.store.get(sn)).get("stream")
+            if (
+                envelope.stream
+                and v2_state
+                and (
+                    v2_state["state"] in ("starting", "running", "stopping")
+                    or str(envelope.stream.stream_instance_id)
+                    == v2_state["start"]["stream_instance_id"]
+                )
+            ):
+                # Only a correlated v2 READY/error can describe this epoch.
+                # Never persist a generic HEVC stream as an implicit v1 H.264 record.
+                envelope = envelope.model_copy(update={"stream": None})
             is_online = (envelope.status == "online") or (
                 getattr(envelope, "online", None) is True
             )
@@ -267,6 +347,7 @@ async def handle_device_ctl_message(
                     _SN_STATUS[sn].agent.online = True
 
             changed, view = await p_registry.update(sn, envelope)
+            await video_control.observe_presence(sn, envelope)
             if sn not in _SN_STATUS:
                 _SN_STATUS[sn] = SnStatus(online=view.online)
             else:
@@ -274,6 +355,16 @@ async def handle_device_ctl_message(
             return True
 
         elif isinstance(envelope, CtlStreamEvent):
+            v2_state = (await video_control.store.get(sn)).get("stream")
+            if v2_state and v2_state["state"] in ("starting", "running", "stopping"):
+                return False
+            active = await l_registry.get_active_by_sn(sn)
+            if (
+                active
+                and active.stream_instance_id is not None
+                and envelope.stream_instance_id != active.stream_instance_id
+            ):
+                return False
             if envelope.sn is not None and envelope.sn != sn:
                 log.warning(
                     "CtlStreamEvent SN mismatch: topic_sn=%s payload_sn=%s. Using topic_sn.",
@@ -318,10 +409,20 @@ async def handle_device_ctl_message(
                         )
             elif envelope.state == "running":
                 active_lease = await l_registry.get_active_by_sn(sn)
-                if active_lease:
+                if (
+                    active_lease
+                    and active_lease.stream_instance_id == envelope.stream_instance_id
+                ):
                     active_lease.stream_state = "running"
                     if envelope.stream_instance_id is not None:
                         active_lease.stream_instance_id = envelope.stream_instance_id
+            active = await l_registry.get_active_by_sn(sn)
+            if (
+                active
+                and active.stream_instance_id is not None
+                and envelope.stream_instance_id != active.stream_instance_id
+            ):
+                return False
             await p_registry.update_stream_event(sn, envelope)
             return True
 

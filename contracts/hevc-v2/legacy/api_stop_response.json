@@ -1,0 +1,7 @@
+{
+  "model": "StreamStopResponse",
+  "payload": {
+    "result": "stopped",
+    "state": "stopped"
+  }
+}

@@ -1,0 +1,898 @@
+[
+  {
+    "name": "current_failure",
+    "action": "event",
+    "active": {
+      "contract_version": 2,
+      "session_id": "00000000-0000-4000-8000-000000000008",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "publisher": {
+        "sn": "hevc-fixture",
+        "stream_instance_id": "00000000-0000-4000-8000-000000000002"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "lease_expires_at": 1792663260,
+      "descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 15,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    },
+    "event": {
+      "v": 2,
+      "type": "stream_event",
+      "sn": "hevc-fixture",
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+      "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+      "state": "failed",
+      "timestamp": "2026-10-22T10:00:10Z",
+      "reason": "encoder_hardware_failure",
+      "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+      "error": {
+        "domain": "encoder",
+        "code": "device_lost",
+        "scope": "stream",
+        "codec": "h265",
+        "backend": "media_foundation",
+        "stage": "encode",
+        "current_stream_terminated": true,
+        "recovery_class": "reprobe_required",
+        "suggested_action": "retry_same_codec",
+        "auto_restart_allowed": false,
+        "attempt": 0
+      }
+    },
+    "watcher_only": false,
+    "expected": "terminate_and_invalidate_capability"
+  },
+  {
+    "name": "current_ready",
+    "action": "ready",
+    "active": {
+      "contract_version": 2,
+      "session_id": "00000000-0000-4000-8000-000000000008",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "publisher": {
+        "sn": "hevc-fixture",
+        "stream_instance_id": "00000000-0000-4000-8000-000000000002"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "lease_expires_at": 1792663260,
+      "descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 15,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    },
+    "event": {
+      "v": 2,
+      "type": "stream_event",
+      "sn": "hevc-fixture",
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+      "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+      "state": "failed",
+      "timestamp": "2026-10-22T10:00:10Z",
+      "reason": "encoder_hardware_failure",
+      "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+      "error": {
+        "domain": "encoder",
+        "code": "device_lost",
+        "scope": "stream",
+        "codec": "h265",
+        "backend": "media_foundation",
+        "stage": "encode",
+        "current_stream_terminated": true,
+        "recovery_class": "reprobe_required",
+        "suggested_action": "retry_same_codec",
+        "auto_restart_allowed": false,
+        "attempt": 0
+      }
+    },
+    "watcher_only": false,
+    "expected": "agent_ready_only",
+    "ready": {
+      "v": 2,
+      "type": "stream_event",
+      "sn": "hevc-fixture",
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+      "command_id": "00000000-0000-4000-8000-000000000006",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+      "state": "running",
+      "confirmation": "agent_ready",
+      "timestamp": "2026-10-22T10:00:00Z",
+      "actual_descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 15,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "actual_ready_mismatch",
+    "action": "ready",
+    "active": {
+      "contract_version": 2,
+      "session_id": "00000000-0000-4000-8000-000000000008",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "publisher": {
+        "sn": "hevc-fixture",
+        "stream_instance_id": "00000000-0000-4000-8000-000000000002"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "lease_expires_at": 1792663260,
+      "descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 15,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    },
+    "event": {
+      "v": 2,
+      "type": "stream_event",
+      "sn": "hevc-fixture",
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+      "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+      "state": "failed",
+      "timestamp": "2026-10-22T10:00:10Z",
+      "reason": "encoder_hardware_failure",
+      "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+      "error": {
+        "domain": "encoder",
+        "code": "device_lost",
+        "scope": "stream",
+        "codec": "h265",
+        "backend": "media_foundation",
+        "stage": "encode",
+        "current_stream_terminated": true,
+        "recovery_class": "reprobe_required",
+        "suggested_action": "retry_same_codec",
+        "auto_restart_allowed": false,
+        "attempt": 0
+      }
+    },
+    "watcher_only": false,
+    "expected": "descriptor_mismatch",
+    "ready": {
+      "v": 2,
+      "type": "stream_event",
+      "sn": "hevc-fixture",
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+      "command_id": "00000000-0000-4000-8000-000000000006",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+      "state": "running",
+      "confirmation": "agent_ready",
+      "timestamp": "2026-10-22T10:00:00Z",
+      "actual_descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 10,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "duplicate_media_start",
+    "action": "media_start",
+    "active": {
+      "contract_version": 2,
+      "session_id": "00000000-0000-4000-8000-000000000008",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "publisher": {
+        "sn": "hevc-fixture",
+        "stream_instance_id": "00000000-0000-4000-8000-000000000002"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "lease_expires_at": 1792663260,
+      "descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 15,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    },
+    "event": {
+      "v": 2,
+      "type": "stream_event",
+      "sn": "hevc-fixture",
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+      "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+      "state": "failed",
+      "timestamp": "2026-10-22T10:00:10Z",
+      "reason": "encoder_hardware_failure",
+      "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+      "error": {
+        "domain": "encoder",
+        "code": "device_lost",
+        "scope": "stream",
+        "codec": "h265",
+        "backend": "media_foundation",
+        "stage": "encode",
+        "current_stream_terminated": true,
+        "recovery_class": "reprobe_required",
+        "suggested_action": "retry_same_codec",
+        "auto_restart_allowed": false,
+        "attempt": 0
+      }
+    },
+    "watcher_only": false,
+    "expected": "replay",
+    "request": {
+      "contract_version": 2,
+      "session_id": "00000000-0000-4000-8000-000000000008",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "publisher": {
+        "sn": "hevc-fixture",
+        "stream_instance_id": "00000000-0000-4000-8000-000000000002"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "lease_expires_at": 1792663260,
+      "descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 15,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "duplicate_media_mismatch",
+    "action": "media_start",
+    "active": {
+      "contract_version": 2,
+      "session_id": "00000000-0000-4000-8000-000000000008",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "publisher": {
+        "sn": "hevc-fixture",
+        "stream_instance_id": "00000000-0000-4000-8000-000000000002"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "lease_expires_at": 1792663260,
+      "descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 15,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    },
+    "event": {
+      "v": 2,
+      "type": "stream_event",
+      "sn": "hevc-fixture",
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+      "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+      "state": "failed",
+      "timestamp": "2026-10-22T10:00:10Z",
+      "reason": "encoder_hardware_failure",
+      "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+      "error": {
+        "domain": "encoder",
+        "code": "device_lost",
+        "scope": "stream",
+        "codec": "h265",
+        "backend": "media_foundation",
+        "stage": "encode",
+        "current_stream_terminated": true,
+        "recovery_class": "reprobe_required",
+        "suggested_action": "retry_same_codec",
+        "auto_restart_allowed": false,
+        "attempt": 0
+      }
+    },
+    "watcher_only": false,
+    "expected": "conflict",
+    "request": {
+      "contract_version": 2,
+      "session_id": "00000000-0000-4000-8000-000000000008",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "publisher": {
+        "sn": "hevc-fixture",
+        "stream_instance_id": "00000000-0000-4000-8000-000000000002"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "lease_expires_at": 1792663260,
+      "descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 10,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "watcher_disconnect",
+    "action": "watcher_leave",
+    "active": {
+      "contract_version": 2,
+      "session_id": "00000000-0000-4000-8000-000000000008",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "publisher": {
+        "sn": "hevc-fixture",
+        "stream_instance_id": "00000000-0000-4000-8000-000000000002"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "lease_expires_at": 1792663260,
+      "descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 15,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    },
+    "event": {
+      "v": 2,
+      "type": "stream_event",
+      "sn": "hevc-fixture",
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+      "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+      "state": "failed",
+      "timestamp": "2026-10-22T10:00:10Z",
+      "reason": "encoder_hardware_failure",
+      "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+      "error": {
+        "domain": "encoder",
+        "code": "device_lost",
+        "scope": "stream",
+        "codec": "h265",
+        "backend": "media_foundation",
+        "stage": "encode",
+        "current_stream_terminated": true,
+        "recovery_class": "reprobe_required",
+        "suggested_action": "retry_same_codec",
+        "auto_restart_allowed": false,
+        "attempt": 0
+      }
+    },
+    "watcher_only": false,
+    "expected": "detach_only"
+  },
+  {
+    "name": "late_error",
+    "action": "event",
+    "active": {
+      "contract_version": 2,
+      "session_id": "00000000-0000-4000-8000-000000000008",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "publisher": {
+        "sn": "hevc-fixture",
+        "stream_instance_id": "00000000-0000-4000-8000-000000000002"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "lease_expires_at": 1792663260,
+      "descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 15,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    },
+    "event": {
+      "v": 2,
+      "type": "stream_event",
+      "sn": "hevc-fixture",
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+      "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+      "state": "failed",
+      "timestamp": "2026-10-22T10:00:10Z",
+      "reason": "encoder_hardware_failure",
+      "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+      "error": {
+        "domain": "encoder",
+        "code": "device_lost",
+        "scope": "stream",
+        "codec": "h265",
+        "backend": "media_foundation",
+        "stage": "encode",
+        "current_stream_terminated": true,
+        "recovery_class": "reprobe_required",
+        "suggested_action": "retry_same_codec",
+        "auto_restart_allowed": false,
+        "attempt": 0
+      }
+    },
+    "watcher_only": false,
+    "expected": "ignore",
+    "stale_stream": true
+  },
+  {
+    "name": "old_stop",
+    "action": "stop",
+    "active": {
+      "contract_version": 2,
+      "session_id": "00000000-0000-4000-8000-000000000008",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "publisher": {
+        "sn": "hevc-fixture",
+        "stream_instance_id": "00000000-0000-4000-8000-000000000002"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "lease_expires_at": 1792663260,
+      "descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 15,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    },
+    "event": {
+      "v": 2,
+      "type": "stream_event",
+      "sn": "hevc-fixture",
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+      "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+      "state": "failed",
+      "timestamp": "2026-10-22T10:00:10Z",
+      "reason": "encoder_hardware_failure",
+      "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+      "error": {
+        "domain": "encoder",
+        "code": "device_lost",
+        "scope": "stream",
+        "codec": "h265",
+        "backend": "media_foundation",
+        "stage": "encode",
+        "current_stream_terminated": true,
+        "recovery_class": "reprobe_required",
+        "suggested_action": "retry_same_codec",
+        "auto_restart_allowed": false,
+        "attempt": 0
+      }
+    },
+    "watcher_only": false,
+    "expected": "ignore",
+    "stale_stream": true
+  },
+  {
+    "name": "current_stop",
+    "action": "stop",
+    "active": {
+      "contract_version": 2,
+      "session_id": "00000000-0000-4000-8000-000000000008",
+      "operation_id": "00000000-0000-4000-8000-000000000007",
+      "publisher": {
+        "sn": "hevc-fixture",
+        "stream_instance_id": "00000000-0000-4000-8000-000000000002"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "lease_expires_at": 1792663260,
+      "descriptor": {
+        "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+        "source_type": "desktop",
+        "source_id": "display-0",
+        "geometry_generation": 1,
+        "profile_id": "low",
+        "tracks": [
+          {
+            "track_id": "video-main",
+            "kind": "video",
+            "direction": "producer_to_viewers",
+            "bit_depth": 8,
+            "chroma": "420",
+            "clock_rate": 90000,
+            "payload_type": 96,
+            "width": 1280,
+            "height": 720,
+            "fps": 15,
+            "feedback": {
+              "pli": true,
+              "fir": false
+            },
+            "max_b_frames": 0,
+            "keyframe_interval_ms": 2000,
+            "repeat_parameter_sets": true,
+            "codec": "h265",
+            "codec_profile": "main",
+            "packetization": "rfc7798",
+            "profile_space": 0,
+            "profile_id": 1,
+            "tier_flag": 0,
+            "level_id": 93,
+            "sprop_max_don_diff": 0
+          }
+        ]
+      }
+    },
+    "event": {
+      "v": 2,
+      "type": "stream_event",
+      "sn": "hevc-fixture",
+      "lease_id": "00000000-0000-4000-8000-000000000001",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+      "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+      "state": "failed",
+      "timestamp": "2026-10-22T10:00:10Z",
+      "reason": "encoder_hardware_failure",
+      "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+      "error": {
+        "domain": "encoder",
+        "code": "device_lost",
+        "scope": "stream",
+        "codec": "h265",
+        "backend": "media_foundation",
+        "stage": "encode",
+        "current_stream_terminated": true,
+        "recovery_class": "reprobe_required",
+        "suggested_action": "retry_same_codec",
+        "auto_restart_allowed": false,
+        "attempt": 0
+      }
+    },
+    "watcher_only": false,
+    "expected": "stop_owned_publisher"
+  }
+]

@@ -1,0 +1,95 @@
+{
+  "revision": "afcd63802bf71535ab21f60adc25bf63589f44f8",
+  "source_archive_sha256": "b83544bce6a23222e3ec0acf7226fc9859b4e32ba9d314a2682fe0631ebae422",
+  "source_date_epoch": "1792685577",
+  "builder": "176.108.247.249",
+  "builds": [
+    {
+      "manifest_digest": "sha256:e46ee01a9f5623cd2424cd5cac0f58010e81dda8b1ef60f1f2019122f7a21c60",
+      "config_digest": "sha256:bd9dffa74019163731618afacc5af144d83011686202277a83a421bd8423f009",
+      "layers": [
+        "sha256:6b37362b3da78869050b894b799ad4df04f1f3b52774087db0d81151570244c8",
+        "sha256:5c21337b2448c4a8923205ad1e092a6464c809780ac426755a2065a39c03369d",
+        "sha256:8def98961a31d91a4dc44e69faedbed1efdc1fd5e756d5d4c7c42dd6c8e24f62",
+        "sha256:ad232412d02ef04c3744a3b575ed85f8ce49361d8c38bb81b2b6a9fbbe014dcf",
+        "sha256:cb6b74d00fba8b4eeb29b87021c896a04a6565ec14c5362f9411cd4b38e79043",
+        "sha256:996c1c6c841effcbaf04d9208bd383c3729c5ef34bb7d0e1aa85e6b3d7137c01",
+        "sha256:756c3e65d0a610648adfce22cca71526bfea94ea9a0b8de448704a413b94260d",
+        "sha256:7b9aea98414baae264132384c464a4df3ad76eb78e4b5e3eeba6298451211755",
+        "sha256:2d588044165c2fe661a650aeb32a1a27d2e62dde0ca00f42c1994fb785daa5d5",
+        "sha256:6f92c0bc2f1a31dd0b61a22ce7a72fa5f6b2bf0cf7ce8018b04607cc622da371",
+        "sha256:9f96a2a8ad3725b53f64c88a53601cbcfcae5aed4629ad1ae1296255c44a98cd",
+        "sha256:22095491459e77ac996508634ec14708637509d84819e79b5f603003b206e7ee",
+        "sha256:ff47be886964790e072701ccc2168e3316163392e3982769b49be9eca705e5ab"
+      ],
+      "created": "2026-10-22T16:12:57Z"
+    },
+    {
+      "manifest_digest": "sha256:e46ee01a9f5623cd2424cd5cac0f58010e81dda8b1ef60f1f2019122f7a21c60",
+      "config_digest": "sha256:bd9dffa74019163731618afacc5af144d83011686202277a83a421bd8423f009",
+      "layers": [
+        "sha256:6b37362b3da78869050b894b799ad4df04f1f3b52774087db0d81151570244c8",
+        "sha256:5c21337b2448c4a8923205ad1e092a6464c809780ac426755a2065a39c03369d",
+        "sha256:8def98961a31d91a4dc44e69faedbed1efdc1fd5e756d5d4c7c42dd6c8e24f62",
+        "sha256:ad232412d02ef04c3744a3b575ed85f8ce49361d8c38bb81b2b6a9fbbe014dcf",
+        "sha256:cb6b74d00fba8b4eeb29b87021c896a04a6565ec14c5362f9411cd4b38e79043",
+        "sha256:996c1c6c841effcbaf04d9208bd383c3729c5ef34bb7d0e1aa85e6b3d7137c01",
+        "sha256:756c3e65d0a610648adfce22cca71526bfea94ea9a0b8de448704a413b94260d",
+        "sha256:7b9aea98414baae264132384c464a4df3ad76eb78e4b5e3eeba6298451211755",
+        "sha256:2d588044165c2fe661a650aeb32a1a27d2e62dde0ca00f42c1994fb785daa5d5",
+        "sha256:6f92c0bc2f1a31dd0b61a22ce7a72fa5f6b2bf0cf7ce8018b04607cc622da371",
+        "sha256:9f96a2a8ad3725b53f64c88a53601cbcfcae5aed4629ad1ae1296255c44a98cd",
+        "sha256:22095491459e77ac996508634ec14708637509d84819e79b5f603003b206e7ee",
+        "sha256:ff47be886964790e072701ccc2168e3316163392e3982769b49be9eca705e5ab"
+      ],
+      "created": "2026-10-22T16:12:57Z"
+    }
+  ],
+  "reproducible": true,
+  "image_id": "sha256:bd9dffa74019163731618afacc5af144d83011686202277a83a421bd8423f009",
+  "image_tag": "iot-task10:afcd63802bf71535ab21f60adc25bf63589f44f8",
+  "image_tests": "PASS",
+  "installed_image_tests": "PASS",
+  "feature_gates_default_off": true,
+  "python": "3.14.7",
+  "platform": "linux/amd64",
+  "docker": "27.5.1",
+  "buildx": "github.com/docker/buildx v0.37.1 0b265a9f62db554fa9aba6dd19e1bd5704bc7d8a",
+  "uv": "uv 0.12.5 (x86_64-unknown-linux-gnu)",
+  "oci_archives": [
+    {
+      "path": "/home/github-runner/etran-ci/task10-hevc-afcd638/image-1.oci.tar",
+      "sha256": "e452a00712394f5cc39646d30314dadb21bc63a890cab768da1bfa98f59f3eaa",
+      "size_bytes": 123216384
+    },
+    {
+      "path": "/home/github-runner/etran-ci/task10-hevc-afcd638/image-2.oci.tar",
+      "sha256": "e452a00712394f5cc39646d30314dadb21bc63a890cab768da1bfa98f59f3eaa",
+      "size_bytes": 123216384
+    }
+  ],
+  "archive_bytes_identical": true,
+  "artifact_type": "candidate-oci-image",
+  "deployed": false,
+  "registry_published": false,
+  "windows_tests": {
+    "passed": 737,
+    "skipped": 7
+  },
+  "linux_tests": {
+    "passed": 711,
+    "skipped": 33
+  },
+  "installed_image_test_counts": {
+    "passed": 711,
+    "skipped": 33
+  },
+  "video_tests": {
+    "passed": 78,
+    "skipped": 0
+  },
+  "local_oci_path": "D:\\.codex\\hevc-plan\\task10-image-afcd638.oci.tar",
+  "local_evidence_path": "D:\\.codex\\hevc-plan\\task10-evidence-afcd638.tar.gz",
+  "contract_revision": "hevc-contract/2.0.0",
+  "contract_digest": "f065b967cd10c2c709fb394ef9e6c2ecf74f77de060d88c9a821cc9069766ac4"
+}

@@ -1,0 +1,29 @@
+{
+  "definition": "error",
+  "valid": false,
+  "payload": {
+    "v": 2,
+    "type": "stream_event",
+    "sn": "hevc-fixture",
+    "lease_id": "00000000-0000-4000-8000-000000000001",
+    "stream_instance_id": "00000000-0000-4000-8000-000000000002",
+    "agent_instance_id": "00000000-0000-4000-8000-000000000004",
+    "state": "failed",
+    "timestamp": "2026-10-22T10:00:10Z",
+    "reason": "encoder_hardware_failure",
+    "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+    "error": {
+      "domain": "encoder",
+      "code": "device_lost",
+      "scope": "stream",
+      "codec": "h265",
+      "backend": "media_foundation",
+      "stage": "encode",
+      "current_stream_terminated": true,
+      "recovery_class": "reprobe_required",
+      "suggested_action": "retry_same_codec",
+      "auto_restart_allowed": true,
+      "attempt": 0
+    }
+  }
+}
