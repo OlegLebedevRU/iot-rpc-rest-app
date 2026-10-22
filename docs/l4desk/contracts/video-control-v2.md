@@ -41,6 +41,7 @@ the existing explicit superuser path. A view lease cannot start a publisher.
 | Method/path | Request | Result |
 |---|---|---|
 | GET `/devices/{sn}/video-capabilities?refresh=true` | Existing service/tenant auth; no lease required | `negotiated_v2`, nullable `video_capabilities` |
+| GET `/lease/{lease_id}/video-lease` | Exact active publisher tenant/user/session, including superusers | Owner/session/scope/deadline for BFF pre-START authorization; no renewal or other mutation |
 | POST `/lease/{lease_id}/stream/start` | Unchanged v1 `{mode,source_id,profile}` or complete `$defs.start` v2 | Unchanged v1 response or `VideoStateView` |
 | GET `/lease/{lease_id}/video-state` | Lease tenant/owner/session | Full codec, immutable descriptor, actual descriptor, structured error and terminal reason |
 | POST `/lease/{lease_id}/video-stop` | Complete `$defs.stop`, including all epoch identifiers | Idempotent terminal state; stale epoch is conflict |

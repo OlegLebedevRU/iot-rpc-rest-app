@@ -127,6 +127,49 @@
         }
       }
     },
+    "/remote-input/lease/{lease_id}/video-lease": {
+      "get": {
+        "tags": [
+          "Internal Remote Input"
+        ],
+        "summary": "Get Video Lease",
+        "operationId": "get_video_lease_remote_input_lease__lease_id__video_lease_get",
+        "parameters": [
+          {
+            "name": "lease_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Lease Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoLeaseView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/remote-input/lease/{lease_id}/video-state": {
       "get": {
         "tags": [
@@ -1527,6 +1570,56 @@
           "video_capabilities"
         ],
         "title": "VideoCapabilityView"
+      },
+      "VideoLeaseView": {
+        "properties": {
+          "sn": {
+            "type": "string",
+            "title": "Sn"
+          },
+          "lease_id": {
+            "type": "string",
+            "title": "Lease Id"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "stream",
+              "input"
+            ],
+            "title": "Scope"
+          },
+          "owner_user_id": {
+            "type": "string",
+            "title": "Owner User Id"
+          },
+          "owner_session_id": {
+            "type": "string",
+            "title": "Owner Session Id"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "sn",
+          "lease_id",
+          "active",
+          "scope",
+          "owner_user_id",
+          "owner_session_id",
+          "expires_at"
+        ],
+        "title": "VideoLeaseView",
+        "description": "Publisher-only context; the legacy shared status never exposes sessions."
       },
       "VideoStateView": {
         "properties": {

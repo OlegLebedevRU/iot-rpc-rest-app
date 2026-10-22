@@ -49,6 +49,7 @@ def main() -> None:
         "/stream/start",
         "/stream/stop",
         "/video-capabilities",
+        "/video-lease",
         "/video-state",
         "/video-stop",
     )

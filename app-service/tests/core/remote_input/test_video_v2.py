@@ -569,6 +569,19 @@ async def test_real_http_v2_response_error_and_legacy_validation(env, monkeypatc
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test", headers=headers
     ) as client:
+        context = await client.get(base + "/video-lease")
+        assert context.status_code == 200, context.text
+        assert context.json()["owner_session_id"] == "session"
+        assert context.json()["active"] is True
+        for caller in (
+            {"X-Org-Id": "2"},
+            {"X-User-Id": "other"},
+            {"X-Session-Id": "other"},
+            {"X-Role": "superuser", "X-Session-Id": "other"},
+        ):
+            assert (
+                await client.get(base + "/video-lease", headers=caller)
+            ).status_code == 403
         invalid = copy.deepcopy(start)
         invalid["descriptor"]["unknown"] = True
         assert (

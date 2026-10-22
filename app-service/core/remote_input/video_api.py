@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from collections.abc import Callable, Coroutine
 from typing import Any, Literal
 
@@ -53,6 +54,19 @@ class VideoCapabilityView(BaseModel):
     model_config = ConfigDict(extra="forbid")
     negotiated_v2: bool
     video_capabilities: Capabilities | None
+
+
+class VideoLeaseView(BaseModel):
+    """Publisher-only context; the legacy shared status never exposes sessions."""
+
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+    sn: str
+    lease_id: str
+    active: bool
+    scope: Literal["stream", "input"]
+    owner_user_id: str
+    owner_session_id: str
+    expires_at: datetime
 
 
 class VideoStateView(BaseModel):
