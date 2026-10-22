@@ -417,7 +417,11 @@ async def get_video_state(
         require_active=False,
     )
     record = (await video_control.store.get(lease.sn)).get("stream")
-    if not record or record["start"]["lease_id"] != str(lease_id):
+    if (
+        lease.stream_contract_version != 2
+        or not record
+        or record["start"]["lease_id"] != str(lease_id)
+    ):
         raise HTTPException(status_code=404, detail="video_state_not_found")
     return VideoStateView.from_record(record)
 

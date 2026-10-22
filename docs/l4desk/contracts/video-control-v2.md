@@ -28,6 +28,10 @@ A separate `APP_CONFIG__REMOTE_INPUT__VIDEO_TEST_CAMERA_SNS` allowlist (empty by
 `operation_id` and `command_id` alongside `stream_instance_id`. The HTTP projection
 sets `confirmation: "agent_ready"` only for a running record whose exact READY
 has persisted an actual descriptor. It does not change the frozen CTL schema.
+The state reader returns404 when the lease's current publisher is legacy,
+including a new H.264 publisher reusing a lease with retained v2 diagnostics.
+The retained record stays available for audit and cannot overwrite current
+legacy state through the BFF's negotiated reader.
 
 Base path: `/api/internal/v1/remote-input`. Existing internal service authentication,
 tenant header, trusted caller user/session headers and the one active lease/SN

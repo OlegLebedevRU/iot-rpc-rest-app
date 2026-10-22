@@ -606,6 +606,14 @@ async def test_real_http_v2_response_error_and_legacy_validation(env, monkeypatc
         assert state.json()["error"] == event["error"]
         denied = await client.get(base + "/video-state", headers={"X-Org-Id": "2"})
         assert denied.status_code == 403
+        # A later legacy publisher can reuse this lease. Its current state must
+        # not be replaced by a retained failed HEVC record from the prior epoch.
+        lease.stream_contract_version = 1
+        lease.stream_instance_id = uuid4()
+        assert (await client.get(base + "/video-state")).status_code == 404
+        assert (await video_control.store.get(lease.sn))["stream"]["error"] == event[
+            "error"
+        ]
 
 
 @pytest.mark.anyio
