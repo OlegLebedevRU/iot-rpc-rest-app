@@ -193,6 +193,80 @@ async def env(monkeypatch):
     )
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("refresh", [False, True])
+async def test_chain_gate_closes_inventory_admission(env, monkeypatch, refresh):
+    service, lease, _start, _cap = env
+    before = await video_control.store.get(lease.sn)
+    monkeypatch.setattr(settings.remote_input, "video_hevc_chain_ready", False)
+    sender = AsyncMock(side_effect=AssertionError("disabled admission must not probe"))
+
+    result = await video_control.capability(
+        lease.sn, service.presence, sender, refresh=refresh
+    )
+
+    assert result == {"negotiated_v2": False, "video_capabilities": None}
+    sender.assert_not_called()
+    assert await video_control.store.get(lease.sn) == before
+
+
+@pytest.mark.anyio
+async def test_chain_gate_inventory_preserves_running_epoch(env, monkeypatch):
+    service, lease, start, _cap = env
+
+    async def send(sn, command, **kwargs):
+        if command.type == "stream_start":
+            assert await ready_for(service, start)
+
+    sender = AsyncMock(side_effect=send)
+    await video_control.start(
+        service, wire.Start.model_validate(start), 1, "owner", "session", sender
+    )
+    before = await video_control.store.get(lease.sn)
+    stream_id = lease.stream_instance_id
+    monkeypatch.setattr(settings.remote_input, "video_hevc_chain_ready", False)
+
+    result = await video_control.capability(lease.sn, service.presence, sender)
+
+    assert result == {"negotiated_v2": False, "video_capabilities": None}
+    assert await video_control.store.get(lease.sn) == before
+    assert lease.stream_instance_id == stream_id
+    assert before["stream"]["state"] == "running"
+    assert sender.await_count == 1
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "camera,allowlisted,negotiated",
+    [(True, True, True), (True, False, False), (False, True, False)],
+)
+async def test_chain_gate_preserves_only_explicit_test_camera_exception(
+    env, monkeypatch, camera, allowlisted, negotiated
+):
+    service, lease, _start, cap = env
+    monkeypatch.setattr(settings.remote_input, "video_hevc_chain_ready", False)
+    monkeypatch.setattr(
+        settings.remote_input,
+        "video_test_camera_sns",
+        [lease.sn] if allowlisted else [],
+    )
+    if camera:
+        cap["source_id"] = "test-fixture-camera"
+        cap["video"][0].update(backend="camera", hardware=False)
+    await video_control.store.change(lease.sn, lambda doc: doc.update(capability=cap))
+    before = await video_control.store.get(lease.sn)
+    sender = AsyncMock()
+
+    result = await video_control.capability(lease.sn, service.presence, sender)
+
+    assert result == {
+        "negotiated_v2": negotiated,
+        "video_capabilities": cap if negotiated else None,
+    }
+    sender.assert_not_called()
+    assert await video_control.store.get(lease.sn) == before
+
+
 async def ready_for(service, start):
     event = fixture("hevc_ready")
     event["sn"] = start["sn"]
