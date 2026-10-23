@@ -276,6 +276,7 @@ async def _periodic_device_reconciliation_job() -> None:
 
 async def _remote_input_cleanup_loop() -> None:
     """Periodic cleanup of expired remote input leases and pending commands."""
+    from core.camera.control import camera_control
     from core.remote_input.leases import lease_registry
     from core.remote_input.pending import pending_registry
     from core.remote_input.publisher import send_ctl_command
@@ -287,6 +288,7 @@ async def _remote_input_cleanup_loop() -> None:
             await asyncio.sleep(1.0)
             await lease_registry.cleanup_expired()
             await video_control.cleanup(remote_input_service, send_ctl_command)
+            await camera_control.cleanup(remote_input_service, send_ctl_command)
             await pending_registry.expire()
         except asyncio.CancelledError:
             break

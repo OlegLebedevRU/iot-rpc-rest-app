@@ -501,6 +501,11 @@ class ArchiveConfig(BaseModel):
     dry_run: bool = False
 
 
+class CameraConfig(BaseModel):
+    # TASK-30 deploys readers first; firmware writers are enabled in a later gate.
+    writers_enabled: bool = False
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(".env.template", ".env"),
@@ -527,6 +532,7 @@ class Settings(BaseSettings):
     inventory_delivery: InventoryDeliveryConfig = InventoryDeliveryConfig()
     billing: BillingConfig = BillingConfig()
     remote_input: RemoteInputConfig = RemoteInputConfig()
+    camera: CameraConfig = CameraConfig()
     diagnostics: DiagnosticsConfig = DiagnosticsConfig()
     archive: ArchiveConfig = ArchiveConfig()
     redis: RedisConfig = RedisConfig()

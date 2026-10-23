@@ -537,10 +537,20 @@ async def test_stop_old_epoch_and_watcher_leave_preserve_publisher(env):
 
 
 @pytest.mark.anyio
-async def test_timeout_stops_once_keeps_error_and_never_falls_back(env):
+async def test_timeout_stops_once_keeps_error_and_never_falls_back(env, monkeypatch):
     service, lease, start, _ = env
-    start["expires_at_ms"] = now_ms() + 80
-    sender = AsyncMock()
+    admitted_at = now_ms()
+    # Expire deterministically after START publication. Setup wall time must not
+    # select the separate pre-admission expired rejection on loaded CI.
+    clock = [admitted_at]
+    monkeypatch.setattr("core.remote_input.video_control.now_ms", lambda: clock[0])
+    start["expires_at_ms"] = admitted_at + 80
+
+    async def expire_after_dispatch(sn, command, **kwargs):
+        if command.type == "stream_start":
+            clock[0] = admitted_at + 81
+
+    sender = AsyncMock(side_effect=expire_after_dispatch)
     with pytest.raises(HTTPException) as exc:
         await video_control.start(
             service, wire.Start.model_validate(start), 1, "owner", "session", sender

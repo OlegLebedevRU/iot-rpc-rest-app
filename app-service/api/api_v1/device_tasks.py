@@ -1,6 +1,7 @@
 from fastapi import APIRouter
+from core.camera.task_route import CameraTaskRoute
 from fastapi_pagination import Page
-from pydantic import UUID4
+from uuid import UUID
 from api.api_v1.api_depends import Session_dep, Org_dep
 from core import settings
 from core.logging_config import setup_module_logger
@@ -15,6 +16,7 @@ from core.services.device_tasks import DeviceTasksService
 
 log = setup_module_logger(__name__, "api_device_tasks.log")
 router = APIRouter(
+    route_class=CameraTaskRoute,
     prefix=settings.api.v1.device_tasks,
     tags=["Device tasks"],
 )
@@ -31,7 +33,7 @@ async def touch_task(
 
 @router.get("/{id}", response_model=TaskResponseResult)
 async def get_task(
-    id: UUID4,
+    id: UUID,
     session: Session_dep,
     org_id: Org_dep,
 ) -> TaskResponseResult:
@@ -56,7 +58,7 @@ async def list_tasks(
 
 @router.delete("/{id}", response_model=TaskResponseDeleted, description="soft delete")
 async def delete_task(
-    id: UUID4,
+    id: UUID,
     session: Session_dep,
     org_id: Org_dep,
 ) -> TaskResponseDeleted:

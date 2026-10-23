@@ -22,7 +22,12 @@ class VideoControlRoute(APIRoute):
         original = super().get_route_handler()
 
         async def handle(request: Request) -> Response:
-            v2 = request.url.path.endswith("/video-stop")
+            revision = request.headers.get("X-L4-Camera-Contract")
+            if revision is not None and revision != "siplite-camera/1.0.0":
+                return JSONResponse(
+                    status_code=422, content={"detail": "unsupported_camera_contract"}
+                )
+            v2 = revision is not None or request.url.path.endswith("/video-stop")
             if request.method == "POST" and request.url.path.endswith(
                 ("/stream/start", "/video-stop")
             ):

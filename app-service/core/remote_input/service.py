@@ -397,6 +397,20 @@ class RemoteInputService:
             timestamp=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         )
 
+        camera_record = (await video_control.store.get(touched.sn)).get("camera_stream")
+        if (
+            camera_record
+            and camera_record["start"]["lease_id"] == str(touched.lease_id)
+            and camera_record["start"]["publisher"]["stream_instance_id"]
+            == str(touched.stream_instance_id)
+        ):
+            from core.camera.control import epoch_of
+            from core.camera.producer import renew_command
+
+            cmd = renew_command(
+                epoch_of(camera_record), touched, int(time.time() * 1000)
+            )
+
         future = await self.pending.register(
             command_id=cmd.command_id,
             lease_id=touched.lease_id,

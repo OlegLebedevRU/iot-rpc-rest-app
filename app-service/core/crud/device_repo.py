@@ -674,15 +674,28 @@ class DeviceRepo:
     async def upsert_gauge(
         cls, session: AsyncSession, org_id: int, device_id: int, type: str, gauges: dict
     ) -> int:
-        stmt = (
-            insert(DeviceGauge)
-            .values(device_id=device_id, type=type, gauges=gauges)
-            .on_conflict_do_update(
-                constraint="uq_tb_device_gauges_device_id_type_is_deleted",
-                set_=dict(gauges=gauges, updated_at=func.now()),
-            )
-            .returning(DeviceGauge.id)
+        incoming = insert(DeviceGauge).values(
+            device_id=device_id, type=type, gauges=gauges
         )
+        updates = dict(gauges=incoming.excluded.gauges, updated_at=func.now())
+        if type == "84":
+            # QoS1 replay of the same camera snapshot must not refresh capability age.
+            current_id = DeviceGauge.gauges["300"][0]["450"]["snapshot_id"].astext
+            incoming_id = incoming.excluded.gauges["300"][0]["450"][
+                "snapshot_id"
+            ].astext
+            same_snapshot = current_id == incoming_id
+            updates = dict(
+                gauges=case(
+                    (same_snapshot, DeviceGauge.gauges), else_=incoming.excluded.gauges
+                ),
+                updated_at=case(
+                    (same_snapshot, DeviceGauge.updated_at), else_=func.now()
+                ),
+            )
+        stmt = incoming.on_conflict_do_update(
+            constraint="uq_tb_device_gauges_device_id_type_is_deleted", set_=updates
+        ).returning(DeviceGauge.id)
         result = await session.execute(stmt)
         await session.commit()
         return result.scalar_one()

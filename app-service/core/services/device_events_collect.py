@@ -98,6 +98,15 @@ class DeviceEventsCollect:
                 dev_event_id,
             )
 
+        if event_type_code == 84:
+            from core.camera.admission import validate_gauge
+
+            try:
+                validate_gauge(payload_dict)
+            except ValueError, TypeError, KeyError, AttributeError:
+                log.warning("Rejected invalid camera gauge sn=%s", self.sn)
+                return
+
         if is_gauge_event:
             # Только обновляем gauge, без создания события и публикации вебхука
             await DeviceRepo.upsert_gauge(
