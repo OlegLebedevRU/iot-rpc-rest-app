@@ -1,0 +1,20 @@
+{
+  "name": "native_auto_size",
+  "target": "rpc",
+  "definition": "rpc161",
+  "valid": true,
+  "payload": {
+    "dt": [
+      {
+        "expected_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "patch": {
+          "video0": {
+            "size": "",
+            "fps": 0,
+            "bitrate": 0
+          }
+        }
+      }
+    ]
+  }
+}

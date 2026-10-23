@@ -6,6 +6,8 @@
 
 Базовый путь: `{base_url}/api/v1/device-events`. Авторизация: `x-api-key: <organization-api-key>`.
 
+Camera extension RPC160..167 использует существующий gauge84/tag450, без новых evt: [siplite-camera-control.md](siplite-camera-control.md). Результат RPC и физическое действие/видеокадр подтверждаются раздельно.
+
 ## 🧭 Выберите способ чтения
 
 | Задача | Метод | Формат ответа |

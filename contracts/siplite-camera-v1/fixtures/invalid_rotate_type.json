@@ -1,0 +1,18 @@
+{
+  "name": "invalid_rotate_type",
+  "target": "rpc",
+  "definition": "rpc161",
+  "valid": false,
+  "payload": {
+    "dt": [
+      {
+        "expected_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "patch": {
+          "image": {
+            "rotate": 90
+          }
+        }
+      }
+    ]
+  }
+}

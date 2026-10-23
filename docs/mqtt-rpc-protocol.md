@@ -4,6 +4,8 @@
 
 [← Документация](README.md) · [Методы](method-codes-reference.md) · [Клиентский поток](mqtt-rpc-client-flow.md) · [REST задач](1-task-workflow-doc.md)
 
+Новая camera-редакция [siplite-camera-control.md](siplite-camera-control.md) расширяет RPC160..167, сохраняет RES + gauge84 без новых event types. Credentials доставляются только sealed envelope; main_app topics/presence и correlation rules сохраняются.
+
 ## 🧭 Модель обмена
 
 **TSK анонсирует → REQ выбирает → RSP передаёт параметры → RES возвращает результат → CMT подтверждает сохранение.**

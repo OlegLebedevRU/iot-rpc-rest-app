@@ -1,0 +1,51 @@
+{
+  "name": "local_offline_snapshot",
+  "target": "local",
+  "definition": "camera_snapshot",
+  "valid": true,
+  "payload": {
+    "v": 1,
+    "hardware_id": "synthetic-hardware",
+    "contract_revision": "siplite-camera/1.0.0",
+    "snapshot_id": "00000000-0000-4000-8000-000000000011",
+    "camera_id": "cam:ip000001",
+    "revision": null,
+    "discovery": {
+      "generation": 1,
+      "state": "auth_required",
+      "physical_port": 2,
+      "ethernet_mode": "switch",
+      "candidates": []
+    },
+    "auth_source": "native",
+    "has_credentials": true,
+    "actual_track": null,
+    "config": null,
+    "capabilities": {
+      "methods": [
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166,
+        167
+      ],
+      "ingest": [
+        "rtp_push",
+        "rtsp_tcp",
+        "rtsp_udp"
+      ],
+      "fields": [],
+      "illumination": {
+        "white": "unverified",
+        "ir": "unverified",
+        "global_enable": "unverified",
+        "pwm": "unknown"
+      },
+      "commissioning_candidates": []
+    },
+    "operation": null
+  }
+}

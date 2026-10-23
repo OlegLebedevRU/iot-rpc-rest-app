@@ -69,6 +69,9 @@
 | `162` | `CMD_IP_CAMERA_SET_DAY_NIGHT` | Установить software Auto/Day/Night с readback; gauge84 + RES | — | ✅ | — | Только siplite ↔ OpenIPC, без STM32 |
 | `163` | `CMD_IP_CAMERA_SET_QUALITY_PRESET` | Полностью проверить preset качества, применить и сверить; gauge84 + RES | — | ✅ | — | Только siplite ↔ OpenIPC |
 | `164` | `CMD_IP_CAMERA_SET_POWER` | EN_1_12V on/off/restart с readback; gauge84 + RES | — | ✅ | — | ESP32 → собственный TCA6408A P3, без STM32 |
+| `165` | `CMD_IP_CAMERA_DISCOVERY` | Port-2 scan/cancel; RES + gauge84 | — | ✅ | — | [Camera control](siplite-camera-control.md) |
+| `166` | `CMD_IP_CAMERA_CONNECTION` | Bind и write-only credential profile; RES + gauge84 | — | ✅ | — | [Camera control](siplite-camera-control.md) |
+| `167` | `CMD_IP_CAMERA_ILLUMINATION` | Verified LED/PWM и commissioning; RES + gauge84 | — | ✅ | — | [Camera control](siplite-camera-control.md) |
 | `170` | `CMD_AUDIO_GET_STATE` | Audio state and capabilities; RES only | ? | ? | ? | [`Audio control`](audio-control.md) |
 | `171` | `CMD_AUDIO_SET_CONFIG` | Verified independent audio configuration; RES only | ? | ? | ? | [`Audio control`](audio-control.md) |
 | `172` | `CMD_AUDIO_SESSION` | Leased LAN one-way/duplex audio debugging; RES only | ? | ? | ? | [`Audio control`](audio-control.md) |
@@ -83,6 +86,8 @@
 ---
 
 ## 🧩 3. Форматы `payload.dt` и ответы `res`
+
+Новая negotiated camera-редакция `siplite-camera/1.0.0` определена в [siplite-camera-control.md](siplite-camera-control.md) и [machine package](../contracts/siplite-camera-v1/README.md). Она расширяет160..164 и вводит165..167; применяется только после capability negotiation. Ниже v1-ограничения size/isp/timeout/legacy-set описывают прежние firmware и не ограничивают новую camera-ветку. Новая ветка использует image.*, POST JSON и schema-based size, без legacy camera firmware.
 
 ### Управление питанием камеры: `164`
 

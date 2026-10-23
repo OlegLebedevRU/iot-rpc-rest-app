@@ -1,0 +1,18 @@
+{
+  "name": "non_native_image_path",
+  "target": "rpc",
+  "definition": "rpc161",
+  "valid": false,
+  "payload": {
+    "dt": [
+      {
+        "expected_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "patch": {
+          "isp": {
+            "mirror": true
+          }
+        }
+      }
+    ]
+  }
+}

@@ -16,6 +16,8 @@
 
 ## 📡 Команды и результаты
 
+- [Управление камерой siplite](siplite-camera-control.md) — port2 discovery, credentials, LED/PWM, H.265/Auto и постоянный локальный API; negotiated camera1.0.0.
+
 | Документ | Содержание |
 | :--- | :--- |
 | [MQTT RPC](mqtt-rpc-protocol.md) | Топики, Trigger/Polling, конверты сообщений, повторы и результаты |

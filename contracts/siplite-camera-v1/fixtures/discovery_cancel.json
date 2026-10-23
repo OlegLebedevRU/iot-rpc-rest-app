@@ -1,0 +1,15 @@
+{
+  "name": "discovery_cancel",
+  "target": "rpc",
+  "definition": "rpc165",
+  "valid": true,
+  "payload": {
+    "dt": [
+      {
+        "action": "cancel",
+        "operation_id": "00000000-0000-4000-8000-000000000013",
+        "target_operation_id": "00000000-0000-4000-8000-000000000011"
+      }
+    ]
+  }
+}

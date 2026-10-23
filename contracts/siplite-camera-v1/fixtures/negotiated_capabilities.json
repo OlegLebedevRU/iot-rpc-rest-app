@@ -1,0 +1,68 @@
+{
+  "name": "negotiated_capabilities",
+  "target": "media",
+  "definition": "media_capabilities",
+  "valid": true,
+  "payload": {
+    "contract_version": 2,
+    "media_contract_versions": [
+      1,
+      2
+    ],
+    "server_revision": "fixture-runtime-verified",
+    "dependencies_ready": true,
+    "hevc_runtime_verified": true,
+    "codecs": [
+      "h264",
+      "h265"
+    ],
+    "max_video_tracks": 1,
+    "audio_supported": false,
+    "reverse_rtcp": true,
+    "formats": [
+      {
+        "codec": "h264",
+        "codec_profile": "baseline",
+        "packetization": "rfc6184",
+        "clock_rate": 90000
+      },
+      {
+        "codec": "h265",
+        "codec_profile": "main",
+        "packetization": "rfc7798",
+        "clock_rate": 90000
+      }
+    ],
+    "camera_contract_revisions": [
+      "siplite-camera/1.0.0"
+    ],
+    "camera_formats": [
+      {
+        "codec": "h265",
+        "codec_profiles": [
+          "main"
+        ],
+        "max_width": 2592,
+        "max_height": 1944,
+        "max_fps": 30,
+        "max_fps_above_full_hd": 20,
+        "bit_depth": 8,
+        "chroma": "420",
+        "max_b_frames": 0,
+        "packetization": "rfc7798",
+        "level_ids": [
+          30,
+          60,
+          63,
+          90,
+          93,
+          120,
+          123,
+          150,
+          153
+        ],
+        "runtime_verified": false
+      }
+    ]
+  }
+}

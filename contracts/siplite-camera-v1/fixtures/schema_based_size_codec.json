@@ -1,0 +1,22 @@
+{
+  "name": "schema_based_size_codec",
+  "target": "rpc",
+  "definition": "rpc161",
+  "valid": true,
+  "payload": {
+    "dt": [
+      {
+        "expected_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "patch": {
+          "video0": {
+            "size": "2592x1944",
+            "codec": "h265"
+          },
+          "image": {
+            "rotate": "90"
+          }
+        }
+      }
+    ]
+  }
+}
