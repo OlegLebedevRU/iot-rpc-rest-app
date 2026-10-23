@@ -383,7 +383,10 @@ class VideoControl:
             command_id=str(uuid4()),
             sn=sn,
             issued_at_ms=current,
-            expires_at_ms=current + 5000,
+            # The frozen inventory_get fixture already allows10s. This is
+            # capability negotiation, not the stream first-frame budget:
+            # hardware activation checks Medium first, then optional HD.
+            expires_at_ms=current + 10000,
         )
 
         def reserve(doc: dict[str, Any]) -> bool:
@@ -405,7 +408,7 @@ class VideoControl:
 
         if await self.store.change(sn, reserve, expected_epoch=server_epoch):
             try:
-                await send(sn, query, ttl_ms=5000)
+                await send(sn, query, ttl_ms=10000)
                 while now_ms() < query.expires_at_ms:
                     doc = await self.store.get(sn)
                     if not doc.get("pending"):

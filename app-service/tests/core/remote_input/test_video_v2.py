@@ -1070,11 +1070,40 @@ async def test_capability_timeout_and_prequery_cache_do_not_negotiate(env, monke
         assert not await video_control.accept_capability(
             sn, wire.CapabilitiesAck.model_validate(ack)
         )
-        clock += 5001
+        clock = query.expires_at_ms + 1
 
     result = await video_control.capability(lease.sn, service.presence, send)
     assert result == {"negotiated_v2": False, "video_capabilities": None}
     assert "pending" not in await video_control.store.get(lease.sn)
+
+
+@pytest.mark.anyio
+async def test_capability_negotiation_accepts_real_priority_probe_after_five_seconds(
+    env, monkeypatch
+):
+    import core.remote_input.video_control as control_module
+
+    service, lease, _, cap = env
+    await video_control.invalidate(lease.sn)
+    clock = now_ms()
+    monkeypatch.setattr(control_module, "now_ms", lambda: clock)
+
+    async def send(sn, query, **kwargs):
+        nonlocal clock
+        assert query.expires_at_ms - query.issued_at_ms == 10000
+        assert kwargs["ttl_ms"] == 10000
+        clock += 6200
+        ack = fixture("capabilities")
+        ack["command_id"] = query.command_id
+        cap.update(checked_at_ms=clock, valid_until_ms=clock + 60000)
+        ack["video_capabilities"] = cap
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+
+    result = await video_control.capability(lease.sn, service.presence, send)
+    assert result["negotiated_v2"] is True
+    assert result["video_capabilities"] == cap
 
 
 @pytest.mark.anyio
