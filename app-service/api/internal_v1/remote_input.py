@@ -421,7 +421,7 @@ async def get_video_capability(
     if revision is not None:
         if revision != REVISION:
             raise HTTPException(422, "unsupported_camera_contract")
-        return await camera_capability(session, device_id)
+        return await camera_capability(session, device_id, authorized_sn=sn)
     return VideoCapabilityView.model_validate(
         await video_control.capability(
             sn, presence_registry, send_ctl_command, refresh, source_id=source_id

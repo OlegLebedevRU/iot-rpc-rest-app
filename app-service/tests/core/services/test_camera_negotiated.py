@@ -425,6 +425,64 @@ def test_actual_siplite_adapter_uses_existing_v1_identity_and_exact_track(monkey
     assert epoch.start["descriptor"]["tracks"][0]["level_id"] == 153
 
 
+@pytest.mark.parametrize("matching", [False, True])
+def test_server_ready_allowlist_admits_only_exact_native_start_not_rpc_writes(
+    monkeypatch, matching
+):
+    epoch, _ = epoch_and_lease()
+    sn = epoch.identity["sn"]
+    monkeypatch.setattr(settings.camera, "writers_enabled", False)
+    monkeypatch.setattr(
+        settings.camera, "test_start_sn_allowlist", [sn if matching else sn + "-other"]
+    )
+    camera = admission.camera_from_gauge(snapshot(), "cam:ip000001")
+    camera["actual_track"] = epoch.start["descriptor"]["tracks"][0]
+    now = int(datetime.now(UTC).timestamp() * 1000)
+    if matching:
+        command = start_command(epoch, camera, now)
+        assert str(command.stream_instance_id) == epoch.identity["stream_instance_id"]
+    else:
+        with pytest.raises(ValueError, match="camera_writers_disabled"):
+            start_command(epoch, camera, now)
+    # The temporary START exception never permits discovery/binding/credential writes.
+    for method in (161, 165, 166):
+        with pytest.raises(HTTPException, match="camera_writers_disabled"):
+            admission.require_camera_operation(method, {}, camera)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("authorized", [False, True])
+async def test_server_ready_projection_requires_authoritative_sn_and_fresh_main_app(
+    monkeypatch, authorized
+):
+    from core.camera.projection import camera_capability
+
+    epoch, _ = epoch_and_lease()
+    sn = epoch.identity["sn"]
+    monkeypatch.setattr(settings.camera, "writers_enabled", False)
+    monkeypatch.setattr(settings.camera, "test_start_sn_allowlist", [sn])
+    payload = snapshot()
+    admission.camera_from_gauge(payload, "cam:ip000001")["actual_track"] = epoch.start[
+        "descriptor"
+    ]["tracks"][0]
+    connection = SimpleNamespace(app_connect=True, is_blocked=False)
+    gauge = SimpleNamespace(gauges=payload, updated_at=datetime.now(UTC))
+
+    async def read():
+        return await camera_capability(
+            SimpleNamespace(scalar=AsyncMock(side_effect=[connection, gauge])),
+            4623,
+            authorized_sn=sn if authorized else None,
+        )
+
+    assert (await read()).producer_adapter["ready"] is authorized
+    connection.app_connect = False
+    assert (await read()).producer_adapter["reason"] == "camera_main_app_offline"
+    connection.app_connect = True
+    gauge.updated_at -= timedelta(seconds=61)
+    assert (await read()).producer_adapter["reason"] == "camera_capabilities_stale"
+
+
 class QueryResult:
     def __init__(self, value):
         self.value = value

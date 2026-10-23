@@ -5,7 +5,7 @@ from typing import Literal
 
 from core.camera.contract import REVISION
 from core.camera.media import CameraEpoch
-from core.config import settings
+from core.camera.start_policy import start_enabled
 from core.remote_input.schemas import StreamStartCommand, StreamStopCommand
 
 
@@ -15,7 +15,7 @@ class CameraRenewCommand(StreamStopCommand):
 
 
 def start_command(epoch: CameraEpoch, camera: dict, now_ms: int) -> StreamStartCommand:
-    if not settings.camera.writers_enabled:
+    if not start_enabled(epoch.identity["sn"]):
         raise ValueError("camera_writers_disabled")
     start = epoch.start
     descriptor = start["descriptor"]
