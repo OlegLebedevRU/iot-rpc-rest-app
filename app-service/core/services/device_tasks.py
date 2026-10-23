@@ -49,6 +49,12 @@ class DeviceTasksService:
                 task_create.device_id,
             )
             raise HTTPException(status_code=404, detail="device_id not found")
+        receipt = await TasksRepository.camera_receipt(self.session, task_create)
+        if receipt is not None:
+            return TaskResponse(id=receipt[0], created_at=int(receipt[1]))
+        from core.camera.admission import admit_task
+
+        await admit_task(self.session, task_create, sn)
         created = await TasksRepository.create_task(
             session=self.session,
             task=task_create,

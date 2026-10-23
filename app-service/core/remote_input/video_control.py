@@ -81,6 +81,12 @@ class VideoStore:
             if state.get("version") != 2 or "descriptor" not in state.get("start", {}):
                 reject("invalid_payload", 400)
             wire.Start.model_validate(state["start"])
+        if document.get("camera_stream") is not None:
+            from core.camera.contract import validate_definition
+
+            validate_definition(
+                "hevc.schema.json", "media_start", document["camera_stream"]["start"]
+            )
         return document
 
     async def change(
@@ -308,6 +314,8 @@ class VideoControl:
         while True:
 
             def reserve(doc: dict[str, Any]) -> bool:
+                if doc.get("camera_stream", {}).get("state") in LIVE:
+                    raise HTTPException(409, "stream_conflict")
                 pending = doc.get("legacy_pending", {})
                 if pending.get("expires_at_ms", 0) > now_ms():
                     if pending["identity"] != identity:
@@ -543,6 +551,8 @@ class VideoControl:
             if doc.get("legacy_pending", {}).get("expires_at_ms", 0) > now_ms():
                 reject("conflict")
             active = doc.get("stream")
+            if doc.get("camera_stream", {}).get("state") in LIVE:
+                reject("conflict")
             cap = doc.get("capability")
             binding = dict(cap["binding"]) if cap else None
             if binding and view.session_id is not None:
@@ -923,7 +933,23 @@ class VideoControl:
     ) -> bool:
         if lease.stream_contract_version != 2:
             return False
-        state = (await self.store.get(lease.sn)).get("stream")
+        document = await self.store.get(lease.sn)
+        camera_record = document.get("camera_stream")
+        if camera_record and camera_record["start"]["lease_id"] == str(lease.lease_id):
+            from core.camera.control import camera_control, epoch_of
+
+            epoch = epoch_of(camera_record)
+            if (
+                lease.stream_instance_id is not None
+                and str(lease.stream_instance_id)
+                != epoch.identity["stream_instance_id"]
+            ):
+                return False
+            await camera_control.stop(
+                None, lease, {**epoch.identity, "reason": reason}, send
+            )
+            return True
+        state = document.get("stream")
         if not state or state["start"]["lease_id"] != str(lease.lease_id):
             return False
         if (

@@ -355,6 +355,11 @@ async def handle_device_ctl_message(
             return True
 
         elif isinstance(envelope, CtlStreamEvent):
+            from core.camera.control import camera_control
+            from core.remote_input.service import remote_input_service
+
+            if await camera_control.event(sn, envelope, remote_input_service):
+                return True
             v2_state = (await video_control.store.get(sn)).get("stream")
             if v2_state and v2_state["state"] in ("starting", "running", "stopping"):
                 return False

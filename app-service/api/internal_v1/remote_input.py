@@ -6,6 +6,9 @@ from contextlib import suppress
 from datetime import datetime, timezone
 from uuid import UUID
 
+from core.camera.contract import REVISION
+from core.camera.control import CameraStart, CameraStop, CameraStateView, camera_control
+from core.camera.projection import CameraCapabilityView, camera_capability
 from core.config import settings
 from core.crud.device_repo import DeviceRepo
 from core.logging_config import setup_module_logger
@@ -346,18 +349,29 @@ async def get_device_inventory(
 
 @router.post(
     "/lease/{lease_id}/stream/start",
-    response_model=StreamStartResponse | VideoStateView,
+    response_model=StreamStartResponse | VideoStateView | CameraStateView,
 )
 async def post_stream_start(
     lease_id: UUID,
-    body: StreamStartRequest | VideoStart,
+    body: StreamStartRequest | VideoStart | CameraStart,
     org_id: Internal_Org_dep,
     _: Internal_Auth_dep,
     request: Request,
-) -> StreamStartResponse | VideoStateView:
+) -> StreamStartResponse | VideoStateView | CameraStateView:
     session_id = extract_caller_session_id(request)
     caller_user_id = extract_caller_user_id(request)
 
+    if isinstance(body, CameraStart):
+        if request.headers.get("X-L4-Camera-Contract") != REVISION:
+            raise HTTPException(422, "camera_contract_not_negotiated")
+        lease = await video_control.authorize(
+            remote_input_service, lease_id, org_id, caller_user_id, session_id
+        )
+        async with db_helper.session_factory() as camera_session:
+            record = await camera_control.start(
+                remote_input_service, camera_session, lease, body.root, send_ctl_command
+            )
+        return CameraStateView.from_record(record)
     if isinstance(body, VideoStart):
         if body.lease_id != str(lease_id):
             raise HTTPException(status_code=409, detail={"code": "lease_mismatch"})
@@ -384,18 +398,28 @@ async def post_stream_start(
     )
 
 
-@router.get("/devices/{sn}/video-capabilities", response_model=VideoCapabilityView)
+@router.get(
+    "/devices/{sn}/video-capabilities",
+    response_model=VideoCapabilityView | CameraCapabilityView,
+)
 async def get_video_capability(
     sn: str,
     org_id: Internal_Org_dep,
     _: Internal_Auth_dep,
     session: Session_dep,
+    request: Request,
     refresh: bool = False,
-) -> VideoCapabilityView:
-    if await DeviceRepo.get_device_id(session, sn=sn, org_id=org_id) is None:
+) -> VideoCapabilityView | CameraCapabilityView:
+    device_id = await DeviceRepo.get_device_id(session, sn=sn, org_id=org_id)
+    if device_id is None:
         raise HTTPException(
             status_code=403, detail="device not available for organization"
         )
+    revision = request.headers.get("X-L4-Camera-Contract")
+    if revision is not None:
+        if revision != REVISION:
+            raise HTTPException(422, "unsupported_camera_contract")
+        return await camera_capability(session, device_id)
     return VideoCapabilityView.model_validate(
         await video_control.capability(sn, presence_registry, send_ctl_command, refresh)
     )
@@ -427,13 +451,15 @@ async def get_video_lease(
     )
 
 
-@router.get("/lease/{lease_id}/video-state", response_model=VideoStateView)
+@router.get(
+    "/lease/{lease_id}/video-state", response_model=VideoStateView | CameraStateView
+)
 async def get_video_state(
     lease_id: UUID,
     org_id: Internal_Org_dep,
     _: Internal_Auth_dep,
     request: Request,
-) -> VideoStateView:
+) -> VideoStateView | CameraStateView:
     lease = await video_control.authorize(
         remote_input_service,
         lease_id,
@@ -443,7 +469,13 @@ async def get_video_state(
         is_request_superuser(request),
         require_active=False,
     )
-    record = (await video_control.store.get(lease.sn)).get("stream")
+    document = await video_control.store.get(lease.sn)
+    camera_record = document.get("camera_stream")
+    if camera_record and camera_record["start"]["lease_id"] == str(lease_id):
+        if request.headers.get("X-L4-Camera-Contract") != REVISION:
+            raise HTTPException(422, "camera_contract_not_negotiated")
+        return CameraStateView.from_record(camera_record)
+    record = document.get("stream")
     if (
         lease.stream_contract_version != 2
         or not record
@@ -453,14 +485,31 @@ async def get_video_state(
     return VideoStateView.from_record(record)
 
 
-@router.post("/lease/{lease_id}/video-stop", response_model=VideoStateView)
+@router.post(
+    "/lease/{lease_id}/video-stop", response_model=VideoStateView | CameraStateView
+)
 async def post_video_stop(
     lease_id: UUID,
-    body: VideoStop,
+    body: VideoStop | CameraStop,
     org_id: Internal_Org_dep,
     _: Internal_Auth_dep,
     request: Request,
-) -> VideoStateView:
+) -> VideoStateView | CameraStateView:
+    if isinstance(body, CameraStop):
+        if request.headers.get("X-L4-Camera-Contract") != REVISION:
+            raise HTTPException(422, "camera_contract_not_negotiated")
+        lease = await video_control.authorize(
+            remote_input_service,
+            lease_id,
+            org_id,
+            extract_caller_user_id(request),
+            extract_caller_session_id(request),
+            require_active=False,
+        )
+        record = await camera_control.stop(
+            remote_input_service, lease, body.root, send_ctl_command
+        )
+        return CameraStateView.from_record(record)
     if body.lease_id != str(lease_id):
         raise HTTPException(status_code=409, detail={"code": "lease_mismatch"})
     record = await video_control.stop(

@@ -1,10 +1,10 @@
 from datetime import UTC, datetime
-from typing import Any, Optional, List, Dict
+from uuid import UUID
+from typing import Any, Optional, List, Dict, Literal
 
 from pydantic import (
     BaseModel,
     Field,
-    UUID4,
     ConfigDict,
     field_validator,
     PrivateAttr,
@@ -52,6 +52,11 @@ class TaskHeader(BaseModel):
 
 
 class TaskCreate(TaskHeader):
+    # REST admission metadata, never part of the existing MQTT envelope.
+    camera_contract_revision: Literal["siplite-camera/1.0.0"] | None = Field(
+        default=None, exclude=True
+    )
+
     payload: Optional[Dict[str, Any]] = Field(
         default=None,
         title="Task payload",
@@ -60,6 +65,7 @@ class TaskCreate(TaskHeader):
 
     model_config = ConfigDict(
         from_attributes=True,
+        hide_input_in_errors=True,
         json_schema_extra={
             "examples": [
                 {
@@ -76,6 +82,22 @@ class TaskCreate(TaskHeader):
 
     @model_validator(mode="after")
     def validate_registered_diagnostics(self):
+        if self.method_code in (49, 50) and isinstance(self.payload, dict):
+            for record in self.payload.get("dt", []):
+                if isinstance(record, dict) and record.get("ns") == "cfg_cam":
+                    key = str(record.get("k", "")).lower()
+                    if not key or key in (
+                        "*",
+                        "user",
+                        "username",
+                        "password",
+                        "credentials",
+                        "credential_profile",
+                        "cred_profile",
+                    ):
+                        raise ValueError(
+                            "camera credentials require the private RPC166 path"
+                        )
         # Other deployed methods (including legacy7010) retain their contracts.
         if self.method_code in (7000, 7001, 7002):
             self.payload = validate_diagnostic_payload(self.method_code, self.payload)
@@ -91,13 +113,22 @@ class TaskCreate(TaskHeader):
                     "RPC TTL must be positive and no longer than remaining PIN lifetime"
                 )
             self.payload = payload.model_dump(mode="json")
-        elif self.method_code in (160, 161, 162, 163, 164):
-            self.payload = validate_ip_camera_payload(self.method_code, self.payload)
+        elif self.method_code in range(160, 168):
+            if self.camera_contract_revision is not None:
+                from core.camera.contract import validate_rpc
+
+                self.payload = validate_rpc(self.method_code, self.payload)
+                if self.ttl < 1:
+                    raise ValueError("camera operations require a positive TTL")
+            else:
+                self.payload = validate_ip_camera_payload(
+                    self.method_code, self.payload
+                )
         return self
 
 
 class TaskRequest(BaseModel):
-    id: UUID4
+    id: UUID
 
 
 # Pydantic model for response data
@@ -206,7 +237,7 @@ class TaskNotify(TaskResponse):
 
 
 class TaskListOut(TaskHeader):
-    id: UUID4
+    id: UUID
     status: int
     created_at: datetime
     pending_at: Optional[datetime] = None

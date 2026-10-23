@@ -8,6 +8,7 @@ from core.logging_config import setup_module_logger
 import uuid
 from typing import Any
 
+from fastapi import HTTPException
 from fastapi_pagination import Page
 from fastapi_pagination.ext.sqlalchemy import apaginate
 from pydantic import UUID4
@@ -149,10 +150,91 @@ class TasksRepository:
         ).select_from(DevTask)
 
     @classmethod
+    async def camera_receipt(cls, session: AsyncSession, task: TaskCreate):
+        if task.camera_contract_revision is None or task.method_code not in (
+            165,
+            166,
+            167,
+        ):
+            return None
+        operation = uuid.UUID(task.payload["dt"][0]["operation_id"])
+        existing = (
+            await session.execute(
+                select(
+                    DevTask.device_id,
+                    DevTask.method_code,
+                    DevTask.is_deleted,
+                    DevTaskPayload.payload,
+                    DevTaskStatus.initial_ttl,
+                    DevTaskStatus.priority,
+                    func.extract("EPOCH", DevTask.created_at).label("created_at"),
+                )
+                .select_from(DevTask)
+                .join(DevTaskPayload)
+                .join(DevTaskStatus)
+                .where(DevTask.id == operation)
+            )
+        ).one_or_none()
+        if existing is None:
+            return None
+        if (
+            existing.device_id != task.device_id
+            or existing.method_code != task.method_code
+            or existing.payload != task.payload
+            or existing.initial_ttl != task.ttl
+            or existing.priority != task.priority
+            or existing.is_deleted
+        ):
+            raise HTTPException(409, "camera_operation_conflict")
+        return operation, float(existing.created_at)
+
+    @classmethod
     async def create_task(
         cls, session: AsyncSession, task: TaskCreate
     ) -> tuple[UUID4, float] | None:
-        db_uuid = uuid.uuid4()
+        operation = None
+        if task.camera_contract_revision is not None and task.method_code in (
+            165,
+            166,
+            167,
+        ):
+            operation = task.payload["dt"][0]["operation_id"]
+        db_uuid = uuid.UUID(operation) if operation else uuid.uuid4()
+        if operation:
+            # Serialize creation across workers and reconnects; the task row is the
+            # durable receipt. Reusing an operation with different content is 409.
+            lock_key = int.from_bytes(db_uuid.bytes[:8], "big", signed=True)
+            await session.execute(select(func.pg_advisory_xact_lock(lock_key)))
+            existing = (
+                await session.execute(
+                    select(
+                        DevTask.device_id,
+                        DevTask.method_code,
+                        DevTask.is_deleted,
+                        DevTaskPayload.payload,
+                        DevTaskStatus.initial_ttl,
+                        DevTaskStatus.priority,
+                        func.extract("EPOCH", DevTask.created_at).label("created_at"),
+                    )
+                    .select_from(DevTask)
+                    .join(DevTaskPayload)
+                    .join(DevTaskStatus)
+                    .where(DevTask.id == db_uuid)
+                )
+            ).one_or_none()
+            if existing is not None:
+                if (
+                    existing.device_id != task.device_id
+                    or existing.method_code != task.method_code
+                    or existing.payload != task.payload
+                    or existing.initial_ttl != task.ttl
+                    or existing.priority != task.priority
+                    or existing.is_deleted
+                ):
+                    await session.rollback()
+                    raise HTTPException(409, "camera_operation_conflict")
+                await session.commit()
+                return db_uuid, float(existing.created_at)
         tsk_q = (
             insert(DevTask)
             .values(
@@ -177,6 +259,12 @@ class TasksRepository:
             deadline = func.least(
                 deadline, func.to_timestamp(task.payload["dt"][0]["pin_expires_at"])
             )
+        if task.camera_contract_revision is not None:
+            envelope = task.payload["dt"][0].get("sealed_credentials")
+            if envelope is not None:
+                deadline = func.least(
+                    deadline, func.to_timestamp(envelope["expires_at_ms"] / 1000.0)
+                )
         status_q = insert(DevTaskStatus).values(
             task_id=db_uuid,
             status=TaskStatus.READY,
@@ -554,6 +642,16 @@ class TasksRepository:
             return None
         is_deleted = owner.is_deleted
         parsed = cls._normalize_result_for_storage(result)
+        if getattr(owner, "method_code", 0) in (165, 166, 167):
+            from core.camera.contract import bounded_json
+
+            try:
+                bounded_json(parsed, 4096)
+                if uuid.UUID(parsed.get("operation_id", "")) != task_id:
+                    raise ValueError("camera_result_operation_mismatch")
+            except ValueError, TypeError, AttributeError:
+                await session.rollback()
+                return None
         fingerprint = (
             None
             if result_uid is not None

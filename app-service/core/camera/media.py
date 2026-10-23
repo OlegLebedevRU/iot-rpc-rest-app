@@ -1,0 +1,250 @@
+"""Negotiated camera media lifecycle; producer START is a separate firmware gate."""
+
+from __future__ import annotations
+
+import json
+import time
+from dataclasses import dataclass
+
+import httpx
+
+from core.camera.contract import REVISION, validate_definition
+
+
+@dataclass(frozen=True)
+class CodecEvidence:
+    checked_at_ms: int
+    valid_until_ms: int
+    h264: str
+    h265: str
+
+
+def resolve_codec(
+    policy: str, evidence: dict[str, CodecEvidence], now_ms: int
+) -> tuple[str, str]:
+    if policy not in ("auto", "h264", "h265") or set(evidence) != {
+        "camera",
+        "relay",
+        "server",
+        "browser",
+    }:
+        raise ValueError("camera_capability_chain_incomplete")
+    for entry in evidence.values():
+        if (
+            not entry.checked_at_ms <= now_ms < entry.valid_until_ms
+            or entry.valid_until_ms - entry.checked_at_ms > 60000
+        ):
+            raise ValueError("camera_capability_chain_unknown_or_stale")
+    if policy in ("auto", "h265") and all(e.h265 == "ready" for e in evidence.values()):
+        return "h265", "camera_chain_h265_ready"
+    if policy == "h265":
+        raise ValueError("camera_h265_unsupported")
+    if policy == "auto" and any(
+        e.h265 not in ("ready", "unsupported") for e in evidence.values()
+    ):
+        raise ValueError("camera_capability_chain_unknown_or_stale")
+    if all(e.h264 == "ready" for e in evidence.values()):
+        return "h264", (
+            "explicit_h264" if policy == "h264" else "camera_chain_h265_unsupported"
+        )
+    raise ValueError("camera_h264_unsupported")
+
+
+def require_server_format(capabilities: dict, descriptor: dict) -> None:
+    track = descriptor["tracks"][0]
+    for fmt in capabilities.get("camera_formats", []):
+        if (
+            fmt["runtime_verified"] is True
+            and fmt["codec"] == track["codec"]
+            and track["codec_profile"] in fmt["codec_profiles"]
+            and track["width"] <= fmt["max_width"]
+            and track["height"] <= fmt["max_height"]
+            and track["fps"] <= fmt["max_fps"]
+            and all(
+                track[key] == fmt[key]
+                for key in ("bit_depth", "chroma", "max_b_frames", "packetization")
+            )
+            and (track["codec"] != "h265" or track["level_id"] in fmt["level_ids"])
+            and (
+                track["width"] <= 1920
+                and track["height"] <= 1080
+                or track["fps"] <= fmt["max_fps_above_full_hd"]
+            )
+        ):
+            return
+    raise ValueError("camera_server_format_unavailable")
+
+
+@dataclass(frozen=True)
+class CameraEpoch:
+    # Canonical immutable JSON prevents later caller mutation of the descriptor.
+    start_json: str
+    route_generation: int | None = None
+
+    @classmethod
+    def from_start(cls, payload: dict, lease, now_ms: int | None = None):
+        value = validate_definition("hevc.schema.json", "media_start", payload)
+        descriptor = value["descriptor"]
+        if (
+            descriptor.get("camera_contract_revision") != REVISION
+            or descriptor["source_type"] != "camera"
+        ):
+            raise ValueError("negotiated_camera_descriptor_required")
+        if (
+            lease.scope != "stream"
+            or not lease.is_active()
+            or str(lease.lease_id) != value["lease_id"]
+            or lease.sn != value["publisher"]["sn"]
+            or value["lease_expires_at"] != int(lease.expires_at.timestamp())
+        ):
+            raise ValueError("camera_lease_mismatch")
+        if value["lease_expires_at"] * 1000 <= (
+            now_ms if now_ms is not None else int(time.time() * 1000)
+        ):
+            raise ValueError("camera_lease_expired")
+        return cls(json.dumps(value, sort_keys=True, separators=(",", ":")))
+
+    @property
+    def start(self) -> dict:
+        return json.loads(self.start_json)
+
+    @property
+    def identity(self) -> dict:
+        start = self.start
+        return {
+            "contract_version": 2,
+            "sn": start["publisher"]["sn"],
+            "session_id": start["session_id"],
+            "lease_id": start["lease_id"],
+            "stream_instance_id": start["publisher"]["stream_instance_id"],
+            "descriptor_revision": start["descriptor"]["descriptor_revision"],
+        }
+
+    def check_response(self, value: dict) -> None:
+        start = self.start
+        for key in (
+            "session_id",
+            "lease_id",
+            "operation_id",
+            "publisher",
+            "descriptor",
+        ):
+            if value[key] != start[key]:
+                raise ValueError("camera_media_epoch_mismatch")
+        if value["stream_instance_id"] != start["publisher"]["stream_instance_id"]:
+            raise ValueError("camera_media_epoch_mismatch")
+        if (
+            self.route_generation is not None
+            and value["route_generation"] != self.route_generation
+        ):
+            raise ValueError("camera_media_route_mismatch")
+
+
+class CameraMediaAdapter:
+    def __init__(self, client: httpx.AsyncClient, service_token: str):
+        if not service_token:
+            raise ValueError("media_service_auth_required")
+        self.client = client
+        self.headers = {
+            "X-L4-Camera-Contract": REVISION,
+            "X-Media-Service-Token": service_token,
+        }
+
+    async def _call(
+        self, path: str, definition: str, *, payload=None, params=None, method="POST"
+    ):
+        try:
+            response = await self.client.request(
+                method,
+                path,
+                headers=self.headers,
+                json=payload,
+                params=params,
+                timeout=10,
+            )
+            response.raise_for_status()
+            if len(response.content) > 32768:
+                raise ValueError("media_response_too_large")
+            from core.remote_input.video_wire import load_object
+
+            value = load_object(response.content)
+            return validate_definition("hevc.schema.json", definition, value)
+        except httpx.HTTPError, ValueError, TypeError:
+            # Service rejection bodies, token, PIN and credential material are private.
+            raise ValueError("camera_media_request_failed") from None
+
+    async def capabilities(self) -> dict:
+        value = await self._call(
+            "/api/v2/media/capabilities", "media_capabilities", method="GET"
+        )
+        if (
+            REVISION not in value.get("camera_contract_revisions", [])
+            or not value.get("camera_formats")
+            or not value["dependencies_ready"]
+        ):
+            raise ValueError("media_camera_contract_unavailable")
+        return value
+
+    async def prepare(self, epoch: CameraEpoch) -> tuple[CameraEpoch, dict]:
+        # No firmware command is emitted here. Capability resolution and the actual
+        # SPS-derived descriptor must already have completed before media prepare.
+        if epoch.start["lease_expires_at"] <= time.time():
+            raise ValueError("camera_lease_expired")
+        capabilities = await self.capabilities()
+        require_server_format(capabilities, epoch.start["descriptor"])
+        try:
+            response = await self._call(
+                "/api/v2/media/sessions/start", "media_response", payload=epoch.start
+            )
+            epoch.check_response(response)
+            if response["state"] not in ("starting", "active"):
+                raise ValueError("camera_media_start_failed")
+        except ValueError, httpx.HTTPError:
+            try:
+                await self.stop(epoch, "prepare_failed")
+            except ValueError:
+                pass  # The immutable server lease deadline remains the final cleanup.
+            raise
+        return CameraEpoch(epoch.start_json, response["route_generation"]), response
+
+    async def health(self, epoch: CameraEpoch) -> dict:
+        response = await self._call(
+            f"/api/v2/media/sessions/{epoch.identity['session_id']}",
+            "media_health",
+            params={
+                key: value
+                for key, value in epoch.identity.items()
+                if key not in ("contract_version", "session_id")
+            },
+            method="GET",
+        )
+        epoch.check_response(response)
+        return response  # READY, RTP freshness and browser decode remain separate.
+
+    async def renew(self, epoch: CameraEpoch, lease) -> dict:
+        if (
+            not lease.is_active()
+            or lease.scope != "stream"
+            or lease.sn != epoch.identity["sn"]
+            or str(lease.lease_id) != epoch.identity["lease_id"]
+        ):
+            raise ValueError("camera_lease_mismatch")
+        payload = {
+            **epoch.identity,
+            "lease_expires_at": int(lease.expires_at.timestamp()),
+        }
+        validate_definition("hevc.schema.json", "media_renew", payload)
+        response = await self._call(
+            "/api/v2/media/sessions/renew", "media_response", payload=payload
+        )
+        epoch.check_response(response)
+        return response
+
+    async def stop(self, epoch: CameraEpoch, reason: str) -> dict:
+        payload = {**epoch.identity, "reason": reason}
+        validate_definition("hevc.schema.json", "media_stop", payload)
+        response = await self._call(
+            "/api/v2/media/sessions/stop", "media_response", payload=payload
+        )
+        epoch.check_response(response)
+        return response
