@@ -118,6 +118,35 @@ event preserves the first reason. Keepalive sends v2 lease_renew with actual epo
 identifiers, reports server_accepted, and does not invent a terminal renewal ACK
 that is absent from G0. No SQL migration or etran ORM change is needed.
 
+### Orphan publisher reconciliation (TASK-51 server lifecycle)
+
+The one-second remote-input cleanup also scans v2 video documents. Active lease
+keys are not an expiry index: Redis may expire them before lease cleanup runs.
+A LIVE document whose publisher lease is absent, expired, revoked, or no longer
+the active lease for its SN becomes `stopped` with reason `lease_invalid`.
+The same reconciliation runs before an authorized manual v2 START. It sends
+the existing terminal notification and a bounded STOP with the retired epoch's
+lease/stream/agent/descriptor identities. It does not create a publisher or a
+media route. A fresh capability for another agent instance is preserved.
+
+Redis WATCH covers the video document, publisher lease hash and active lease
+key together. Concurrent renewal/replacement retries the decision; a live
+authorized publisher still conflicts with an incompatible START. START and
+READY also check lease authority under WATCH. Late READY cannot revive an
+expired publisher. A fully correlated terminal ERROR may close its own LIVE
+epoch even after its lease disappeared; SN/lease/stream/agent/descriptor checks
+remain mandatory. Terminal ERROR/STOP for A cannot mutate publisher B.
+
+No-op reconciliation and duplicate terminal events do not refresh document
+retention. V2 lease reads use Redis authority rather than writing cached lease
+snapshots back into Redis. General legacy lease mutation behavior is unchanged,
+except that reading an absent hash never recreates it.
+
+IoT emits its existing epoch-specific terminal notification. BFF/l4media retain
+ownership of route/Janus teardown via their owner APIs and media watchdogs;
+IoT does not delete media Redis records or call Janus directly. Their cleanup
+and actual browser recovery remain separate integration checks.
+
 ## Admission boundary and TASK-30/40
 
 Watcher leave only unsubscribes its own read-only notifications/PeerConnection.
