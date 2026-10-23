@@ -188,3 +188,8 @@ service auth, immutable descriptor/identity/route generation и scoped compensat
 и соответствующего server-ready gate. Старый camera/desktop путь не изменён.
 Фактический native reference при разработке: l4_video_ctl.c принимает CTL v1,
 а main MQTT app публикует app_online/app_offline; desktop CTL v2 ему не приписывается.
+
+Scoped CI выполняется на действующем builder: `python3 deploy/check_siplite_camera.py`.
+Он запускает locked dependencies, immutable verifier, camera/RPC/desktop regressions
+и scoped Ruff/Black. Выпуск дополнительно запускает полный pytest через
+`deploy/registry_app1.py`; GitHub hosted Actions не является обязательным transport.
