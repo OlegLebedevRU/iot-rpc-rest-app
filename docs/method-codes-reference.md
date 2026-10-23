@@ -692,3 +692,8 @@ REST-история и результат рекурсивно маскирую�
 Служебный consumer передаёт непустое подмножество `7001,7002,7003,7011,7021,7023,7030,7031,7032,7033` в `rpc_methods`. Отсутствующий или невалидный header оставляет legacy-ограничения. [Алгоритм выбора](mqtt-rpc-protocol.md).
 
 Сверено с валидаторами и выборкой IoT в `master` на 09.10.2026. Поддержка и смысл device-specific команд определяются контрактом прошивки/агента.
+
+##173 — siplite Internet audio
+
+ESP32-only start/stop/status with URL and volatile duration; correlated RES,
+no new EVT. [Contract](siplite-internet-audio.md).

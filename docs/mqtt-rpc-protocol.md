@@ -161,3 +161,8 @@ Probe использует существующие `req/rsp/evt/eva`, но им
 RPC170/171/172 use the existing correlated RES path without new events or topics.
 See [live audio control](audio-control.md) for config/readback, two-device leases,
 local HTTP parity and authenticated LAN media framing.
+
+## siplite Internet audio173
+
+Device-specific RES-only lifecycle and polling: [contract](siplite-internet-audio.md).
+Task TTL and volatile playback duration are separate clocks.
