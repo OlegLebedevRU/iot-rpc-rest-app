@@ -186,6 +186,17 @@ service auth, immutable descriptor/identity/route generation и scoped compensat
 Начальный deploy — readers/control с `APP_CONFIG__CAMERA__WRITERS_ENABLED=false`
 по умолчанию. Включать новый START/мутации только после готовности TASK-60 firmware
 и соответствующего server-ready gate. Старый camera/desktop путь не изменён.
+
+Для server-ready до готовности firmware допускается отдельный пустой по
+умолчанию `APP_CONFIG__CAMERA__TEST_START_SN_ALLOWLIST=[]` (не более16SN).
+Он разрешает только native camera START для явно выбранного тестового producer
+с существующей certificate identity. SN берётся из уже проверенной tenant
+привязки в reader и из authoritative stream lease в START; совпадение точное.
+Существующие main_app presence, свежий gauge84/actual_track, ownership, scope,
+descriptor, ACK, TTL и epoch guards остаются обязательными. Это не аппаратная
+приёмка и не обход PKI/авторизации. RPC161..167 по-прежнему запрещены при
+writers_enabled=false, включая этот тестовый SN. Список очистить после теста;
+реальные firmware writers включаются отдельно по прежнему gate.
 Фактический native reference при разработке: l4_video_ctl.c принимает CTL v1,
 а main MQTT app публикует app_online/app_offline; desktop CTL v2 ему не приписывается.
 

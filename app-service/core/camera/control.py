@@ -127,7 +127,9 @@ class CameraControl:
     async def start(self, service, session_db, lease, payload: dict, send) -> dict:
         await self.reconcile(lease.sn, service, send)
         epoch = CameraEpoch.from_start(payload, lease)
-        view = await camera_capability(session_db, lease.device_id)
+        view = await camera_capability(
+            session_db, lease.device_id, authorized_sn=lease.sn
+        )
         if not view.producer_adapter["ready"]:
             raise HTTPException(409, view.producer_adapter["reason"])
         current_ms = int(time.time() * 1000)

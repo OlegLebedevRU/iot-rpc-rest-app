@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from core.camera.admission import camera_from_gauge, validate_gauge
 from core.camera.contract import REVISION
-from core.config import settings
+from core.camera.start_policy import start_enabled
 from core.models.devices import DeviceConnection, DeviceGauge
 
 
@@ -23,7 +23,9 @@ class CameraCapabilityView(BaseModel):
     producer_adapter: dict[str, Any]
 
 
-async def camera_capability(session, device_id: int) -> CameraCapabilityView:
+async def camera_capability(
+    session, device_id: int, *, authorized_sn: str | None = None
+) -> CameraCapabilityView:
     connection = await session.scalar(
         select(DeviceConnection).where(DeviceConnection.device_id == device_id)
     )
@@ -65,7 +67,7 @@ async def camera_capability(session, device_id: int) -> CameraCapabilityView:
                 if camera.get("actual_track") is None
                 else (
                     "camera_writers_disabled"
-                    if not settings.camera.writers_enabled
+                    if not start_enabled(authorized_sn)
                     else None
                 )
             )
