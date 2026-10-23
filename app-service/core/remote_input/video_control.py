@@ -214,11 +214,9 @@ def select_codec(start: dict[str, Any], context: dict[str, Any]) -> str:
         )
         for entry in cap["video"]
     )
-    return (
-        "h265"
-        if supported
-        else "h264" if start["codec_policy"] == "auto" else "unsupported"
-    )
+    if supported:
+        return "h265"
+    return "h264" if start["codec_policy"] == "auto" else "unsupported"
 
 
 class VideoControl:
@@ -366,6 +364,13 @@ class VideoControl:
         if not settings.remote_input.video_v2_enabled:
             await self.invalidate(sn)
             return {"negotiated_v2": False, "video_capabilities": None}
+        if (
+            not settings.remote_input.video_hevc_chain_ready
+            and sn not in settings.remote_input.video_test_camera_sns
+        ):
+            # Close new HEVC negotiation before BFF commits a concrete codec.
+            # Keep measured capability and existing v2 traffic/state intact.
+            return {"negotiated_v2": False, "video_capabilities": None}
         view = await presence.get(sn)
         if not view.online or "video_contract_v2" not in (view.capabilities or []):
             await self.invalidate(sn)
@@ -415,10 +420,17 @@ class VideoControl:
                 await self.store.change(sn, expire)
         doc = await self.store.get(sn)
         cap = doc.get("capability")
+        test_camera = bool(
+            cap
+            and sn in settings.remote_input.video_test_camera_sns
+            and cap.get("source_id", "").startswith("test-")
+            and any(entry["backend"] == "camera" for entry in cap.get("video", []))
+        )
         fresh = bool(
             cap
             and doc.get("server_epoch") == await self.store.current_epoch()
             and cap["checked_at_ms"] <= now_ms() < cap["valid_until_ms"]
+            and (settings.remote_input.video_hevc_chain_ready or test_camera)
         )
         return {"negotiated_v2": fresh, "video_capabilities": cap if fresh else None}
 
@@ -563,14 +575,8 @@ class VideoControl:
             if result not in ("h264", "h265"):
                 reject(
                     result,
-                    (
-                        422
-                        if result == "unsupported"
-                        else (
-                            403
-                            if result == "forbidden"
-                            else 410 if result == "expired" else 409
-                        )
+                    {"unsupported": 422, "forbidden": 403, "expired": 410}.get(
+                        result, 409
                     ),
                 )
             if result != start["resolved_codec"]:
