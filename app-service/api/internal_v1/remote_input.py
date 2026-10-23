@@ -66,6 +66,7 @@ from core.remote_input.video_models import Stop as VideoStop
 from fastapi import (
     APIRouter,
     HTTPException,
+    Query,
     Request,
     Response,
     WebSocket,
@@ -409,6 +410,7 @@ async def get_video_capability(
     session: Session_dep,
     request: Request,
     refresh: bool = False,
+    source_id: str | None = Query(None, min_length=1, max_length=63),
 ) -> VideoCapabilityView | CameraCapabilityView:
     device_id = await DeviceRepo.get_device_id(session, sn=sn, org_id=org_id)
     if device_id is None:
@@ -421,7 +423,9 @@ async def get_video_capability(
             raise HTTPException(422, "unsupported_camera_contract")
         return await camera_capability(session, device_id)
     return VideoCapabilityView.model_validate(
-        await video_control.capability(sn, presence_registry, send_ctl_command, refresh)
+        await video_control.capability(
+            sn, presence_registry, send_ctl_command, refresh, source_id=source_id
+        )
     )
 
 

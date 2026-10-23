@@ -367,7 +367,12 @@ class VideoControl:
         await self.store.change(sn, update)
 
     async def capability(
-        self, sn: str, presence: Any, send: Any, refresh: bool = False
+        self,
+        sn: str,
+        presence: Any,
+        send: Any,
+        refresh: bool = False,
+        source_id: str | None = None,
     ) -> dict[str, Any]:
         if not settings.remote_input.video_v2_enabled:
             await self.invalidate(sn)
@@ -395,6 +400,7 @@ class VideoControl:
             # capability negotiation, not the stream first-frame budget:
             # hardware activation checks Medium first, then optional HD.
             expires_at_ms=current + 10000,
+            **({"source_id": source_id} if source_id else {}),
         )
 
         def reserve(doc: dict[str, Any]) -> bool:
@@ -402,15 +408,22 @@ class VideoControl:
             if (
                 not refresh
                 and cap
+                and (not source_id or cap["source_id"] == source_id)
                 and doc.get("server_epoch") == server_epoch
                 and cap["checked_at_ms"] <= current < cap["valid_until_ms"]
             ):
                 return False
-            if current < doc.get("next_probe_ms", 0):
+            if doc.get("pending", {}).get("expires_at_ms", 0) > current:
+                return False
+            if (
+                current < doc.get("next_probe_ms", 0)
+                and doc.get("probe_source_id") == source_id
+            ):
                 return False
             doc.pop("capability", None)
             doc["pending"] = query.model_dump(mode="json")
             doc["next_probe_ms"] = current + 30000
+            doc["probe_source_id"] = source_id
             doc["server_epoch"] = server_epoch
             return True
 
@@ -439,6 +452,7 @@ class VideoControl:
         )
         fresh = bool(
             cap
+            and (not source_id or cap["source_id"] == source_id)
             and doc.get("server_epoch") == await self.store.current_epoch()
             and cap["checked_at_ms"] <= now_ms() < cap["valid_until_ms"]
             and (settings.remote_input.video_hevc_chain_ready or test_camera)
@@ -462,6 +476,7 @@ class VideoControl:
                 ack.sn != sn
                 or doc.get("server_epoch") != server_epoch
                 or ack.command_id != query.get("command_id")
+                or (query.get("source_id") and cap["source_id"] != query["source_id"])
                 or not query.get("issued_at_ms", 0)
                 <= now_ms()
                 < query.get("expires_at_ms", 0)
