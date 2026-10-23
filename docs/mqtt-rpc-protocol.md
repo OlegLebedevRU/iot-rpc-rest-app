@@ -161,3 +161,7 @@ Probe использует существующие `req/rsp/evt/eva`, но им
 RPC170/171/172 use the existing correlated RES path without new events or topics.
 See [live audio control](audio-control.md) for config/readback, two-device leases,
 local HTTP parity and authenticated LAN media framing.
+
+## Native SIP peer diagnostics
+
+RPC174 `CMD_SIP_PEER`: temporary leased SIP duplex, RES only; no new EVT or STM32 command. [Contract](siplite-sip-peer.md).
