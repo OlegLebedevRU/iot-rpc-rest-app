@@ -1,0 +1,17 @@
+{
+  "name": "commissioning_confirm",
+  "target": "rpc",
+  "definition": "rpc167",
+  "valid": true,
+  "payload": {
+    "dt": [
+      {
+        "action": "confirm",
+        "operation_id": "00000000-0000-4000-8000-000000000013",
+        "commissioning_id": "00000000-0000-4000-8000-000000000012",
+        "expected_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "observation": "white"
+      }
+    ]
+  }
+}

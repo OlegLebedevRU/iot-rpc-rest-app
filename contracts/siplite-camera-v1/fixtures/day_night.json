@@ -1,0 +1,14 @@
+{
+  "name": "day_night",
+  "target": "rpc",
+  "definition": "rpc162",
+  "valid": true,
+  "payload": {
+    "dt": [
+      {
+        "expected_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "mode": "night"
+      }
+    ]
+  }
+}

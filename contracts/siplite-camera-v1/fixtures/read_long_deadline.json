@@ -1,0 +1,13 @@
+{
+  "name": "read_long_deadline",
+  "target": "rpc",
+  "definition": "rpc160",
+  "valid": true,
+  "payload": {
+    "dt": [
+      {
+        "timeout_ms": 20000
+      }
+    ]
+  }
+}

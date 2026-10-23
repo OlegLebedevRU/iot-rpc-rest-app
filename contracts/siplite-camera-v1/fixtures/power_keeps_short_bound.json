@@ -1,0 +1,15 @@
+{
+  "name": "power_keeps_short_bound",
+  "target": "rpc",
+  "definition": "rpc164",
+  "valid": false,
+  "payload": {
+    "dt": [
+      {
+        "action": "on",
+        "expected_power_on": false,
+        "timeout_ms": 30000
+      }
+    ]
+  }
+}

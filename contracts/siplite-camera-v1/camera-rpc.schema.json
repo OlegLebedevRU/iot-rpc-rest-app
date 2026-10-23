@@ -1,0 +1,1002 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "siplite camera RPC extension 1.0.0",
+  "$defs": {
+    "sealed_credentials": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "alg": {
+          "const": "RSA-OAEP-256+A256GCM"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 36,
+          "maxLength": 36,
+          "format": "uuid"
+        },
+        "recipient_cert_sha256": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "expires_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "wrapped_key": {
+          "type": "string",
+          "minLength": 344,
+          "maxLength": 688,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+        },
+        "nonce": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 16,
+          "pattern": "^[A-Za-z0-9+/]{16}$"
+        },
+        "ciphertext": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 1024,
+          "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 24,
+          "maxLength": 24,
+          "pattern": "^[A-Za-z0-9+/]{22}==$"
+        }
+      },
+      "required": [
+        "v",
+        "alg",
+        "sn",
+        "operation_id",
+        "recipient_cert_sha256",
+        "expires_at_ms",
+        "wrapped_key",
+        "nonce",
+        "ciphertext",
+        "tag"
+      ],
+      "additionalProperties": false
+    },
+    "credential_plaintext": {
+      "type": "object",
+      "properties": {
+        "username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[^:\\x00-\\x1f\\x7f]+$"
+        },
+        "password": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+        }
+      },
+      "required": [
+        "username",
+        "password"
+      ],
+      "additionalProperties": false
+    },
+    "camera_read": {
+      "type": "object",
+      "properties": {
+        "camera_id": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 12,
+          "pattern": "^cam:ip[0-9]{6}$"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 30000
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "camera_write": {
+      "type": "object",
+      "properties": {
+        "camera_id": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 12,
+          "pattern": "^cam:ip[0-9]{6}$"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 30000
+        },
+        "expected_revision": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "patch": {
+          "type": "object",
+          "properties": {
+            "video0": {
+              "type": "object",
+              "properties": {
+                "codec": {
+                  "enum": [
+                    "h264",
+                    "h265"
+                  ]
+                },
+                "size": {
+                  "type": "string",
+                  "minLength": 0,
+                  "maxLength": 32,
+                  "pattern": "^(|[0-9]{1,5}x[0-9]{1,5})$"
+                },
+                "fps": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 120
+                },
+                "bitrate": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100000
+                },
+                "gopSize": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 16,
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                },
+                "rcMode": {
+                  "enum": [
+                    "cbr",
+                    "vbr",
+                    "avbr"
+                  ]
+                }
+              },
+              "required": [],
+              "additionalProperties": false,
+              "minProperties": 1
+            },
+            "image": {
+              "type": "object",
+              "properties": {
+                "mirror": {
+                  "type": "boolean"
+                },
+                "flip": {
+                  "type": "boolean"
+                },
+                "rotate": {
+                  "enum": [
+                    "0",
+                    "90",
+                    "270"
+                  ]
+                },
+                "luminance": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "contrast": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "saturation": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "hue": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 100
+                }
+              },
+              "required": [],
+              "additionalProperties": false,
+              "minProperties": 1
+            },
+            "nightMode": {
+              "type": "object",
+              "properties": {
+                "lightMonitor": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "lightMonitor"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [],
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "allow_disruptive": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "expected_revision",
+        "patch"
+      ],
+      "additionalProperties": false
+    },
+    "camera_day_night": {
+      "type": "object",
+      "properties": {
+        "camera_id": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 12,
+          "pattern": "^cam:ip[0-9]{6}$"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 30000
+        },
+        "expected_revision": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "mode": {
+          "enum": [
+            "auto",
+            "day",
+            "night"
+          ]
+        },
+        "allow_disruptive": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "expected_revision",
+        "mode"
+      ],
+      "additionalProperties": false
+    },
+    "camera_preset": {
+      "type": "object",
+      "properties": {
+        "camera_id": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 12,
+          "pattern": "^cam:ip[0-9]{6}$"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 30000
+        },
+        "expected_revision": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "preset": {
+          "enum": [
+            "medium",
+            "hd"
+          ]
+        },
+        "allow_disruptive": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "expected_revision",
+        "preset"
+      ],
+      "additionalProperties": false
+    },
+    "camera_power": {
+      "type": "object",
+      "properties": {
+        "camera_id": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 12,
+          "pattern": "^cam:ip[0-9]{6}$"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 15000
+        },
+        "action": {
+          "enum": [
+            "on",
+            "off",
+            "restart"
+          ]
+        },
+        "expected_power_on": {
+          "type": "boolean"
+        },
+        "allow_disruptive": {
+          "type": "boolean"
+        },
+        "dry_run": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "expected_power_on"
+      ],
+      "additionalProperties": false
+    },
+    "camera_discovery": {
+      "type": "object",
+      "properties": {
+        "camera_id": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 12,
+          "pattern": "^cam:ip[0-9]{6}$"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 30000
+        },
+        "action": {
+          "enum": [
+            "scan",
+            "cancel"
+          ]
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 36,
+          "maxLength": 36,
+          "format": "uuid"
+        },
+        "target_operation_id": {
+          "type": "string",
+          "minLength": 36,
+          "maxLength": 36,
+          "format": "uuid"
+        }
+      },
+      "required": [
+        "action",
+        "operation_id"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "cancel"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "target_operation_id"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "scan"
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "required": [
+                "target_operation_id"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "camera_connection": {
+      "type": "object",
+      "properties": {
+        "camera_id": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 12,
+          "pattern": "^cam:ip[0-9]{6}$"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 30000
+        },
+        "action": {
+          "enum": [
+            "bind",
+            "set_credentials",
+            "clear_credentials",
+            "unbind"
+          ]
+        },
+        "expected_revision": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 36,
+          "maxLength": 36,
+          "format": "uuid"
+        },
+        "candidate_mac": {
+          "type": "string",
+          "minLength": 17,
+          "maxLength": 17,
+          "pattern": "^([0-9a-f]{2}:){5}[0-9a-f]{2}$"
+        },
+        "discovery_generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "sealed_credentials": {
+          "$ref": "#/$defs/sealed_credentials"
+        }
+      },
+      "required": [
+        "action",
+        "expected_revision",
+        "operation_id"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "bind"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "candidate_mac",
+              "discovery_generation"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "set_credentials"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "sealed_credentials"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "set_credentials"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "candidate_mac": false,
+              "discovery_generation": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "clear_credentials",
+                  "unbind"
+                ]
+              }
+            }
+          },
+          "then": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "sealed_credentials"
+                  ]
+                },
+                {
+                  "required": [
+                    "candidate_mac"
+                  ]
+                },
+                {
+                  "required": [
+                    "discovery_generation"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "camera_illumination": {
+      "type": "object",
+      "properties": {
+        "camera_id": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 12,
+          "pattern": "^cam:ip[0-9]{6}$"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000,
+          "maximum": 30000
+        },
+        "action": {
+          "enum": [
+            "set",
+            "probe",
+            "confirm",
+            "cancel"
+          ]
+        },
+        "operation_id": {
+          "type": "string",
+          "minLength": 36,
+          "maxLength": 36,
+          "format": "uuid"
+        },
+        "commissioning_id": {
+          "type": "string",
+          "minLength": 36,
+          "maxLength": 36,
+          "format": "uuid"
+        },
+        "expected_revision": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "role": {
+          "enum": [
+            "white",
+            "ir",
+            "global_enable"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "off",
+            "on",
+            "auto",
+            "pwm"
+          ]
+        },
+        "duty_pct": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "profile_revision": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "candidate_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "observation": {
+          "enum": [
+            "white",
+            "ir",
+            "no_response",
+            "inconclusive"
+          ]
+        },
+        "allow_disruptive": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "action",
+        "operation_id",
+        "expected_revision"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "set"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "role",
+              "mode",
+              "profile_revision"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "probe"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "commissioning_id",
+              "role",
+              "candidate_id",
+              "allow_disruptive"
+            ],
+            "properties": {
+              "allow_disruptive": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "confirm"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "commissioning_id",
+              "observation"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "cancel"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "commissioning_id"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "mode"
+            ],
+            "properties": {
+              "mode": {
+                "const": "pwm"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "duty_pct"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "set"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "commissioning_id": false,
+              "candidate_id": false,
+              "observation": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "probe"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "mode": false,
+              "duty_pct": false,
+              "profile_revision": false,
+              "observation": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "enum": [
+                  "confirm",
+                  "cancel"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "role": false,
+              "mode": false,
+              "duty_pct": false,
+              "profile_revision": false,
+              "candidate_id": false,
+              "allow_disruptive": false
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "action": {
+                "const": "cancel"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "observation": false
+            }
+          }
+        },
+        {
+          "if": {
+            "not": {
+              "required": [
+                "mode"
+              ],
+              "properties": {
+                "mode": {
+                  "const": "pwm"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "duty_pct": false
+            }
+          }
+        }
+      ]
+    },
+    "rpc160": {
+      "type": "object",
+      "properties": {
+        "dt": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/camera_read"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "dt"
+      ],
+      "additionalProperties": false
+    },
+    "rpc161": {
+      "type": "object",
+      "properties": {
+        "dt": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/camera_write"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "dt"
+      ],
+      "additionalProperties": false
+    },
+    "rpc162": {
+      "type": "object",
+      "properties": {
+        "dt": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/camera_day_night"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "dt"
+      ],
+      "additionalProperties": false
+    },
+    "rpc163": {
+      "type": "object",
+      "properties": {
+        "dt": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/camera_preset"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "dt"
+      ],
+      "additionalProperties": false
+    },
+    "rpc164": {
+      "type": "object",
+      "properties": {
+        "dt": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/camera_power"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "dt"
+      ],
+      "additionalProperties": false
+    },
+    "rpc165": {
+      "type": "object",
+      "properties": {
+        "dt": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/camera_discovery"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "dt"
+      ],
+      "additionalProperties": false
+    },
+    "rpc166": {
+      "type": "object",
+      "properties": {
+        "dt": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/camera_connection"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "dt"
+      ],
+      "additionalProperties": false
+    },
+    "rpc167": {
+      "type": "object",
+      "properties": {
+        "dt": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/camera_illumination"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "required": [
+        "dt"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/rpc160"
+    },
+    {
+      "$ref": "#/$defs/rpc161"
+    },
+    {
+      "$ref": "#/$defs/rpc162"
+    },
+    {
+      "$ref": "#/$defs/rpc163"
+    },
+    {
+      "$ref": "#/$defs/rpc164"
+    },
+    {
+      "$ref": "#/$defs/rpc165"
+    },
+    {
+      "$ref": "#/$defs/rpc166"
+    },
+    {
+      "$ref": "#/$defs/rpc167"
+    }
+  ]
+}

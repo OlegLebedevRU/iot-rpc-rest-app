@@ -1,0 +1,20 @@
+{
+  "name": "no_raw_gpio",
+  "target": "rpc",
+  "definition": "rpc167",
+  "valid": false,
+  "payload": {
+    "dt": [
+      {
+        "action": "probe",
+        "expected_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "operation_id": "00000000-0000-4000-8000-000000000011",
+        "role": "white",
+        "candidate_id": "board:white-1",
+        "allow_disruptive": true,
+        "pin": 4,
+        "commissioning_id": "00000000-0000-4000-8000-000000000012"
+      }
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "name": "discovery",
+  "target": "rpc",
+  "definition": "rpc165",
+  "valid": true,
+  "payload": {
+    "dt": [
+      {
+        "action": "scan",
+        "operation_id": "00000000-0000-4000-8000-000000000011"
+      }
+    ]
+  }
+}

@@ -216,6 +216,8 @@
 
 ### Тег `450`: gauge IPCamera (84)
 
+Negotiated camera extension1.0.0 описан в [siplite-camera-control.md](siplite-camera-control.md). Root schema_version=1 и базовые snapshot поля сохранены; camera_contract_revision/discovery/auth_source/actual_track/illumination добавляются к объекту камеры после обновления readers. Никаких credentials или новых event types. Предыдущая v1-модель ниже остаётся базой совместимости.
+
 Тип `object`, producer `Siplite`. Контракт версии 1:
 
 ```json
