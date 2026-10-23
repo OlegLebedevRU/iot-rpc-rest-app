@@ -87,6 +87,85 @@ def test_runtime_schema_matches_frozen_package():
     ).read_bytes()
 
 
+@pytest.mark.parametrize("source", ["disp:secondary", "disp:primary"])
+def test_source_inventory_extension_retains_legacy_wire(source):
+    old = fixture("inventory_get")
+    assert wire.InventoryGet.model_validate(old).model_dump(mode="json") == old
+    targeted = dict(old, source_id=source)
+    assert (
+        wire.InventoryGet.model_validate(targeted).model_dump(mode="json") == targeted
+    )
+    for invalid in ["", "x" * 64, None, 123]:
+        with pytest.raises(ValidationError):
+            wire.InventoryGet.model_validate(dict(old, source_id=invalid))
+
+
+@pytest.mark.anyio
+async def test_selected_source_reprobes_other_cached_source_and_correlates_ack(env):
+    service, lease, _, cap = env
+    cap["source_id"] = "disp:primary"
+    await video_control.store.change(
+        lease.sn, lambda doc: doc.update(capability=cap, next_probe_ms=now_ms() + 30000)
+    )
+    observed = []
+
+    async def send(sn, query, **kwargs):
+        observed.append(query.model_dump(mode="json"))
+        assert query.source_id == "disp:secondary"
+        ack = fixture("capabilities")
+        ack["command_id"] = query.command_id
+        ack["video_capabilities"].update(
+            source_id="disp:primary",
+            checked_at_ms=now_ms(),
+            valid_until_ms=now_ms() + 59000,
+        )
+        assert not await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+        ack["video_capabilities"]["source_id"] = "disp:secondary"
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+
+    result = await video_control.capability(
+        lease.sn, service.presence, send, source_id="disp:secondary"
+    )
+    assert result["negotiated_v2"]
+    assert result["video_capabilities"]["source_id"] == "disp:secondary"
+    assert len(observed) == 1
+    sender = AsyncMock(
+        side_effect=AssertionError("fresh selected source must be cached")
+    )
+    assert (
+        await video_control.capability(
+            lease.sn, service.presence, sender, source_id="disp:secondary"
+        )
+    )["negotiated_v2"]
+    sender.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_selected_source_does_not_replace_live_pending_probe(env):
+    service, lease, _, _ = env
+    await video_control.store.change(
+        lease.sn,
+        lambda doc: doc.update(
+            pending={
+                "command_id": "owned",
+                "source_id": "disp:primary",
+                "expires_at_ms": now_ms() + 5000,
+            }
+        ),
+    )
+    sender = AsyncMock()
+    result = await video_control.capability(
+        lease.sn, service.presence, sender, source_id="disp:secondary"
+    )
+    sender.assert_not_called()
+    assert not result["negotiated_v2"]
+    assert (await video_control.store.get(lease.sn))["pending"]["command_id"] == "owned"
+
+
 @pytest.mark.parametrize(
     "case",
     json.loads((PACKAGE / "scenarios.json").read_text()),

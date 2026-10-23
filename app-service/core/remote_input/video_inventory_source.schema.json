@@ -1,0 +1,47 @@
+{
+  "type": "object",
+  "properties": {
+    "v": {
+      "const": 2
+    },
+    "command_id": {
+      "type": "string",
+      "format": "uuid",
+      "minLength": 36,
+      "maxLength": 36
+    },
+    "sn": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[A-Za-z0-9._-]+$"
+    },
+    "issued_at_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5000000000000
+    },
+    "expires_at_ms": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5000000000000
+    },
+    "type": {
+      "const": "inventory_get"
+    },
+    "source_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 63
+    }
+  },
+  "required": [
+    "v",
+    "command_id",
+    "sn",
+    "issued_at_ms",
+    "expires_at_ms",
+    "type"
+  ],
+  "additionalProperties": false
+}

@@ -1,4 +1,4 @@
-"""Strict CTL v2 validation against the immutable G0 wire schema."""
+"""Strict CTL v2 validation: immutable G0 plus inventory source selection."""
 
 from __future__ import annotations
 
@@ -10,6 +10,10 @@ from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import BaseModel, model_validator
 
 SCHEMA = json.loads(Path(__file__).with_name("video.schema.json").read_text())
+# Source-selection extension; keep the frozen G0 schema file byte-for-byte.
+SCHEMA["$defs"]["inventory_get"] = json.loads(
+    Path(__file__).with_name("video_inventory_source.schema.json").read_text()
+)
 DEFINITIONS = {
     "Descriptor": "descriptor",
     "Descriptor1": "descriptor",
