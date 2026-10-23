@@ -278,11 +278,15 @@ async def _remote_input_cleanup_loop() -> None:
     """Periodic cleanup of expired remote input leases and pending commands."""
     from core.remote_input.leases import lease_registry
     from core.remote_input.pending import pending_registry
+    from core.remote_input.publisher import send_ctl_command
+    from core.remote_input.service import remote_input_service
+    from core.remote_input.video_control import video_control
 
     while True:
         try:
             await asyncio.sleep(1.0)
             await lease_registry.cleanup_expired()
+            await video_control.cleanup(remote_input_service, send_ctl_command)
             await pending_registry.expire()
         except asyncio.CancelledError:
             break

@@ -543,6 +543,340 @@ def test_additive_lease_serialization(env=None):
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("loss", ["missing", "expired", "revoked"])
+async def test_orphan_running_epoch_allows_fresh_manual_start(env, loss):
+    from core.remote_input.leases import RedisLeaseRegistry
+
+    service, lease, start, cap = env
+    client = video_control.store.client
+    service.leases = RedisLeaseRegistry()
+    await client.hset(f"l4d:lease:{lease.lease_id}", mapping=_lease_to_dict(lease))
+    await client.set(f"l4d:lease:active:{lease.sn}", str(lease.lease_id))
+
+    async def send(sn, command, **kwargs):
+        if command.type == "stream_start":
+            await ready_for(service, command.model_dump(mode="json"))
+
+    sender = AsyncMock(side_effect=send)
+    await video_control.start(
+        service, wire.Start.model_validate(start), 1, "owner", "session", sender
+    )
+    assert (await video_control.store.get(lease.sn))["stream"]["state"] == "running"
+    # Simulate Redis TTL/revocation after the worker that owned A disappeared.
+    if loss == "missing":
+        await client.delete(f"l4d:lease:{lease.lease_id}")
+    else:
+        await client.hset(
+            f"l4d:lease:{lease.lease_id}",
+            mapping=(
+                {"expires_at": "2020-01-01T00:00:00+00:00"}
+                if loss == "expired"
+                else {"revoked_reason": "owner_logout"}
+            ),
+        )
+    await client.delete(f"l4d:lease:active:{lease.sn}")
+    await handle_device_ctl_message(
+        routing_key=f"dev.{lease.sn}.ctl",
+        payload={
+            "v": 1,
+            "type": "presence",
+            "timestamp": datetime.now(UTC).isoformat(),
+            "status": "online",
+            "session_id": 1,
+            "desktop_available": True,
+            "capabilities": ["video_contract_v2"],
+            "stream": {
+                "state": "stopped",
+                "stream_instance_id": start["stream_instance_id"],
+            },
+        },
+        p_registry=service.presence,
+        l_registry=service.leases,
+    )
+    await video_control.invalidate(lease.sn)
+    service.leases = RedisLeaseRegistry()
+    new_lease = await service.leases.acquire(
+        org_id=1,
+        device_id=10,
+        sn=lease.sn,
+        owner_user_id="owner",
+        owner_session_id="session",
+        owner_role="admin",
+        scope="input",
+        ttl_sec=60,
+    )
+    new_start = copy.deepcopy(start)
+    new_start.update(
+        lease_id=str(new_lease.lease_id),
+        stream_instance_id=str(uuid4()),
+        operation_id=str(uuid4()),
+        command_id=str(uuid4()),
+        agent_instance_id=str(uuid4()),
+        issued_at_ms=now_ms(),
+        expires_at_ms=now_ms() + 2000,
+        lease_expires_at_ms=int(new_lease.expires_at.timestamp() * 1000),
+    )
+    cap["agent_instance_id"] = new_start["agent_instance_id"]
+    await video_control.store.change(lease.sn, lambda doc: doc.update(capability=cap))
+    queue = await service.presence.subscribe_stream(lease.sn)
+    result = await video_control.start(
+        service, wire.Start.model_validate(new_start), 1, "owner", "session", sender
+    )
+    assert result["state"] == "running"
+    terminal = await asyncio.wait_for(queue.get(), 1)
+    assert str(terminal.stream_instance_id) == start["stream_instance_id"]
+    assert terminal.state == "stopped"
+    assert [c.args[1].type for c in sender.await_args_list] == [
+        "stream_start",
+        "stream_stop",
+        "stream_start",
+    ]
+    assert (
+        sender.await_args_list[1].args[1].agent_instance_id
+        == start["agent_instance_id"]
+    )
+    error = fixture("runtime_error")
+    error["lease_id"] = str(lease.lease_id)
+    assert not await video_control.event(
+        lease.sn, wire.Error.model_validate(error), service, sender
+    )
+    assert (await video_control.store.get(lease.sn))["stream"] == result
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("loss", ["missing", "expired", "revoked"])
+async def test_exact_runtime_error_after_lease_loss_is_terminal(env, loss):
+    service, lease, start, _ = env
+
+    async def send(*args, **kwargs):
+        await ready_for(service, start)
+
+    await video_control.start(
+        service,
+        wire.Start.model_validate(start),
+        1,
+        "owner",
+        "session",
+        AsyncMock(side_effect=send),
+    )
+    if loss == "missing":
+        service.leases._leases_by_id.pop(lease.lease_id)
+    elif loss == "expired":
+        lease.expires_at = datetime(2020, 1, 1, tzinfo=UTC)
+    else:
+        lease.revoked_reason = "owner_logout"
+    error = fixture("runtime_error")
+    error["lease_id"] = str(lease.lease_id)
+    queue = await service.presence.subscribe_stream(lease.sn)
+    assert await video_control.event(
+        lease.sn, wire.Error.model_validate(error), service, AsyncMock()
+    )
+    state = (await video_control.store.get(lease.sn))["stream"]
+    assert state["state"] == "failed" and state["error"] == error["error"]
+    assert (await asyncio.wait_for(queue.get(), 1)).state == "failed"
+
+
+async def redis_running(env):
+    from core.remote_input.leases import RedisLeaseRegistry
+
+    service, lease, start, _ = env
+    service.leases = RedisLeaseRegistry()
+    client = video_control.store.client
+    await client.hset(f"l4d:lease:{lease.lease_id}", mapping=_lease_to_dict(lease))
+    await client.set(f"l4d:lease:active:{lease.sn}", str(lease.lease_id))
+
+    async def send(sn, command, **kwargs):
+        if command.type == "stream_start":
+            await ready_for(service, start)
+
+    await video_control.start(
+        service,
+        wire.Start.model_validate(start),
+        1,
+        "owner",
+        "session",
+        AsyncMock(side_effect=send),
+    )
+    return service, lease, start, client
+
+
+@pytest.mark.anyio
+async def test_cleanup_discovers_missing_lease_without_active_key_and_is_idempotent(
+    env,
+):
+    service, lease, start, client = await redis_running(env)
+    await client.delete(f"l4d:lease:{lease.lease_id}", f"l4d:lease:active:{lease.sn}")
+    await video_control.store.reset_server_epoch()
+    await video_control.invalidate(lease.sn)
+    sender = AsyncMock()
+    queue = await service.presence.subscribe_stream(lease.sn)
+    await asyncio.gather(
+        video_control.cleanup(service, sender), video_control.cleanup(service, sender)
+    )
+    state = (await video_control.store.get(lease.sn))["stream"]
+    assert state["state"] == "stopped" and state["reason"] == "lease_invalid"
+    assert (
+        str((await asyncio.wait_for(queue.get(), 1)).stream_instance_id)
+        == start["stream_instance_id"]
+    )
+    assert queue.empty()
+    sender.assert_awaited_once()
+    # Reconciliation/probing cannot keep a LIVE orphan alive by extending TTL.
+    await client.expire(video_control.store.key(lease.sn), 20)
+    await video_control.cleanup(service, sender)
+    assert await client.ttl(video_control.store.key(lease.sn)) <= 20
+    assert not await client.exists(f"l4d:lease:{lease.lease_id}")
+
+
+@pytest.mark.anyio
+async def test_cleanup_preserves_live_publisher_and_renewal_race(env, monkeypatch):
+    service, lease, start, client = await redis_running(env)
+    sender = AsyncMock()
+    assert not await video_control.reconcile(lease.sn, service, sender)
+    # Even a concurrent repair/renewal of the lease invalidates retirement's WATCH.
+    await client.hset(
+        f"l4d:lease:{lease.lease_id}", "expires_at", "2020-01-01T00:00:00+00:00"
+    )
+    original = video_control.publisher_lease
+    raced = False
+
+    async def renew(service, candidate, pipe):
+        nonlocal raced
+        result = await original(service, candidate, pipe)
+        if not raced:
+            raced = True
+            await client.hset(
+                f"l4d:lease:{lease.lease_id}",
+                "expires_at",
+                lease.expires_at.isoformat(),
+            )
+        return result
+
+    monkeypatch.setattr(video_control, "publisher_lease", renew)
+    assert not await video_control.reconcile(lease.sn, service, sender)
+    assert raced
+    assert (await video_control.store.get(lease.sn))["stream"]["state"] == "running"
+    changed = copy.deepcopy(start)
+    changed.update(stream_instance_id=str(uuid4()), operation_id=str(uuid4()))
+    with pytest.raises(HTTPException) as exc:
+        await video_control.start(
+            service, wire.Start.model_validate(changed), 1, "owner", "session", sender
+        )
+    assert exc.value.detail == {"code": "conflict"}
+    sender.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_start_revocation_between_guard_and_commit_sends_no_start(
+    env, monkeypatch
+):
+    from core.remote_input.leases import RedisLeaseRegistry
+
+    service, lease, start, _ = env
+    client = video_control.store.client
+    service.leases = RedisLeaseRegistry()
+    await client.hset(f"l4d:lease:{lease.lease_id}", mapping=_lease_to_dict(lease))
+    await client.set(f"l4d:lease:active:{lease.sn}", str(lease.lease_id))
+    original = video_control.publisher_lease
+    raced = False
+
+    async def revoke(service, candidate, pipe):
+        nonlocal raced
+        result = await original(service, candidate, pipe)
+        if not raced:
+            raced = True
+            await client.hset(
+                f"l4d:lease:{lease.lease_id}", "revoked_reason", "owner_logout"
+            )
+        return result
+
+    monkeypatch.setattr(video_control, "publisher_lease", revoke)
+    sender = AsyncMock()
+    with pytest.raises(HTTPException) as exc:
+        await video_control.start(
+            service, wire.Start.model_validate(start), 1, "owner", "session", sender
+        )
+    assert exc.value.detail == {"code": "lease_invalid"}
+    assert raced and "stream" not in await video_control.store.get(lease.sn)
+    sender.assert_not_called()
+
+
+@pytest.mark.anyio
+async def test_v2_cached_read_does_not_restore_missing_or_revoked_lease(env):
+    service, lease, _, client = await redis_running(env)
+    await service.leases.get(lease.lease_id)
+    await client.hset(f"l4d:lease:{lease.lease_id}", "revoked_reason", "owner_logout")
+    assert (await service.leases.get(lease.lease_id)).revoked_reason == "owner_logout"
+    await client.delete(f"l4d:lease:{lease.lease_id}")
+    assert await service.leases.get(lease.lease_id) is None
+    assert not await client.exists(f"l4d:lease:{lease.lease_id}")
+
+
+@pytest.mark.anyio
+async def test_ready_after_expiry_cannot_revive_starting_publisher(env):
+    from core.remote_input.leases import RedisLeaseRegistry
+
+    service, lease, start, _ = env
+    service.leases = RedisLeaseRegistry()
+    client = video_control.store.client
+    await client.hset(f"l4d:lease:{lease.lease_id}", mapping=_lease_to_dict(lease))
+    await client.set(f"l4d:lease:active:{lease.sn}", str(lease.lease_id))
+    sender = AsyncMock()
+    task = asyncio.create_task(
+        video_control.start(
+            service, wire.Start.model_validate(start), 1, "owner", "session", sender
+        )
+    )
+    try:
+        for _ in range(100):
+            if sender.await_count:
+                break
+            await asyncio.sleep(0.001)
+        assert sender.await_count
+        await client.hset(
+            f"l4d:lease:{lease.lease_id}", "expires_at", "2020-01-01T00:00:00+00:00"
+        )
+        assert not await ready_for(service, start)
+        assert await video_control.reconcile(lease.sn, service, sender)
+        assert (await asyncio.wait_for(task, 1))["state"] == "stopped"
+        assert not await ready_for(service, start)
+    finally:
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.anyio
+async def test_old_agent_error_preserves_new_agent_probe(env):
+    service, lease, start, cap = env
+
+    async def send(*args, **kwargs):
+        await ready_for(service, start)
+
+    await video_control.start(
+        service,
+        wire.Start.model_validate(start),
+        1,
+        "owner",
+        "session",
+        AsyncMock(side_effect=send),
+    )
+    cap["agent_instance_id"] = str(uuid4())
+    await video_control.store.change(lease.sn, lambda doc: doc.update(capability=cap))
+    error = fixture("runtime_error")
+    error["lease_id"] = str(lease.lease_id)
+    malformed = copy.deepcopy(error)
+    malformed["descriptor_revision"] = str(uuid4())
+    assert not await video_control.event(
+        lease.sn, wire.Error.model_validate(malformed), service, AsyncMock()
+    )
+    assert await video_control.event(
+        lease.sn, wire.Error.model_validate(error), service, AsyncMock()
+    )
+    assert (await video_control.store.get(lease.sn))["capability"] == cap
+
+
+@pytest.mark.anyio
 async def test_real_http_v2_response_error_and_legacy_validation(env, monkeypatch):
     from api.internal_v1 import remote_input as api
     from fastapi import FastAPI

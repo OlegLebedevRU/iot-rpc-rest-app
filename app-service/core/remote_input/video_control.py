@@ -6,10 +6,10 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
@@ -19,6 +19,9 @@ from core.config import settings
 from core.redis_helper import redis_helper
 from core.remote_input import video_models as wire
 from core.remote_input.schemas import CtlStreamEvent, StreamState
+
+if TYPE_CHECKING:
+    from core.remote_input.leases import Lease
 
 # A cached ready from a previous server process cannot authorize a publisher.
 SERVER_EPOCH = str(uuid4())
@@ -86,6 +89,7 @@ class VideoStore:
         apply: Callable[[dict[str, Any]], Any],
         claim: tuple[str, str] | None = None,
         expected_epoch: str | None = None,
+        guard: Callable[[Any, dict[str, Any]], Awaitable[None]] | None = None,
     ) -> Any:
         key = self.key(sn)
         claim_keys = (
@@ -107,7 +111,12 @@ class VideoStore:
                         reject("stale_capability")
                     raw = await pipe.get(key)
                     doc = self.decode(raw)
+                    before = json.dumps(doc, separators=(",", ":"))
+                    if guard is not None:
+                        await guard(pipe, doc)
                     result = apply(doc)
+                    if json.dumps(doc, separators=(",", ":")) == before:
+                        return result
                     state = doc.get("stream", {})
                     deadline = state.get("start", {}).get("lease_expires_at_ms", 0)
                     ttl = max(300, int((deadline - now_ms()) / 1000) + 300)
@@ -215,6 +224,82 @@ def select_codec(start: dict[str, Any], context: dict[str, Any]) -> str:
 class VideoControl:
     def __init__(self, store: VideoStore | None = None) -> None:
         self.store = store or VideoStore()
+
+    async def get_lease(self, service: Any, lease_id: UUID) -> Lease | None:
+        from core.remote_input.leases import RedisLeaseRegistry, _dict_to_lease
+
+        if isinstance(service.leases, RedisLeaseRegistry):
+            data = await self.store.client.hgetall(f"l4d:lease:{lease_id}")
+            return _dict_to_lease(data) if data else None
+        return await service.leases.get(lease_id)
+
+    async def publisher_lease(
+        self, service: Any, start: dict[str, Any], pipe: Any
+    ) -> Lease | None:
+        """Read authority under the video transaction, never a worker cache.
+
+        Watching both keys fences renew/revoke/replacement and Redis expiry.
+        The in-memory registry is retained for single-process integrations.
+        """
+        from core.remote_input.leases import RedisLeaseRegistry, _dict_to_lease
+
+        if isinstance(service.leases, RedisLeaseRegistry):
+            key = f"l4d:lease:{start['lease_id']}"
+            active = f"l4d:lease:active:{start['sn']}"
+            await pipe.watch(key, active)
+            data = await pipe.hgetall(key)
+            if not data or await pipe.get(active) != start["lease_id"]:
+                return None
+            lease = _dict_to_lease(data)
+        else:
+            lease = await service.leases.get(UUID(start["lease_id"]))
+        if not lease or not lease.is_active() or lease.sn != start["sn"]:
+            return None
+        return lease
+
+    async def reconcile(self, sn: str, service: Any, send: Any) -> bool:
+        """Retire only a LIVE epoch whose publisher lease lost authority."""
+        orphan = False
+
+        async def guard(pipe: Any, doc: dict[str, Any]) -> None:
+            nonlocal orphan
+            state = doc.get("stream")
+            orphan = bool(
+                state
+                and state["state"] in LIVE
+                and await self.publisher_lease(service, state["start"], pipe) is None
+            )
+
+        def retire(doc: dict[str, Any]) -> dict[str, Any] | None:
+            if not orphan:
+                return None
+            state = doc["stream"]
+            state.update(state="stopped", result="stopped", reason="lease_invalid")
+            return state
+
+        state = await self.store.change(sn, retire, guard=guard)
+        if state is None:
+            return False
+        await self.clear_lease(service, sn, state)
+        await self.notify(
+            service,
+            sn,
+            state["start"]["stream_instance_id"],
+            "stopped",
+            "lease_invalid",
+        )
+        try:
+            await self.stop_command(state, send)
+        except Exception:
+            log.warning("V2 orphan STOP publication failed", exc_info=True)
+        return True
+
+    async def cleanup(self, service: Any, send: Any) -> None:
+        # Do not discover expiry through active lease keys: those expire first.
+        async for key in self.store.client.scan_iter(match="l4d:video:v2:*"):
+            sn = key.removeprefix("l4d:video:v2:")
+            if ":" not in sn:
+                await self.reconcile(sn, service, send)
 
     @asynccontextmanager
     async def legacy_start(self, lease: Any, mode: str, source: str, profile: str):
@@ -380,7 +465,7 @@ class VideoControl:
         superuser: bool = False,
         require_active: bool = True,
     ) -> Any:
-        lease = await service.leases.get(lease_id)
+        lease = await self.get_lease(service, lease_id)
         if not lease or (require_active and not lease.is_active()):
             reject("lease_invalid")
         if not superuser and (
@@ -416,6 +501,7 @@ class VideoControl:
             reject("unsupported", 422)
         if command.lease_expires_at_ms > int(lease.expires_at.timestamp() * 1000):
             reject("lease_mismatch")
+        await self.reconcile(lease.sn, service, send)
         view = await service.presence.get(lease.sn)
         inv = await service.presence.get_inventory(lease.sn)
         descriptor = start["descriptor"]
@@ -509,11 +595,25 @@ class VideoControl:
             doc["stream"] = state
             return state
 
+        async def guard(pipe: Any, doc: dict[str, Any]) -> None:
+            current = await self.publisher_lease(service, start, pipe)
+            if (
+                current is None
+                or command.lease_expires_at_ms
+                > int(current.expires_at.timestamp() * 1000)
+                or current.org_id != lease.org_id
+                or current.owner_user_id != lease.owner_user_id
+                or current.owner_session_id != lease.owner_session_id
+                or current.scope not in ("input", "stream")
+            ):
+                reject("lease_invalid")
+
         state = await self.store.change(
             lease.sn,
             reserve,
             claim=(command.stream_instance_id, command.operation_id),
             expected_epoch=server_epoch,
+            guard=guard,
         )
         if state["result"] == "already_running":
             return state
@@ -573,7 +673,7 @@ class VideoControl:
             raise
 
     async def clear_lease(self, service: Any, sn: str, state: dict[str, Any]) -> None:
-        lease = await service.leases.get(UUID(state["start"]["lease_id"]))
+        lease = await self.get_lease(service, UUID(state["start"]["lease_id"]))
         stream_id = UUID(state["start"]["stream_instance_id"])
         if lease and lease.stream_instance_id == stream_id:
             lease.stream_instance_id = None
@@ -665,7 +765,11 @@ class VideoControl:
             current.update(state=state, reason=reason, error=detail, result=state)
             if state == "failed" and current["start"]["resolved_codec"] == "h265":
                 cap = doc.get("capability")
-                if cap:
+                if (
+                    cap
+                    and cap["agent_instance_id"]
+                    == current["start"]["agent_instance_id"]
+                ):
                     for entry in cap["video"]:
                         if entry["codec"] == "h265":
                             entry.update(
@@ -688,8 +792,8 @@ class VideoControl:
             for k in ("lease_id", "stream_instance_id", "agent_instance_id")
         ):
             return False
-        lease = await service.leases.get(UUID(start["lease_id"]))
-        if (
+        lease = await self.get_lease(service, UUID(start["lease_id"]))
+        if isinstance(event, wire.Ready) and (
             not lease
             or not lease.is_active()
             or lease.stream_contract_version != 2
@@ -725,7 +829,17 @@ class VideoControl:
                     )
                     return True
 
-                if not await self.store.change(sn, ready):
+                async def guard(pipe: Any, doc: dict[str, Any]) -> None:
+                    if await self.publisher_lease(service, start, pipe) is None:
+                        reject("lease_invalid")
+
+                try:
+                    accepted = await self.store.change(sn, ready, guard=guard)
+                except HTTPException as exc:
+                    if exc.detail == {"code": "lease_invalid"}:
+                        return False
+                    raise
+                if not accepted:
                     return False
         else:
             if (
@@ -744,11 +858,12 @@ class VideoControl:
         current = (await self.store.get(sn))["stream"]
         if current["start"]["stream_instance_id"] != event.stream_instance_id:
             return False
-        previous_stream = lease.stream_instance_id
-        lease.stream_state = current["state"]
-        if current["state"] not in LIVE:
-            lease.stream_instance_id = None
-        await service.leases.save_stream(lease, previous_stream)
+        if lease and str(lease.stream_instance_id) == event.stream_instance_id:
+            previous_stream = lease.stream_instance_id
+            lease.stream_state = current["state"]
+            if current["state"] not in LIVE:
+                lease.stream_instance_id = None
+            await service.leases.save_stream(lease, previous_stream)
         await service.presence.notify_video_event(
             CtlStreamEvent(
                 sn=sn,

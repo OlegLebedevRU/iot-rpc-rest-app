@@ -1143,12 +1143,19 @@ class RedisLeaseRegistry:
     async def get(self, lease_id: UUID) -> Lease | None:
         async with self._lock:
             local = self._leases_by_id.get(lease_id)
+            raw_data = await self._client.hgetall(f"l4d:lease:{lease_id}")
+            if not raw_data:
+                return None
+            if (local and local.stream_contract_version == 2) or raw_data.get(
+                "stream_contract_version"
+            ) == "2":
+                # V2 uses explicit stream CAS. A cached read must not resurrect
+                # an expired hash or overwrite another worker's revoke/renew.
+                return _dict_to_lease(raw_data) if raw_data else None
             if local is not None and local.scope != "files":
                 try:
-                    client = self._client
-                    await client.hset(
-                        f"l4d:lease:{lease_id}",
-                        mapping=_lease_to_dict(local),
+                    await self._client.hset(
+                        f"l4d:lease:{lease_id}", mapping=_lease_to_dict(local)
                     )
                 except Exception:
                     pass
