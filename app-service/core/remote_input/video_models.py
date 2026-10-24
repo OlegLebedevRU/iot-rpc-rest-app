@@ -213,6 +213,9 @@ class Capabilities(BaseModel):
     measured_at_ms: StrictInt | None = Field(
         default=None, ge=1, le=5000000000000, exclude_if=lambda value: value is None
     )
+    admission_clock: Literal["issuer_monotonic_v1"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     valid_until_ms: StrictInt = Field(..., ge=1, le=5000000000000)
     source_id: StrictStr = Field(..., max_length=63, min_length=1)
     binding: ProbeBinding

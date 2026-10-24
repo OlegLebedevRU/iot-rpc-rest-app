@@ -15,7 +15,7 @@ SCHEMA["$defs"]["inventory_get"] = json.loads(
     Path(__file__).with_name("video_inventory_memory.schema.json").read_text()
 )
 SCHEMA["$defs"]["capabilities"] = json.loads(
-    Path(__file__).with_name("video_capabilities_memory.schema.json").read_text()
+    Path(__file__).with_name("video_capabilities_monotonic.schema.json").read_text()
 )
 DEFINITIONS = {
     "Descriptor": "descriptor",
