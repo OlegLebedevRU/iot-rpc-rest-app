@@ -202,6 +202,7 @@
     },
     "commit": {
       "type": "object",
+      "$comment": "Stateful admission rule: commit admission_floor must be >= max(accepted offer admission_floor, proof admission_high_water, current device high-water, durable server counter). Device checks its observable offer/proof/current values; server checks its durable counter. Rejection must preserve pending exchange and original timeout. These cross-message checks are not expressible by this per-message schema.",
       "additionalProperties": false,
       "required": [
         "revision",

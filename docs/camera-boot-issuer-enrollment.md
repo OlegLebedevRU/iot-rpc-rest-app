@@ -56,6 +56,13 @@ physical identity proof.
    retire the previous boot if different, install the new binding/epoch and floor,
    then publish. Terminal installs only the commit matching its pending proof
    before local expiry. It raises (never lowers) high-water to committed floor.
+   Terminal independently rejects committed floor below the accepted offer's
+   admission_floor or its current/proof high-water, even when all other echoed
+   fields match. A rejection preserves the pending exchange, high-water and
+   issuer state; a corrected commit can still complete within the same original
+   budget. Rejected commits and duplicate offers never restart that budget.
+   The durable server counter is a server-side obligation, not a value the
+   terminal can independently observe.
    Fresh readiness with a strictly higher sequence is still required for START.
 
 Server and device each bound the entire exchange by5000ms on their own monotonic
@@ -109,6 +116,22 @@ Negative transcripts: replayed retired boot; wrong transport SN; stale challenge
 late proof/commit; lost pending on restart; older issuer generation; changed epoch
 at same generation; binding mismatch; unsupported revision; counter rollback.
 The offline verifier exercises these transitions, not authentication infrastructure.
+
+Follow-up to reviewed commit `28dfdd2f27bc2abfac90557fbdc08a8432be33aa`:
+the model previously accepted offer floor100 → commit floor42 at high-water41.
+The terminal now also compares against its pending offered floor. Regression
+transcripts in `contracts/camera-enrollment-proposal/commit-floor-vectors.json`
+cover below/equal/above floors, current and proof high-water, duplicate traffic,
+corrected commits and the original timeout boundary. The existing wire revision
+and message shapes stay the same: the max rule above was already normative.
+Cross-message floor comparisons belong in the stateful model; JSON Schema alone
+validates individual message shapes and numeric bounds.
+
+Validation on 2026-10-24: 23 original enrollment checks and 22 new commit-floor
+cases passed; removing the new offer-floor guard reproduces the review failure.
+Full pytest: 838 passed, 7 skipped (dependency deprecations and an unawaited
+AsyncMock warning remain). Ruff and Black passed for the two changed Python
+files; schema comparison confirms only an explanatory comment was added.
 
 Firmware/server owners must approve this revision and strict schema before runtime
 work. Advertise both exact enrollment and CTL revisions only when implemented;

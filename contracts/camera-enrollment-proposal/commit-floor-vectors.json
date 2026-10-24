@@ -1,0 +1,194 @@
+{
+  "revision": "camera-enrollment/0.1.0-proposed",
+  "scope": "offline proposal only; existing normative floor rule",
+  "cases": [
+    {
+      "name": "review_reproduction_offer100_commit42",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 41,
+      "proof_high_water": 41,
+      "commit_floor": 42,
+      "accepted": false
+    },
+    {
+      "name": "offer_dominates_-1",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 41,
+      "proof_high_water": 41,
+      "commit_floor": 99,
+      "accepted": false
+    },
+    {
+      "name": "offer_dominates_0",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 41,
+      "proof_high_water": 41,
+      "commit_floor": 100,
+      "accepted": true
+    },
+    {
+      "name": "offer_dominates_1",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 41,
+      "proof_high_water": 41,
+      "commit_floor": 101,
+      "accepted": true
+    },
+    {
+      "name": "equal_offer_and_high_water_-1",
+      "initial_high_water": 41,
+      "offered_floor": 41,
+      "current_high_water": 41,
+      "proof_high_water": 41,
+      "commit_floor": 40,
+      "accepted": false
+    },
+    {
+      "name": "equal_offer_and_high_water_0",
+      "initial_high_water": 41,
+      "offered_floor": 41,
+      "current_high_water": 41,
+      "proof_high_water": 41,
+      "commit_floor": 41,
+      "accepted": true
+    },
+    {
+      "name": "equal_offer_and_high_water_1",
+      "initial_high_water": 41,
+      "offered_floor": 41,
+      "current_high_water": 41,
+      "proof_high_water": 41,
+      "commit_floor": 42,
+      "accepted": true
+    },
+    {
+      "name": "current_and_proof_at_offer_-1",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 100,
+      "proof_high_water": 100,
+      "commit_floor": 99,
+      "accepted": false
+    },
+    {
+      "name": "current_and_proof_at_offer_0",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 100,
+      "proof_high_water": 100,
+      "commit_floor": 100,
+      "accepted": true
+    },
+    {
+      "name": "current_and_proof_at_offer_1",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 100,
+      "proof_high_water": 100,
+      "commit_floor": 101,
+      "accepted": true
+    },
+    {
+      "name": "current_and_proof_above_offer_-1",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 120,
+      "proof_high_water": 120,
+      "commit_floor": 119,
+      "accepted": false
+    },
+    {
+      "name": "current_and_proof_above_offer_0",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 120,
+      "proof_high_water": 120,
+      "commit_floor": 120,
+      "accepted": true
+    },
+    {
+      "name": "current_and_proof_above_offer_1",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 120,
+      "proof_high_water": 120,
+      "commit_floor": 121,
+      "accepted": true
+    },
+    {
+      "name": "stale_proof",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 120,
+      "proof_high_water": 41,
+      "commit_floor": 120,
+      "accepted": false
+    },
+    {
+      "name": "proof_ahead_of_current",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 120,
+      "proof_high_water": 121,
+      "commit_floor": 121,
+      "accepted": false
+    },
+    {
+      "name": "proof_mismatch_with_live_offer",
+      "initial_high_water": 41,
+      "offered_floor": 100,
+      "current_high_water": 41,
+      "proof_high_water": 42,
+      "commit_floor": 100,
+      "accepted": false
+    },
+    {
+      "name": "zero_floor",
+      "initial_high_water": 0,
+      "offered_floor": 0,
+      "current_high_water": 0,
+      "proof_high_water": 0,
+      "commit_floor": 0,
+      "accepted": true
+    },
+    {
+      "name": "max_safe_floor",
+      "initial_high_water": 41,
+      "offered_floor": 9007199254740991,
+      "current_high_water": 41,
+      "proof_high_water": 41,
+      "commit_floor": 9007199254740991,
+      "accepted": true
+    },
+    {
+      "name": "below_max_safe_floor",
+      "initial_high_water": 41,
+      "offered_floor": 9007199254740991,
+      "current_high_water": 41,
+      "proof_high_water": 41,
+      "commit_floor": 9007199254740990,
+      "accepted": false
+    }
+  ],
+  "deadline_cases": [
+    {
+      "name": "last_ms_original_budget",
+      "tick": 4999,
+      "accepted": true
+    },
+    {
+      "name": "at_original_deadline",
+      "tick": 5000,
+      "accepted": false
+    },
+    {
+      "name": "after_original_deadline",
+      "tick": 5001,
+      "accepted": false
+    }
+  ]
+}
