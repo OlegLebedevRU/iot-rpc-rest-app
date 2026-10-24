@@ -37,6 +37,96 @@ def fixture(name):
     return json.loads((PACKAGE / "fixtures" / f"{name}.json").read_text())["payload"]
 
 
+@pytest.mark.parametrize("invalid", [None, 0, -1, "123", 5000000000001])
+def test_memory_capability_rejects_invalid_measurement(invalid):
+    cap = fixture("capabilities")["video_capabilities"]
+    with pytest.raises(ValidationError):
+        wire.Capabilities.model_validate(dict(cap, measured_at_ms=invalid))
+
+
+def test_memory_capability_rejects_measurement_after_check():
+    cap = fixture("capabilities")["video_capabilities"]
+    with pytest.raises(ValidationError):
+        wire.Capabilities.model_validate(
+            dict(cap, measured_at_ms=cap["checked_at_ms"] + 1)
+        )
+
+
+@pytest.mark.anyio
+async def test_memory_old_measurement_fresh_correlated_response(env):
+    service, lease, _, cap = env
+    await video_control.invalidate(lease.sn)
+    measured = now_ms() - 86400000
+
+    async def send(sn, query, **kwargs):
+        ack = fixture("capabilities")
+        ack["command_id"] = query.command_id
+        cap.update(
+            measured_at_ms=measured,
+            checked_at_ms=now_ms(),
+            valid_until_ms=now_ms() + 59000,
+        )
+        ack["video_capabilities"] = cap
+        assert not await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(dict(ack, command_id=str(uuid4())))
+        )
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+
+    result = await video_control.capability(lease.sn, service.presence, send)
+    assert result["negotiated_v2"]
+    assert result["video_capabilities"]["measured_at_ms"] == measured
+
+
+@pytest.mark.anyio
+async def test_memory_missing_profile_bypasses_other_profile_cache_cooldown(env):
+    service, lease, _, cap = env
+    cap["source_id"] = "disp:fixture"
+    cap["video"][0]["profiles"] = [
+        p for p in cap["video"][0]["profiles"] if p["profile_id"] == "low"
+    ]
+    await video_control.store.change(
+        lease.sn,
+        lambda doc: doc.update(
+            capability=cap,
+            probe_source_id=cap["source_id"],
+            probe_profile_id="low",
+            next_probe_ms=now_ms() + 30000,
+        ),
+    )
+
+    async def send(sn, query, **kwargs):
+        assert query.profile_id == "default"
+        ack = fixture("capabilities")
+        ack["command_id"] = query.command_id
+        ack["video_capabilities"].update(
+            source_id=query.source_id,
+            checked_at_ms=now_ms(),
+            valid_until_ms=now_ms() + 59000,
+        )
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+
+    assert (
+        await video_control.capability(
+            lease.sn,
+            service.presence,
+            send,
+            source_id="disp:fixture",
+            profile_id="default",
+        )
+    )["negotiated_v2"]
+
+
+@pytest.mark.parametrize("invalid", [None, "", "hd", 123])
+def test_memory_inventory_profile_strict(invalid):
+    inventory = fixture("inventory_get")
+    with pytest.raises(ValidationError):
+        wire.InventoryGet.model_validate(dict(inventory, profile_id=invalid))
+
+
 @pytest.mark.parametrize(
     "path",
     [

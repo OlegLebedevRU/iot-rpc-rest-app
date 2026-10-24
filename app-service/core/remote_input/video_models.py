@@ -15,6 +15,7 @@ from pydantic import (
     StrictBool,
     StrictInt,
     StrictStr,
+    model_validator,
 )
 
 from core.remote_input.video_wire import WireModel as BaseModel
@@ -209,10 +210,19 @@ class Capabilities(BaseModel):
     agent_instance_id: StrictStr = Field(..., max_length=36, min_length=36)
     capability_revision: StrictStr = Field(..., max_length=36, min_length=36)
     checked_at_ms: StrictInt = Field(..., ge=1, le=5000000000000)
+    measured_at_ms: StrictInt | None = Field(
+        default=None, ge=1, le=5000000000000, exclude_if=lambda value: value is None
+    )
     valid_until_ms: StrictInt = Field(..., ge=1, le=5000000000000)
     source_id: StrictStr = Field(..., max_length=63, min_length=1)
     binding: ProbeBinding
     video: list[CapabilityEntry] = Field(..., max_length=4, min_length=1)
+
+    @model_validator(mode="after")
+    def validate_measurement_time(self) -> Capabilities:
+        if self.measured_at_ms is not None and self.measured_at_ms > self.checked_at_ms:
+            raise ValueError("measurement cannot follow applicability check")
+        return self
 
 
 class InventoryGet(BaseModel):
@@ -230,6 +240,9 @@ class InventoryGet(BaseModel):
         min_length=1,
         max_length=63,
         exclude_if=lambda value: value is None,
+    )
+    profile_id: Literal["low", "default"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
     )
 
 
