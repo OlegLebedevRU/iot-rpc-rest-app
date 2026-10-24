@@ -431,7 +431,8 @@ class VideoControl:
             if doc.get("pending", {}).get("expires_at_ms", 0) > current:
                 return False
             if (
-                current < doc.get("next_probe_ms", 0)
+                not refresh
+                and current < doc.get("next_probe_ms", 0)
                 and doc.get("probe_source_id") == source_id
                 and doc.get("probe_profile_id") == profile_id
             ):

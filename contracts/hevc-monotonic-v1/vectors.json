@@ -1,0 +1,16 @@
+{
+  "contract": "hevc-monotonic/1.0",
+  "anchor": {"local_tick": 100000, "start_issued_at_ms": 1800000000000},
+  "cases": [
+    {"name": "start_before_deadline", "expires_at_ms": 1800000005000, "now_tick": 104999, "accept": true},
+    {"name": "start_at_deadline", "expires_at_ms": 1800000005000, "now_tick": 105000, "accept": false},
+    {"name": "delayed_start", "expires_at_ms": 1800000005000, "now_tick": 120000, "accept": false},
+    {"name": "rtc_ahead_7_days", "device_rtc_offset_ms": 604800000, "expires_at_ms": 1800000005000, "now_tick": 100100, "accept": true},
+    {"name": "rtc_behind_7_days", "device_rtc_offset_ms": -604800000, "expires_at_ms": 1800000005000, "now_tick": 100100, "accept": true},
+    {"name": "renew_keeps_initial_anchor", "issued_at_ms": 1800000030000, "lease_expires_at_ms": 1800000090000, "lease_deadline_tick": 190000},
+    {"name": "renew_after_local_expiry", "previous_lease_deadline_tick": 160000, "now_tick": 160000, "accept": false},
+    {"name": "old_boot_or_wrong_nonce", "identity_matches": false, "accept": false},
+    {"name": "duplicate_start", "same_epoch": true, "already_running": true, "new_encoder": false, "reset_anchor": false},
+    {"name": "stopped_epoch", "already_stopped": true, "accept": false}
+  ]
+}
