@@ -1,0 +1,2757 @@
+{
+  "revision": "camera-ctl-monotonic/0.2.0-proposed",
+  "messages": {
+    "query": {
+      "v": 1,
+      "camera_admission_revision": "camera-ctl-monotonic/0.2.0-proposed",
+      "sn": "synthetic-4623",
+      "issuer_epoch": "00000000-0000-4000-8000-000000000002",
+      "readiness_nonce": "00000000-0000-4000-8000-000000000003",
+      "binding": {
+        "boot_id": "00000000-0000-4000-8000-000000000001",
+        "source_id": "cam:ip000001",
+        "physical_camera_mac": "02:00:00:00:00:01",
+        "path_generation": "port2-rtsp-1",
+        "codec": "h265",
+        "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "type": "camera_readiness_query",
+      "issued_at_ms": 1799999999900,
+      "expires_at_ms": 1800000004900,
+      "admission_seq": 1
+    },
+    "result": {
+      "v": 1,
+      "camera_admission_revision": "camera-ctl-monotonic/0.2.0-proposed",
+      "sn": "synthetic-4623",
+      "issuer_epoch": "00000000-0000-4000-8000-000000000002",
+      "readiness_nonce": "00000000-0000-4000-8000-000000000003",
+      "binding": {
+        "boot_id": "00000000-0000-4000-8000-000000000001",
+        "source_id": "cam:ip000001",
+        "physical_camera_mac": "02:00:00:00:00:01",
+        "path_generation": "port2-rtsp-1",
+        "codec": "h265",
+        "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "type": "camera_readiness_result",
+      "status": "ready",
+      "admission_seq": 1
+    },
+    "start": {
+      "v": 1,
+      "camera_admission_revision": "camera-ctl-monotonic/0.2.0-proposed",
+      "sn": "synthetic-4623",
+      "issuer_epoch": "00000000-0000-4000-8000-000000000002",
+      "readiness_nonce": "00000000-0000-4000-8000-000000000003",
+      "binding": {
+        "boot_id": "00000000-0000-4000-8000-000000000001",
+        "source_id": "cam:ip000001",
+        "physical_camera_mac": "02:00:00:00:00:01",
+        "path_generation": "port2-rtsp-1",
+        "codec": "h265",
+        "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000004",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000005",
+      "command_seq": 1,
+      "issued_at_ms": 1800000000000,
+      "expires_at_ms": 1800000060000,
+      "type": "stream_start",
+      "command_id": "00000000-0000-4000-8000-000000000006",
+      "mode": "usb-camera",
+      "source_id": "cam:ip000001",
+      "profile": "default",
+      "admission_seq": 1
+    },
+    "renew": {
+      "v": 1,
+      "camera_admission_revision": "camera-ctl-monotonic/0.2.0-proposed",
+      "sn": "synthetic-4623",
+      "issuer_epoch": "00000000-0000-4000-8000-000000000002",
+      "readiness_nonce": "00000000-0000-4000-8000-000000000003",
+      "binding": {
+        "boot_id": "00000000-0000-4000-8000-000000000001",
+        "source_id": "cam:ip000001",
+        "physical_camera_mac": "02:00:00:00:00:01",
+        "path_generation": "port2-rtsp-1",
+        "codec": "h265",
+        "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000004",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000005",
+      "command_seq": 2,
+      "issued_at_ms": 1800000030000,
+      "expires_at_ms": 1800000090000,
+      "type": "lease_renew",
+      "command_id": "00000000-0000-4000-8000-000000000007",
+      "ttl_sec": 60,
+      "admission_seq": 1
+    },
+    "stop": {
+      "v": 1,
+      "camera_admission_revision": "camera-ctl-monotonic/0.2.0-proposed",
+      "sn": "synthetic-4623",
+      "issuer_epoch": "00000000-0000-4000-8000-000000000002",
+      "readiness_nonce": "00000000-0000-4000-8000-000000000003",
+      "binding": {
+        "boot_id": "00000000-0000-4000-8000-000000000001",
+        "source_id": "cam:ip000001",
+        "physical_camera_mac": "02:00:00:00:00:01",
+        "path_generation": "port2-rtsp-1",
+        "codec": "h265",
+        "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "lease_id": "00000000-0000-4000-8000-000000000004",
+      "stream_instance_id": "00000000-0000-4000-8000-000000000005",
+      "command_seq": 3,
+      "issued_at_ms": 1800000031000,
+      "expires_at_ms": 1800000036000,
+      "type": "stream_stop",
+      "command_id": "00000000-0000-4000-8000-000000000008",
+      "admission_seq": 1
+    }
+  },
+  "invalid_wire": [
+    {
+      "name": "legacy_no_extension",
+      "message": "start",
+      "patch": {
+        "camera_admission_revision": null
+      }
+    },
+    {
+      "name": "desktop_lease_field",
+      "message": "start",
+      "patch": {
+        "lease_expires_at_ms": 1800000060000
+      }
+    },
+    {
+      "name": "caller_anchor",
+      "message": "start",
+      "patch": {
+        "R": 100000
+      }
+    },
+    {
+      "name": "relative_ttl",
+      "message": "start",
+      "patch": {
+        "ttl_ms": 60000
+      }
+    },
+    {
+      "name": "bool_time",
+      "message": "start",
+      "patch": {
+        "issued_at_ms": true
+      }
+    },
+    {
+      "name": "bad_nonce",
+      "message": "start",
+      "patch": {
+        "readiness_nonce": "bad"
+      }
+    },
+    {
+      "name": "sequence_zero",
+      "message": "start",
+      "patch": {
+        "command_seq": 0
+      }
+    },
+    {
+      "name": "missing_boot_binding",
+      "message": "start",
+      "patch": {
+        "binding": {
+          "source_id": "cam:ip000001",
+          "physical_camera_mac": "02:00:00:00:00:01",
+          "path_generation": "port2-rtsp-1",
+          "codec": "h265",
+          "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    },
+    {
+      "name": "invalid_admission_sequence",
+      "message": "query",
+      "patch": {
+        "admission_seq": 0
+      }
+    },
+    {
+      "name": "old_revision",
+      "message": "start",
+      "patch": {
+        "camera_admission_revision": "camera-ctl-monotonic/0.1.0-proposed"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "name": "start_readiness_last_ms",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 104999,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        }
+      ]
+    },
+    {
+      "name": "start_at_readiness_boundary",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 105000,
+          "expected": "readiness_expired",
+          "message": "start"
+        },
+        {
+          "action": "start",
+          "tick": 105001,
+          "expected": "replay",
+          "message": "start",
+          "saved_result": "readiness_expired"
+        }
+      ]
+    },
+    {
+      "name": "delayed_short_start_100999",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100999,
+          "expected": "started",
+          "message": "start",
+          "patch": {
+            "expires_at_ms": 1800000001000
+          }
+        }
+      ]
+    },
+    {
+      "name": "delayed_short_start_101000",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 101000,
+          "expected": "expired",
+          "message": "start",
+          "patch": {
+            "expires_at_ms": 1800000001000
+          }
+        }
+      ]
+    },
+    {
+      "name": "delayed_short_start_120000",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 120000,
+          "expected": "readiness_expired",
+          "message": "start",
+          "patch": {
+            "expires_at_ms": 1800000001000
+          }
+        }
+      ]
+    },
+    {
+      "name": "rtc_offset_-604800000",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "device_rtc_offset_ms": -604800000,
+          "deadline": 160000
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "renewed",
+          "message": "renew",
+          "device_rtc_offset_ms": 604800000,
+          "deadline": 190000
+        }
+      ]
+    },
+    {
+      "name": "rtc_offset_604800000",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "device_rtc_offset_ms": 604800000,
+          "deadline": 160000
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "renewed",
+          "message": "renew",
+          "device_rtc_offset_ms": -604800000,
+          "deadline": 190000
+        }
+      ]
+    },
+    {
+      "name": "pending_boundary",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100001,
+          "expected": "pending_expired",
+          "message": "result",
+          "server_tick": 5000
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "not_authorized",
+          "message": "start"
+        }
+      ]
+    },
+    {
+      "name": "pending_last_ms",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100001,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 4999
+        },
+        {
+          "action": "result",
+          "tick": 100002,
+          "expected": "result_replay",
+          "message": "result",
+          "server_tick": 4999
+        }
+      ]
+    },
+    {
+      "name": "wrong_result_nonce",
+      "events": [
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "wrong_nonce",
+          "message": "result",
+          "patch": {
+            "readiness_nonce": "00000000-0000-4000-8000-000000000099"
+          },
+          "server_tick": 100
+        }
+      ]
+    },
+    {
+      "name": "wrong_transport",
+      "events": [
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "transport_mismatch",
+          "message": "result",
+          "server_tick": 100,
+          "transport_sn": "other-sn"
+        }
+      ]
+    },
+    {
+      "name": "wrong_binding_boot_id",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "binding_mismatch",
+          "message": "start",
+          "patch": {
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000099",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong_binding_physical_camera_mac",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "binding_mismatch",
+          "message": "start",
+          "patch": {
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:02",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong_binding_path_generation",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "binding_mismatch",
+          "message": "start",
+          "patch": {
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-2",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong_binding_codec",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "binding_mismatch",
+          "message": "start",
+          "patch": {
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h264",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong_binding_descriptor_sha256",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "binding_mismatch",
+          "message": "start",
+          "patch": {
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong_epoch",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "binding_mismatch",
+          "message": "start",
+          "patch": {
+            "issuer_epoch": "00000000-0000-4000-8000-000000000099"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong_start_nonce",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "wrong_nonce",
+          "message": "start",
+          "patch": {
+            "readiness_nonce": "00000000-0000-4000-8000-000000000099"
+          }
+        }
+      ]
+    },
+    {
+      "name": "duplicate_start_and_query",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "ready",
+          "tick": 103000,
+          "expected": "readiness_replay",
+          "message": "query"
+        },
+        {
+          "action": "start",
+          "tick": 103001,
+          "expected": "replay",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "start",
+          "tick": 103002,
+          "expected": "conflict",
+          "message": "start",
+          "patch": {
+            "expires_at_ms": 1800000059000
+          }
+        }
+      ]
+    },
+    {
+      "name": "consumed_nonce_new_command",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "start",
+          "tick": 103000,
+          "expected": "stale_command",
+          "message": "start",
+          "patch": {
+            "command_id": "00000000-0000-4000-8000-000000000099"
+          }
+        }
+      ]
+    },
+    {
+      "name": "long_stream_same_anchor",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "renewed",
+          "message": "renew",
+          "deadline": 190000
+        },
+        {
+          "action": "renew",
+          "tick": 180000,
+          "expected": "renewed",
+          "message": "renew",
+          "patch": {
+            "command_id": "00000000-0000-4000-8000-000000000009",
+            "command_seq": 3,
+            "issued_at_ms": 1800000080000,
+            "expires_at_ms": 1800000140000
+          },
+          "deadline": 240000
+        }
+      ]
+    },
+    {
+      "name": "duplicate_and_reordered_renew",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "renewed",
+          "message": "renew",
+          "deadline": 190000
+        },
+        {
+          "action": "renew",
+          "tick": 130001,
+          "expected": "replay",
+          "message": "renew",
+          "deadline": 190000
+        },
+        {
+          "action": "renew",
+          "tick": 130002,
+          "expected": "stale_command",
+          "message": "renew",
+          "patch": {
+            "command_id": "00000000-0000-4000-8000-000000000009",
+            "command_seq": 1,
+            "expires_at_ms": 1800000089999
+          },
+          "deadline": 190000
+        }
+      ]
+    },
+    {
+      "name": "renew_after_expiry_160000",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "renew",
+          "tick": 160000,
+          "expected": "stale_admission",
+          "message": "renew"
+        },
+        {
+          "action": "start",
+          "tick": 160001,
+          "expected": "replay",
+          "message": "start",
+          "saved_result": "started"
+        }
+      ]
+    },
+    {
+      "name": "renew_after_expiry_160001",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "renew",
+          "tick": 160001,
+          "expected": "stale_admission",
+          "message": "renew"
+        },
+        {
+          "action": "start",
+          "tick": 160002,
+          "expected": "replay",
+          "message": "start",
+          "saved_result": "started"
+        }
+      ]
+    },
+    {
+      "name": "stop_then_replay",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "stop",
+          "tick": 131000,
+          "expected": "stopped",
+          "message": "stop"
+        },
+        {
+          "action": "start",
+          "tick": 131001,
+          "expected": "replay",
+          "message": "start",
+          "saved_result": "started"
+        },
+        {
+          "action": "renew",
+          "tick": 131002,
+          "expected": "stale_admission",
+          "message": "renew"
+        },
+        {
+          "action": "ready",
+          "tick": 131003,
+          "expected": "readiness_replay",
+          "message": "query"
+        }
+      ]
+    },
+    {
+      "name": "expired_stop_cannot_stop",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "stop",
+          "tick": 136000,
+          "expected": "expired",
+          "message": "stop",
+          "deadline": 160000
+        }
+      ]
+    },
+    {
+      "name": "older_stop",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "renewed",
+          "message": "renew"
+        },
+        {
+          "action": "stop",
+          "tick": 131000,
+          "expected": "stale_command",
+          "message": "stop",
+          "patch": {
+            "command_seq": 2
+          },
+          "deadline": 190000
+        }
+      ]
+    },
+    {
+      "name": "issuer_regression",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "renewed",
+          "message": "renew"
+        },
+        {
+          "action": "renew",
+          "tick": 130001,
+          "expected": "issuer_regression",
+          "message": "renew",
+          "patch": {
+            "command_id": "00000000-0000-4000-8000-000000000009",
+            "command_seq": 3,
+            "issued_at_ms": 1800000029000,
+            "expires_at_ms": 1800000089000
+          }
+        }
+      ]
+    },
+    {
+      "name": "nonextending_renewal",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "not_extending",
+          "message": "renew",
+          "patch": {
+            "expires_at_ms": 1800000060000
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong_stream",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "identity_mismatch",
+          "message": "renew",
+          "patch": {
+            "stream_instance_id": "00000000-0000-4000-8000-000000000099"
+          }
+        }
+      ]
+    },
+    {
+      "name": "wrong_lease",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "identity_mismatch",
+          "message": "renew",
+          "patch": {
+            "lease_id": "00000000-0000-4000-8000-000000000099"
+          }
+        }
+      ]
+    },
+    {
+      "name": "start_interval_1800000000000",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "interval",
+          "message": "start",
+          "patch": {
+            "expires_at_ms": 1800000000000
+          }
+        }
+      ]
+    },
+    {
+      "name": "start_interval_1800000060001",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "interval",
+          "message": "start",
+          "patch": {
+            "expires_at_ms": 1800000060001
+          }
+        }
+      ]
+    },
+    {
+      "name": "source_inconsistent",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "binding_mismatch",
+          "message": "start",
+          "patch": {
+            "source_id": "cam:ip000002"
+          }
+        }
+      ]
+    },
+    {
+      "name": "path_invalidation",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "invalidate",
+          "tick": 110000,
+          "expected": "invalidated",
+          "reason": "path"
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "stale_admission",
+          "message": "renew"
+        },
+        {
+          "action": "start",
+          "tick": 130001,
+          "expected": "replay",
+          "message": "start",
+          "saved_result": "started"
+        }
+      ]
+    },
+    {
+      "name": "descriptor_invalidation",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "invalidate",
+          "tick": 110000,
+          "expected": "invalidated",
+          "reason": "descriptor"
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "stale_admission",
+          "message": "renew"
+        },
+        {
+          "action": "start",
+          "tick": 130001,
+          "expected": "replay",
+          "message": "start",
+          "saved_result": "started"
+        }
+      ]
+    },
+    {
+      "name": "physical_camera_invalidation",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "invalidate",
+          "tick": 110000,
+          "expected": "invalidated",
+          "reason": "physical_camera"
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "stale_admission",
+          "message": "renew"
+        },
+        {
+          "action": "start",
+          "tick": 130001,
+          "expected": "replay",
+          "message": "start",
+          "saved_result": "started"
+        }
+      ]
+    },
+    {
+      "name": "runtime_failure_invalidation",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "invalidate",
+          "tick": 110000,
+          "expected": "invalidated",
+          "reason": "runtime_failure"
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "stale_admission",
+          "message": "renew"
+        },
+        {
+          "action": "start",
+          "tick": 130001,
+          "expected": "replay",
+          "message": "start",
+          "saved_result": "started"
+        }
+      ]
+    },
+    {
+      "name": "reboot_old_boot",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "reboot",
+          "tick": 110000,
+          "expected": "invalidated",
+          "boot_id": "00000000-0000-4000-8000-000000000099"
+        },
+        {
+          "action": "start",
+          "tick": 110001,
+          "expected": "binding_mismatch",
+          "message": "start"
+        }
+      ]
+    },
+    {
+      "name": "epoch_owner_lost",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "epoch_lost",
+          "tick": 110000,
+          "expected": "invalidated",
+          "issuer_epoch": "00000000-0000-4000-8000-000000000099"
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "binding_mismatch",
+          "message": "renew"
+        }
+      ]
+    },
+    {
+      "name": "timer_regression",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "deadline": 160000
+        },
+        {
+          "action": "renew",
+          "tick": 100000,
+          "expected": "clock_invalid",
+          "message": "renew"
+        }
+      ]
+    },
+    {
+      "name": "readiness_overflow",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 18446744073709547616,
+          "expected": "arithmetic",
+          "message": "query"
+        }
+      ]
+    },
+    {
+      "name": "lease_addition_overflow",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 18446744073709541616,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 18446744073709541616,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 18446744073709541716,
+          "expected": "arithmetic",
+          "message": "start"
+        }
+      ]
+    },
+    {
+      "name": "review_stop_duplicate_and_new_attempt",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "stop",
+          "tick": 131000,
+          "expected": "stopped",
+          "message": "stop"
+        },
+        {
+          "action": "stop",
+          "tick": 131001,
+          "expected": "replay",
+          "message": "stop",
+          "saved_result": "stopped"
+        },
+        {
+          "action": "query",
+          "tick": 133000,
+          "expected": "query_pending",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "issued_at_ms": 1800000032900,
+            "expires_at_ms": 1800000037900
+          },
+          "server_tick": 133000
+        },
+        {
+          "action": "ready",
+          "tick": 133000,
+          "expected": "ready",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "issued_at_ms": 1800000032900,
+            "expires_at_ms": 1800000037900
+          }
+        },
+        {
+          "action": "result",
+          "tick": 133100,
+          "expected": "result_accepted",
+          "message": "result",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102"
+          },
+          "server_tick": 133100
+        },
+        {
+          "action": "start",
+          "tick": 133200,
+          "expected": "started",
+          "message": "start",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "command_id": "00000000-0000-4000-8000-000000000202",
+            "lease_id": "00000000-0000-4000-8000-000000000302",
+            "stream_instance_id": "00000000-0000-4000-8000-000000000402",
+            "issued_at_ms": 1800000033000,
+            "expires_at_ms": 1800000093000
+          },
+          "start_count": 2,
+          "deadline": 193000
+        },
+        {
+          "action": "start",
+          "tick": 133201,
+          "expected": "replay",
+          "message": "start",
+          "saved_result": "started",
+          "start_count": 2
+        },
+        {
+          "action": "renew",
+          "tick": 133202,
+          "expected": "stale_admission",
+          "message": "renew"
+        }
+      ]
+    },
+    {
+      "name": "expiry_new_attempt",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "renew",
+          "tick": 160000,
+          "expected": "stale_admission",
+          "message": "renew"
+        },
+        {
+          "action": "query",
+          "tick": 161000,
+          "expected": "query_pending",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "issued_at_ms": 1800000060900,
+            "expires_at_ms": 1800000065900
+          },
+          "server_tick": 161000
+        },
+        {
+          "action": "ready",
+          "tick": 161000,
+          "expected": "ready",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "issued_at_ms": 1800000060900,
+            "expires_at_ms": 1800000065900
+          }
+        },
+        {
+          "action": "result",
+          "tick": 161100,
+          "expected": "result_accepted",
+          "message": "result",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102"
+          },
+          "server_tick": 161100
+        },
+        {
+          "action": "start",
+          "tick": 161200,
+          "expected": "started",
+          "message": "start",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "command_id": "00000000-0000-4000-8000-000000000202",
+            "lease_id": "00000000-0000-4000-8000-000000000302",
+            "stream_instance_id": "00000000-0000-4000-8000-000000000402",
+            "issued_at_ms": 1800000061000,
+            "expires_at_ms": 1800000121000
+          },
+          "start_count": 2,
+          "deadline": 221000
+        },
+        {
+          "action": "start",
+          "tick": 161201,
+          "expected": "replay",
+          "message": "start",
+          "saved_result": "started",
+          "start_count": 2
+        }
+      ]
+    },
+    {
+      "name": "encoder_failure_new_attempt",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "invalidate",
+          "tick": 110000,
+          "expected": "invalidated",
+          "reason": "encoder_failure"
+        },
+        {
+          "action": "query",
+          "tick": 111000,
+          "expected": "query_pending",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "issued_at_ms": 1800000010900,
+            "expires_at_ms": 1800000015900
+          },
+          "server_tick": 111000
+        },
+        {
+          "action": "ready",
+          "tick": 111000,
+          "expected": "ready",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "issued_at_ms": 1800000010900,
+            "expires_at_ms": 1800000015900
+          }
+        },
+        {
+          "action": "result",
+          "tick": 111100,
+          "expected": "result_accepted",
+          "message": "result",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102"
+          },
+          "server_tick": 111100
+        },
+        {
+          "action": "start",
+          "tick": 111200,
+          "expected": "started",
+          "message": "start",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "command_id": "00000000-0000-4000-8000-000000000202",
+            "lease_id": "00000000-0000-4000-8000-000000000302",
+            "stream_instance_id": "00000000-0000-4000-8000-000000000402",
+            "issued_at_ms": 1800000011000,
+            "expires_at_ms": 1800000071000
+          },
+          "start_count": 2,
+          "deadline": 171000
+        }
+      ]
+    },
+    {
+      "name": "path_rebind_new_attempt",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "rebind",
+          "tick": 110000,
+          "expected": "invalidated",
+          "binding": {
+            "boot_id": "00000000-0000-4000-8000-000000000001",
+            "source_id": "cam:ip000001",
+            "physical_camera_mac": "02:00:00:00:00:01",
+            "path_generation": "port2-rtsp-2",
+            "codec": "h265",
+            "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "action": "query",
+          "tick": 111000,
+          "expected": "query_pending",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-2",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "issued_at_ms": 1800000010900,
+            "expires_at_ms": 1800000015900
+          },
+          "server_tick": 111000
+        },
+        {
+          "action": "ready",
+          "tick": 111000,
+          "expected": "ready",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-2",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "issued_at_ms": 1800000010900,
+            "expires_at_ms": 1800000015900
+          }
+        },
+        {
+          "action": "result",
+          "tick": 111100,
+          "expected": "result_accepted",
+          "message": "result",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-2",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          "server_tick": 111100
+        },
+        {
+          "action": "start",
+          "tick": 111200,
+          "expected": "started",
+          "message": "start",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-2",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "command_id": "00000000-0000-4000-8000-000000000202",
+            "lease_id": "00000000-0000-4000-8000-000000000302",
+            "stream_instance_id": "00000000-0000-4000-8000-000000000402",
+            "issued_at_ms": 1800000011000,
+            "expires_at_ms": 1800000071000
+          },
+          "start_count": 2,
+          "deadline": 171000
+        },
+        {
+          "action": "start",
+          "tick": 111201,
+          "expected": "binding_mismatch",
+          "message": "start"
+        }
+      ]
+    },
+    {
+      "name": "descriptor_rebind_new_attempt",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "rebind",
+          "tick": 110000,
+          "expected": "invalidated",
+          "binding": {
+            "boot_id": "00000000-0000-4000-8000-000000000001",
+            "source_id": "cam:ip000001",
+            "physical_camera_mac": "02:00:00:00:00:01",
+            "path_generation": "port2-rtsp-1",
+            "codec": "h265",
+            "descriptor_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        },
+        {
+          "action": "query",
+          "tick": 111000,
+          "expected": "query_pending",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            "issued_at_ms": 1800000010900,
+            "expires_at_ms": 1800000015900
+          },
+          "server_tick": 111000
+        },
+        {
+          "action": "ready",
+          "tick": 111000,
+          "expected": "ready",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            "issued_at_ms": 1800000010900,
+            "expires_at_ms": 1800000015900
+          }
+        },
+        {
+          "action": "result",
+          "tick": 111100,
+          "expected": "result_accepted",
+          "message": "result",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            }
+          },
+          "server_tick": 111100
+        },
+        {
+          "action": "start",
+          "tick": 111200,
+          "expected": "started",
+          "message": "start",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            "command_id": "00000000-0000-4000-8000-000000000202",
+            "lease_id": "00000000-0000-4000-8000-000000000302",
+            "stream_instance_id": "00000000-0000-4000-8000-000000000402",
+            "issued_at_ms": 1800000011000,
+            "expires_at_ms": 1800000071000
+          },
+          "start_count": 2,
+          "deadline": 171000
+        },
+        {
+          "action": "start",
+          "tick": 111201,
+          "expected": "binding_mismatch",
+          "message": "start"
+        }
+      ]
+    },
+    {
+      "name": "physical_camera_rebind_new_attempt",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "rebind",
+          "tick": 110000,
+          "expected": "invalidated",
+          "binding": {
+            "boot_id": "00000000-0000-4000-8000-000000000001",
+            "source_id": "cam:ip000001",
+            "physical_camera_mac": "02:00:00:00:00:02",
+            "path_generation": "port2-rtsp-1",
+            "codec": "h265",
+            "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        },
+        {
+          "action": "query",
+          "tick": 111000,
+          "expected": "query_pending",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:02",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "issued_at_ms": 1800000010900,
+            "expires_at_ms": 1800000015900
+          },
+          "server_tick": 111000
+        },
+        {
+          "action": "ready",
+          "tick": 111000,
+          "expected": "ready",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:02",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "issued_at_ms": 1800000010900,
+            "expires_at_ms": 1800000015900
+          }
+        },
+        {
+          "action": "result",
+          "tick": 111100,
+          "expected": "result_accepted",
+          "message": "result",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:02",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          "server_tick": 111100
+        },
+        {
+          "action": "start",
+          "tick": 111200,
+          "expected": "started",
+          "message": "start",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000001",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:02",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "command_id": "00000000-0000-4000-8000-000000000202",
+            "lease_id": "00000000-0000-4000-8000-000000000302",
+            "stream_instance_id": "00000000-0000-4000-8000-000000000402",
+            "issued_at_ms": 1800000011000,
+            "expires_at_ms": 1800000071000
+          },
+          "start_count": 2,
+          "deadline": 171000
+        },
+        {
+          "action": "start",
+          "tick": 111201,
+          "expected": "binding_mismatch",
+          "message": "start"
+        }
+      ]
+    },
+    {
+      "name": "issuer_restart_continues_admission_sequence",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "epoch_lost",
+          "tick": 110000,
+          "expected": "invalidated",
+          "issuer_epoch": "00000000-0000-4000-8000-000000000999"
+        },
+        {
+          "action": "query",
+          "tick": 110001,
+          "expected": "stale_server_sequence",
+          "message": "query",
+          "patch": {
+            "issuer_epoch": "00000000-0000-4000-8000-000000000999"
+          },
+          "server_tick": 110001
+        },
+        {
+          "action": "query",
+          "tick": 111000,
+          "expected": "query_pending",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "issuer_epoch": "00000000-0000-4000-8000-000000000999",
+            "issued_at_ms": 1800000010900,
+            "expires_at_ms": 1800000015900
+          },
+          "server_tick": 111000
+        },
+        {
+          "action": "ready",
+          "tick": 111000,
+          "expected": "ready",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "issuer_epoch": "00000000-0000-4000-8000-000000000999",
+            "issued_at_ms": 1800000010900,
+            "expires_at_ms": 1800000015900
+          }
+        },
+        {
+          "action": "result",
+          "tick": 111100,
+          "expected": "result_accepted",
+          "message": "result",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "issuer_epoch": "00000000-0000-4000-8000-000000000999"
+          },
+          "server_tick": 111100
+        },
+        {
+          "action": "start",
+          "tick": 111200,
+          "expected": "started",
+          "message": "start",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000102",
+            "issuer_epoch": "00000000-0000-4000-8000-000000000999",
+            "command_id": "00000000-0000-4000-8000-000000000202",
+            "lease_id": "00000000-0000-4000-8000-000000000302",
+            "stream_instance_id": "00000000-0000-4000-8000-000000000402",
+            "issued_at_ms": 1800000011000,
+            "expires_at_ms": 1800000071000
+          },
+          "start_count": 2,
+          "deadline": 171000
+        },
+        {
+          "action": "start",
+          "tick": 111201,
+          "expected": "binding_mismatch",
+          "message": "start"
+        }
+      ]
+    },
+    {
+      "name": "new_boot_new_attempt",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "reboot",
+          "tick": 1000,
+          "expected": "invalidated",
+          "boot_id": "00000000-0000-4000-8000-000000000998"
+        },
+        {
+          "action": "query",
+          "tick": 2000,
+          "expected": "query_pending",
+          "message": "query",
+          "patch": {
+            "admission_seq": 1,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000101",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000998",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "issued_at_ms": 1799999901900,
+            "expires_at_ms": 1799999906900
+          },
+          "server_tick": 2000
+        },
+        {
+          "action": "ready",
+          "tick": 2000,
+          "expected": "ready",
+          "message": "query",
+          "patch": {
+            "admission_seq": 1,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000101",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000998",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "issued_at_ms": 1799999901900,
+            "expires_at_ms": 1799999906900
+          }
+        },
+        {
+          "action": "result",
+          "tick": 2100,
+          "expected": "result_accepted",
+          "message": "result",
+          "patch": {
+            "admission_seq": 1,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000101",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000998",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+          },
+          "server_tick": 2100
+        },
+        {
+          "action": "start",
+          "tick": 2200,
+          "expected": "started",
+          "message": "start",
+          "patch": {
+            "admission_seq": 1,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000101",
+            "binding": {
+              "boot_id": "00000000-0000-4000-8000-000000000998",
+              "source_id": "cam:ip000001",
+              "physical_camera_mac": "02:00:00:00:00:01",
+              "path_generation": "port2-rtsp-1",
+              "codec": "h265",
+              "descriptor_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "command_id": "00000000-0000-4000-8000-000000000201",
+            "lease_id": "00000000-0000-4000-8000-000000000301",
+            "stream_instance_id": "00000000-0000-4000-8000-000000000401",
+            "issued_at_ms": 1799999902000,
+            "expires_at_ms": 1799999962000
+          },
+          "start_count": 2,
+          "deadline": 62000
+        },
+        {
+          "action": "start",
+          "tick": 2201,
+          "expected": "binding_mismatch",
+          "message": "start"
+        }
+      ]
+    },
+    {
+      "name": "counter_regression_requires_new_boot",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "renew",
+          "tick": 100099,
+          "expected": "clock_invalid",
+          "message": "renew"
+        },
+        {
+          "action": "ready",
+          "tick": 101000,
+          "expected": "clock_invalid",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2
+          }
+        }
+      ]
+    },
+    {
+      "name": "readiness_cache_eviction_is_stale",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "ready",
+          "tick": 106000,
+          "expected": "ready",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000099"
+          }
+        },
+        {
+          "action": "ready",
+          "tick": 106001,
+          "expected": "stale_admission",
+          "message": "query"
+        }
+      ],
+      "capacity": 1
+    },
+    {
+      "name": "duplicate_command_after_eviction",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "renewed",
+          "message": "renew"
+        },
+        {
+          "action": "start",
+          "tick": 130001,
+          "expected": "stale_command",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "renew",
+          "tick": 130002,
+          "expected": "replay",
+          "message": "renew",
+          "saved_result": "renewed"
+        }
+      ],
+      "capacity": 1
+    },
+    {
+      "name": "duplicate_sequence_changed_command",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "renew",
+          "tick": 130000,
+          "expected": "renewed",
+          "message": "renew"
+        },
+        {
+          "action": "renew",
+          "tick": 130001,
+          "expected": "conflict",
+          "message": "renew",
+          "patch": {
+            "expires_at_ms": 1800000089999
+          }
+        }
+      ]
+    },
+    {
+      "name": "query_timeout_has_new_server_pending",
+      "events": [
+        {
+          "action": "ready",
+          "tick": 100000,
+          "expected": "ready",
+          "message": "query"
+        },
+        {
+          "action": "result",
+          "tick": 100000,
+          "expected": "result_accepted",
+          "message": "result",
+          "server_tick": 100
+        },
+        {
+          "action": "start",
+          "tick": 100100,
+          "expected": "started",
+          "message": "start",
+          "start_count": 1
+        },
+        {
+          "action": "invalidate",
+          "tick": 110000,
+          "expected": "invalidated"
+        },
+        {
+          "action": "query",
+          "tick": 111000,
+          "expected": "query_pending",
+          "message": "query",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000099"
+          },
+          "server_tick": 111000
+        },
+        {
+          "action": "result",
+          "tick": 111001,
+          "expected": "wrong_nonce",
+          "message": "result",
+          "server_tick": 111001
+        },
+        {
+          "action": "result",
+          "tick": 116000,
+          "expected": "pending_expired",
+          "message": "result",
+          "patch": {
+            "admission_seq": 2,
+            "readiness_nonce": "00000000-0000-4000-8000-000000000099"
+          },
+          "server_tick": 116000
+        }
+      ]
+    }
+  ],
+  "issuer_clock": [
+    {
+      "name": "wall_jump_-604800000",
+      "wall_ms0": 1800000000000,
+      "monotonic_ms0": 100000,
+      "monotonic_now": 130000,
+      "current_wall_ms": 1799395230000,
+      "expected_issued_at_ms": 1800000030000
+    },
+    {
+      "name": "wall_jump_0",
+      "wall_ms0": 1800000000000,
+      "monotonic_ms0": 100000,
+      "monotonic_now": 130000,
+      "current_wall_ms": 1800000030000,
+      "expected_issued_at_ms": 1800000030000
+    },
+    {
+      "name": "wall_jump_604800000",
+      "wall_ms0": 1800000000000,
+      "monotonic_ms0": 100000,
+      "monotonic_now": 130000,
+      "current_wall_ms": 1800604830000,
+      "expected_issued_at_ms": 1800000030000
+    }
+  ],
+  "stress": {
+    "renewals": 10000,
+    "attempts": 10000,
+    "cache_capacity": 4
+  }
+}

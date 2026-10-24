@@ -17,6 +17,7 @@
 ## 📡 Команды и результаты
 
 - [Управление камерой siplite](siplite-camera-control.md) — port2 discovery, credentials, LED/PWM, H.265/Auto и постоянный локальный API; negotiated camera1.0.0.
+- [Проект monotonic admission для камеры CTLv1](camera-ctlv1-monotonic-agreement.md) — readiness nonce, issuer epoch, порядок команд и офлайн-векторы; требует согласования владельцев.
 
 | Документ | Содержание |
 | :--- | :--- |
@@ -61,3 +62,7 @@
 Handoff, планы реализации, RFC и материалы в `exceptions/` сохраняют контекст отдельных работ. Для интеграции начинайте с текущих контрактов выше; исторические SHA и результаты проверок в handoff относятся к указанному в них выпуску.
 
 - [HEVC TASK-00 contracts and local pin](hevc-contracts-p0.md).
+# Session lifecycle55 and camera enrollment
+
+- [Desktop lifecycle handoff](session-lifecycle55-handoff.md).
+- [Camera boot/issuer enrollment proposal](camera-boot-issuer-enrollment.md).

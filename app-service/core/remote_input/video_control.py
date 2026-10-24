@@ -99,10 +99,7 @@ class VideoStore:
     ) -> Any:
         key = self.key(sn)
         claim_keys = (
-            [
-                f"{key}:{kind}:{value}"
-                for kind, value in zip(("stream", "operation"), claim)
-            ]
+            [f"{key}:{kind}:{value}" for kind, value in zip(("stream", "operation"), claim)]
             if claim
             else []
         )
@@ -175,11 +172,7 @@ def select_codec(start: dict[str, Any], context: dict[str, Any]) -> str:
         return "expired"
     active = context.get("active_start")
     if active:
-        return (
-            "already_running"
-            if all(start[k] == active[k] for k in IDENTITY)
-            else "conflict"
-        )
+        return "already_running" if all(start[k] == active[k] for k in IDENTITY) else "conflict"
     if not context["negotiated_v2"]:
         return "unsupported"
     cap = context["capabilities"]
@@ -188,8 +181,7 @@ def select_codec(start: dict[str, Any], context: dict[str, Any]) -> str:
         or cap["agent_instance_id"] != context["agent_instance_id"]
         or start["capability_revision"] != cap["capability_revision"]
         or start["descriptor"]["source_id"] != cap["source_id"]
-        or start["descriptor"]["geometry_generation"]
-        != cap["binding"]["geometry_generation"]
+        or start["descriptor"]["geometry_generation"] != cap["binding"]["geometry_generation"]
         or context["binding"] != cap["binding"]
     ):
         return "capability_mismatch"
@@ -237,9 +229,7 @@ class VideoControl:
             return _dict_to_lease(data) if data else None
         return await service.leases.get(lease_id)
 
-    async def publisher_lease(
-        self, service: Any, start: dict[str, Any], pipe: Any
-    ) -> Lease | None:
+    async def publisher_lease(self, service: Any, start: dict[str, Any], pipe: Any) -> Lease | None:
         """Read authority under the video transaction, never a worker cache.
 
         Watching both keys fences renew/revoke/replacement and Redis expiry.
@@ -497,9 +487,7 @@ class VideoControl:
                 or doc.get("server_epoch") != server_epoch
                 or ack.command_id != query.get("command_id")
                 or (query.get("source_id") and cap["source_id"] != query["source_id"])
-                or not query.get("issued_at_ms", 0)
-                <= now_ms()
-                < query.get("expires_at_ms", 0)
+                or not query.get("issued_at_ms", 0) <= now_ms() < query.get("expires_at_ms", 0)
                 or not cap["checked_at_ms"] <= now_ms() < cap["valid_until_ms"]
                 or not 0 < cap["valid_until_ms"] - cap["checked_at_ms"] <= 60000
             ):
@@ -579,8 +567,7 @@ class VideoControl:
             )
         else:
             source_allowed = any(
-                c.camera_id == descriptor["source_id"] and c.available
-                for c in inv.cameras
+                c.camera_id == descriptor["source_id"] and c.available for c in inv.cameras
             )
 
         def reserve(doc: dict[str, Any]) -> dict[str, Any]:
@@ -601,9 +588,7 @@ class VideoControl:
                 "lease_active": lease.is_active(),
                 "lease_id": str(lease.lease_id),
                 "now_ms": now_ms(),
-                "active_start": (
-                    active["start"] if active and active["state"] in LIVE else None
-                ),
+                "active_start": (active["start"] if active and active["state"] in LIVE else None),
                 "negotiated_v2": bool(
                     cap
                     and view.online
@@ -613,8 +598,7 @@ class VideoControl:
                 "capabilities": cap,
                 "agent_instance_id": cap["agent_instance_id"] if cap else None,
                 "binding": binding,
-                "server_hevc_ready": settings.remote_input.video_hevc_chain_ready
-                or test_camera,
+                "server_hevc_ready": settings.remote_input.video_hevc_chain_ready or test_camera,
                 "test_camera_source": test_camera,
             }
             result = select_codec(start, context)
@@ -624,9 +608,7 @@ class VideoControl:
             if result not in ("h264", "h265"):
                 reject(
                     result,
-                    {"unsupported": 422, "forbidden": 403, "expired": 410}.get(
-                        result, 409
-                    ),
+                    {"unsupported": 422, "forbidden": 403, "expired": 410}.get(result, 409),
                 )
             if result != start["resolved_codec"]:
                 reject("codec_mismatch")
@@ -654,8 +636,7 @@ class VideoControl:
             current = await self.publisher_lease(service, start, pipe)
             if (
                 current is None
-                or command.lease_expires_at_ms
-                > int(current.expires_at.timestamp() * 1000)
+                or command.lease_expires_at_ms > int(current.expires_at.timestamp() * 1000)
                 or current.org_id != lease.org_id
                 or current.owner_user_id != lease.owner_user_id
                 or current.owner_session_id != lease.owner_session_id
@@ -684,9 +665,7 @@ class VideoControl:
             descriptor["source_id"] if descriptor["source_type"] != "desktop" else None
         )
         if not await service.leases.save_stream(lease, None):
-            await self.finish(
-                lease.sn, command.stream_instance_id, "failed", "lease_invalid"
-            )
+            await self.finish(lease.sn, command.stream_instance_id, "failed", "lease_invalid")
             reject("lease_invalid")
         try:
             await asyncio.wait_for(
@@ -695,10 +674,7 @@ class VideoControl:
             )
             while now_ms() < command.expires_at_ms:
                 current = (await self.store.get(lease.sn)).get("stream", {})
-                if (
-                    current.get("start", {}).get("stream_instance_id")
-                    != command.stream_instance_id
-                ):
+                if current.get("start", {}).get("stream_instance_id") != command.stream_instance_id:
                     reject("conflict")
                 if current.get("state") != "starting":
                     if current["state"] not in LIVE:
@@ -709,9 +685,7 @@ class VideoControl:
                             try:
                                 await self.stop_command(current, send)
                             except Exception:
-                                log.warning(
-                                    "V2 compensation STOP failed", exc_info=True
-                                )
+                                log.warning("V2 compensation STOP failed", exc_info=True)
                     return current
                 await asyncio.sleep(0.05)
             await self.terminate(service, state, "start_timeout", send)
@@ -719,9 +693,7 @@ class VideoControl:
         except HTTPException:
             raise
         except asyncio.CancelledError:
-            await asyncio.shield(
-                self.terminate(service, state, "caller_cancelled", send)
-            )
+            await asyncio.shield(self.terminate(service, state, "caller_cancelled", send))
             raise
         except Exception:
             await self.terminate(service, state, "publish_failed", send)
@@ -762,14 +734,10 @@ class VideoControl:
         error: dict[str, Any] | None = None,
     ) -> None:
         start = state["start"]
-        if not await self.finish(
-            start["sn"], start["stream_instance_id"], "failed", reason, error
-        ):
+        if not await self.finish(start["sn"], start["stream_instance_id"], "failed", reason, error):
             return
         await self.clear_lease(service, start["sn"], state)
-        await self.notify(
-            service, start["sn"], start["stream_instance_id"], "failed", reason
-        )
+        await self.notify(service, start["sn"], start["stream_instance_id"], "failed", reason)
         try:
             await self.stop_command(state, send)
         except Exception:
@@ -798,9 +766,7 @@ class VideoControl:
                 return False
             if state == "failed" and error is None:
                 error_code = (
-                    "codec_mismatch"
-                    if reason == "descriptor_mismatch"
-                    else "producer_lost"
+                    "codec_mismatch" if reason == "descriptor_mismatch" else "producer_lost"
                 )
                 detail = {
                     "domain": "producer",
@@ -809,7 +775,7 @@ class VideoControl:
                     "codec": current["start"]["resolved_codec"],
                     "backend": "unknown",
                     "stage": "unknown",
-                    "current_stream_terminated": True,
+                    "current_stream_terminated": False,
                     "recovery_class": "unknown",
                     "suggested_action": "none",
                     "auto_restart_allowed": False,
@@ -818,13 +784,23 @@ class VideoControl:
             else:
                 detail = error
             current.update(state=state, reason=reason, error=detail, result=state)
-            if state == "failed" and current["start"]["resolved_codec"] == "h265":
+            if (
+                state == "failed"
+                and current["start"]["resolved_codec"] == "h265"
+                and (detail or {}).get("code")
+                in {
+                    "device_lost",
+                    "capture_path_unavailable",
+                    "input_format_unsupported",
+                    "encoded_output_invalid",
+                    "profile_unsupported",
+                    "encoder_hung",
+                    "conversion_failed",
+                    "codec_mismatch",
+                }
+            ):
                 cap = doc.get("capability")
-                if (
-                    cap
-                    and cap["agent_instance_id"]
-                    == current["start"]["agent_instance_id"]
-                ):
+                if cap and cap["agent_instance_id"] == current["start"]["agent_instance_id"]:
                     for entry in cap["video"]:
                         if entry["codec"] == "h265":
                             entry.update(
@@ -843,8 +819,7 @@ class VideoControl:
             return False
         start = state["start"]
         if any(
-            payload[k] != start[k]
-            for k in ("lease_id", "stream_instance_id", "agent_instance_id")
+            payload[k] != start[k] for k in ("lease_id", "stream_instance_id", "agent_instance_id")
         ):
             return False
         lease = await self.get_lease(service, UUID(start["lease_id"]))
@@ -897,10 +872,7 @@ class VideoControl:
                 if not accepted:
                     return False
         else:
-            if (
-                payload["descriptor_revision"]
-                != start["descriptor"]["descriptor_revision"]
-            ):
+            if payload["descriptor_revision"] != start["descriptor"]["descriptor_revision"]:
                 return False
             if not await self.finish(
                 sn,
@@ -941,8 +913,7 @@ class VideoControl:
             return (
                 event.lease_id == start["lease_id"]
                 and event.stream_instance_id == start["stream_instance_id"]
-                and event.descriptor_revision
-                == start["descriptor"]["descriptor_revision"]
+                and event.descriptor_revision == start["descriptor"]["descriptor_revision"]
             )
         await self.terminate(service, state, event.code.value, send)
         return True
@@ -977,13 +948,10 @@ class VideoControl:
             epoch = epoch_of(camera_record)
             if (
                 lease.stream_instance_id is not None
-                and str(lease.stream_instance_id)
-                != epoch.identity["stream_instance_id"]
+                and str(lease.stream_instance_id) != epoch.identity["stream_instance_id"]
             ):
                 return False
-            await camera_control.stop(
-                None, lease, {**epoch.identity, "reason": reason}, send
-            )
+            await camera_control.stop(None, lease, {**epoch.identity, "reason": reason}, send)
             return True
         state = document.get("stream")
         if not state or state["start"]["lease_id"] != str(lease.lease_id):

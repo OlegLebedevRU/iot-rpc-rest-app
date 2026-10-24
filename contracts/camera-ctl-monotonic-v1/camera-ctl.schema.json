@@ -1,0 +1,409 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Proposed camera CTLv1 monotonic admission extension",
+  "$defs": {
+    "uuid": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "boot_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^cam:ip[0-9]{6}$"
+        },
+        "physical_camera_mac": {
+          "type": "string",
+          "pattern": "^([0-9a-f]{2}:){5}[0-9a-f]{2}$"
+        },
+        "path_generation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "codec": {
+          "enum": [
+            "h264",
+            "h265"
+          ]
+        },
+        "descriptor_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "boot_id",
+        "source_id",
+        "physical_camera_mac",
+        "path_generation",
+        "codec",
+        "descriptor_sha256"
+      ]
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "camera_admission_revision": {
+          "const": "camera-ctl-monotonic/0.2.0-proposed"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "issuer_epoch": {
+          "$ref": "#/$defs/uuid"
+        },
+        "readiness_nonce": {
+          "$ref": "#/$defs/uuid"
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "type": {
+          "const": "camera_readiness_query"
+        },
+        "issued_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expires_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "admission_seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "v",
+        "camera_admission_revision",
+        "sn",
+        "issuer_epoch",
+        "readiness_nonce",
+        "binding",
+        "type",
+        "issued_at_ms",
+        "expires_at_ms",
+        "admission_seq"
+      ]
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "camera_admission_revision": {
+          "const": "camera-ctl-monotonic/0.2.0-proposed"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "issuer_epoch": {
+          "$ref": "#/$defs/uuid"
+        },
+        "readiness_nonce": {
+          "$ref": "#/$defs/uuid"
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "type": {
+          "const": "camera_readiness_result"
+        },
+        "status": {
+          "const": "ready"
+        },
+        "admission_seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "v",
+        "camera_admission_revision",
+        "sn",
+        "issuer_epoch",
+        "readiness_nonce",
+        "binding",
+        "type",
+        "status",
+        "admission_seq"
+      ]
+    },
+    "start": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "camera_admission_revision": {
+          "const": "camera-ctl-monotonic/0.2.0-proposed"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "issuer_epoch": {
+          "$ref": "#/$defs/uuid"
+        },
+        "readiness_nonce": {
+          "$ref": "#/$defs/uuid"
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "type": {
+          "const": "stream_start"
+        },
+        "command_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "lease_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "stream_instance_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "command_seq": {
+          "const": 1
+        },
+        "issued_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expires_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "mode": {
+          "const": "usb-camera"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^cam:ip[0-9]{6}$"
+        },
+        "profile": {
+          "const": "default"
+        },
+        "admission_seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "v",
+        "camera_admission_revision",
+        "sn",
+        "issuer_epoch",
+        "readiness_nonce",
+        "binding",
+        "type",
+        "command_id",
+        "lease_id",
+        "stream_instance_id",
+        "command_seq",
+        "issued_at_ms",
+        "expires_at_ms",
+        "mode",
+        "source_id",
+        "profile",
+        "admission_seq"
+      ]
+    },
+    "renew": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "camera_admission_revision": {
+          "const": "camera-ctl-monotonic/0.2.0-proposed"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "issuer_epoch": {
+          "$ref": "#/$defs/uuid"
+        },
+        "readiness_nonce": {
+          "$ref": "#/$defs/uuid"
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "type": {
+          "const": "lease_renew"
+        },
+        "command_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "lease_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "stream_instance_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "command_seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "issued_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expires_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "ttl_sec": {
+          "const": 60
+        },
+        "admission_seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "v",
+        "camera_admission_revision",
+        "sn",
+        "issuer_epoch",
+        "readiness_nonce",
+        "binding",
+        "type",
+        "command_id",
+        "lease_id",
+        "stream_instance_id",
+        "command_seq",
+        "issued_at_ms",
+        "expires_at_ms",
+        "ttl_sec",
+        "admission_seq"
+      ]
+    },
+    "stop": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1
+        },
+        "camera_admission_revision": {
+          "const": "camera-ctl-monotonic/0.2.0-proposed"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "issuer_epoch": {
+          "$ref": "#/$defs/uuid"
+        },
+        "readiness_nonce": {
+          "$ref": "#/$defs/uuid"
+        },
+        "binding": {
+          "$ref": "#/$defs/binding"
+        },
+        "type": {
+          "const": "stream_stop"
+        },
+        "command_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "lease_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "stream_instance_id": {
+          "$ref": "#/$defs/uuid"
+        },
+        "command_seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "issued_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expires_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "admission_seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "v",
+        "camera_admission_revision",
+        "sn",
+        "issuer_epoch",
+        "readiness_nonce",
+        "binding",
+        "type",
+        "command_id",
+        "lease_id",
+        "stream_instance_id",
+        "command_seq",
+        "issued_at_ms",
+        "expires_at_ms",
+        "admission_seq"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/query"
+    },
+    {
+      "$ref": "#/$defs/result"
+    },
+    {
+      "$ref": "#/$defs/start"
+    },
+    {
+      "$ref": "#/$defs/renew"
+    },
+    {
+      "$ref": "#/$defs/stop"
+    }
+  ]
+}

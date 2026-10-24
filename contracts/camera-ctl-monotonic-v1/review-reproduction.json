@@ -1,0 +1,50 @@
+{
+  "revision": "camera-ctl-monotonic/0.1.0-proposed",
+  "sequential_stream_reproduction": [
+    {
+      "action": "ready",
+      "tick": 1000,
+      "result": "ready"
+    },
+    {
+      "action": "result",
+      "tick": 1100,
+      "result": "result_accepted"
+    },
+    {
+      "action": "start",
+      "tick": 1200,
+      "result": "started"
+    },
+    {
+      "action": "stop",
+      "tick": 32000,
+      "result": "stopped"
+    },
+    {
+      "action": "stop",
+      "tick": 32001,
+      "result": "closed"
+    },
+    {
+      "action": "ready",
+      "tick": 33000,
+      "result": "ready"
+    },
+    {
+      "action": "result",
+      "tick": 33100,
+      "result": "result_accepted"
+    },
+    {
+      "action": "start",
+      "tick": 33200,
+      "result": "closed"
+    }
+  ],
+  "capacity_failure": {
+    "renewal": 4096,
+    "outcome": "capacity",
+    "retained_command_receipts": 4096
+  }
+}

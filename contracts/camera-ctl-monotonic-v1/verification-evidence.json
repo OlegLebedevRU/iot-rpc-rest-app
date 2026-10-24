@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-24",
+  "baseline_commit": "b42e4844536e42de6b3347923125ccd260d97ca7",
+  "python": "3.14.0",
+  "offline_verifier": {
+    "revision": "camera-ctl-monotonic/0.2.0-proposed",
+    "wire_examples": 5,
+    "invalid_shapes": 10,
+    "stateful_cases": 56,
+    "stateful_steps": 268,
+    "issuer_clock_cases": 3,
+    "stress": {
+      "renewals": 10000,
+      "new_attempts": 10000,
+      "cache_capacity_each": 4,
+      "retained_command_results": 4,
+      "retained_readiness_results": 4,
+      "admission_high_water": 10001
+    },
+    "descriptor_hash_vectors": {
+      "valid": 8,
+      "invalid": 6
+    }
+  },
+  "pytest": {
+    "command": "uv run pytest -q",
+    "passed": 831,
+    "skipped": 7,
+    "warnings": 4,
+    "elapsed_seconds": 51.99,
+    "additional_warning": "unawaited AsyncMock coroutine at GC"
+  },
+  "ruff": {
+    "result": "passed",
+    "scope": [
+      "contracts/camera-ctl-monotonic-v1/verify.py",
+      "contracts/camera-ctl-monotonic-v1/stress.py",
+      "app-service/tests/core/services/test_camera_monotonic_proposal.py"
+    ]
+  },
+  "black": {
+    "result": "passed",
+    "scope": "same three Python files"
+  },
+  "tested_files_sha256": {
+    "app-service/tests/core/services/test_camera_monotonic_proposal.py": "a9e5c9130902a2340914b3227c6f530d1e1da2e42e83d13f70edf390d60ef0ce",
+    "contracts/camera-ctl-monotonic-v1/camera-ctl.schema.json": "e75e1c7f49f0d0fc68f6720a3c47766ccb4caad83d721b5d1b8aabe3d3b58a0d",
+    "contracts/camera-ctl-monotonic-v1/descriptor-hash-vectors.json": "92a1dee71c22e4e0665be739dd521869e83a4bbd7bef8880d59ef80924e9a57e",
+    "contracts/camera-ctl-monotonic-v1/README.md": "1f161ae9b5463e182cda50c9c8fd555a1de1cf7f8fba9df538a0f16079325e8f",
+    "contracts/camera-ctl-monotonic-v1/review-reproduction.json": "88de549660bc5f0e4f59c887d1ac8cbcd05b490a1bcfe94f9413ff4dfef3f1f6",
+    "contracts/camera-ctl-monotonic-v1/stress.py": "e039edf6628f9adaf3d6ce7766b2ed7b8e8ccad29f1e448b5dbbd1d3d653e54d",
+    "contracts/camera-ctl-monotonic-v1/vectors.json": "0e0a40ae829eb790f6eae3a6f00bdb15ef598d6a0c14d93a9c5d6924220c32a0",
+    "contracts/camera-ctl-monotonic-v1/verify.py": "15abe6c7220a15af9fb6ce78b5eb57d77ead869382e4f0c7e2df14c665bbac26",
+    "docs/camera-ctlv1-monotonic-agreement.md": "d81014d502208b6a29b7b2f7daff2fb73f7d49856b88a0682d90fdfb023856f1",
+    "docs/hevc-monotonic-time-firmware-handoff.md": "6de341f808adb4b4218c21074f066b948a2e7f20c5e20d2348c7ffd2769d2ab0",
+    "docs/README.md": "974800c34836d94e20c7ebc046eaf9c56a872d46f817ccc7aaa81e2f2e97bc34",
+    "docs/siplite-camera-control.md": "23f242f0d8b610faecdc483b0abebd4d17f402087629f6a0cc75b91937b09573"
+  },
+  "limitations": [
+    "proposal only",
+    "no product runtime changes",
+    "no deployment",
+    "no real terminal acceptance",
+    "no C/C++ firmware canonicalizer executed"
+  ],
+  "hash_domain": "Git index text blobs (LF normalization), identical in the immutable commit"
+}
