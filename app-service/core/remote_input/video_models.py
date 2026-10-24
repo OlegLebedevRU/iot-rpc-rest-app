@@ -40,17 +40,17 @@ class H264Track(BaseModel):
     chroma: Literal["420"]
     clock_rate: Literal[90000]
     payload_type: StrictInt = Field(..., ge=96, le=127)
-    width: StrictInt = Field(..., ge=2, le=1920, multiple_of=2)
-    height: StrictInt = Field(..., ge=2, le=1080, multiple_of=2)
-    fps: StrictInt = Field(..., ge=1, le=25)
+    width: StrictInt = Field(..., ge=2, le=16384, multiple_of=2)
+    height: StrictInt = Field(..., ge=2, le=16384, multiple_of=2)
+    fps: StrictInt = Field(..., ge=1, le=120)
     feedback: Feedback
     max_b_frames: Literal[0]
     keyframe_interval_ms: StrictInt = Field(..., ge=250, le=5000)
     repeat_parameter_sets: Literal[True]
     codec: Literal["h264"]
-    codec_profile: Literal["baseline"]
+    codec_profile: Literal["baseline", "main", "high"]
     packetization: Literal["rfc6184"]
-    profile_level_id: StrictStr = Field(..., pattern="^42[0-9a-f]{4}$")
+    profile_level_id: StrictStr = Field(..., pattern="^(42|4d|64)[0-9a-f]{4}$")
     packetization_mode: Literal[1]
 
 
@@ -61,6 +61,13 @@ class LevelId(Enum):
     int_90 = 90
     int_93 = 93
     int_120 = 120
+    int_123 = 123
+    int_150 = 150
+    int_153 = 153
+    int_156 = 156
+    int_180 = 180
+    int_183 = 183
+    int_186 = 186
 
 
 class H265Track(BaseModel):
@@ -74,9 +81,9 @@ class H265Track(BaseModel):
     chroma: Literal["420"]
     clock_rate: Literal[90000]
     payload_type: StrictInt = Field(..., ge=96, le=127)
-    width: StrictInt = Field(..., ge=2, le=1920, multiple_of=2)
-    height: StrictInt = Field(..., ge=2, le=1080, multiple_of=2)
-    fps: StrictInt = Field(..., ge=1, le=25)
+    width: StrictInt = Field(..., ge=2, le=16384, multiple_of=2)
+    height: StrictInt = Field(..., ge=2, le=16384, multiple_of=2)
+    fps: StrictInt = Field(..., ge=1, le=120)
     feedback: Feedback
     max_b_frames: Literal[0]
     keyframe_interval_ms: StrictInt = Field(..., ge=250, le=5000)
@@ -108,6 +115,9 @@ class ProfileId(Enum):
 
 
 class Descriptor(BaseModel):
+    contract_version: Literal[3] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     model_config = ConfigDict(
         extra="forbid",
     )
@@ -204,6 +214,9 @@ class CapabilityEntry(BaseModel):
 
 
 class Capabilities(BaseModel):
+    contract_version: Literal[3] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     model_config = ConfigDict(
         extra="forbid",
     )

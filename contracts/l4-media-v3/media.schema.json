@@ -1,0 +1,2358 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Unified L4 media contract 3.0.0",
+  "$defs": {
+    "h264_track": {
+      "type": "object",
+      "properties": {
+        "track_id": {
+          "const": "video-main"
+        },
+        "kind": {
+          "const": "video"
+        },
+        "direction": {
+          "const": "producer_to_viewers"
+        },
+        "bit_depth": {
+          "const": 8
+        },
+        "chroma": {
+          "const": "420"
+        },
+        "clock_rate": {
+          "const": 90000
+        },
+        "payload_type": {
+          "type": "integer",
+          "minimum": 96,
+          "maximum": 127
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 16384,
+          "multipleOf": 2
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 16384,
+          "multipleOf": 2
+        },
+        "fps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120
+        },
+        "feedback": {
+          "type": "object",
+          "properties": {
+            "pli": {
+              "type": "boolean"
+            },
+            "fir": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "pli",
+            "fir"
+          ],
+          "additionalProperties": false
+        },
+        "max_b_frames": {
+          "const": 0
+        },
+        "keyframe_interval_ms": {
+          "type": "integer",
+          "minimum": 250,
+          "maximum": 5000
+        },
+        "repeat_parameter_sets": {
+          "const": true
+        },
+        "codec": {
+          "const": "h264"
+        },
+        "codec_profile": {
+          "enum": [
+            "baseline",
+            "main",
+            "high"
+          ]
+        },
+        "packetization": {
+          "const": "rfc6184"
+        },
+        "profile_level_id": {
+          "type": "string",
+          "pattern": "^(42|4d|64)[0-9a-f]{4}$"
+        },
+        "packetization_mode": {
+          "const": 1
+        }
+      },
+      "required": [
+        "track_id",
+        "kind",
+        "direction",
+        "bit_depth",
+        "chroma",
+        "clock_rate",
+        "payload_type",
+        "width",
+        "height",
+        "fps",
+        "feedback",
+        "max_b_frames",
+        "keyframe_interval_ms",
+        "repeat_parameter_sets",
+        "codec",
+        "codec_profile",
+        "packetization",
+        "profile_level_id",
+        "packetization_mode"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "codec_profile": {
+                "const": "baseline"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "profile_level_id": {
+                "pattern": "^42[0-9a-f]{4}$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "codec_profile": {
+                "const": "main"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "profile_level_id": {
+                "pattern": "^4d[0-9a-f]{4}$"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "codec_profile": {
+                "const": "high"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "profile_level_id": {
+                "pattern": "^64[0-9a-f]{4}$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "h265_track": {
+      "type": "object",
+      "properties": {
+        "track_id": {
+          "const": "video-main"
+        },
+        "kind": {
+          "const": "video"
+        },
+        "direction": {
+          "const": "producer_to_viewers"
+        },
+        "bit_depth": {
+          "const": 8
+        },
+        "chroma": {
+          "const": "420"
+        },
+        "clock_rate": {
+          "const": 90000
+        },
+        "payload_type": {
+          "type": "integer",
+          "minimum": 96,
+          "maximum": 127
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 16384,
+          "multipleOf": 2
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 16384,
+          "multipleOf": 2
+        },
+        "fps": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 120
+        },
+        "feedback": {
+          "type": "object",
+          "properties": {
+            "pli": {
+              "type": "boolean"
+            },
+            "fir": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "pli",
+            "fir"
+          ],
+          "additionalProperties": false
+        },
+        "max_b_frames": {
+          "const": 0
+        },
+        "keyframe_interval_ms": {
+          "type": "integer",
+          "minimum": 250,
+          "maximum": 5000
+        },
+        "repeat_parameter_sets": {
+          "const": true
+        },
+        "codec": {
+          "const": "h265"
+        },
+        "codec_profile": {
+          "const": "main"
+        },
+        "packetization": {
+          "const": "rfc7798"
+        },
+        "profile_space": {
+          "const": 0
+        },
+        "profile_id": {
+          "const": 1
+        },
+        "tier_flag": {
+          "const": 0
+        },
+        "level_id": {
+          "enum": [
+            30,
+            60,
+            63,
+            90,
+            93,
+            120,
+            123,
+            150,
+            153,
+            156,
+            180,
+            183,
+            186
+          ]
+        },
+        "sprop_max_don_diff": {
+          "const": 0
+        }
+      },
+      "required": [
+        "track_id",
+        "kind",
+        "direction",
+        "bit_depth",
+        "chroma",
+        "clock_rate",
+        "payload_type",
+        "width",
+        "height",
+        "fps",
+        "feedback",
+        "max_b_frames",
+        "keyframe_interval_ms",
+        "repeat_parameter_sets",
+        "codec",
+        "codec_profile",
+        "packetization",
+        "profile_space",
+        "profile_id",
+        "tier_flag",
+        "level_id",
+        "sprop_max_don_diff"
+      ],
+      "additionalProperties": false
+    },
+    "track": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/h264_track"
+        },
+        {
+          "$ref": "#/$defs/h265_track"
+        }
+      ]
+    },
+    "descriptor": {
+      "type": "object",
+      "properties": {
+        "descriptor_revision": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "source_type": {
+          "enum": [
+            "desktop",
+            "usb-camera",
+            "camera",
+            "test"
+          ]
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63
+        },
+        "geometry_generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "profile_id": {
+          "enum": [
+            "default",
+            "low"
+          ]
+        },
+        "tracks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/track"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "contract_version": {
+          "const": 3
+        }
+      },
+      "required": [
+        "contract_version",
+        "descriptor_revision",
+        "source_type",
+        "source_id",
+        "geometry_generation",
+        "profile_id",
+        "tracks"
+      ],
+      "additionalProperties": false
+    },
+    "probe_binding": {
+      "type": "object",
+      "properties": {
+        "process_arch": {
+          "enum": [
+            "x86",
+            "x64"
+          ]
+        },
+        "adapter_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "driver_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "component_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "interactive_session_id": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "geometry_generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        }
+      },
+      "required": [
+        "process_arch",
+        "adapter_id",
+        "driver_revision",
+        "component_revision",
+        "interactive_session_id",
+        "geometry_generation"
+      ],
+      "additionalProperties": false
+    },
+    "probe_profile": {
+      "type": "object",
+      "properties": {
+        "profile_id": {
+          "enum": [
+            "default",
+            "low"
+          ]
+        },
+        "track": {
+          "$ref": "#/$defs/track"
+        }
+      },
+      "required": [
+        "profile_id",
+        "track"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "profile_id": {
+                "const": "low"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "track": {
+                "properties": {
+                  "fps": {
+                    "maximum": 15
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "capability_entry": {
+      "type": "object",
+      "properties": {
+        "codec": {
+          "enum": [
+            "h264",
+            "h265"
+          ]
+        },
+        "backend": {
+          "enum": [
+            "media_foundation",
+            "openh264",
+            "ffmpeg",
+            "camera"
+          ]
+        },
+        "hardware": {
+          "type": "boolean"
+        },
+        "status": {
+          "enum": [
+            "unknown",
+            "probing",
+            "ready",
+            "unsupported",
+            "temporarily_unavailable",
+            "disabled_by_policy"
+          ]
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "no_hardware_mft",
+                "os_api_unavailable",
+                "input_format_unsupported",
+                "profile_unsupported",
+                "encoder_busy",
+                "probe_timeout",
+                "encoded_output_invalid",
+                "driver_reset",
+                "capture_path_unavailable",
+                "conversion_failed",
+                "policy_disabled",
+                "device_lost",
+                "encoder_hung",
+                "codec_mismatch",
+                "producer_lost",
+                "network_failure",
+                "unknown"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "profiles": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/probe_profile"
+          },
+          "minItems": 0,
+          "maxItems": 8
+        },
+        "probe_evidence": {
+          "enum": [
+            "none",
+            "encoded_sequence"
+          ]
+        }
+      },
+      "required": [
+        "codec",
+        "backend",
+        "hardware",
+        "status",
+        "reason_code",
+        "profiles",
+        "probe_evidence"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "ready"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "profiles": {
+                "minItems": 1
+              },
+              "probe_evidence": {
+                "const": "encoded_sequence"
+              },
+              "reason_code": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "codec": {
+                "const": "h265"
+              },
+              "backend": {
+                "const": "media_foundation"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "hardware": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "codec": {
+                "const": "h265"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "backend": {
+                "enum": [
+                  "media_foundation",
+                  "camera"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "codec": {
+                "const": "h264"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "profiles": {
+                "items": {
+                  "properties": {
+                    "track": {
+                      "$ref": "#/$defs/h264_track"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "codec": {
+                "const": "h265"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "profiles": {
+                "items": {
+                  "properties": {
+                    "track": {
+                      "$ref": "#/$defs/h265_track"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "agent_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "capability_revision": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "checked_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "valid_until_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63
+        },
+        "binding": {
+          "$ref": "#/$defs/probe_binding"
+        },
+        "video": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capability_entry"
+          },
+          "minItems": 1,
+          "maxItems": 4
+        },
+        "measured_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "admission_clock": {
+          "enum": [
+            "issuer_monotonic_v1"
+          ]
+        },
+        "contract_version": {
+          "const": 3
+        }
+      },
+      "required": [
+        "contract_version",
+        "agent_instance_id",
+        "capability_revision",
+        "checked_at_ms",
+        "valid_until_ms",
+        "source_id",
+        "binding",
+        "video"
+      ],
+      "additionalProperties": false
+    },
+    "inventory_get": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 2
+        },
+        "command_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "issued_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "expires_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "type": {
+          "const": "inventory_get"
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63
+        },
+        "profile_id": {
+          "enum": [
+            "low",
+            "default"
+          ]
+        }
+      },
+      "required": [
+        "v",
+        "command_id",
+        "sn",
+        "issued_at_ms",
+        "expires_at_ms",
+        "type"
+      ],
+      "additionalProperties": false
+    },
+    "capabilities_ack": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 2
+        },
+        "type": {
+          "const": "ack"
+        },
+        "command_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "result": {
+          "const": "inventory"
+        },
+        "video_capabilities": {
+          "$ref": "#/$defs/capabilities"
+        }
+      },
+      "required": [
+        "v",
+        "type",
+        "command_id",
+        "sn",
+        "result",
+        "video_capabilities"
+      ],
+      "additionalProperties": false
+    },
+    "delivery": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 253
+        },
+        "rtp_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "rtcp_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "required": [
+        "host",
+        "rtp_port",
+        "rtcp_port"
+      ],
+      "additionalProperties": false
+    },
+    "start": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 2
+        },
+        "command_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "issued_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "expires_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "lease_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "stream_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "type": {
+          "const": "stream_start"
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "agent_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "capability_revision": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "lease_expires_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "codec_policy": {
+          "enum": [
+            "auto",
+            "h264",
+            "h265"
+          ]
+        },
+        "resolved_codec": {
+          "enum": [
+            "h264",
+            "h265"
+          ]
+        },
+        "descriptor": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/descriptor"
+            },
+            {
+              "properties": {
+                "source_type": {
+                  "enum": [
+                    "desktop",
+                    "usb-camera"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "delivery": {
+          "$ref": "#/$defs/delivery"
+        },
+        "recovery_policy": {
+          "const": "stop_on_failure"
+        }
+      },
+      "required": [
+        "v",
+        "command_id",
+        "sn",
+        "issued_at_ms",
+        "expires_at_ms",
+        "lease_id",
+        "stream_instance_id",
+        "type",
+        "operation_id",
+        "agent_instance_id",
+        "capability_revision",
+        "lease_expires_at_ms",
+        "codec_policy",
+        "resolved_codec",
+        "descriptor",
+        "delivery",
+        "recovery_policy"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "resolved_codec": {
+                "const": "h264"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "descriptor": {
+                "properties": {
+                  "tracks": {
+                    "items": {
+                      "$ref": "#/$defs/h264_track"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "resolved_codec": {
+                "const": "h265"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "descriptor": {
+                "properties": {
+                  "tracks": {
+                    "items": {
+                      "$ref": "#/$defs/h265_track"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "ready": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 2
+        },
+        "type": {
+          "const": "stream_event"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "lease_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "stream_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "command_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "agent_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "state": {
+          "const": "running"
+        },
+        "confirmation": {
+          "const": "agent_ready"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 35
+        },
+        "actual_descriptor": {
+          "$ref": "#/$defs/descriptor"
+        }
+      },
+      "required": [
+        "v",
+        "type",
+        "sn",
+        "lease_id",
+        "stream_instance_id",
+        "command_id",
+        "operation_id",
+        "agent_instance_id",
+        "state",
+        "confirmation",
+        "timestamp",
+        "actual_descriptor"
+      ],
+      "additionalProperties": false
+    },
+    "error_detail": {
+      "type": "object",
+      "properties": {
+        "domain": {
+          "enum": [
+            "encoder",
+            "capture",
+            "conversion",
+            "transport",
+            "camera",
+            "producer"
+          ]
+        },
+        "code": {
+          "enum": [
+            "no_hardware_mft",
+            "os_api_unavailable",
+            "input_format_unsupported",
+            "profile_unsupported",
+            "encoder_busy",
+            "probe_timeout",
+            "encoded_output_invalid",
+            "driver_reset",
+            "capture_path_unavailable",
+            "conversion_failed",
+            "policy_disabled",
+            "device_lost",
+            "encoder_hung",
+            "codec_mismatch",
+            "producer_lost",
+            "network_failure",
+            "unknown"
+          ]
+        },
+        "scope": {
+          "const": "stream"
+        },
+        "codec": {
+          "enum": [
+            "h264",
+            "h265"
+          ]
+        },
+        "backend": {
+          "enum": [
+            "media_foundation",
+            "openh264",
+            "ffmpeg",
+            "camera",
+            "unknown"
+          ]
+        },
+        "stage": {
+          "enum": [
+            "probe",
+            "capture",
+            "convert",
+            "init",
+            "encode",
+            "packetize",
+            "forward",
+            "network",
+            "unknown"
+          ]
+        },
+        "current_stream_terminated": {
+          "const": true
+        },
+        "recovery_class": {
+          "enum": [
+            "reprobe_required",
+            "manual_action_required",
+            "unknown"
+          ]
+        },
+        "suggested_action": {
+          "enum": [
+            "retry_same_codec",
+            "check_source",
+            "check_transport",
+            "none"
+          ]
+        },
+        "auto_restart_allowed": {
+          "const": false
+        },
+        "attempt": {
+          "const": 0
+        }
+      },
+      "required": [
+        "domain",
+        "code",
+        "scope",
+        "codec",
+        "backend",
+        "stage",
+        "current_stream_terminated",
+        "recovery_class",
+        "suggested_action",
+        "auto_restart_allowed",
+        "attempt"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 2
+        },
+        "type": {
+          "const": "stream_event"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "lease_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "stream_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "agent_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "state": {
+          "const": "failed"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 35
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 96
+        },
+        "descriptor_revision": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "error": {
+          "$ref": "#/$defs/error_detail"
+        }
+      },
+      "required": [
+        "v",
+        "type",
+        "sn",
+        "lease_id",
+        "stream_instance_id",
+        "agent_instance_id",
+        "state",
+        "timestamp",
+        "reason",
+        "descriptor_revision",
+        "error"
+      ],
+      "additionalProperties": false
+    },
+    "media_start": {
+      "type": "object",
+      "properties": {
+        "contract_version": {
+          "const": 3
+        },
+        "session_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "publisher": {
+          "type": "object",
+          "properties": {
+            "sn": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            },
+            "stream_instance_id": {
+              "type": "string",
+              "format": "uuid",
+              "minLength": 36,
+              "maxLength": 36
+            }
+          },
+          "required": [
+            "sn",
+            "stream_instance_id"
+          ],
+          "additionalProperties": false
+        },
+        "lease_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "lease_expires_at": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000
+        },
+        "descriptor": {
+          "$ref": "#/$defs/descriptor"
+        },
+        "pin": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "contract_version",
+        "session_id",
+        "operation_id",
+        "publisher",
+        "lease_id",
+        "lease_expires_at",
+        "descriptor"
+      ],
+      "additionalProperties": false
+    },
+    "media_identity": {
+      "type": "object",
+      "properties": {
+        "contract_version": {
+          "const": 3
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "session_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "lease_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "stream_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "descriptor_revision": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        }
+      },
+      "required": [
+        "contract_version",
+        "sn",
+        "session_id",
+        "lease_id",
+        "stream_instance_id",
+        "descriptor_revision"
+      ],
+      "additionalProperties": false
+    },
+    "media_renew": {
+      "type": "object",
+      "properties": {
+        "contract_version": {
+          "const": 3
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "session_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "lease_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "stream_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "descriptor_revision": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "lease_expires_at": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000
+        }
+      },
+      "required": [
+        "contract_version",
+        "sn",
+        "session_id",
+        "lease_id",
+        "stream_instance_id",
+        "descriptor_revision",
+        "lease_expires_at"
+      ],
+      "additionalProperties": false
+    },
+    "media_stop": {
+      "type": "object",
+      "properties": {
+        "contract_version": {
+          "const": 3
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "session_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "lease_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "stream_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "descriptor_revision": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 96
+        }
+      },
+      "required": [
+        "contract_version",
+        "sn",
+        "session_id",
+        "lease_id",
+        "stream_instance_id",
+        "descriptor_revision",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "media_response": {
+      "type": "object",
+      "properties": {
+        "contract_version": {
+          "const": 3
+        },
+        "session_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "stream_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "route_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "state": {
+          "enum": [
+            "starting",
+            "active",
+            "stopped",
+            "failed"
+          ]
+        },
+        "descriptor": {
+          "$ref": "#/$defs/descriptor"
+        },
+        "publisher": {
+          "type": "object",
+          "properties": {
+            "sn": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            },
+            "stream_instance_id": {
+              "type": "string",
+              "format": "uuid",
+              "minLength": 36,
+              "maxLength": 36
+            }
+          },
+          "required": [
+            "sn",
+            "stream_instance_id"
+          ],
+          "additionalProperties": false
+        },
+        "lease_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "mountpoint_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "rtp_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "rtcp_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "janus_ws": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^/"
+        },
+        "pin": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "contract_version",
+        "session_id",
+        "stream_instance_id",
+        "route_generation",
+        "state",
+        "descriptor",
+        "publisher",
+        "lease_id",
+        "operation_id",
+        "mountpoint_id",
+        "rtp_port",
+        "rtcp_port",
+        "janus_ws"
+      ],
+      "additionalProperties": false
+    },
+    "media_health": {
+      "type": "object",
+      "properties": {
+        "contract_version": {
+          "const": 3
+        },
+        "session_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "stream_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "route_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "state": {
+          "enum": [
+            "starting",
+            "active",
+            "stopped",
+            "failed"
+          ]
+        },
+        "descriptor": {
+          "$ref": "#/$defs/descriptor"
+        },
+        "publisher": {
+          "type": "object",
+          "properties": {
+            "sn": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64,
+              "pattern": "^[A-Za-z0-9._-]+$"
+            },
+            "stream_instance_id": {
+              "type": "string",
+              "format": "uuid",
+              "minLength": 36,
+              "maxLength": 36
+            }
+          },
+          "required": [
+            "sn",
+            "stream_instance_id"
+          ],
+          "additionalProperties": false
+        },
+        "lease_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "operation_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "mountpoint_id": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "rtp_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "rtcp_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "janus_ws": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^/"
+        },
+        "pin": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "transport": {
+          "type": "object",
+          "properties": {
+            "connected": {
+              "type": "boolean"
+            },
+            "rtp_packets": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "last_rtp_at_ms": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 5000000000000
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "rtp_fresh": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "connected",
+            "rtp_packets",
+            "bytes",
+            "last_rtp_at_ms",
+            "rtp_fresh"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "contract_version",
+        "session_id",
+        "stream_instance_id",
+        "route_generation",
+        "state",
+        "descriptor",
+        "publisher",
+        "lease_id",
+        "operation_id",
+        "mountpoint_id",
+        "rtp_port",
+        "rtcp_port",
+        "janus_ws",
+        "transport"
+      ],
+      "additionalProperties": false
+    },
+    "media_capabilities": {
+      "type": "object",
+      "properties": {
+        "contract_version": {
+          "const": 3
+        },
+        "media_contract_versions": {
+          "type": "array",
+          "items": {
+            "const": 3
+          },
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "server_revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "dependencies_ready": {
+          "type": "boolean"
+        },
+        "hevc_runtime_verified": {
+          "type": "boolean"
+        },
+        "codecs": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "h264",
+              "h265"
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "formats": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "codec": {
+                    "const": "h264"
+                  },
+                  "codec_profile": {
+                    "enum": [
+                      "baseline",
+                      "main",
+                      "high"
+                    ]
+                  },
+                  "packetization": {
+                    "const": "rfc6184"
+                  },
+                  "clock_rate": {
+                    "const": 90000
+                  }
+                },
+                "required": [
+                  "codec",
+                  "codec_profile",
+                  "packetization",
+                  "clock_rate"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "codec": {
+                    "const": "h265"
+                  },
+                  "codec_profile": {
+                    "const": "main"
+                  },
+                  "packetization": {
+                    "const": "rfc7798"
+                  },
+                  "clock_rate": {
+                    "const": 90000
+                  }
+                },
+                "required": [
+                  "codec",
+                  "codec_profile",
+                  "packetization",
+                  "clock_rate"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true
+        },
+        "max_video_tracks": {
+          "const": 1
+        },
+        "audio_supported": {
+          "const": false
+        },
+        "reverse_rtcp": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "contract_version",
+        "media_contract_versions",
+        "server_revision",
+        "dependencies_ready",
+        "hevc_runtime_verified",
+        "codecs",
+        "formats",
+        "max_video_tracks",
+        "audio_supported",
+        "reverse_rtcp"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "codecs": {
+                "contains": {
+                  "const": "h265"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "hevc_runtime_verified": {
+                "const": true
+              },
+              "dependencies_ready": {
+                "const": true
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "codecs": {
+                "contains": {
+                  "const": "h264"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "formats": {
+                "contains": {
+                  "properties": {
+                    "codec": {
+                      "const": "h264"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "formats": {
+                "contains": {
+                  "properties": {
+                    "codec": {
+                      "const": "h264"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "codecs": {
+                "contains": {
+                  "const": "h264"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "codecs": {
+                "contains": {
+                  "const": "h265"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "formats": {
+                "contains": {
+                  "properties": {
+                    "codec": {
+                      "const": "h265"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "formats": {
+                "contains": {
+                  "properties": {
+                    "codec": {
+                      "const": "h265"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "codecs": {
+                "contains": {
+                  "const": "h265"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "rejection": {
+      "type": "object",
+      "properties": {
+        "contract_version": {
+          "const": 3
+        },
+        "code": {
+          "enum": [
+            "invalid_payload",
+            "unauthorized",
+            "forbidden",
+            "lease_invalid",
+            "lease_mismatch",
+            "expired",
+            "stale_capability",
+            "capability_mismatch",
+            "unsupported",
+            "codec_mismatch",
+            "descriptor_mismatch",
+            "conflict",
+            "busy",
+            "producer_lost",
+            "janus_unavailable",
+            "capacity_exhausted"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "contract_version",
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "stop": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 2
+        },
+        "command_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "issued_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "expires_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "lease_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "stream_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "type": {
+          "const": "stream_stop"
+        },
+        "agent_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "descriptor_revision": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        }
+      },
+      "required": [
+        "v",
+        "command_id",
+        "sn",
+        "issued_at_ms",
+        "expires_at_ms",
+        "lease_id",
+        "stream_instance_id",
+        "type",
+        "agent_instance_id",
+        "descriptor_revision"
+      ],
+      "additionalProperties": false
+    },
+    "lease_renew": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 2
+        },
+        "command_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "issued_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "expires_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        },
+        "lease_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "stream_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "type": {
+          "const": "lease_renew"
+        },
+        "agent_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "descriptor_revision": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "lease_expires_at_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        }
+      },
+      "required": [
+        "v",
+        "command_id",
+        "sn",
+        "issued_at_ms",
+        "expires_at_ms",
+        "lease_id",
+        "stream_instance_id",
+        "type",
+        "agent_instance_id",
+        "descriptor_revision",
+        "lease_expires_at_ms"
+      ],
+      "additionalProperties": false
+    },
+    "start_ack": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 2
+        },
+        "type": {
+          "const": "ack"
+        },
+        "command_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "lease_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "stream_instance_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "result": {
+          "const": "accepted"
+        },
+        "state": {
+          "const": "starting"
+        },
+        "descriptor_revision": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        }
+      },
+      "required": [
+        "v",
+        "type",
+        "command_id",
+        "sn",
+        "lease_id",
+        "stream_instance_id",
+        "result",
+        "state",
+        "descriptor_revision"
+      ],
+      "additionalProperties": false
+    },
+    "nack": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "const": 2
+        },
+        "type": {
+          "const": "nack"
+        },
+        "command_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[A-Za-z0-9._-]+$"
+        },
+        "code": {
+          "enum": [
+            "invalid_payload",
+            "unauthorized",
+            "forbidden",
+            "lease_invalid",
+            "lease_mismatch",
+            "expired",
+            "stale_capability",
+            "capability_mismatch",
+            "unsupported",
+            "codec_mismatch",
+            "descriptor_mismatch",
+            "conflict",
+            "busy",
+            "producer_lost",
+            "janus_unavailable",
+            "capacity_exhausted"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "terminal_time_ms": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5000000000000
+        }
+      },
+      "required": [
+        "v",
+        "type",
+        "command_id",
+        "sn",
+        "code",
+        "message",
+        "terminal_time_ms"
+      ],
+      "additionalProperties": false
+    },
+    "quality_options": {
+      "type": "object",
+      "properties": {
+        "profile_id": {
+          "enum": [
+            "low",
+            "default"
+          ]
+        }
+      },
+      "required": [
+        "profile_id"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/inventory_get"
+    },
+    {
+      "$ref": "#/$defs/capabilities_ack"
+    },
+    {
+      "$ref": "#/$defs/start"
+    },
+    {
+      "$ref": "#/$defs/ready"
+    },
+    {
+      "$ref": "#/$defs/error"
+    },
+    {
+      "$ref": "#/$defs/media_start"
+    },
+    {
+      "$ref": "#/$defs/media_renew"
+    },
+    {
+      "$ref": "#/$defs/media_stop"
+    },
+    {
+      "$ref": "#/$defs/media_response"
+    },
+    {
+      "$ref": "#/$defs/media_capabilities"
+    },
+    {
+      "$ref": "#/$defs/media_health"
+    },
+    {
+      "$ref": "#/$defs/rejection"
+    },
+    {
+      "$ref": "#/$defs/stop"
+    },
+    {
+      "$ref": "#/$defs/lease_renew"
+    },
+    {
+      "$ref": "#/$defs/start_ack"
+    },
+    {
+      "$ref": "#/$defs/nack"
+    }
+  ]
+}
