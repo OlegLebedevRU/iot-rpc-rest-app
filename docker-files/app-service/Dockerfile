@@ -28,6 +28,8 @@ COPY app-service /app
 COPY contracts/siplite-camera-v1/camera-rpc.schema.json contracts/siplite-camera-v1/hevc.schema.json contracts/siplite-camera-v1/local-camera.schema.json /contracts/siplite-camera-v1/
 COPY contracts/camera-enrollment-proposal/schema.json /contracts/camera-enrollment-proposal/
 COPY contracts/camera-ctl-monotonic-v1/camera-ctl.schema.json /contracts/camera-ctl-monotonic-v1/
+COPY contracts/camera-enrollment-v0.2/schema.json /contracts/camera-enrollment-v0.2/
+COPY contracts/siplite-camera-v1.1/hevc.schema.json /contracts/siplite-camera-v1.1/
 # The archive provider resolves this versioned contract outside /app.
 # Include only its data files, never the documentation tree or private config.
 COPY l4desk-service/docs/prompts/contracts/archive-manifest-v1/archive-manifest.schema.json l4desk-service/docs/prompts/contracts/archive-manifest-v1/examples.json /l4desk-service/docs/prompts/contracts/archive-manifest-v1/

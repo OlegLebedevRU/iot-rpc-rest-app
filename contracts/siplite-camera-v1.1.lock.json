@@ -1,0 +1,17 @@
+{
+  "revision": "siplite-camera/1.1.0",
+  "schema_sha256": "bfd71ec96cf8de81657fd319c603f91a4769209887e32297fff4193752e3c62e",
+  "canonical_vectors_sha256": "9f0124bbd7ae8f754ffc6a50e0085a6d885d82f0a5c0de48c06ffe533008938b",
+  "owner": "OlegLebedevRU/etranprocessing",
+  "source": "contracts/siplite-camera-v1.1/ at pinned owner_commit",
+  "owner_commit": "60a2bffc961dfc31caeea96a76bfb856484212b5",
+  "source_pr": "https://github.com/OlegLebedevRU/etranprocessing/pull/111",
+  "files": {
+    ".gitattributes": "a79691a93b46e49ce460c26ef22afcc03d6eca1e63bf2edbc20e96159510f6c9",
+    "canonical-vectors.json": "9f0124bbd7ae8f754ffc6a50e0085a6d885d82f0a5c0de48c06ffe533008938b",
+    "hevc.schema.json": "bfd71ec96cf8de81657fd319c603f91a4769209887e32297fff4193752e3c62e",
+    "manifest.json": "b97e50480b1841897d5ec5d5e00819f2adb00b4bb061bba4aac0ca9e623f1fbc",
+    "README.md": "bb403e77c567c1036bb0a76b302a789a2e3533a4626aa0ba73126ebd980fae60",
+    "verify.py": "36fb55eff426076837bbbeca0606cc71fbd3bc061b81ef2e1d3ce27611cc5ff8"
+  }
+}

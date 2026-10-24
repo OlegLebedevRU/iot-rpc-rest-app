@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 from uuid import uuid4
 
+from core.camera.native_contract import CADENCE, ENROLLMENT02, MEDIA11, SELECTED
 from core.camera.runtime_wire import (
     ADMISSION,
     MAX_COUNTER,
@@ -21,7 +22,7 @@ def increase(number: int) -> int:
 
 def initial_state() -> dict:
     return {
-        "version": 1,
+        "version": 2,
         "generation": 0,
         "counter": 0,
         "boot": None,
@@ -235,6 +236,9 @@ class CameraMachine:
         validate(message)
         kind = message["type"]
         if kind == "camera_enrollment_hello":
+            selection = self.s["configured"].get("selection")
+            if (message["revision"] == ENROLLMENT02) != (selection == SELECTED):
+                return False
             if (
                 message["boot_id"] in self.s["retired"]
                 or ADMISSION not in message["supported_ctl"]
@@ -268,6 +272,13 @@ class CameraMachine:
                 binding_hash=digest(self.binding(message["boot_id"])),
                 admission_floor=max(counter, message["admission_high_water"]),
             )
+            if selection == SELECTED:
+                offer.update(
+                    camera_contract_revision=MEDIA11,
+                    cadence_revision=CADENCE,
+                    descriptor=copy.deepcopy(self.s["configured"]["descriptor"]),
+                    binding=self.binding(message["boot_id"]),
+                )
             self.s["pending"] = {
                 "hello": copy.deepcopy(message),
                 "offer": offer,

@@ -502,6 +502,7 @@ class ArchiveConfig(BaseModel):
 
 
 class CameraConfig(BaseModel):
+    native_auto_enabled: bool = False
     # Separate rollout gate; never expands the existing writer/SN admission gate.
     monotonic_runtime_enabled: bool = False
     # TASK-30 deploys readers first; firmware writers are enabled in a later gate.

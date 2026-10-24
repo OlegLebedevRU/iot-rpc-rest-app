@@ -11,8 +11,10 @@ from uuid import UUID
 
 from jsonschema import FormatChecker
 from pydantic import RootModel
+from referencing import Registry, Resource
 
 from core.camera.contract import StrictValidator, bounded_json
+from core.camera.native_contract import ENROLLMENT02, schema11
 from core.remote_input.video_wire import load_object
 
 ENROLLMENT = "camera-enrollment/0.1.0-proposed"
@@ -22,7 +24,25 @@ ROOT = Path(__file__).resolve().parents[3] / "contracts"
 
 
 @lru_cache
-def validator(enrollment: bool) -> StrictValidator:
+def validator(enrollment: bool | str) -> StrictValidator:
+    if enrollment == ENROLLMENT02:
+        schema = json.loads(
+            (ROOT / "camera-enrollment-v0.2/schema.json").read_text(encoding="utf-8")
+        )
+        admission = json.loads(
+            (ROOT / "camera-ctl-monotonic-v1/camera-ctl.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        registry = Registry().with_resources(
+            [
+                ("urn:leo4:siplite-camera:1.1.0", Resource.from_contents(schema11())),
+                ("urn:leo4:camera-admission:0.2.0", Resource.from_contents(admission)),
+            ]
+        )
+        return StrictValidator(
+            schema, registry=registry, format_checker=FormatChecker()
+        )
     path = ROOT / (
         "camera-enrollment-proposal/schema.json"
         if enrollment
@@ -35,13 +55,28 @@ def validator(enrollment: bool) -> StrictValidator:
 
 def validate(message: dict) -> dict:
     bounded_json(message, 4096, 8)
-    if not validator(message.get("revision") == ENROLLMENT).is_valid(message):
+    revision = message.get("revision")
+    selector = ENROLLMENT02 if revision == ENROLLMENT02 else revision == ENROLLMENT
+    if not validator(selector).is_valid(message):
         raise ValueError("invalid_camera_runtime_message")
-    if message.get("revision") == ENROLLMENT and any(
+    if revision in (ENROLLMENT, ENROLLMENT02) and any(
         UUID(message[k]).version != 4 or str(UUID(message[k])) != message[k]
         for k in ("boot_id", "enrollment_id")
     ):
         raise ValueError("camera_enrollment_uuid_canonical_v4_required")
+    if revision == ENROLLMENT02 and message["type"] != "camera_enrollment_hello":
+        binding, descriptor = message["binding"], message["descriptor"]
+        if (
+            binding["boot_id"] != message["boot_id"]
+            or binding["source_id"] != descriptor["source_id"]
+            or binding["codec"] != descriptor["tracks"][0]["codec"]
+            or binding["descriptor_sha256"] != digest(descriptor)
+            or message["binding_hash"] != digest(binding)
+            or not binding["path_generation"].endswith(
+                "/" + str(descriptor["geometry_generation"])
+            )
+        ):
+            raise ValueError("camera_enrollment_complete_binding_mismatch")
     return message
 
 

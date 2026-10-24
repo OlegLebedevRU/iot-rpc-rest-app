@@ -714,8 +714,9 @@ async def test_new_runtime_http_endpoints_preserve_org_authorization(
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("native_bundle", [False, True])
 async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack(
-    environment, monkeypatch
+    environment, monkeypatch, native_bundle
 ):
     from unittest.mock import AsyncMock
 
@@ -746,6 +747,12 @@ async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack
             ],
         },
     }
+    observation = None
+    if native_bundle:
+        from .test_camera_native_auto11 import fixture, configured as native_configured
+
+        camera = fixture("physical-camera")
+        observation = fixture("observation")
     monkeypatch.setattr(
         control,
         "camera_capability",
@@ -753,6 +760,7 @@ async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack
             return_value=SimpleNamespace(
                 producer_adapter={"ready": True},
                 camera=camera,
+                camera_observation=observation,
                 main_app_online=True,
                 fresh=True,
             )
@@ -782,8 +790,16 @@ async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack
         lease_id=str(lease.lease_id), lease_expires_at=int(lease.expires_at.timestamp())
     )
     payload["publisher"]["sn"] = SN
+    if native_bundle:
+        payload["descriptor"] = fixture("offer")["descriptor"]
     epoch = CameraEpoch.from_start(payload, lease)
-    await enroll(e)
+    if native_bundle:
+        await e.runtime.submit(SN, "configure", native_configured())
+        message = fixture("hello")
+        message["sn"] = SN
+        await enroll(e, message)
+    else:
+        await enroll(e)
     query, _ = await ready(e)
     tasks = []
 
@@ -809,6 +825,11 @@ async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack
             readiness_nonce=query["readiness_nonce"],
         )
         assert record["state"] == "running" and record["confirmation"] == "command_ack"
+        if native_bundle:
+            view = control.CameraStateView.from_record(record)
+            assert view.camera_contract_revision == "siplite-camera/1.1.0"
+            assert view.cadence_revision == "camera-cadence/0.1.0-proposed"
+            assert view.descriptor == payload["descriptor"]
         assert record["admission_revision"] == ADMISSION
         assert not service.pending._pending
         native = next(m for m in e.sent if m["type"] == "stream_start")
@@ -816,7 +837,14 @@ async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack
             native["readiness_nonce"] == query["readiness_nonce"]
             and native["admission_seq"] == 42
         )
-        with pytest.raises(HTTPException, match="runtime_revision_required"):
+        with pytest.raises(
+            HTTPException,
+            match=(
+                "incomplete_revision_bundle"
+                if native_bundle
+                else "runtime_revision_required"
+            ),
+        ):
             await control.camera_control.start(
                 service, None, lease, payload, send_ctl_command
             )

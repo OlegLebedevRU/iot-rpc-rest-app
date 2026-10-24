@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, RootModel, model_validator
 
 from core.camera.contract import REVISION, validate_definition
+from core.camera.native_contract import MEDIA11, CADENCE, SELECTED, validate_media
 from core.camera.media import CameraEpoch
 from core.camera.producer import start_command, stop_command
 from core.camera.projection import camera_capability
@@ -22,7 +23,7 @@ class CameraStart(RootModel[dict[str, Any]]):
     @model_validator(mode="before")
     @classmethod
     def validate_body(cls, value):
-        return validate_definition("hevc.schema.json", "media_start", value)
+        return validate_media("media_start", value)
 
 
 class CameraStop(RootModel[dict[str, Any]]):
@@ -51,7 +52,12 @@ class CameraStateView(BaseModel):
     @classmethod
     def from_record(cls, record: dict):
         start = record["start"]
-        return cls(
+        model = (
+            CameraStateView11
+            if start["descriptor"]["camera_contract_revision"] == MEDIA11
+            else cls
+        )
+        return model(
             sn=start["publisher"]["sn"],
             lease_id=start["lease_id"],
             operation_id=start["operation_id"],
@@ -64,6 +70,11 @@ class CameraStateView(BaseModel):
             confirmation=record.get("confirmation"),
             reason=record.get("reason"),
         )
+
+
+class CameraStateView11(CameraStateView):
+    camera_contract_revision: Literal["siplite-camera/1.1.0"] = MEDIA11
+    cadence_revision: Literal["camera-cadence/0.1.0-proposed"] = CADENCE
 
 
 def epoch_of(record: dict) -> CameraEpoch:
@@ -145,13 +156,28 @@ class CameraControl:
     ) -> dict:
         await self.reconcile(lease.sn, service, send)
         epoch = CameraEpoch.from_start(payload, lease)
+        native = epoch.start["descriptor"]["camera_contract_revision"] == MEDIA11
+        if native and not monotonic:
+            raise HTTPException(422, "camera11_incomplete_revision_bundle")
         view = await camera_capability(
-            session_db, lease.device_id, authorized_sn=lease.sn
+            session_db,
+            lease.device_id,
+            authorized_sn=lease.sn,
+            **({"native": True} if native else {}),
         )
         if not view.producer_adapter["ready"]:
             raise HTTPException(409, view.producer_adapter["reason"])
         current_ms = int(time.time() * 1000)
-        command = start_command(epoch, view.camera, current_ms)
+        command = start_command(
+            epoch,
+            view.camera,
+            current_ms,
+            **(
+                {"observation": view.camera_observation, "selection": SELECTED}
+                if native
+                else {}
+            ),
+        )
         from core.config import settings
 
         if settings.camera.monotonic_runtime_enabled:
@@ -167,6 +193,11 @@ class CameraControl:
                     view.camera,
                     epoch.start["descriptor"],
                     configured["binding"]["physical_camera_mac"],
+                    **(
+                        {"observation": view.camera_observation, "selection": SELECTED}
+                        if native
+                        else {}
+                    ),
                 )
                 if actual != configured:
                     raise HTTPException(409, "camera_physical_binding_changed")
@@ -405,7 +436,15 @@ class CameraControl:
                     configured = durable.get("configured")
                     async with db_helper.session_factory() as session:
                         view = await camera_capability(
-                            session, lease.device_id, authorized_sn=sn
+                            session,
+                            lease.device_id,
+                            authorized_sn=sn,
+                            **(
+                                {"native": True}
+                                if configured
+                                and configured.get("selection") == SELECTED
+                                else {}
+                            ),
                         )
                     try:
                         orphan = (
@@ -416,6 +455,14 @@ class CameraControl:
                                 view.camera,
                                 configured["descriptor"],
                                 configured["binding"]["physical_camera_mac"],
+                                **(
+                                    {
+                                        "observation": view.camera_observation,
+                                        "selection": SELECTED,
+                                    }
+                                    if configured.get("selection") == SELECTED
+                                    else {}
+                                ),
                             )
                             != configured
                             or (

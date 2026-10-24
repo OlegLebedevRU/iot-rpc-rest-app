@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from core.camera.contract import REVISION, bounded_json, validate_definition
+from core.camera.native_contract import validate11
 from core.config import settings
 from core.models.devices import DeviceConnection, DeviceGauge
 from core.rpc_redaction import redact_rpc
@@ -27,8 +28,17 @@ def validate_gauge(payload: Any) -> dict:
     bounded_json(payload, 32768)
     if redact_rpc(payload) != payload:
         raise ValueError("camera_snapshot_contains_credentials")
+    seen = set()
     for record in payload.get("300", []):
         state = record.get("450", {})
+        observations = state.get("media_observations", [])
+        if not isinstance(observations, list) or len(observations) > 16:
+            raise ValueError("camera_observation_bounds")
+        for observation in observations:
+            validate11("camera_observation", observation)
+            if observation["source_id"] in seen:
+                raise ValueError("camera_observation_duplicate")
+            seen.add(observation["source_id"])
         for camera in state.get("cameras", []):
             revision = camera.get("camera_contract_revision")
             if revision is None:

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import copy
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
 
 from sqlalchemy import func, or_, select
 
+from core.camera.authority_state import load_state
 from core.models.camera_authority import CameraAuthority
 from core.models.db_helper import db_helper
 
@@ -27,15 +27,14 @@ class AuthorityStore:
             )
             if row is None:
                 raise ValueError("camera_authority_not_provisioned")
-            if row.state.get("version") != 1:
-                raise ValueError("camera_authority_corrupt")
             now = await session.scalar(select(func.clock_timestamp()))
-            row.state = copy.deepcopy(row.state)
+            row.state = load_state(row.state)
             yield row, now
             # JSONB is assigned a new object so nested edits are always persisted.
             from sqlalchemy.orm.attributes import flag_modified
 
             flag_modified(row, "state")
+            row.state = load_state(row.state)
 
     async def get(self, sn: str) -> dict:
         async with self.sessions() as session:
@@ -44,9 +43,7 @@ class AuthorityStore:
             )
             if state is None:
                 raise ValueError("camera_authority_not_provisioned")
-            if not isinstance(state, dict) or state.get("version") != 1:
-                raise ValueError("camera_authority_corrupt")
-            return copy.deepcopy(state)
+            return load_state(state)
 
     async def candidates(self) -> list[str]:
         async with self.sessions() as session:

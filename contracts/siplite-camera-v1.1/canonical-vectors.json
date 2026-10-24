@@ -1,0 +1,99 @@
+{
+  "descriptor": {
+    "descriptor_revision": "00000000-0000-4000-8000-000000000003",
+    "source_type": "camera",
+    "source_id": "cam:ip000001",
+    "geometry_generation": 17,
+    "profile_id": "default",
+    "tracks": [
+      {
+        "track_id": "video-main",
+        "kind": "video",
+        "direction": "producer_to_viewers",
+        "bit_depth": 8,
+        "chroma": "420",
+        "clock_rate": 90000,
+        "payload_type": 96,
+        "width": 2592,
+        "height": 1944,
+        "fps": 20,
+        "feedback": {
+          "pli": false,
+          "fir": false
+        },
+        "max_b_frames": 0,
+        "keyframe_interval_ms": 2000,
+        "repeat_parameter_sets": true,
+        "codec": "h265",
+        "codec_profile": "main",
+        "packetization": "rfc7798",
+        "profile_space": 0,
+        "profile_id": 1,
+        "tier_flag": 0,
+        "level_id": 153,
+        "sprop_max_don_diff": 0
+      }
+    ],
+    "camera_contract_revision": "siplite-camera/1.1.0",
+    "cadence_revision": "camera-cadence/0.1.0-proposed"
+  },
+  "descriptor_canonical": "{\"cadence_revision\":\"camera-cadence/0.1.0-proposed\",\"camera_contract_revision\":\"siplite-camera/1.1.0\",\"descriptor_revision\":\"00000000-0000-4000-8000-000000000003\",\"geometry_generation\":17,\"profile_id\":\"default\",\"source_id\":\"cam:ip000001\",\"source_type\":\"camera\",\"tracks\":[{\"bit_depth\":8,\"chroma\":\"420\",\"clock_rate\":90000,\"codec\":\"h265\",\"codec_profile\":\"main\",\"direction\":\"producer_to_viewers\",\"feedback\":{\"fir\":false,\"pli\":false},\"fps\":20,\"height\":1944,\"keyframe_interval_ms\":2000,\"kind\":\"video\",\"level_id\":153,\"max_b_frames\":0,\"packetization\":\"rfc7798\",\"payload_type\":96,\"profile_id\":1,\"profile_space\":0,\"repeat_parameter_sets\":true,\"sprop_max_don_diff\":0,\"tier_flag\":0,\"track_id\":\"video-main\",\"width\":2592}]}",
+  "descriptor_sha256": "6ccbddacab9d9a72c03b10ad0a4937855f1871c3246868c69f12348ad2ea1e04",
+  "binding": {
+    "boot_id": "11111111-1111-4111-8111-111111111111",
+    "source_id": "cam:ip000001",
+    "physical_camera_mac": "02:00:00:00:00:01",
+    "path_generation": "port2/3/17",
+    "codec": "h265",
+    "descriptor_sha256": "6ccbddacab9d9a72c03b10ad0a4937855f1871c3246868c69f12348ad2ea1e04"
+  },
+  "binding_canonical": "{\"boot_id\":\"11111111-1111-4111-8111-111111111111\",\"codec\":\"h265\",\"descriptor_sha256\":\"6ccbddacab9d9a72c03b10ad0a4937855f1871c3246868c69f12348ad2ea1e04\",\"path_generation\":\"port2/3/17\",\"physical_camera_mac\":\"02:00:00:00:00:01\",\"source_id\":\"cam:ip000001\"}",
+  "binding_sha256": "e2f5a4a77a1a7eeddfccf97b9241dceff960f350a698a4832651828eaa6846be",
+  "observation": {
+    "camera_contract_revision": "siplite-camera/1.1.0",
+    "cadence_revision": "camera-cadence/0.1.0-proposed",
+    "source_id": "cam:ip000001",
+    "geometry_generation": 17,
+    "actual_track": {
+      "track_id": "video-main",
+      "kind": "video",
+      "direction": "producer_to_viewers",
+      "bit_depth": 8,
+      "chroma": "420",
+      "clock_rate": 90000,
+      "payload_type": 96,
+      "width": 2592,
+      "height": 1944,
+      "fps": 20,
+      "feedback": {
+        "pli": false,
+        "fir": false
+      },
+      "max_b_frames": 0,
+      "keyframe_interval_ms": 2000,
+      "repeat_parameter_sets": true,
+      "codec": "h265",
+      "codec_profile": "main",
+      "packetization": "rfc7798",
+      "profile_space": 0,
+      "profile_id": 1,
+      "tier_flag": 0,
+      "level_id": 153,
+      "sprop_max_don_diff": 0
+    },
+    "capabilities": {
+      "camera_contract_revisions": [
+        "siplite-camera/1.1.0"
+      ],
+      "camera_cadence_revisions": [
+        "camera-cadence/0.1.0-proposed"
+      ],
+      "camera_enrollment_revisions": [
+        "camera-enrollment/0.2.0-proposed"
+      ],
+      "camera_admission_revisions": [
+        "camera-ctl-monotonic/0.2.0-proposed"
+      ]
+    }
+  }
+}

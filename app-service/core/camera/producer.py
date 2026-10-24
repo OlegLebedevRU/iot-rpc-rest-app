@@ -1,10 +1,11 @@
 """Adapt the inspected siplite CTL v1 camera producer without desktop probes."""
 
-from uuid import UUID, uuid4
 from typing import Literal
+from uuid import UUID, uuid4
 
 from core.camera.contract import REVISION
 from core.camera.media import CameraEpoch
+from core.camera.native_contract import MEDIA11, SELECTED, validate11
 from core.camera.start_policy import start_enabled
 from core.remote_input.schemas import StreamStartCommand, StreamStopCommand
 
@@ -14,15 +15,34 @@ class CameraRenewCommand(StreamStopCommand):
     ttl_sec: int = 60
 
 
-def start_command(epoch: CameraEpoch, camera: dict, now_ms: int) -> StreamStartCommand:
+def start_command(
+    epoch: CameraEpoch,
+    camera: dict,
+    now_ms: int,
+    *,
+    observation: dict | None = None,
+    selection: dict | None = None,
+) -> StreamStartCommand:
     if not start_enabled(epoch.identity["sn"]):
         raise ValueError("camera_writers_disabled")
     start = epoch.start
     descriptor = start["descriptor"]
+    native = descriptor.get("camera_contract_revision") == MEDIA11
+    if native:
+        if selection != SELECTED:
+            raise ValueError("camera11_incomplete_revision_bundle")
+        validate11("camera_descriptor", descriptor)
+        validate11("camera_observation", observation)
+        if (
+            descriptor["geometry_generation"] != observation["geometry_generation"]
+            or descriptor["tracks"][0] != observation["actual_track"]
+            or descriptor["source_id"] != observation["source_id"]
+        ):
+            raise ValueError("camera_actual_descriptor_mismatch")
     if (
         camera.get("camera_contract_revision") != REVISION
         or descriptor["source_id"] != camera.get("camera_id")
-        or descriptor["tracks"][0] != camera.get("actual_track")
+        or (not native and descriptor["tracks"][0] != camera.get("actual_track"))
     ):
         raise ValueError("camera_actual_descriptor_mismatch")
     deadline = start["lease_expires_at"] * 1000
