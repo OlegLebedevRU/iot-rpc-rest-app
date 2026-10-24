@@ -51,9 +51,14 @@ def test_monotonic_admission_marker_is_explicit_and_strict(invalid):
 async def test_control_failure_preserves_hardware_applicability(env, reason):
     _, lease, start, cap = env
     await video_control.store.change(
-        lease.sn, lambda doc: doc.update(stream={"version": 2, "start": start, "state": "starting"})
+        lease.sn,
+        lambda doc: doc.update(
+            stream={"version": 2, "start": start, "state": "starting"}
+        ),
     )
-    assert await video_control.finish(lease.sn, start["stream_instance_id"], "failed", reason)
+    assert await video_control.finish(
+        lease.sn, start["stream_instance_id"], "failed", reason
+    )
     document = await video_control.store.get(lease.sn)
     assert document["capability"] == cap
     assert document["stream"]["error"]["current_stream_terminated"] is False
@@ -82,7 +87,9 @@ async def test_start_refresh_reconfirms_cached_measurement_despite_read_cooldown
         ack["command_id"] = query.command_id
         cap.update(checked_at_ms=now_ms(), valid_until_ms=now_ms() + 59000)
         ack["video_capabilities"] = cap
-        assert await video_control.accept_capability(sn, wire.CapabilitiesAck.model_validate(ack))
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
 
     result = await video_control.capability(
         lease.sn,
@@ -92,7 +99,10 @@ async def test_start_refresh_reconfirms_cached_measurement_despite_read_cooldown
         source_id="disp:fixture",
         profile_id="low",
     )
-    assert result["negotiated_v2"] and result["video_capabilities"]["measured_at_ms"] == measured
+    assert (
+        result["negotiated_v2"]
+        and result["video_capabilities"]["measured_at_ms"] == measured
+    )
     assert len(observed) == 1
 
 
@@ -105,7 +115,9 @@ def test_memory_capability_rejects_invalid_measurement(invalid):
 
 @pytest.mark.anyio
 @pytest.mark.parametrize("invalidation", ["transport", "presence"])
-async def test_invalidated_admission_reconfirms_without_old_probe_cooldown(env, invalidation):
+async def test_invalidated_admission_reconfirms_without_old_probe_cooldown(
+    env, invalidation
+):
     service, lease, _, cap = env
     cap["source_id"] = "disp:fixture"
     cap["admission_clock"] = "issuer_monotonic_v1"
@@ -140,7 +152,9 @@ async def test_invalidated_admission_reconfirms_without_old_probe_cooldown(env, 
         ack["command_id"] = query.command_id
         cap.update(checked_at_ms=now_ms(), valid_until_ms=now_ms() + 59000)
         ack["video_capabilities"] = cap
-        assert await video_control.accept_capability(sn, wire.CapabilitiesAck.model_validate(ack))
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
 
     result = await video_control.capability(
         lease.sn, service.presence, send, source_id="disp:fixture", profile_id="low"
@@ -152,7 +166,9 @@ async def test_invalidated_admission_reconfirms_without_old_probe_cooldown(env, 
 def test_memory_capability_rejects_measurement_after_check():
     cap = fixture("capabilities")["video_capabilities"]
     with pytest.raises(ValidationError):
-        wire.Capabilities.model_validate(dict(cap, measured_at_ms=cap["checked_at_ms"] + 1))
+        wire.Capabilities.model_validate(
+            dict(cap, measured_at_ms=cap["checked_at_ms"] + 1)
+        )
 
 
 @pytest.mark.anyio
@@ -173,7 +189,9 @@ async def test_memory_old_measurement_fresh_correlated_response(env):
         assert not await video_control.accept_capability(
             sn, wire.CapabilitiesAck.model_validate(dict(ack, command_id=str(uuid4())))
         )
-        assert await video_control.accept_capability(sn, wire.CapabilitiesAck.model_validate(ack))
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
 
     result = await video_control.capability(lease.sn, service.presence, send)
     assert result["negotiated_v2"]
@@ -206,7 +224,9 @@ async def test_memory_missing_profile_bypasses_other_profile_cache_cooldown(env)
             checked_at_ms=now_ms(),
             valid_until_ms=now_ms() + 59000,
         )
-        assert await video_control.accept_capability(sn, wire.CapabilitiesAck.model_validate(ack))
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
 
     assert (
         await video_control.capability(
@@ -261,7 +281,10 @@ def test_actual_v2_models(path):
     }.get(case["definition"])
     assert model is not None
     if case["valid"]:
-        assert model.model_validate(case["payload"]).model_dump(mode="json") == case["payload"]
+        assert (
+            model.model_validate(case["payload"]).model_dump(mode="json")
+            == case["payload"]
+        )
     else:
         with pytest.raises(ValidationError):
             model.model_validate(case["payload"])
@@ -278,7 +301,9 @@ def test_source_inventory_extension_retains_legacy_wire(source):
     old = fixture("inventory_get")
     assert wire.InventoryGet.model_validate(old).model_dump(mode="json") == old
     targeted = dict(old, source_id=source)
-    assert wire.InventoryGet.model_validate(targeted).model_dump(mode="json") == targeted
+    assert (
+        wire.InventoryGet.model_validate(targeted).model_dump(mode="json") == targeted
+    )
     for invalid in ["", "x" * 64, None, 123]:
         with pytest.raises(ValidationError):
             wire.InventoryGet.model_validate(dict(old, source_id=invalid))
@@ -307,7 +332,9 @@ async def test_selected_source_reprobes_other_cached_source_and_correlates_ack(e
             sn, wire.CapabilitiesAck.model_validate(ack)
         )
         ack["video_capabilities"]["source_id"] = "disp:secondary"
-        assert await video_control.accept_capability(sn, wire.CapabilitiesAck.model_validate(ack))
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
 
     result = await video_control.capability(
         lease.sn, service.presence, send, source_id="disp:secondary"
@@ -315,7 +342,9 @@ async def test_selected_source_reprobes_other_cached_source_and_correlates_ack(e
     assert result["negotiated_v2"]
     assert result["video_capabilities"]["source_id"] == "disp:secondary"
     assert len(observed) == 1
-    sender = AsyncMock(side_effect=AssertionError("fresh selected source must be cached"))
+    sender = AsyncMock(
+        side_effect=AssertionError("fresh selected source must be cached")
+    )
     assert (
         await video_control.capability(
             lease.sn, service.presence, sender, source_id="disp:secondary"
@@ -398,7 +427,11 @@ async def env(monkeypatch):
         scope="input",
     )
     await video_control.store.client.delete(
-        *(await video_control.store.client.keys(video_control.store.key(lease.sn) + "*"))
+        *(
+            await video_control.store.client.keys(
+                video_control.store.key(lease.sn) + "*"
+            )
+        )
         or ["unused-test-key"]
     )
     await presence.update(
@@ -439,7 +472,11 @@ async def env(monkeypatch):
     )
     yield service, lease, start, cap
     await video_control.store.client.delete(
-        *(await video_control.store.client.keys(video_control.store.key(lease.sn) + "*"))
+        *(
+            await video_control.store.client.keys(
+                video_control.store.key(lease.sn) + "*"
+            )
+        )
         or ["unused-test-key"]
     )
 
@@ -452,7 +489,9 @@ async def test_chain_gate_closes_inventory_admission(env, monkeypatch, refresh):
     monkeypatch.setattr(settings.remote_input, "video_hevc_chain_ready", False)
     sender = AsyncMock(side_effect=AssertionError("disabled admission must not probe"))
 
-    result = await video_control.capability(lease.sn, service.presence, sender, refresh=refresh)
+    result = await video_control.capability(
+        lease.sn, service.presence, sender, refresh=refresh
+    )
 
     assert result == {"negotiated_v2": False, "video_capabilities": None}
     sender.assert_not_called()
@@ -637,7 +676,9 @@ async def test_admission_rejects_before_dispatch(env, monkeypatch, alter, expect
     if alter == "stale":
         cap.update(checked_at_ms=now_ms() - 60000, valid_until_ms=now_ms() - 1)
     if alter == "unsupported":
-        cap["video"][0].update(status="unsupported", profiles=[], reason_code="no_hardware_mft")
+        cap["video"][0].update(
+            status="unsupported", profiles=[], reason_code="no_hardware_mft"
+        )
     if alter == "chain":
         monkeypatch.setattr(settings.remote_input, "video_hevc_chain_ready", False)
     if alter == "epoch":
@@ -666,8 +707,12 @@ async def test_capability_correlated_nonce_and_old_cached_ready(env):
 
     async def send(sn, query, **kwargs):
         ack["command_id"] = query.command_id
-        ack["video_capabilities"].update(checked_at_ms=now_ms(), valid_until_ms=now_ms() + 59000)
-        assert await video_control.accept_capability(sn, wire.CapabilitiesAck.model_validate(ack))
+        ack["video_capabilities"].update(
+            checked_at_ms=now_ms(), valid_until_ms=now_ms() + 59000
+        )
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
 
     result = await video_control.capability(lease.sn, service.presence, send)
     assert result["negotiated_v2"]
@@ -677,9 +722,9 @@ async def test_capability_correlated_nonce_and_old_cached_ready(env):
     await video_control.store.change(
         lease.sn, lambda doc: doc.update(server_epoch="previous-server")
     )
-    assert not (await video_control.capability(lease.sn, service.presence, AsyncMock()))[
-        "negotiated_v2"
-    ]
+    assert not (
+        await video_control.capability(lease.sn, service.presence, AsyncMock())
+    )["negotiated_v2"]
 
 
 @pytest.mark.anyio
@@ -696,7 +741,9 @@ async def test_ready_mismatch_terminal_and_stale_error_isolation(env):
     event = fixture("hevc_ready")
     event["lease_id"] = str(lease.lease_id)
     event["actual_descriptor"]["tracks"][0]["width"] = 640
-    assert await video_control.event(lease.sn, wire.Ready.model_validate(event), service, sender)
+    assert await video_control.event(
+        lease.sn, wire.Ready.model_validate(event), service, sender
+    )
     result = await task
     assert result["state"] == "failed" and result["reason"] == "descriptor_mismatch"
     assert [call.args[1].type for call in sender.await_args_list] == [
@@ -722,7 +769,9 @@ async def test_redis_workers_receive_same_terminal_event_without_legacy_storage(
     )
     try:
         await workers[0].notify_video_event(event)
-        received = await asyncio.gather(*[asyncio.wait_for(q.get(), 1.0) for q in queues])
+        received = await asyncio.gather(
+            *[asyncio.wait_for(q.get(), 1.0) for q in queues]
+        )
         assert received[0].model_dump() == received[1].model_dump()
         assert not await video_control.store.client.exists(f"l4d:stream:{lease.sn}")
     finally:
@@ -845,7 +894,9 @@ async def test_explicit_opt_in_h264_uses_v2_and_legacy_agent_gets_no_v2(env):
         lease.sn, CtlPresence(timestamp=datetime.now(UTC).isoformat(), version="999.0")
     )
     sender.reset_mock()
-    result = await video_control.capability(lease.sn, service.presence, sender, refresh=True)
+    result = await video_control.capability(
+        lease.sn, service.presence, sender, refresh=True
+    )
     assert result == {"negotiated_v2": False, "video_capabilities": None}
     sender.assert_not_called()
 
@@ -952,7 +1003,10 @@ async def test_orphan_running_epoch_allows_fresh_manual_start(env, loss):
         "stream_stop",
         "stream_start",
     ]
-    assert sender.await_args_list[1].args[1].agent_instance_id == start["agent_instance_id"]
+    assert (
+        sender.await_args_list[1].args[1].agent_instance_id
+        == start["agent_instance_id"]
+    )
     error = fixture("runtime_error")
     error["lease_id"] = str(lease.lease_id)
     assert not await video_control.event(
@@ -1052,7 +1106,9 @@ async def test_cleanup_preserves_live_publisher_and_renewal_race(env, monkeypatc
     sender = AsyncMock()
     assert not await video_control.reconcile(lease.sn, service, sender)
     # Even a concurrent repair/renewal of the lease invalidates retirement's WATCH.
-    await client.hset(f"l4d:lease:{lease.lease_id}", "expires_at", "2020-01-01T00:00:00+00:00")
+    await client.hset(
+        f"l4d:lease:{lease.lease_id}", "expires_at", "2020-01-01T00:00:00+00:00"
+    )
     original = video_control.publisher_lease
     raced = False
 
@@ -1083,7 +1139,9 @@ async def test_cleanup_preserves_live_publisher_and_renewal_race(env, monkeypatc
 
 
 @pytest.mark.anyio
-async def test_start_revocation_between_guard_and_commit_sends_no_start(env, monkeypatch):
+async def test_start_revocation_between_guard_and_commit_sends_no_start(
+    env, monkeypatch
+):
     from core.remote_input.leases import RedisLeaseRegistry
 
     service, lease, start, _ = env
@@ -1099,7 +1157,9 @@ async def test_start_revocation_between_guard_and_commit_sends_no_start(env, mon
         result = await original(service, candidate, pipe)
         if not raced:
             raced = True
-            await client.hset(f"l4d:lease:{lease.lease_id}", "revoked_reason", "owner_logout")
+            await client.hset(
+                f"l4d:lease:{lease.lease_id}", "revoked_reason", "owner_logout"
+            )
         return result
 
     monkeypatch.setattr(video_control, "publisher_lease", revoke)
@@ -1145,7 +1205,9 @@ async def test_ready_after_expiry_cannot_revive_starting_publisher(env):
                 break
             await asyncio.sleep(0.001)
         assert sender.await_count
-        await client.hset(f"l4d:lease:{lease.lease_id}", "expires_at", "2020-01-01T00:00:00+00:00")
+        await client.hset(
+            f"l4d:lease:{lease.lease_id}", "expires_at", "2020-01-01T00:00:00+00:00"
+        )
         assert not await ready_for(service, start)
         assert await video_control.reconcile(lease.sn, service, sender)
         assert (await asyncio.wait_for(task, 1))["state"] == "stopped"
@@ -1223,12 +1285,18 @@ async def test_real_http_v2_response_error_and_legacy_validation(env, monkeypatc
             {"X-Session-Id": "other"},
             {"X-Role": "superuser", "X-Session-Id": "other"},
         ):
-            assert (await client.get(base + "/video-lease", headers=caller)).status_code == 403
+            assert (
+                await client.get(base + "/video-lease", headers=caller)
+            ).status_code == 403
         invalid = copy.deepcopy(start)
         invalid["descriptor"]["unknown"] = True
-        assert (await client.post(base + "/stream/start", json=invalid)).status_code == 400
         assert (
-            await client.post(base + "/stream/start", json={"mode": "desktop", "unknown": True})
+            await client.post(base + "/stream/start", json=invalid)
+        ).status_code == 400
+        assert (
+            await client.post(
+                base + "/stream/start", json={"mode": "desktop", "unknown": True}
+            )
         ).status_code == 422
         raw = json.dumps(start).replace('"v": 2', '"v": 2, "v": 2')
         assert (
@@ -1262,7 +1330,9 @@ async def test_real_http_v2_response_error_and_legacy_validation(env, monkeypatc
         lease.stream_contract_version = 1
         lease.stream_instance_id = uuid4()
         assert (await client.get(base + "/video-state")).status_code == 404
-        assert (await video_control.store.get(lease.sn))["stream"]["error"] == event["error"]
+        assert (await video_control.store.get(lease.sn))["stream"]["error"] == event[
+            "error"
+        ]
 
 
 @pytest.mark.anyio
@@ -1325,7 +1395,9 @@ async def test_capability_negotiation_accepts_real_priority_probe_after_five_sec
         ack["command_id"] = query.command_id
         cap.update(checked_at_ms=clock, valid_until_ms=clock + 60000)
         ack["video_capabilities"] = cap
-        assert await video_control.accept_capability(sn, wire.CapabilitiesAck.model_validate(ack))
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
 
     result = await video_control.capability(lease.sn, service.presence, send)
     assert result["negotiated_v2"] is True
@@ -1367,9 +1439,9 @@ async def test_g0_lifecycle_vectors_against_handlers(env, case):
             lease.sn, wire.Ready.model_validate(ready), service, sender
         )
         result = await asyncio.wait_for(task, 1)
-        assert ("agent_ready_only" if result["state"] == "running" else result["reason"]) == case[
-            "expected"
-        ]
+        assert (
+            "agent_ready_only" if result["state"] == "running" else result["reason"]
+        ) == case["expected"]
         return
     await asyncio.wait_for(task, 1)
     if case["action"] == "watcher_leave":
@@ -1420,7 +1492,9 @@ def test_new_agent_v1_bootstrap_is_readable_by_old_server():
 
 
 @pytest.mark.anyio
-async def test_redis_v2_lease_persists_profile_and_revocation_sends_only_v2_stop(env, monkeypatch):
+async def test_redis_v2_lease_persists_profile_and_revocation_sends_only_v2_stop(
+    env, monkeypatch
+):
     from core.remote_input import leases as lease_module
     from core.remote_input.leases import RedisLeaseRegistry
 
@@ -1439,7 +1513,9 @@ async def test_redis_v2_lease_persists_profile_and_revocation_sends_only_v2_stop
         ttl_sec=60,
     )
     document = await video_control.store.get(start["sn"])
-    await video_control.store.client.set(video_control.store.key(sn), json.dumps(document), ex=300)
+    await video_control.store.client.set(
+        video_control.store.key(sn), json.dumps(document), ex=300
+    )
     await service.presence.update(
         sn,
         CtlPresence(
@@ -1449,7 +1525,9 @@ async def test_redis_v2_lease_persists_profile_and_revocation_sends_only_v2_stop
             desktop_available=True,
         ),
     )
-    await service.presence.update_inventory(sn, await service.presence.get_inventory(start["sn"]))
+    await service.presence.update_inventory(
+        sn, await service.presence.get_inventory(start["sn"])
+    )
     start.update(
         sn=sn,
         lease_id=str(lease.lease_id),
@@ -1482,3 +1560,324 @@ async def test_redis_v2_lease_persists_profile_and_revocation_sends_only_v2_stop
         await video_control.store.client.delete(
             *keys, f"l4d:lease:{lease.lease_id}", f"l4d:lease:active:{sn}"
         )
+
+
+# Unified media v3 uses the existing CTL2 transport and lease lifecycle.
+@pytest.fixture
+async def native_env(env):
+    service, lease, start, cap = env
+    start["descriptor"]["contract_version"] = 3
+    track = start["descriptor"]["tracks"][0]
+    track.update(width=3000, height=2000, fps=15, level_id=150)
+    cap["contract_version"] = 3
+    for entry in cap["video"]:
+        if entry["codec"] == "h265":
+            entry["profiles"] = [
+                {"profile_id": profile, "track": copy.deepcopy(track)}
+                for profile in ("low", "default")
+            ]
+    await video_control.store.change(
+        lease.sn, lambda doc: doc.update(capability=cap, media_selection=3)
+    )
+    return service, lease, start, cap
+
+
+@pytest.mark.parametrize("profile", ["low", "default"])
+@pytest.mark.parametrize("size", [(800, 600), (1920, 1080), (3000, 2000), (1080, 1920)])
+def test_media3_concrete_track_schema(profile, size):
+    start = fixture("hevc_start")
+    start["descriptor"].update(contract_version=3, profile_id=profile)
+    start["descriptor"]["tracks"][0].update(
+        width=size[0], height=size[1], fps=30, level_id=150
+    )
+    assert wire.Start.model_validate(start).model_dump(mode="json") == start
+    del start["descriptor"]["contract_version"]
+    if size[0] > 1920 or size[1] > 1080 or start["descriptor"]["tracks"][0]["fps"] > 25:
+        with pytest.raises(ValidationError):
+            wire.Start.model_validate(start)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("profile", ["low", "default"])
+async def test_media3_inventory_start_ready_state_and_bound_renew(
+    native_env, monkeypatch, profile
+):
+    from api.internal_v1 import remote_input as api
+    from core.remote_input import service as service_module
+    from fastapi import FastAPI
+    from httpx import ASGITransport, AsyncClient
+
+    service, lease, start, cap = native_env
+    start["descriptor"]["profile_id"] = profile
+    monkeypatch.setattr(api, "remote_input_service", service)
+    monkeypatch.setattr(api, "presence_registry", service.presence)
+    monkeypatch.setattr(settings.auth, "internal_service_key", "test-secret")
+    sent = []
+
+    async def send(sn, command, **kwargs):
+        sent.append(command.model_dump(mode="json"))
+        if command.type == "inventory_get":
+            cap.update(checked_at_ms=now_ms(), valid_until_ms=now_ms() + 59000)
+            ack = fixture("capabilities")
+            ack.update(command_id=command.command_id, video_capabilities=cap)
+            assert await video_control.accept_capability(
+                sn, wire.CapabilitiesAck.model_validate(ack)
+            )
+        elif command.type == "stream_start":
+            assert await ready_for(service, start)
+
+    monkeypatch.setattr(api, "send_ctl_command", send)
+    monkeypatch.setattr(service_module, "send_ctl_command", send)
+    # The HTTP inventory path performs the normal tenant lookup.
+    monkeypatch.setattr(api.DeviceRepo, "get_device_id", AsyncMock(return_value=10))
+    app = FastAPI()
+    app.include_router(api.router)
+
+    async def session_override():
+        yield None
+
+    app.dependency_overrides[api.db_helper.session_getter] = session_override
+    headers = {
+        "X-Internal-Service-Key": "test-secret",
+        "X-Org-Id": "1",
+        "X-User-Id": "owner",
+        "X-Session-Id": "session",
+        "X-Role": "user",
+        "X-L4-Media-Contract": "l4-media/3.0.0",
+    }
+    base = f"{api.router.prefix}/lease/{lease.lease_id}"
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test", headers=headers
+    ) as client:
+        inventory = await client.get(
+            f"{api.router.prefix}/devices/{lease.sn}/video-capabilities",
+            params={
+                "refresh": True,
+                "source_id": cap["source_id"],
+                "profile_id": profile,
+            },
+        )
+        assert inventory.status_code == 200, inventory.text
+        assert inventory.json()["video_capabilities"] == cap
+        assert inventory.json()["contract_version"] == 3
+        assert sent[0]["v"] == 2 and sent[0]["profile_id"] == profile
+        start.update(issued_at_ms=now_ms(), expires_at_ms=now_ms() + 2000)
+        response = await client.post(base + "/stream/start", json=start)
+        assert response.status_code == 200, response.text
+        assert response.json()["contract_version"] == 3
+        assert response.json()["descriptor"] == start["descriptor"]
+        assert response.json()["actual_descriptor"] == start["descriptor"]
+        state = await client.get(base + "/video-state")
+        assert state.status_code == 200 and state.json() == response.json()
+        assert (
+            await client.get(
+                base + "/video-state", headers={"X-L4-Media-Contract": "l4-media/2.0.0"}
+            )
+        ).status_code == 422
+        await service.keepalive_lease(
+            lease.lease_id,
+            org_id=1,
+            caller_user_id="owner",
+            caller_session_id="session",
+        )
+        assert sent[-1]["type"] == "lease_renew" and sent[-1]["v"] == 2
+        assert sent[-1]["stream_instance_id"] == start["stream_instance_id"]
+        assert (
+            sent[-1]["descriptor_revision"]
+            == start["descriptor"]["descriptor_revision"]
+        )
+        assert sent[-1]["lease_expires_at_ms"] <= int(
+            lease.expires_at.timestamp() * 1000
+        )
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "mismatch", ["source", "geometry", "version", "track", "resource"]
+)
+async def test_media3_admission_keeps_exact_native_facts(native_env, mismatch):
+    service, _, start, cap = native_env
+    if mismatch == "source":
+        cap["source_id"] = "other"
+    elif mismatch == "geometry":
+        cap["binding"]["geometry_generation"] += 1
+    elif mismatch == "version":
+        del cap["contract_version"]
+        for entry in cap["video"]:
+            for profile in entry["profiles"]:
+                profile["track"].update(width=1280, height=720, level_id=93)
+    elif mismatch == "track":
+        start["descriptor"]["tracks"][0]["fps"] = 30
+    else:
+        start["descriptor"]["tracks"][0].update(width=4000, height=3000)
+    await video_control.store.change(
+        start["sn"], lambda doc: doc.update(capability=cap)
+    )
+    send = AsyncMock()
+    with pytest.raises(HTTPException):
+        await video_control.start(
+            service, wire.Start.model_validate(start), 1, "owner", "session", send
+        )
+    send.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_media3_old_cache_is_reconfirmed_and_busy_retains_probe_memory(
+    native_env,
+):
+    service, lease, _, cap = native_env
+    old = copy.deepcopy(cap)
+    del old["contract_version"]
+    for entry in old["video"]:
+        for profile in entry["profiles"]:
+            profile["track"].update(width=1280, height=720, level_id=93)
+    await video_control.store.change(
+        lease.sn, lambda doc: doc.update(capability=old, media_selection=2)
+    )
+    observed = []
+
+    async def send(sn, command, **kwargs):
+        observed.append(command)
+        cap.update(checked_at_ms=now_ms(), valid_until_ms=now_ms() + 59000)
+        ack = fixture("capabilities")
+        ack.update(command_id=command.command_id, video_capabilities=cap)
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+
+    result = await video_control.capability(
+        lease.sn, service.presence, send, contract_version=3
+    )
+    assert result["video_capabilities"]["contract_version"] == 3
+    assert len(observed) == 1
+    memory = copy.deepcopy((await video_control.store.get(lease.sn))["probe_memory"])
+    # Opening UI again reuses fresh applicability, without a new probe.
+    await video_control.capability(lease.sn, service.presence, send, contract_version=3)
+    assert len(observed) == 1
+    for entry in cap["video"]:
+        entry.update(
+            status="temporarily_unavailable", reason_code="encoder_busy", profiles=[]
+        )
+    await video_control.capability(
+        lease.sn, service.presence, send, refresh=True, contract_version=3
+    )
+    doc = await video_control.store.get(lease.sn)
+    assert doc["probe_memory"] == memory
+    assert doc["capability"]["video"][0]["reason_code"] == "encoder_busy"
+
+
+@pytest.mark.anyio
+async def test_media3_rejects_mixed_correlated_inventory(native_env):
+    service, lease, _, cap = native_env
+
+    async def send(sn, command, **kwargs):
+        ack = fixture("capabilities")
+        cap.update(checked_at_ms=now_ms(), valid_until_ms=now_ms() + 59000)
+        ack.update(command_id=command.command_id, video_capabilities=cap)
+        assert not await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+        await video_control.store.change(sn, lambda doc: doc.pop("pending", None))
+
+    result = await video_control.capability(
+        lease.sn, service.presence, send, refresh=True, contract_version=2
+    )
+    assert result["video_capabilities"] is None
+
+
+@pytest.mark.parametrize("version", [None, 0, 2, 4, "3", True])
+def test_media3_invalid_version_never_uses_native_dimensions(version):
+    value = fixture("hevc_start")
+    value["descriptor"]["tracks"][0].update(width=3000, height=2000, level_id=150)
+    value["descriptor"]["contract_version"] = version
+    with pytest.raises(ValidationError):
+        wire.Start.model_validate(value)
+
+
+@pytest.mark.parametrize(
+    "selected,actual", [(None, 3), ("l4-media/3.0.0", 2), ("l4-media/unknown", 3)]
+)
+def test_media3_http_requires_exact_selection(selected, actual):
+    from core.remote_input.video_api import require_media_version
+    from starlette.requests import Request
+
+    headers = [] if selected is None else [(b"x-l4-media-contract", selected.encode())]
+    request = Request({"type": "http", "headers": headers})
+    descriptor = {} if actual == 2 else {"contract_version": actual}
+    with pytest.raises(HTTPException) as exc:
+        require_media_version(request, descriptor)
+    assert exc.value.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_media3_busy_does_not_authorize_saved_success(native_env):
+    service, lease, start, cap = native_env
+    memory = copy.deepcopy(cap)
+    for entry in cap["video"]:
+        entry.update(
+            status="temporarily_unavailable", reason_code="encoder_busy", profiles=[]
+        )
+    await video_control.store.change(
+        lease.sn, lambda doc: doc.update(capability=cap, probe_memory=memory)
+    )
+    sender = AsyncMock()
+    with pytest.raises(HTTPException) as exc:
+        await video_control.start(
+            service, wire.Start.model_validate(start), 1, "owner", "session", sender
+        )
+    assert exc.value.detail == {"code": "unsupported"}
+    sender.assert_not_awaited()
+    assert (await video_control.store.get(lease.sn))["probe_memory"] == memory
+
+
+def test_media3_coordinator_schema_is_pinned():
+    import hashlib
+
+    package = ROOT / "contracts/l4-media-v3"
+    manifest = json.loads((package / "manifest.json").read_text())
+    assert (
+        hashlib.sha256((package / "media.schema.json").read_bytes()).hexdigest()
+        == manifest["schema_sha256"]
+    )
+
+
+@pytest.mark.parametrize("descriptor", [None, [], "invalid"])
+def test_media3_malformed_nested_descriptor_is_validation_error(descriptor):
+    value = fixture("hevc_start")
+    value["descriptor"] = descriptor
+    with pytest.raises(ValidationError):
+        wire.Start.model_validate(value)
+
+
+@pytest.mark.anyio
+async def test_media3_auto_accepts_only_declared_h264_candidate(native_env):
+    service, lease, start, cap = native_env
+    track = fixture("h264_v2_start")["descriptor"]["tracks"][0]
+    track.update(
+        width=3000, height=2000, fps=15, codec_profile="high", profile_level_id="640033"
+    )
+    start.update(codec_policy="auto", resolved_codec="h264")
+    start["descriptor"]["tracks"] = [track]
+    entry = cap["video"][0]
+    entry.update(
+        codec="h264",
+        backend="openh264",
+        hardware=False,
+        profiles=[
+            {
+                "profile_id": start["descriptor"]["profile_id"],
+                "track": copy.deepcopy(track),
+            }
+        ],
+    )
+    cap["video"] = [entry]
+    await video_control.store.change(lease.sn, lambda doc: doc.update(capability=cap))
+
+    async def send(sn, command, **kwargs):
+        assert command.resolved_codec.value == "h264"
+        assert await ready_for(service, start)
+
+    state = await video_control.start(
+        service, wire.Start.model_validate(start), 1, "owner", "session", send
+    )
+    assert state["actual_descriptor"] == start["descriptor"]

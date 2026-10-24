@@ -60,6 +60,8 @@ from core.remote_input.video_api import (
     VideoControlRoute,
     VideoLeaseView,
     VideoStateView,
+    require_media_version,
+    selected_media_version,
 )
 from core.remote_input.video_control import video_control
 from core.remote_input.video_models import Start as VideoStart
@@ -375,6 +377,7 @@ async def post_stream_start(
             )
         return CameraStateView.from_record(record)
     if isinstance(body, VideoStart):
+        require_media_version(request, body.descriptor.model_dump(mode="json"))
         if body.lease_id != str(lease_id):
             raise HTTPException(status_code=409, detail={"code": "lease_mismatch"})
         record = await video_control.start(
@@ -388,6 +391,8 @@ async def post_stream_start(
         )
         return VideoStateView.from_record(record)
 
+    if selected_media_version(request) == 3:
+        raise HTTPException(422, "media_contract_not_negotiated")
     return await remote_input_service.stream_start(
         lease_id=lease_id,
         org_id=org_id,
@@ -432,6 +437,7 @@ async def get_video_capability(
             refresh,
             source_id=source_id,
             profile_id=profile_id,
+            contract_version=selected_media_version(request),
         )
     )
 
@@ -493,6 +499,7 @@ async def get_video_state(
         or record["start"]["lease_id"] != str(lease_id)
     ):
         raise HTTPException(status_code=404, detail="video_state_not_found")
+    require_media_version(request, record["start"]["descriptor"])
     return VideoStateView.from_record(record)
 
 
@@ -523,6 +530,17 @@ async def post_video_stop(
         return CameraStateView.from_record(record)
     if body.lease_id != str(lease_id):
         raise HTTPException(status_code=409, detail={"code": "lease_mismatch"})
+    lease = await video_control.authorize(
+        remote_input_service,
+        lease_id,
+        org_id,
+        extract_caller_user_id(request),
+        extract_caller_session_id(request),
+        is_request_superuser(request),
+    )
+    current = (await video_control.store.get(lease.sn)).get("stream")
+    if current:
+        require_media_version(request, current["start"]["descriptor"])
     record = await video_control.stop(
         remote_input_service,
         body,

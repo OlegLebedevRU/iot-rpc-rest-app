@@ -38,6 +38,26 @@ VALIDATORS = {
     )
     for name, definition in DEFINITIONS.items()
 }
+MEDIA_SCHEMA = json.loads(
+    (
+        Path(__file__).resolve().parents[3] / "contracts/l4-media-v3/media.schema.json"
+    ).read_text()
+)
+MEDIA_VALIDATORS = {
+    name: Draft202012Validator(
+        {"$ref": f"#/$defs/{definition}", "$defs": MEDIA_SCHEMA["$defs"]},
+        format_checker=FormatChecker(),
+    )
+    for name, definition in DEFINITIONS.items()
+}
+
+
+def media_version(value: dict[str, Any]) -> int:
+    """Selection is explicit; geometry never selects a contract."""
+    for key in ("descriptor", "actual_descriptor", "video_capabilities"):
+        if isinstance(value.get(key), dict):
+            return value[key].get("contract_version", 2)
+    return value.get("contract_version", 2)
 
 
 class WireModel(BaseModel):
@@ -45,7 +65,8 @@ class WireModel(BaseModel):
     @classmethod
     def validate_wire(cls, value: Any) -> Any:
         if cls.__name__ in VALIDATORS and isinstance(value, dict):
-            errors = list(VALIDATORS[cls.__name__].iter_errors(value))
+            validators = MEDIA_VALIDATORS if media_version(value) == 3 else VALIDATORS
+            errors = list(validators[cls.__name__].iter_errors(value))
             if errors:
                 raise ValueError(errors[0].message)
         return value

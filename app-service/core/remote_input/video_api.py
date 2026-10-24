@@ -5,14 +5,30 @@ from datetime import datetime
 from collections.abc import Callable, Coroutine
 from typing import Any, Literal
 
-from fastapi import Request, Response
+from fastapi import HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from core.remote_input.video_models import Capabilities, Descriptor, ErrorDetail
 from core.remote_input.video_wire import load_object
+
+MEDIA_REVISION = "l4-media/3.0.0"
+
+
+def selected_media_version(request: Request) -> int:
+    revision = request.headers.get("X-L4-Media-Contract")
+    if revision is None:
+        return 2
+    if revision != MEDIA_REVISION or request.headers.get("X-L4-Camera-Contract"):
+        raise HTTPException(422, "unsupported_media_contract")
+    return 3
+
+
+def require_media_version(request: Request, descriptor: dict) -> None:
+    if selected_media_version(request) != descriptor.get("contract_version", 2):
+        raise HTTPException(422, "media_contract_not_negotiated")
 
 
 class VideoControlRoute(APIRoute):
@@ -22,6 +38,7 @@ class VideoControlRoute(APIRoute):
         original = super().get_route_handler()
 
         async def handle(request: Request) -> Response:
+            selected_media_version(request)
             revision = request.headers.get("X-L4-Camera-Contract")
             if revision is not None and revision != "siplite-camera/1.0.0":
                 return JSONResponse(
@@ -59,6 +76,9 @@ class VideoCapabilityView(BaseModel):
     model_config = ConfigDict(extra="forbid")
     negotiated_v2: bool
     video_capabilities: Capabilities | None
+    contract_version: Literal[3] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class VideoLeaseView(BaseModel):
@@ -77,6 +97,9 @@ class VideoLeaseView(BaseModel):
 class VideoStateView(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: Literal[2] = 2
+    contract_version: Literal[3] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     sn: str
     lease_id: str
     agent_instance_id: str
@@ -96,6 +119,7 @@ class VideoStateView(BaseModel):
     def from_record(cls, record: dict) -> VideoStateView:
         start = record["start"]
         return cls(
+            contract_version=start["descriptor"].get("contract_version"),
             sn=start["sn"],
             lease_id=start["lease_id"],
             agent_instance_id=start["agent_instance_id"],
