@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict
 
+from core.camera.native_contract import ENROLLMENT02, MEDIA11, selected_headers
 from core.remote_input.video_models import Capabilities, Descriptor, ErrorDetail
 from core.remote_input.video_wire import load_object
 
@@ -23,7 +24,17 @@ class VideoControlRoute(APIRoute):
 
         async def handle(request: Request) -> Response:
             revision = request.headers.get("X-L4-Camera-Contract")
-            if revision is not None and revision != "siplite-camera/1.0.0":
+            modern = (
+                revision == MEDIA11
+                or request.headers.get("X-L4-Camera-Cadence") is not None
+                or request.headers.get("X-L4-Camera-Enrollment") == ENROLLMENT02
+            )
+            if modern:
+                try:
+                    selected_headers(request.headers)
+                except ValueError as exc:
+                    return JSONResponse(status_code=422, content={"detail": str(exc)})
+            elif revision is not None and revision != "siplite-camera/1.0.0":
                 return JSONResponse(
                     status_code=422, content={"detail": "unsupported_camera_contract"}
                 )

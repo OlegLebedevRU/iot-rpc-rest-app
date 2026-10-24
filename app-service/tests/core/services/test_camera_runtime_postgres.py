@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 from core.camera.runtime_state import initial_state
+from core.camera.authority_state import load_state
 from core.camera.runtime_store import AuthorityStore
 from core.models.camera_authority import CameraAuthority
 from core.models.devices import Device
@@ -31,6 +32,14 @@ async def test_postgres_fence_serialization_rollback_and_missing_state():
     )
     sessions = async_sessionmaker(engine, expire_on_commit=False)
     store = AuthorityStore(sessions)
+    original_boot, retired_boot = str(uuid4()), str(uuid4())
+    legacy = {
+        **initial_state(),
+        "version": 1,
+        "counter": 100,
+        "boot": original_boot,
+        "retired": [retired_boot],
+    }
     try:
         async with engine.begin() as connection:
             await connection.execute(CreateSchema(schema))
@@ -40,7 +49,7 @@ async def test_postgres_fence_serialization_rollback_and_missing_state():
             )
             await connection.execute(insert(Device).values(device_id=1, sn="fixture"))
             await connection.execute(
-                insert(CameraAuthority).values(sn="fixture", state=initial_state())
+                insert(CameraAuthority).values(sn="fixture", state=legacy)
             )
 
         async def advance():
@@ -50,12 +59,20 @@ async def test_postgres_fence_serialization_rollback_and_missing_state():
                 row.state["counter"] = counter + 1
 
         await asyncio.gather(*(advance() for _ in range(8)))
-        assert (await store.get("fixture"))["counter"] == 8
+        upgraded = await store.get("fixture")
+        assert upgraded["counter"] == 108 and upgraded["version"] == 2
+        assert upgraded["boot"] == original_boot and upgraded["retired"] == [
+            retired_boot
+        ]
         original = await store.get("fixture")
         with pytest.raises(RuntimeError):
             async with store.locked("fixture") as (row, _):
                 row.state["counter"] = 0
                 raise RuntimeError("transaction interrupted")
+        assert await store.get("fixture") == original
+        with pytest.raises(ValueError, match="authority_corrupt"):
+            async with store.locked("fixture") as (row, _):
+                del row.state["counter"]
         assert await store.get("fixture") == original
         async with store.locked("fixture") as (row, _):
             row.state["retired"].append(str(uuid4()))
@@ -115,7 +132,8 @@ async def test_real_migration_seeds_and_only_new_device_insert_creates_authority
                     )
                 )
             ).scalar_one()
-            assert state == initial_state()
+            assert state["version"] == 1  # Immutable migration stays unchanged.
+            assert load_state(state) == initial_state()
             await connection.execute(
                 insert(Device).values(device_id=2, sn="new-device")
             )

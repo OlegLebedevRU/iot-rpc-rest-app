@@ -8,8 +8,24 @@ from typing import Any, Literal
 from uuid import UUID
 
 from core.camera.contract import REVISION
-from core.camera.control import CameraStart, CameraStop, CameraStateView, camera_control
-from core.camera.projection import CameraCapabilityView, camera_capability
+from core.camera.control import (
+    CameraStart,
+    CameraStop,
+    CameraStateView,
+    CameraStateView11,
+    camera_control,
+)
+from core.camera.projection import (
+    CameraCapabilityView,
+    CameraCapabilityView11,
+    camera_capability,
+)
+from core.camera.native_contract import (
+    MEDIA11,
+    ENROLLMENT02,
+    SELECTED,
+    selected_headers,
+)
 from core.config import settings
 from core.crud.device_repo import DeviceRepo
 from core.logging_config import setup_module_logger
@@ -351,7 +367,10 @@ async def get_device_inventory(
 
 @router.post(
     "/lease/{lease_id}/stream/start",
-    response_model=StreamStartResponse | VideoStateView | CameraStateView,
+    response_model=StreamStartResponse
+    | VideoStateView
+    | CameraStateView
+    | CameraStateView11,
 )
 async def post_stream_start(
     lease_id: UUID,
@@ -359,13 +378,12 @@ async def post_stream_start(
     org_id: Internal_Org_dep,
     _: Internal_Auth_dep,
     request: Request,
-) -> StreamStartResponse | VideoStateView | CameraStateView:
+) -> StreamStartResponse | VideoStateView | CameraStateView | CameraStateView11:
     session_id = extract_caller_session_id(request)
     caller_user_id = extract_caller_user_id(request)
 
     if isinstance(body, CameraStart):
-        if request.headers.get("X-L4-Camera-Contract") != REVISION:
-            raise HTTPException(422, "camera_contract_not_negotiated")
+        require_record_camera_headers(request, body.root["descriptor"])
         lease = await video_control.authorize(
             remote_input_service, lease_id, org_id, caller_user_id, session_id
         )
@@ -417,7 +435,7 @@ async def post_stream_start(
 
 @router.get(
     "/devices/{sn}/video-capabilities",
-    response_model=VideoCapabilityView | CameraCapabilityView,
+    response_model=VideoCapabilityView | CameraCapabilityView | CameraCapabilityView11,
 )
 async def get_video_capability(
     sn: str,
@@ -428,7 +446,7 @@ async def get_video_capability(
     refresh: bool = False,
     source_id: str | None = Query(None, min_length=1, max_length=63),
     profile_id: Literal["low", "default"] | None = None,
-) -> VideoCapabilityView | CameraCapabilityView:
+) -> VideoCapabilityView | CameraCapabilityView | CameraCapabilityView11:
     device_id = await DeviceRepo.get_device_id(session, sn=sn, org_id=org_id)
     if device_id is None:
         raise HTTPException(
@@ -436,7 +454,19 @@ async def get_video_capability(
         )
     revision = request.headers.get("X-L4-Camera-Contract")
     if revision is not None:
-        if revision != REVISION:
+        if revision == MEDIA11:
+            try:
+                selected_headers(request.headers)
+            except ValueError as exc:
+                raise HTTPException(422, str(exc)) from None
+            return await camera_capability(
+                session, device_id, authorized_sn=sn, native=True
+            )
+        if (
+            revision != REVISION
+            or request.headers.get("X-L4-Camera-Cadence") is not None
+            or request.headers.get("X-L4-Camera-Enrollment") == ENROLLMENT02
+        ):
             raise HTTPException(422, "unsupported_camera_contract")
         return await camera_capability(session, device_id, authorized_sn=sn)
     return VideoCapabilityView.model_validate(
@@ -478,14 +508,15 @@ async def get_video_lease(
 
 
 @router.get(
-    "/lease/{lease_id}/video-state", response_model=VideoStateView | CameraStateView
+    "/lease/{lease_id}/video-state",
+    response_model=VideoStateView | CameraStateView | CameraStateView11,
 )
 async def get_video_state(
     lease_id: UUID,
     org_id: Internal_Org_dep,
     _: Internal_Auth_dep,
     request: Request,
-) -> VideoStateView | CameraStateView:
+) -> VideoStateView | CameraStateView | CameraStateView11:
     lease = await video_control.authorize(
         remote_input_service,
         lease_id,
@@ -498,8 +529,7 @@ async def get_video_state(
     document = await video_control.store.get(lease.sn)
     camera_record = document.get("camera_stream")
     if camera_record and camera_record["start"]["lease_id"] == str(lease_id):
-        if request.headers.get("X-L4-Camera-Contract") != REVISION:
-            raise HTTPException(422, "camera_contract_not_negotiated")
+        require_record_camera_headers(request, camera_record["start"]["descriptor"])
         return CameraStateView.from_record(camera_record)
     record = document.get("stream")
     if (
@@ -512,7 +542,8 @@ async def get_video_state(
 
 
 @router.post(
-    "/lease/{lease_id}/video-stop", response_model=VideoStateView | CameraStateView
+    "/lease/{lease_id}/video-stop",
+    response_model=VideoStateView | CameraStateView | CameraStateView11,
 )
 async def post_video_stop(
     lease_id: UUID,
@@ -520,9 +551,9 @@ async def post_video_stop(
     org_id: Internal_Org_dep,
     _: Internal_Auth_dep,
     request: Request,
-) -> VideoStateView | CameraStateView:
+) -> VideoStateView | CameraStateView | CameraStateView11:
     if isinstance(body, CameraStop):
-        if request.headers.get("X-L4-Camera-Contract") != REVISION:
+        if request.headers.get("X-L4-Camera-Contract") not in (REVISION, MEDIA11):
             raise HTTPException(422, "camera_contract_not_negotiated")
         lease = await video_control.authorize(
             remote_input_service,
@@ -532,6 +563,9 @@ async def post_video_stop(
             extract_caller_session_id(request),
             require_active=False,
         )
+        existing = await camera_control.record(lease.sn)
+        if existing:
+            require_record_camera_headers(request, existing["start"]["descriptor"])
         record = await camera_control.stop(
             remote_input_service, lease, body.root, send_ctl_command
         )
@@ -1437,12 +1471,30 @@ def require_camera_runtime_headers(request: Request, optional: bool = False) -> 
 
     admission = request.headers.get("X-L4-Camera-Admission")
     enrollment = request.headers.get("X-L4-Camera-Enrollment")
-    if optional and admission is None and enrollment is None:
+    if (
+        optional
+        and admission is None
+        and enrollment is None
+        and request.headers.get("X-L4-Camera-Contract") != MEDIA11
+        and request.headers.get("X-L4-Camera-Cadence") is None
+    ):
         return False
-    if admission != ADMISSION or enrollment != ENROLLMENT:
+    modern = (
+        request.headers.get("X-L4-Camera-Contract") == MEDIA11
+        or request.headers.get("X-L4-Camera-Cadence") is not None
+        or enrollment == ENROLLMENT02
+    )
+    if modern:
+        try:
+            selected_headers(request.headers)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
+    elif admission != ADMISSION or enrollment != ENROLLMENT:
         raise HTTPException(422, "unsupported_camera_runtime_revision")
     if not settings.camera.monotonic_runtime_enabled:
         raise HTTPException(409, "camera_monotonic_runtime_disabled")
+    if modern and not settings.camera.native_auto_enabled:
+        raise HTTPException(409, "camera_native_auto_disabled")
     return True
 
 
@@ -1452,11 +1504,16 @@ class CameraRuntimePrepare(BaseModel):
     physical_camera_mac: str = Field(pattern=r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$")
 
 
-async def runtime_camera_view(sn, org_id, session):
+async def runtime_camera_view(sn, org_id, session, request=None):
     device_id = await DeviceRepo.get_device_id(session, sn=sn, org_id=org_id)
     if device_id is None:
         raise HTTPException(403, "device not available for organization")
-    view = await camera_capability(session, device_id, authorized_sn=sn)
+    native = (
+        request is not None and request.headers.get("X-L4-Camera-Contract") == MEDIA11
+    )
+    view = await camera_capability(
+        session, device_id, authorized_sn=sn, **({"native": True} if native else {})
+    )
     if not view.main_app_online or not view.fresh or not view.camera:
         raise HTTPException(409, "camera_main_app_or_gauge_not_fresh")
     return view
@@ -1475,10 +1532,20 @@ async def prepare_camera_admission(
     from core.camera.runtime import camera_runtime
     from core.camera.runtime_admission import configuration
 
-    view = await runtime_camera_view(sn, org_id, session)
+    view = await runtime_camera_view(sn, org_id, session, request)
     try:
         configured = configuration(
-            view.camera, body.descriptor, body.physical_camera_mac
+            view.camera,
+            body.descriptor,
+            body.physical_camera_mac,
+            **(
+                {
+                    "observation": view.camera_observation,
+                    "selection": selected_headers(request.headers),
+                }
+                if request.headers.get("X-L4-Camera-Contract") == MEDIA11
+                else {}
+            ),
         )
         return await camera_runtime.submit(sn, "configure", configured)
     except ValueError as exc:
@@ -1497,7 +1564,7 @@ async def fresh_camera_readiness(
     from core.camera.runtime import camera_runtime
     from core.camera.runtime_admission import configuration
 
-    view = await runtime_camera_view(sn, org_id, session)
+    view = await runtime_camera_view(sn, org_id, session, request)
     try:
         configured = (await camera_runtime.store.get(sn))["configured"]
         if (
@@ -1506,6 +1573,14 @@ async def fresh_camera_readiness(
                 view.camera,
                 configured["descriptor"],
                 configured["binding"]["physical_camera_mac"],
+                **(
+                    {
+                        "observation": view.camera_observation,
+                        "selection": selected_headers(request.headers),
+                    }
+                    if request.headers.get("X-L4-Camera-Contract") == MEDIA11
+                    else {}
+                ),
             )
             != configured
         ):
@@ -1534,14 +1609,35 @@ async def camera_admission_status(
     request: Request,
 ) -> dict:
     require_camera_runtime_headers(request)
-    await runtime_camera_view(sn, org_id, session)
+    await runtime_camera_view(sn, org_id, session, request)
     from core.camera.runtime import camera_runtime
 
     try:
         state = await camera_runtime.store.get(sn)
+        configured = state["configured"]
+        modern = request.headers.get("X-L4-Camera-Contract") == MEDIA11
+        if configured and (configured.get("selection") == SELECTED) != modern:
+            raise ValueError("camera_runtime_selection_mismatch")
         return {
             key: state.get(key)
             for key in ("generation", "epoch", "boot", "counter", "enrolled")
         }
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from None
+
+
+def require_record_camera_headers(request: Request, descriptor: dict) -> None:
+    if (
+        request.headers.get("X-L4-Camera-Contract")
+        != descriptor["camera_contract_revision"]
+    ):
+        raise HTTPException(422, "camera_contract_not_negotiated")
+    if (
+        descriptor["camera_contract_revision"] == MEDIA11
+        or request.headers.get("X-L4-Camera-Cadence") is not None
+        or request.headers.get("X-L4-Camera-Enrollment") == ENROLLMENT02
+    ):
+        try:
+            selected_headers(request.headers)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None

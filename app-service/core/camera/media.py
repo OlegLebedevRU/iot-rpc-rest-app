@@ -8,7 +8,14 @@ from dataclasses import dataclass
 
 import httpx
 
-from core.camera.contract import REVISION, validate_definition
+from core.camera.contract import REVISION
+from core.camera.native_contract import (
+    CAPABILITIES,
+    MEDIA11,
+    SELECTED,
+    headers11,
+    validate_media,
+)
 
 
 @dataclass(frozen=True)
@@ -83,10 +90,10 @@ class CameraEpoch:
 
     @classmethod
     def from_start(cls, payload: dict, lease, now_ms: int | None = None):
-        value = validate_definition("hevc.schema.json", "media_start", payload)
+        value = validate_media("media_start", payload)
         descriptor = value["descriptor"]
         if (
-            descriptor.get("camera_contract_revision") != REVISION
+            descriptor.get("camera_contract_revision") not in (REVISION, MEDIA11)
             or descriptor["source_type"] != "camera"
         ):
             raise ValueError("negotiated_camera_descriptor_required")
@@ -141,14 +148,29 @@ class CameraEpoch:
 
 
 class CameraMediaAdapter:
-    def __init__(self, client: httpx.AsyncClient, service_token: str):
+    def __init__(
+        self,
+        client: httpx.AsyncClient,
+        service_token: str,
+        *,
+        selection: dict | None = None,
+    ):
         if not service_token:
             raise ValueError("media_service_auth_required")
+        if selection is not None and selection != SELECTED:
+            raise ValueError("camera11_incomplete_revision_bundle")
+        self.revision = MEDIA11 if selection is not None else REVISION
         self.client = client
         self.headers = {
             "X-L4-Camera-Contract": REVISION,
             "X-Media-Service-Token": service_token,
         }
+        if selection is not None:
+            self.headers.update(headers11())
+
+    def require_epoch(self, epoch: CameraEpoch) -> None:
+        if epoch.start["descriptor"]["camera_contract_revision"] != self.revision:
+            raise ValueError("camera_media_selection_mismatch")
 
     async def _call(
         self, path: str, definition: str, *, payload=None, params=None, method="POST"
@@ -168,7 +190,7 @@ class CameraMediaAdapter:
             from core.remote_input.video_wire import load_object
 
             value = load_object(response.content)
-            return validate_definition("hevc.schema.json", definition, value)
+            return validate_media(definition, value, self.revision)
         except httpx.HTTPError, ValueError, TypeError:
             # Service rejection bodies, token, PIN and credential material are private.
             raise ValueError("camera_media_request_failed") from None
@@ -178,16 +200,21 @@ class CameraMediaAdapter:
             "/api/v2/media/capabilities", "media_capabilities", method="GET"
         )
         if (
-            REVISION not in value.get("camera_contract_revisions", [])
+            self.revision not in value.get("camera_contract_revisions", [])
             or not value.get("camera_formats")
             or not value["dependencies_ready"]
         ):
             raise ValueError("media_camera_contract_unavailable")
+        if self.revision == MEDIA11 and any(
+            value.get(key) != expected for key, expected in CAPABILITIES.items()
+        ):
+            raise ValueError("camera_media_selection_mismatch")
         return value
 
     async def prepare(self, epoch: CameraEpoch) -> tuple[CameraEpoch, dict]:
         # No firmware command is emitted here. Capability resolution and the actual
         # SPS-derived descriptor must already have completed before media prepare.
+        self.require_epoch(epoch)
         if epoch.start["lease_expires_at"] <= time.time():
             raise ValueError("camera_lease_expired")
         capabilities = await self.capabilities()
@@ -208,6 +235,7 @@ class CameraMediaAdapter:
         return CameraEpoch(epoch.start_json, response["route_generation"]), response
 
     async def health(self, epoch: CameraEpoch) -> dict:
+        self.require_epoch(epoch)
         response = await self._call(
             f"/api/v2/media/sessions/{epoch.identity['session_id']}",
             "media_health",
@@ -222,6 +250,7 @@ class CameraMediaAdapter:
         return response  # READY, RTP freshness and browser decode remain separate.
 
     async def renew(self, epoch: CameraEpoch, lease) -> dict:
+        self.require_epoch(epoch)
         if (
             not lease.is_active()
             or lease.scope != "stream"
@@ -233,7 +262,7 @@ class CameraMediaAdapter:
             **epoch.identity,
             "lease_expires_at": int(lease.expires_at.timestamp()),
         }
-        validate_definition("hevc.schema.json", "media_renew", payload)
+        validate_media("media_renew", payload, self.revision)
         response = await self._call(
             "/api/v2/media/sessions/renew", "media_response", payload=payload
         )
@@ -241,8 +270,9 @@ class CameraMediaAdapter:
         return response
 
     async def stop(self, epoch: CameraEpoch, reason: str) -> dict:
+        self.require_epoch(epoch)
         payload = {**epoch.identity, "reason": reason}
-        validate_definition("hevc.schema.json", "media_stop", payload)
+        validate_media("media_stop", payload, self.revision)
         response = await self._call(
             "/api/v2/media/sessions/stop", "media_response", payload=payload
         )

@@ -1,0 +1,18 @@
+{
+  "hello": {
+    "compact_utf8_bytes": 406,
+    "depth": 2
+  },
+  "offer": {
+    "compact_utf8_bytes": 1588,
+    "depth": 5
+  },
+  "proof": {
+    "compact_utf8_bytes": 1614,
+    "depth": 5
+  },
+  "commit": {
+    "compact_utf8_bytes": 1615,
+    "depth": 5
+  }
+}

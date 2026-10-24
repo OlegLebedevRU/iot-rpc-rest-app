@@ -1,5 +1,12 @@
 # Camera monotonic server runtime
 
+The subsequent Native Auto1.1/enrollment0.2 implementation is documented in
+[the bundle handoff](l4desk/handoffs/camera-native-auto11-iot-http.md).
+It requires all four exact revision headers, adds a complete offer and upgrades
+validated authority JSON to version2 without resetting fences or counters.
+Both runtime gates remain off. The original implementation evidence below
+describes the immutable PR141 baseline.
+
 Server implementation of the reviewed enrollment and admission contracts, based
 on `fdfa36862ecaa2c63f56ac2ff32b7e1d3d90b8c5` (merged PR139). This adds an optional
 server path; it is not a camera firmware release, production deployment or real
