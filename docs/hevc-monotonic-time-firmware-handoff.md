@@ -55,6 +55,11 @@ wrap/reboot policy. Windows uses GetTickCount64, not a persisted uptime value.
 
 ## Camera CTLv1: unchanged fields, coordination required
 
+The server-side candidate handshake, strict wire schema and offline timing/replay
+vectors are now recorded in [camera agreement proposal](camera-ctlv1-monotonic-agreement.md).
+Its status is proposed for owner review, not agreed, enabled or deployed. The
+current production path described below is unchanged by that proposal.
+
 Current camera START is StreamStartCommand v1: command_id, lease_id, sn,
 mode=usb-camera, source_id, profile=default, stream_instance_id, issued_at_ms
 (server publication time), expires_at_ms (lease expiry). START does not carry

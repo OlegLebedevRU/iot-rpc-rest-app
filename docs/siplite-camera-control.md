@@ -5,6 +5,11 @@
 firmware/app1. Machine package:
 [contracts/siplite-camera-v1](../contracts/siplite-camera-v1/README.md).
 
+Camera CTLv1 admission clock extension is separately proposed in
+[camera-ctlv1-monotonic-agreement.md](camera-ctlv1-monotonic-agreement.md).
+It requires coordinated agreement and implementation; camera1.0.0 does not
+negotiate that extension or authorize advertising a monotonic admission marker.
+
 ## Владельцы и транзакция
 
 IoT владеет RPC, gauge84/tag450 и правами; siplite — контроллером камеры и

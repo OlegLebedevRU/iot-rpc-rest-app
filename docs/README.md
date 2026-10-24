@@ -17,6 +17,7 @@
 ## 📡 Команды и результаты
 
 - [Управление камерой siplite](siplite-camera-control.md) — port2 discovery, credentials, LED/PWM, H.265/Auto и постоянный локальный API; negotiated camera1.0.0.
+- [Проект monotonic admission для камеры CTLv1](camera-ctlv1-monotonic-agreement.md) — readiness nonce, issuer epoch, порядок команд и офлайн-векторы; требует согласования владельцев.
 
 | Документ | Содержание |
 | :--- | :--- |
