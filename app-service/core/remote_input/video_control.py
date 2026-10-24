@@ -362,6 +362,7 @@ class VideoControl:
             ):
                 doc.pop("capability", None)
                 doc.pop("pending", None)
+                doc.pop("next_probe_ms", None)
             doc["presence"] = signature
 
         await self.store.change(sn, update)
@@ -481,6 +482,7 @@ class VideoControl:
         def update(doc: dict[str, Any]) -> None:
             doc.pop("capability", None)
             doc.pop("pending", None)
+            doc.pop("next_probe_ms", None)
 
         await self.store.change(sn, update)
 
