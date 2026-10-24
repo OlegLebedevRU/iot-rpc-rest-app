@@ -9,7 +9,7 @@ import time
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING, Any, Literal, NoReturn
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
@@ -373,6 +373,7 @@ class VideoControl:
         send: Any,
         refresh: bool = False,
         source_id: str | None = None,
+        profile_id: Literal["low", "default"] | None = None,
     ) -> dict[str, Any]:
         if not settings.remote_input.video_v2_enabled:
             await self.invalidate(sn)
@@ -390,6 +391,11 @@ class VideoControl:
             return {"negotiated_v2": False, "video_capabilities": None}
         current = now_ms()
         server_epoch = await self.store.current_epoch()
+        selection: dict[str, Any] = {}
+        if source_id:
+            selection["source_id"] = source_id
+        if profile_id:
+            selection["profile_id"] = profile_id
         query = wire.InventoryGet(
             v=2,
             type="inventory_get",
@@ -400,7 +406,7 @@ class VideoControl:
             # capability negotiation, not the stream first-frame budget:
             # hardware activation checks Medium first, then optional HD.
             expires_at_ms=current + 10000,
-            **({"source_id": source_id} if source_id else {}),
+            **selection,
         )
 
         def reserve(doc: dict[str, Any]) -> bool:
@@ -409,6 +415,15 @@ class VideoControl:
                 not refresh
                 and cap
                 and (not source_id or cap["source_id"] == source_id)
+                and (
+                    not profile_id
+                    or any(
+                        p["profile_id"] == profile_id
+                        for entry in cap["video"]
+                        if entry["status"] == "ready"
+                        for p in entry["profiles"]
+                    )
+                )
                 and doc.get("server_epoch") == server_epoch
                 and cap["checked_at_ms"] <= current < cap["valid_until_ms"]
             ):
@@ -418,12 +433,14 @@ class VideoControl:
             if (
                 current < doc.get("next_probe_ms", 0)
                 and doc.get("probe_source_id") == source_id
+                and doc.get("probe_profile_id") == profile_id
             ):
                 return False
             doc.pop("capability", None)
             doc["pending"] = query.model_dump(mode="json")
             doc["next_probe_ms"] = current + 30000
             doc["probe_source_id"] = source_id
+            doc["probe_profile_id"] = profile_id
             doc["server_epoch"] = server_epoch
             return True
 
@@ -484,7 +501,8 @@ class VideoControl:
                 or not 0 < cap["valid_until_ms"] - cap["checked_at_ms"] <= 60000
             ):
                 return False
-            # A cached pre-query ready must never complete negotiation.
+            # A fresh applicability check may reuse an older encoded measurement.
+            # Keep nonce/source/epoch correlation and post-query checked_at_ms.
             if cap["checked_at_ms"] < query["issued_at_ms"]:
                 return False
             doc["capability"] = cap

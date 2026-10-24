@@ -12,7 +12,10 @@ from pydantic import BaseModel, model_validator
 SCHEMA = json.loads(Path(__file__).with_name("video.schema.json").read_text())
 # Source-selection extension; keep the frozen G0 schema file byte-for-byte.
 SCHEMA["$defs"]["inventory_get"] = json.loads(
-    Path(__file__).with_name("video_inventory_source.schema.json").read_text()
+    Path(__file__).with_name("video_inventory_memory.schema.json").read_text()
+)
+SCHEMA["$defs"]["capabilities"] = json.loads(
+    Path(__file__).with_name("video_capabilities_memory.schema.json").read_text()
 )
 DEFINITIONS = {
     "Descriptor": "descriptor",

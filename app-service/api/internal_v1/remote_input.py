@@ -4,6 +4,7 @@ import asyncio
 import hmac
 from contextlib import suppress
 from datetime import datetime, timezone
+from typing import Literal
 from uuid import UUID
 
 from core.camera.contract import REVISION
@@ -411,6 +412,7 @@ async def get_video_capability(
     request: Request,
     refresh: bool = False,
     source_id: str | None = Query(None, min_length=1, max_length=63),
+    profile_id: Literal["low", "default"] | None = None,
 ) -> VideoCapabilityView | CameraCapabilityView:
     device_id = await DeviceRepo.get_device_id(session, sn=sn, org_id=org_id)
     if device_id is None:
@@ -424,7 +426,12 @@ async def get_video_capability(
         return await camera_capability(session, device_id, authorized_sn=sn)
     return VideoCapabilityView.model_validate(
         await video_control.capability(
-            sn, presence_registry, send_ctl_command, refresh, source_id=source_id
+            sn,
+            presence_registry,
+            send_ctl_command,
+            refresh,
+            source_id=source_id,
+            profile_id=profile_id,
         )
     )
 
