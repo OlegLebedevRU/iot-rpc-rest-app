@@ -34,10 +34,18 @@ class Device:
         self.pending = None
         self.complete = False
 
-    def accept(self, message, tick, authenticated=True, transport_sn="fixture-terminal"):
-        if not VALIDATOR.is_valid(message) or not authenticated or message["sn"] != transport_sn:
+    def accept(
+        self, message, tick, authenticated=True, transport_sn="fixture-terminal"
+    ):
+        if (
+            not VALIDATOR.is_valid(message)
+            or not authenticated
+            or message["sn"] != transport_sn
+        ):
             return False
-        if tick >= 5000 or any(message[k] != BASE[k] for k in ("boot_id", "enrollment_id")):
+        if tick >= 5000 or any(
+            message[k] != BASE[k] for k in ("boot_id", "enrollment_id")
+        ):
             return False
         if (
             message["issuer_generation"] < self.generation
@@ -59,13 +67,20 @@ class Device:
         if message["type"] != "camera_enrollment_commit" or self.pending is None:
             return False
         if any(
-            message[k] != v for k, v in self.pending.items() if k not in ("type", "admission_floor")
+            message[k] != v
+            for k, v in self.pending.items()
+            if k not in ("type", "admission_floor")
         ):
             return False
         if message["admission_high_water"] != self.high_water:
             return False
+        if message["admission_floor"] < self.pending["admission_floor"]:
+            return False
         self.high_water = message["admission_floor"]
-        self.generation, self.epoch = message["issuer_generation"], message["issuer_epoch"]
+        self.generation, self.epoch = (
+            message["issuer_generation"],
+            message["issuer_epoch"],
+        )
         self.pending = None
         self.complete = True
         return True
@@ -103,12 +118,80 @@ class Server:
             or any(message[k] != v for k, v in self.pending.items() if k != "type")
         ):
             return False
-        self.floor = max(self.floor, message["admission_high_water"], message["admission_floor"])
+        self.floor = max(
+            self.floor, message["admission_high_water"], message["admission_floor"]
+        )
         if self.boot != message["boot_id"]:
             self.retired.add(self.boot)
         self.boot = message["boot_id"]
         self.pending = None
         return True
+
+
+def verify_commit_floors():
+    """Commit cannot weaken an accepted offer or refresh its original budget."""
+    vectors = json.loads(
+        Path(__file__).with_name("commit-floor-vectors.json").read_text()
+    )
+    checks = 0
+    for case in vectors["cases"]:
+        device = Device()
+        device.high_water = case["initial_high_water"]
+        offer = dict(OFFER, admission_floor=case["offered_floor"])
+        assert device.accept(offer, 10), case["name"]
+        # Exercise a current high-water that advanced since the offer/proof.
+        device.high_water = case["current_high_water"]
+        commit = dict(
+            offer,
+            type="camera_enrollment_commit",
+            admission_floor=case["commit_floor"],
+            admission_high_water=case["proof_high_water"],
+        )
+        VALIDATOR.validate(commit)
+        before = copy.deepcopy(vars(device))
+        assert device.accept(commit, 20) == case["accepted"], case["name"]
+        if case["accepted"]:
+            assert device.high_water == case["commit_floor"], case["name"]
+            assert device.pending is None and device.complete, case["name"]
+        else:
+            assert vars(device) == before, case["name"]
+            assert not device.accept(commit, 21), case["name"]
+            assert vars(device) == before, case["name"]
+            corrected = dict(
+                commit,
+                admission_floor=max(case["offered_floor"], case["current_high_water"]),
+                admission_high_water=case["current_high_water"],
+            )
+            # Reuse the same challenge, pending offer and original budget.
+            assert device.accept(corrected, 4999), case["name"]
+        complete = copy.deepcopy(vars(device))
+        assert not device.accept(offer, 4999), case["name"]
+        assert not device.accept(commit, 4999), case["name"]
+        assert vars(device) == complete, case["name"]
+        checks += 1
+
+    for case in vectors["deadline_cases"]:
+        device = Device()
+        offer = dict(OFFER, admission_floor=100)
+        assert device.accept(offer, 10)
+        bad = dict(
+            offer,
+            type="camera_enrollment_commit",
+            admission_floor=42,
+            admission_high_water=41,
+        )
+        before = copy.deepcopy(vars(device))
+        assert not device.accept(bad, 20)
+        assert vars(device) == before
+        assert device.accept(offer, 4998)  # duplicate offer does not restart the budget
+        assert not device.accept(bad, 4999)
+        assert vars(device) == before
+        corrected = dict(bad, admission_floor=100)
+        assert device.accept(corrected, case["tick"]) == case["accepted"], case["name"]
+        if not case["accepted"]:
+            assert vars(device) == before, case["name"]
+        checks += 1
+    return checks
 
 
 def main():
@@ -154,7 +237,16 @@ def main():
     assert server.proof(proof, 100, 2) and server.boot == hello["boot_id"]
     assert not server.proof(proof, 200, 2)
     assert server.floor == 41
-    print(json.dumps({"checks": checks + 14, "runtime_handlers": False}))
+    floor_checks = verify_commit_floors()
+    print(
+        json.dumps(
+            {
+                "checks": checks + 14,
+                "commit_floor_cases": floor_checks,
+                "runtime_handlers": False,
+            }
+        )
+    )
 
 
 if __name__ == "__main__":
