@@ -1881,3 +1881,214 @@ async def test_media3_auto_accepts_only_declared_h264_candidate(native_env):
         service, wire.Start.model_validate(start), 1, "owner", "session", send
     )
     assert state["actual_descriptor"] == start["descriptor"]
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "version,source,budget",
+    [
+        (3, None, 35000),
+        (3, "display-0", 35000),
+        (3, "camera-source", 10000),
+        (2, "display-0", 10000),
+    ],
+)
+async def test_cold_desktop_inventory_window_and_immediate_memory_hit(
+    env, monkeypatch, version, source, budget
+):
+    import core.remote_input.video_control as control_module
+    from core.remote_input.publisher import send_ctl_command
+    from core.remote_input import publisher
+
+    service, lease, _, cap = env
+    if version == 3:
+        cap["contract_version"] = 3
+    if source:
+        cap["source_id"] = source
+    measured = now_ms() - 86400000
+    cap["measured_at_ms"] = measured
+    await video_control.invalidate(lease.sn)
+    clock = now_ms()
+    monkeypatch.setattr(control_module, "now_ms", lambda: clock)
+    broker = AsyncMock()
+    monkeypatch.setattr(publisher.topic_publisher, "publish", broker)
+    calls = []
+
+    async def send(sn, query, **kwargs):
+        nonlocal clock
+        calls.append(query.command_id)
+        assert query.v == 2
+        assert query.expires_at_ms - query.issued_at_ms == budget
+        assert kwargs["ttl_ms"] == budget
+        await send_ctl_command(sn, query, **kwargs)
+        assert broker.call_args.kwargs["expiration"] == budget
+        assert broker.call_args.kwargs["correlation_id"] == query.command_id
+        clock += 31000 if budget == 35000 else 9500
+        if budget == 35000:
+            waiting = await video_control.capability(
+                lease.sn,
+                service.presence,
+                send,
+                source_id=source,
+                contract_version=version,
+            )
+            assert not waiting["negotiated_v2"] and len(calls) == 1
+        cap.update(checked_at_ms=clock, valid_until_ms=clock + 59000)
+        ack = fixture("capabilities")
+        ack.update(command_id=query.command_id, video_capabilities=cap)
+        assert not await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(dict(ack, command_id=str(uuid4())))
+        )
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+
+    result = await video_control.capability(
+        lease.sn, service.presence, send, source_id=source, contract_version=version
+    )
+    assert result["negotiated_v2"]
+    assert result["video_capabilities"]["measured_at_ms"] == measured
+    assert len(calls) == 1
+    again = await video_control.capability(
+        lease.sn, service.presence, send, source_id=source, contract_version=version
+    )
+    assert again == result and len(calls) == 1
+
+
+@pytest.mark.anyio
+async def test_cold_desktop_inventory_ack_at_deadline_is_rejected(
+    native_env, monkeypatch
+):
+    import core.remote_input.video_control as control_module
+
+    service, lease, _, cap = native_env
+    clock = now_ms()
+    monkeypatch.setattr(control_module, "now_ms", lambda: clock)
+
+    async def send(sn, query, **kwargs):
+        nonlocal clock
+        assert query.expires_at_ms - query.issued_at_ms == 35000
+        clock = query.expires_at_ms
+        cap.update(checked_at_ms=clock, valid_until_ms=clock + 59000)
+        ack = fixture("capabilities")
+        ack.update(command_id=query.command_id, video_capabilities=cap)
+        assert not await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+
+    result = await video_control.capability(
+        lease.sn, service.presence, send, refresh=True, contract_version=3
+    )
+    assert result["video_capabilities"] is None
+    assert "pending" not in await video_control.store.get(lease.sn)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "budget,offset,expected",
+    [
+        (35000, 34999, True),
+        (35000, 35000, False),
+        (20000, 19999, True),
+        (20000, 20000, False),
+    ],
+)
+async def test_cold_desktop_ready_respects_command_window_and_publish_ttl(
+    native_env, monkeypatch, budget, offset, expected
+):
+    import core.remote_input.video_control as control_module
+
+    service, lease, start, _ = native_env
+    clock = now_ms()
+    monkeypatch.setattr(control_module, "now_ms", lambda: clock)
+    if budget == 20000:
+        lease.expires_at = datetime.fromtimestamp((clock + budget) / 1000, UTC)
+        start["lease_expires_at_ms"] = clock + budget
+    start.update(
+        issued_at_ms=clock,
+        expires_at_ms=min(clock + 35000, start["lease_expires_at_ms"]),
+    )
+    before_deadline = lease.expires_at
+    sent = []
+
+    async def send(sn, command, **kwargs):
+        nonlocal clock
+        sent.append(command.type)
+        if command.type == "stream_start":
+            assert kwargs["ttl_ms"] == budget
+            assert command.expires_at_ms <= command.lease_expires_at_ms
+            clock += offset
+            event = fixture("hevc_ready")
+            for key in (
+                "sn",
+                "lease_id",
+                "stream_instance_id",
+                "command_id",
+                "operation_id",
+                "agent_instance_id",
+            ):
+                event[key] = start[key]
+            event["actual_descriptor"] = copy.deepcopy(start["descriptor"])
+            assert (
+                await video_control.event(
+                    sn, wire.Ready.model_validate(event), service, send
+                )
+                is expected
+            )
+
+    if expected:
+        record = await video_control.start(
+            service, wire.Start.model_validate(start), 1, "owner", "session", send
+        )
+        assert record["state"] == "running"
+        assert record["actual_descriptor"] == start["descriptor"]
+        assert sent == ["stream_start"]
+    else:
+        with pytest.raises(HTTPException) as exc:
+            await video_control.start(
+                service, wire.Start.model_validate(start), 1, "owner", "session", send
+            )
+        assert exc.value.detail == {"code": "producer_lost"}
+    assert lease.expires_at == before_deadline
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "case", ["over_budget", "lease_deadline", "old_media", "usb_camera"]
+)
+async def test_cold_start_extension_preserves_other_limits(native_env, case):
+    service, lease, start, cap = native_env
+    before_deadline = lease.expires_at
+    start["expires_at_ms"] = start["issued_at_ms"] + 35000
+    if case == "over_budget":
+        start["expires_at_ms"] += 1
+    elif case == "lease_deadline":
+        start["lease_expires_at_ms"] = start["expires_at_ms"] - 1
+    elif case == "old_media":
+        del start["descriptor"]["contract_version"]
+        start["descriptor"]["tracks"][0].update(width=1280, height=720, level_id=93)
+    else:
+        start["descriptor"]["source_type"] = "usb-camera"
+        assert (
+            select_codec(
+                start,
+                {
+                    "authorized": True,
+                    "tenant_matches": True,
+                    "source_allowed": True,
+                    "sn": lease.sn,
+                    "lease_active": True,
+                    "lease_id": str(lease.lease_id),
+                },
+            )
+            == "invalid_payload"
+        )
+        return
+    sender = AsyncMock()
+    with pytest.raises(HTTPException) as exc:
+        await video_control.start(
+            service, wire.Start.model_validate(start), 1, "owner", "session", sender
+        )
+    assert exc.value.detail == {"code": "invalid_payload"}
+    sender.assert_not_awaited()
+    assert lease.expires_at == before_deadline

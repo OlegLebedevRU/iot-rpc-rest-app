@@ -27,6 +27,7 @@ if TYPE_CHECKING:
 # A cached ready from a previous server process cannot authorize a publisher.
 SERVER_EPOCH = str(uuid4())
 LIVE = ("starting", "running", "stopping")
+DESKTOP_COLD_START_MS = 35000
 IDENTITY = (
     "lease_id",
     "stream_instance_id",
@@ -163,8 +164,15 @@ def select_codec(start: dict[str, Any], context: dict[str, Any]) -> str:
         return "lease_invalid"
     if start["lease_id"] != context["lease_id"]:
         return "lease_mismatch"
+    descriptor = start["descriptor"]
+    command_budget = (
+        DESKTOP_COLD_START_MS
+        if descriptor.get("contract_version") == 3
+        and descriptor["source_type"] == "desktop"
+        else 30000
+    )
     if (
-        not 0 < start["expires_at_ms"] - start["issued_at_ms"] <= 30000
+        not 0 < start["expires_at_ms"] - start["issued_at_ms"] <= command_budget
         or start["expires_at_ms"] > start["lease_expires_at_ms"]
     ):
         return "invalid_payload"
@@ -424,6 +432,13 @@ class VideoControl:
         if not view.online or "video_contract_v2" not in (view.capabilities or []):
             await self.invalidate(sn)
             return unavailable
+        inventory_budget = 10000
+        if contract_version == 3 and view.desktop_available:
+            inventory = await presence.get_inventory(sn)
+            if source_id is None or any(
+                d.desktop_id == source_id for d in inventory.displays
+            ):
+                inventory_budget = DESKTOP_COLD_START_MS
         current = now_ms()
         server_epoch = await self.store.current_epoch()
         selection: dict[str, Any] = {}
@@ -437,10 +452,9 @@ class VideoControl:
             command_id=str(uuid4()),
             sn=sn,
             issued_at_ms=current,
-            # The frozen inventory_get fixture already allows10s. This is
-            # capability negotiation, not the stream first-frame budget:
-            # hardware activation checks Medium first, then optional HD.
-            expires_at_ms=current + 10000,
+            # Native desktop activation may take30s; correlation and broker TTL
+            # share a35s outer window. Camera and previous media paths keep10s.
+            expires_at_ms=current + inventory_budget,
             **selection,
         )
 
@@ -491,7 +505,7 @@ class VideoControl:
 
         if await self.store.change(sn, reserve, expected_epoch=server_epoch):
             try:
-                await send(sn, query, ttl_ms=10000)
+                await send(sn, query, ttl_ms=inventory_budget)
                 while now_ms() < query.expires_at_ms:
                     doc = await self.store.get(sn)
                     if not doc.get("pending"):

@@ -69,3 +69,31 @@ Validation for this implementation:
 - Targeted regex secret scan of all 13 changed/new files: no findings.
 - Git whitespace check passes. The staged schema's raw Git blob matches the
   coordinator's pinned SHA; imported README/test/schema attributes are retained.
+
+## Cold-start addendum (IoT only)
+
+For explicitly selected v3 desktop inventory, the command deadline, MQTT publish
+TTL and pending/correlation window are 35 seconds. Desktop selection uses current
+presence/inventory, with the initial unselected query using desktop availability.
+Explicit camera/unknown sources and earlier media retain their 10-second inventory
+budget. A live pending query remains authoritative beyond the old 30-second probe
+cooldown; repeated UI reads cannot start a competing probe. Compatible fresh cache
+and successful-probe memory paths return immediately without another command.
+
+V3 desktop START accepts an issued-to-expiry interval up to 35 seconds. Its expiry
+must still fit the submitted lease deadline and the actual publisher lease. A
+shorter remaining lease therefore shortens the usable command window. Publication,
+START waiting and READY admission all use this same immutable command deadline;
+READY at or beyond the deadline is rejected. No lease TTL or contract schema/SHA
+was changed. The native producer's separate 30-second hard bound is coordinator
+scope; these tests simulate delayed replies and do not claim hardware acceptance.
+
+Cold-start validation covers a correlated inventory reply after31 seconds, broker
+TTL/correlation, pending-query reuse past30 seconds, immediate subsequent cache hit,
+late inventory rejection, READY at34.999 seconds and rejection at35 seconds,
+shorter20-second leases, >35-second rejection and preserved earlier/USB budgets.
+Deployment remains pending the user's signal after media stage1.
+
+Addendum checks: full application suite 883 passed, 7 skipped, 5 existing warnings;
+13 new cold-start cases are included. Ruff/Black and whitespace checks pass.
+The owner confirmed media stage1 ready and authorized app1 deployment on2026-10-24.
