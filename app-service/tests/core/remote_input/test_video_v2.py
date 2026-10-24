@@ -93,6 +93,56 @@ def test_memory_capability_rejects_invalid_measurement(invalid):
         wire.Capabilities.model_validate(dict(cap, measured_at_ms=invalid))
 
 
+@pytest.mark.anyio
+@pytest.mark.parametrize("invalidation", ["transport", "presence"])
+async def test_invalidated_admission_reconfirms_without_old_probe_cooldown(
+    env, invalidation
+):
+    service, lease, _, cap = env
+    cap["source_id"] = "disp:fixture"
+    cap["admission_clock"] = "issuer_monotonic_v1"
+    cap["measured_at_ms"] = now_ms() - 86400000
+    await video_control.store.change(
+        lease.sn,
+        lambda doc: doc.update(
+            capability=cap,
+            probe_source_id="disp:fixture",
+            probe_profile_id="low",
+            next_probe_ms=now_ms() + 30000,
+        ),
+    )
+    if invalidation == "transport":
+        await video_control.invalidate(lease.sn)
+    else:
+        await video_control.observe_presence(
+            lease.sn,
+            CtlPresence(
+                timestamp=datetime.now(UTC).isoformat(),
+                capabilities=["video_contract_v2"],
+                session_id=2,
+                desktop_available=True,
+            ),
+        )
+    assert not (await video_control.store.get(lease.sn)).get("capability")
+    observed = []
+
+    async def send(sn, query, **kwargs):
+        observed.append(query.command_id)
+        ack = fixture("capabilities")
+        ack["command_id"] = query.command_id
+        cap.update(checked_at_ms=now_ms(), valid_until_ms=now_ms() + 59000)
+        ack["video_capabilities"] = cap
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+
+    result = await video_control.capability(
+        lease.sn, service.presence, send, source_id="disp:fixture", profile_id="low"
+    )
+    assert result["negotiated_v2"] and len(observed) == 1
+    assert result["video_capabilities"]["measured_at_ms"] == cap["measured_at_ms"]
+
+
 def test_memory_capability_rejects_measurement_after_check():
     cap = fixture("capabilities")["video_capabilities"]
     with pytest.raises(ValidationError):
