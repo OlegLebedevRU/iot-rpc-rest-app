@@ -3,6 +3,7 @@ __all__ = (
     "BillingActiveDevice",
     "BillingCoefficient",
     "BillingCounter",
+    "CameraAuthority",
     "Cell",
     "DevEvent",
     "DevTask",
@@ -32,6 +33,7 @@ __all__ = (
 from .archive import FinArchiveBatch
 from .base import Base
 from .billing import BillingActiveDevice, BillingCoefficient, BillingCounter
+from .camera_authority import CameraAuthority
 from .cell import Cell
 from .db_helper import db_helper
 from .device_events import DevEvent

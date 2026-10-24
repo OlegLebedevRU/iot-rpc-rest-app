@@ -407,20 +407,35 @@ class RemoteInputService:
             from core.camera.control import epoch_of
             from core.camera.producer import renew_command
 
-            cmd = renew_command(
-                epoch_of(camera_record), touched, int(time.time() * 1000)
-            )
+            if camera_record.get("admission_revision"):
+                from core.camera.runtime import camera_runtime
 
-        future = await self.pending.register(
-            command_id=cmd.command_id,
-            lease_id=touched.lease_id,
-            sn=touched.sn,
-            cmd_type="lease_renew",
-            timeout_sec=timeout_sec or 5.0,
+                cmd = await camera_runtime.command(
+                    "renew", epoch_of(camera_record), touched
+                )
+            else:
+                cmd = renew_command(
+                    epoch_of(camera_record), touched, int(time.time() * 1000)
+                )
+
+        from core.camera.runtime_wire import CameraRuntimeCommand
+
+        future = (
+            None
+            if isinstance(cmd, CameraRuntimeCommand)
+            else await self.pending.register(
+                command_id=cmd.command_id,
+                lease_id=touched.lease_id,
+                sn=touched.sn,
+                cmd_type="lease_renew",
+                timeout_sec=timeout_sec or 5.0,
+            )
         )
 
         try:
-            if (
+            if isinstance(cmd, CameraRuntimeCommand):
+                await send_ctl_command(touched.sn, cmd, ttl_ms=60000)
+            elif (
                 self.publisher is not None
                 and self.publisher is not default_control_publisher
             ):
@@ -452,7 +467,14 @@ class RemoteInputService:
         if wait_ack:
             ack_wait = timeout_sec or 2.0
             try:
-                res = await asyncio.wait_for(asyncio.shield(future), timeout=ack_wait)
+                from core.camera.runtime_wire import CameraRuntimeCommand
+
+                if isinstance(cmd, CameraRuntimeCommand):
+                    res = await camera_runtime.wait_ack(cmd, ack_wait)
+                else:
+                    res = await asyncio.wait_for(
+                        asyncio.shield(future), timeout=ack_wait
+                    )
                 if res.result in (
                     "renewed",
                     "accepted",

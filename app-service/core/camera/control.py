@@ -123,8 +123,26 @@ class CameraControl:
             lease.stream_mode = None
             lease.selected_camera_id = None
             await service.leases.save_stream(lease, stream)
+            record = await self.record(epoch.identity["sn"])
+            if (
+                record
+                and record.get("admission_revision")
+                and epoch_of(record).identity == epoch.identity
+            ):
+                # The negotiated profile requires fresh lease/stream IDs per attempt.
+                await service.leases.revoke(lease.lease_id, "camera_attempt_retired")
 
-    async def start(self, service, session_db, lease, payload: dict, send) -> dict:
+    async def start(
+        self,
+        service,
+        session_db,
+        lease,
+        payload: dict,
+        send,
+        *,
+        monotonic: bool = False,
+        readiness_nonce: str | None = None,
+    ) -> dict:
         await self.reconcile(lease.sn, service, send)
         epoch = CameraEpoch.from_start(payload, lease)
         view = await camera_capability(
@@ -134,6 +152,26 @@ class CameraControl:
             raise HTTPException(409, view.producer_adapter["reason"])
         current_ms = int(time.time() * 1000)
         command = start_command(epoch, view.camera, current_ms)
+        from core.config import settings
+
+        if settings.camera.monotonic_runtime_enabled:
+            from core.camera.runtime import camera_runtime
+            from core.camera.runtime_admission import configuration
+
+            durable = await camera_runtime.store.get(lease.sn)
+            configured = durable.get("configured")
+            if configured:
+                if not monotonic:
+                    raise HTTPException(409, "camera_runtime_revision_required")
+                actual = configuration(
+                    view.camera,
+                    epoch.start["descriptor"],
+                    configured["binding"]["physical_camera_mac"],
+                )
+                if actual != configured:
+                    raise HTTPException(409, "camera_physical_binding_changed")
+            elif monotonic:
+                raise HTTPException(409, "camera_binding_not_prepared")
         # PIN belongs only to BFF/media. Do not retain or send it to firmware.
         stored_start = epoch.start
         stored_start.pop("pin", None)
@@ -160,6 +198,10 @@ class CameraControl:
                 "result": "accepted",
                 "confirmation": None,
             }
+            if monotonic:
+                from core.camera.runtime_wire import ADMISSION
+
+                record["admission_revision"] = ADMISSION
             doc["camera_stream"] = record
             return record
 
@@ -200,12 +242,22 @@ class CameraControl:
         try:
             if timeout <= 0:
                 raise ValueError("camera_lease_expired")
-            future = await service.pending.register(
-                command.command_id,
-                lease.lease_id,
-                lease.sn,
-                "stream_start",
-                timeout_sec=timeout,
+            if monotonic:
+                from core.camera.runtime import camera_runtime
+
+                command = await camera_runtime.command(
+                    "start", epoch, lease, readiness_nonce
+                )
+            future = (
+                None
+                if monotonic
+                else await service.pending.register(
+                    command.command_id,
+                    lease.lease_id,
+                    lease.sn,
+                    "stream_start",
+                    timeout_sec=timeout,
+                )
             )
             await asyncio.wait_for(
                 send(
@@ -213,7 +265,11 @@ class CameraControl:
                 ),
                 timeout=5,
             )
-            ack = await asyncio.wait_for(future, timeout=timeout)
+            ack = (
+                await camera_runtime.wait_ack(command, timeout)
+                if monotonic
+                else await asyncio.wait_for(future, timeout=timeout)
+            )
             if (
                 ack.result not in ("started", "already_running")
                 or ack.stream_instance_id != command.stream_instance_id
@@ -242,7 +298,11 @@ class CameraControl:
             )
             await self.clear_lease(service, epoch)
             try:
-                command_stop = stop_command(epoch, int(time.time() * 1000))
+                command_stop = (
+                    await camera_runtime.command("stop", epoch)
+                    if monotonic
+                    else stop_command(epoch, int(time.time() * 1000))
+                )
                 await asyncio.wait_for(
                     send(lease.sn, command_stop, ttl_ms=5000), timeout=5
                 )
@@ -260,7 +320,21 @@ class CameraControl:
         if record["state"] not in LIVE:
             return record
         await self.update(epoch, state="stopping", result="stopping")
-        command = stop_command(epoch, int(time.time() * 1000))
+        if record.get("admission_revision"):
+            from core.camera.runtime import camera_runtime
+
+            try:
+                command = await camera_runtime.command("stop", epoch)
+            except ValueError as exc:
+                if str(exc) != "camera_stream_not_live":
+                    raise
+                await self.update(
+                    epoch, state="stopped", result="stopped", reason="lease_invalid"
+                )
+                await self.clear_lease(service, epoch)
+                return await self.record(lease.sn)
+        else:
+            command = stop_command(epoch, int(time.time() * 1000))
         await asyncio.wait_for(send(lease.sn, command, ttl_ms=5000), timeout=5)
         # Wait for terminal evidence/watchdog; publication is not STOP completion.
         return await self.record(lease.sn)
@@ -292,6 +366,14 @@ class CameraControl:
             "source_unavailable",
             "session_unavailable",
         ):
+            if record.get("admission_revision"):
+                from core.camera.runtime import camera_runtime
+
+                await camera_runtime.submit(
+                    sn,
+                    "retire",
+                    {k: epoch.identity[k] for k in ("lease_id", "stream_instance_id")},
+                )
             state = "stopped" if event.state == "stopped" else "failed"
             await self.update(epoch, state=state, result=state, reason=event.reason)
             await self.clear_lease(service, epoch)
@@ -314,6 +396,38 @@ class CameraControl:
                     or lease.scope != "stream"
                     or str(lease.stream_instance_id) != identity["stream_instance_id"]
                 )
+                if not orphan and record.get("admission_revision"):
+                    from core.camera.runtime import camera_runtime
+                    from core.camera.runtime_admission import configuration
+                    from core.models import db_helper
+
+                    durable = await camera_runtime.store.get(sn)
+                    configured = durable.get("configured")
+                    async with db_helper.session_factory() as session:
+                        view = await camera_capability(
+                            session, lease.device_id, authorized_sn=sn
+                        )
+                    try:
+                        orphan = (
+                            not view.main_app_online
+                            or not view.fresh
+                            or not configured
+                            or configuration(
+                                view.camera,
+                                configured["descriptor"],
+                                configured["binding"]["physical_camera_mac"],
+                            )
+                            != configured
+                            or (
+                                durable["active"] is None
+                                and (
+                                    record["state"] == "running"
+                                    or durable["ready"] is None
+                                )
+                            )
+                        )
+                    except ValueError, TypeError:
+                        orphan = True
 
         def retire(document):
             record = document.get("camera_stream")
@@ -339,8 +453,13 @@ class CameraControl:
                 timestamp=datetime.now(UTC).isoformat(),
             )
         )
-        command = stop_command(epoch, int(time.time() * 1000))
         try:
+            if record.get("admission_revision"):
+                from core.camera.runtime import camera_runtime
+
+                command = await camera_runtime.command("stop", epoch)
+            else:
+                command = stop_command(epoch, int(time.time() * 1000))
             await asyncio.wait_for(send(sn, command, ttl_ms=5000), timeout=5)
         except Exception:
             pass

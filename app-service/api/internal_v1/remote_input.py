@@ -4,7 +4,7 @@ import asyncio
 import hmac
 from contextlib import suppress
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from core.camera.contract import REVISION
@@ -74,7 +74,7 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from api.internal_v1.internal_depends import (
     Internal_Auth_dep,
@@ -180,7 +180,7 @@ def verify_ws_internal_auth(ws: WebSocket) -> bool:
     return True
 
 
-# ── REST Endpoints ───────────────────────────────────────────────────────────
+# РІвЂќР‚РІвЂќР‚ REST Endpoints РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚
 
 
 @router.get(
@@ -369,10 +369,25 @@ async def post_stream_start(
         lease = await video_control.authorize(
             remote_input_service, lease_id, org_id, caller_user_id, session_id
         )
-        async with db_helper.session_factory() as camera_session:
-            record = await camera_control.start(
-                remote_input_service, camera_session, lease, body.root, send_ctl_command
-            )
+        monotonic = require_camera_runtime_headers(request, optional=True)
+        readiness_nonce = request.headers.get("X-L4-Camera-Readiness")
+        if monotonic and not readiness_nonce:
+            raise HTTPException(422, "camera_readiness_nonce_required")
+        try:
+            async with db_helper.session_factory() as camera_session:
+                record = await camera_control.start(
+                    remote_input_service,
+                    camera_session,
+                    lease,
+                    body.root,
+                    send_ctl_command,
+                    monotonic=monotonic,
+                    readiness_nonce=readiness_nonce,
+                )
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+        except TimeoutError:
+            raise HTTPException(504, "camera_runtime_timeout") from None
         return CameraStateView.from_record(record)
     if isinstance(body, VideoStart):
         if body.lease_id != str(lease_id):
@@ -684,7 +699,7 @@ async def post_key_event(
     )
 
 
-# ── WebSocket Endpoint ───────────────────────────────────────────────────────
+# РІвЂќР‚РІвЂќР‚ WebSocket Endpoint РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚РІвЂќР‚
 
 
 @router.websocket("/ws/watch/{sn}")
@@ -1414,3 +1429,119 @@ async def remote_input_ws(
             await websocket.close()
         except Exception:
             pass
+
+
+# Camera monotonic admission is negotiated independently of camera media1.0.0.
+def require_camera_runtime_headers(request: Request, optional: bool = False) -> bool:
+    from core.camera.runtime_wire import ADMISSION, ENROLLMENT
+
+    admission = request.headers.get("X-L4-Camera-Admission")
+    enrollment = request.headers.get("X-L4-Camera-Enrollment")
+    if optional and admission is None and enrollment is None:
+        return False
+    if admission != ADMISSION or enrollment != ENROLLMENT:
+        raise HTTPException(422, "unsupported_camera_runtime_revision")
+    if not settings.camera.monotonic_runtime_enabled:
+        raise HTTPException(409, "camera_monotonic_runtime_disabled")
+    return True
+
+
+class CameraRuntimePrepare(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    descriptor: dict[str, Any]
+    physical_camera_mac: str = Field(pattern=r"^([0-9a-f]{2}:){5}[0-9a-f]{2}$")
+
+
+async def runtime_camera_view(sn, org_id, session):
+    device_id = await DeviceRepo.get_device_id(session, sn=sn, org_id=org_id)
+    if device_id is None:
+        raise HTTPException(403, "device not available for organization")
+    view = await camera_capability(session, device_id, authorized_sn=sn)
+    if not view.main_app_online or not view.fresh or not view.camera:
+        raise HTTPException(409, "camera_main_app_or_gauge_not_fresh")
+    return view
+
+
+@router.post("/devices/{sn}/camera/admission/prepare")
+async def prepare_camera_admission(
+    sn: str,
+    body: CameraRuntimePrepare,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    session: Session_dep,
+    request: Request,
+) -> dict:
+    require_camera_runtime_headers(request)
+    from core.camera.runtime import camera_runtime
+    from core.camera.runtime_admission import configuration
+
+    view = await runtime_camera_view(sn, org_id, session)
+    try:
+        configured = configuration(
+            view.camera, body.descriptor, body.physical_camera_mac
+        )
+        return await camera_runtime.submit(sn, "configure", configured)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+
+
+@router.post("/devices/{sn}/camera/admission/readiness")
+async def fresh_camera_readiness(
+    sn: str,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    session: Session_dep,
+    request: Request,
+) -> dict:
+    require_camera_runtime_headers(request)
+    from core.camera.runtime import camera_runtime
+    from core.camera.runtime_admission import configuration
+
+    view = await runtime_camera_view(sn, org_id, session)
+    try:
+        configured = (await camera_runtime.store.get(sn))["configured"]
+        if (
+            not configured
+            or configuration(
+                view.camera,
+                configured["descriptor"],
+                configured["binding"]["physical_camera_mac"],
+            )
+            != configured
+        ):
+            raise ValueError("camera_binding_not_prepared")
+        query = await camera_runtime.submit(sn, "readiness", {"sn": sn})
+        deadline = camera_runtime.monotonic() + 5000
+        while camera_runtime.monotonic() < deadline:
+            state = await camera_runtime.store.get(sn)
+            ready = state["ready"]
+            if not ready or ready["query"] != query:
+                raise ValueError("camera_readiness_retired")
+            if ready["accepted"] and not ready["consumed"]:
+                return query
+            await asyncio.sleep(0.025)
+        raise HTTPException(504, "camera_readiness_timeout")
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+
+
+@router.get("/devices/{sn}/camera/admission")
+async def camera_admission_status(
+    sn: str,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    session: Session_dep,
+    request: Request,
+) -> dict:
+    require_camera_runtime_headers(request)
+    await runtime_camera_view(sn, org_id, session)
+    from core.camera.runtime import camera_runtime
+
+    try:
+        state = await camera_runtime.store.get(sn)
+        return {
+            key: state.get(key)
+            for key in ("generation", "epoch", "boot", "counter", "enrolled")
+        }
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
