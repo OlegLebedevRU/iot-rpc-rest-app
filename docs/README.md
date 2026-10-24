@@ -62,3 +62,7 @@
 Handoff, планы реализации, RFC и материалы в `exceptions/` сохраняют контекст отдельных работ. Для интеграции начинайте с текущих контрактов выше; исторические SHA и результаты проверок в handoff относятся к указанному в них выпуску.
 
 - [HEVC TASK-00 contracts and local pin](hevc-contracts-p0.md).
+# Session lifecycle55 and camera enrollment
+
+- [Desktop lifecycle handoff](session-lifecycle55-handoff.md).
+- [Camera boot/issuer enrollment proposal](camera-boot-issuer-enrollment.md).
