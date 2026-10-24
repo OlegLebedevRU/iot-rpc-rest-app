@@ -1,5 +1,6 @@
 """Independent full-offer/physical-facts and original-budget reference checks."""
 
+import argparse
 import copy
 import hashlib
 import json
@@ -114,12 +115,24 @@ class Device:
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--strict-bytes",
+        action="store_true",
+        help="Hash raw exported Git bytes without checkout newline normalization",
+    )
+    args = parser.parse_args()
+
+    def file_sha(path):
+        raw = path.read_bytes()
+        # Pins identify LF Git text blobs, never a developer's CRLF checkout.
+        if not args.strict_bytes:
+            raw = raw.replace(b"\r\n", b"\n")
+        return hashlib.sha256(raw).hexdigest()
+
     manifest = read("manifest.json")
     for name, expected in manifest["fixtures"].items():
-        assert (
-            hashlib.sha256((ROOT / "fixtures" / name).read_bytes()).hexdigest()
-            == expected
-        ), name
+        assert file_sha(ROOT / "fixtures" / name) == expected, name
     for path, expected in (
         (ROOT / "schema.json", manifest["schema_sha256"]),
         (
@@ -131,7 +144,7 @@ def main():
             manifest["admission_schema_sha256"],
         ),
     ):
-        assert hashlib.sha256(path.read_bytes()).hexdigest() == expected, path
+        assert file_sha(path) == expected, path
     hello, offer, proof, commit = [
         read("fixtures/" + name + ".json")
         for name in ("hello", "offer", "proof", "commit")

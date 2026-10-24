@@ -2,7 +2,7 @@
   "revision": "camera-enrollment/0.2.0-proposed",
   "media_owner_commit": "60a2bffc961dfc31caeea96a76bfb856484212b5",
   "media_schema_sha256": "bfd71ec96cf8de81657fd319c603f91a4769209887e32297fff4193752e3c62e",
-  "admission_schema_sha256": "51f8177d0af7c4c821f4c45c778f8a51343b2c46d7de4e2664d02432a673d53f",
+  "admission_schema_sha256": "e75e1c7f49f0d0fc68f6720a3c47766ccb4caad83d721b5d1b8aabe3d3b58a0d",
   "schema_sha256": "f1697a9506117b215d2d66fd63fd375e2ca23d7365bee5d10d2a6955f9c4e91b",
   "fixtures": {
     "commit.json": "8f14a7b6b282eb7e93c626da6ac8657759914b3255fdb56c72fa8d4a15c882a1",

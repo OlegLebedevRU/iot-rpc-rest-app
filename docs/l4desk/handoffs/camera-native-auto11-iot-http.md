@@ -43,3 +43,16 @@ Full pytest with isolated PostgreSQL176 enabled: **921 passed,7 skipped**, with5
 All20 changed/new Python files pass Ruff and Black. Full repository Ruff still reports14 diagnostics in unchanged frozen/auxiliary files; none are introduced by this continuation. Both standalone package verifiers pass. Actual C canonicalization built with -Werror and SDK MbedTLS SHA256 matches descriptor, binding and full offer/proof/commit bytes/digests, including the4096/4097-byte boundary; report: contracts/camera-enrollment-v0.2/c-canonical-report.json.
 
 The real PostgreSQL checks cover version1→2 preservation of floor100 and retired boot,8 concurrent increments, rollback of malformed state, immutable0013 migration/trigger and issuer takeover with stale-owner egress rejection. They use only disposable UUID schemas in a temporary PostgreSQL18 container on authorized176. Existing production infrastructure is unchanged. Frozen1.0/HEVC2.0/enrollment0.1/admission0.2, migration0013 and uv.lock have no diff.
+
+## Packaging correction: LF Git bytes
+
+The original369c86c manifest used the CRLF checkout digest for the imported
+admission schema. The corrected admission_schema_sha256 is
+e75e1c7f49f0d0fc68f6720a3c47766ccb4caad83d721b5d1b8aabe3d3b58a0d, matching the
+immutable LF blob in both141 and143. All other enrollment/fixture/owner-lock
+pins were reviewed against raw Git exports. No schema, runtime or wire change
+is involved. The new package declares LF explicitly; its ordinary verifier
+handles CRLF checkouts as LF Git text, while --strict-bytes checks raw bytes.
+Reproduce independently of core.autocrlf with
+`uv run python contracts/camera-enrollment-v0.2/verify_git.py --revision <SHA>`:
+all pins and both package verifiers are checked inside a raw Git export.
