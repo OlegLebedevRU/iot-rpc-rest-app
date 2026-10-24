@@ -214,9 +214,13 @@ if _REGISTER_SUBSCRIBERS:
         await handle_device_output_message(routing_key=routing_key, payload=msg.body)
 
     @fs_router.subscriber(q_ctl)
-    async def remote_input_ctl(msg: RabbitMessage, sn: Sn_dep):
+    async def remote_input_ctl(msg: RabbitMessage, sn: Sn_dep, corr_id: Corr_id_dep):
         routing_key = getattr(msg, "routing_key", None) or f"dev.{sn}.ctl"
-        await handle_device_ctl_message(routing_key=routing_key, payload=msg.body)
+        await handle_device_ctl_message(
+            routing_key=routing_key,
+            payload=msg.body,
+            correlation_id=str(corr_id) if corr_id else None,
+        )
 
     @fs_router.subscriber(q_app)
     async def app_connect_handler(

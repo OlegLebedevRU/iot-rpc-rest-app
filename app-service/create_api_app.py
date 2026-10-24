@@ -330,6 +330,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     remote_input_cleanup_task = asyncio.create_task(_remote_input_cleanup_loop())
     rpc_webhook_task = asyncio.create_task(delivery_loop())
     inventory_delivery_task = asyncio.create_task(inventory_delivery_loop())
+    from core.camera.runtime import camera_runtime_loop
+
+    camera_runtime_task = asyncio.create_task(camera_runtime_loop())
     scheduler = AsyncIOScheduler()
     scheduler.configure(jobstores={"default": MemoryJobStore()})
     try:
@@ -364,6 +367,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         log.info(f"Исключение scheduler: {e!s}")
 
     yield
+
+    camera_runtime_task.cancel()
+    with suppress(asyncio.CancelledError, Exception):
+        await camera_runtime_task
 
     inventory_delivery_task.cancel()
     with suppress(asyncio.CancelledError, Exception):

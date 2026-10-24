@@ -66,3 +66,4 @@ Handoff, планы реализации, RFC и материалы в `exceptio
 
 - [Desktop lifecycle handoff](session-lifecycle55-handoff.md).
 - [Camera boot/issuer enrollment proposal](camera-boot-issuer-enrollment.md).
+- [Camera monotonic server runtime](camera-monotonic-runtime.md) — durable enrollment, readiness and fenced command outbox; disabled by default.

@@ -174,6 +174,7 @@ async def handle_device_ctl_message(
     p_registry: PresenceRegistryProtocol = presence_registry,
     cmd_registry: PendingCommandRegistryProtocol = pending_registry,
     l_registry: LeaseRegistryProtocol = lease_registry,
+    correlation_id: str | None = None,
 ) -> bool:
     try:
         sn = extract_sn_from_ctl_routing_key(routing_key)
@@ -182,6 +183,15 @@ async def handle_device_ctl_message(
             return False
 
         try:
+            raw = load_object(payload, settings.remote_input.max_inbound_payload_bytes)
+            if str(raw.get("type", "")).startswith("camera_"):
+                if not settings.camera.monotonic_runtime_enabled:
+                    return False
+                from core.camera.runtime import camera_runtime
+                from core.camera.runtime_wire import decode
+
+                message = decode(payload, sn, correlation_id)
+                return bool(await camera_runtime.submit(sn, "incoming", message))
             envelope = decode_ctl_payload(payload)
         except Exception as exc:
             diag = _extract_malformed_ctl_diagnostics(payload)
@@ -235,6 +245,17 @@ async def handle_device_ctl_message(
                     envelope.sn,
                 )
                 return False
+
+            if settings.camera.monotonic_runtime_enabled:
+                from core.camera.runtime import camera_runtime
+
+                try:
+                    if await camera_runtime.accept_ack(
+                        sn, envelope.model_dump(mode="json")
+                    ):
+                        return True
+                except ValueError:
+                    pass  # Unconfigured/unknown command remains in the existing plane.
 
             if isinstance(envelope, CtlAck):
                 if envelope.result == "nack":
