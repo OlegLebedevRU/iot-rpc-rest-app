@@ -1,0 +1,96 @@
+{
+  "source": "RFC8785 sections3.2.2-3.2.4; integer-only descriptor numeric domain",
+  "independent_generator": "rfc8785 Python package 0.1.4",
+  "valid": [
+    {
+      "name": "native_hevc_descriptor",
+      "kind": "camera_descriptor",
+      "input_json": "{\n  \"descriptor_revision\": \"00000000-0000-4000-8000-000000000003\",\n  \"source_type\": \"camera\",\n  \"source_id\": \"cam:ip000001\",\n  \"geometry_generation\": 1,\n  \"profile_id\": \"default\",\n  \"tracks\": [\n    {\n      \"track_id\": \"video-main\",\n      \"kind\": \"video\",\n      \"direction\": \"producer_to_viewers\",\n      \"bit_depth\": 8,\n      \"chroma\": \"420\",\n      \"clock_rate\": 90000,\n      \"payload_type\": 96,\n      \"width\": 2592,\n      \"height\": 1944,\n      \"fps\": 20,\n      \"feedback\": {\n        \"pli\": false,\n        \"fir\": false\n      },\n      \"max_b_frames\": 0,\n      \"keyframe_interval_ms\": 2000,\n      \"repeat_parameter_sets\": true,\n      \"codec\": \"h265\",\n      \"codec_profile\": \"main\",\n      \"packetization\": \"rfc7798\",\n      \"profile_space\": 0,\n      \"profile_id\": 1,\n      \"tier_flag\": 0,\n      \"level_id\": 153,\n      \"sprop_max_don_diff\": 0\n    }\n  ],\n  \"camera_contract_revision\": \"siplite-camera/1.0.0\"\n}",
+      "canonical_json": "{\"camera_contract_revision\":\"siplite-camera/1.0.0\",\"descriptor_revision\":\"00000000-0000-4000-8000-000000000003\",\"geometry_generation\":1,\"profile_id\":\"default\",\"source_id\":\"cam:ip000001\",\"source_type\":\"camera\",\"tracks\":[{\"bit_depth\":8,\"chroma\":\"420\",\"clock_rate\":90000,\"codec\":\"h265\",\"codec_profile\":\"main\",\"direction\":\"producer_to_viewers\",\"feedback\":{\"fir\":false,\"pli\":false},\"fps\":20,\"height\":1944,\"keyframe_interval_ms\":2000,\"kind\":\"video\",\"level_id\":153,\"max_b_frames\":0,\"packetization\":\"rfc7798\",\"payload_type\":96,\"profile_id\":1,\"profile_space\":0,\"repeat_parameter_sets\":true,\"sprop_max_don_diff\":0,\"tier_flag\":0,\"track_id\":\"video-main\",\"width\":2592}]}",
+      "canonical_utf8_hex": "7b2263616d6572615f636f6e74726163745f7265766973696f6e223a227369706c6974652d63616d6572612f312e302e30222c2264657363726970746f725f7265766973696f6e223a2230303030303030302d303030302d343030302d383030302d303030303030303030303033222c2267656f6d657472795f67656e65726174696f6e223a312c2270726f66696c655f6964223a2264656661756c74222c22736f757263655f6964223a2263616d3a6970303030303031222c22736f757263655f74797065223a2263616d657261222c22747261636b73223a5b7b226269745f6465707468223a382c226368726f6d61223a22343230222c22636c6f636b5f72617465223a39303030302c22636f646563223a2268323635222c22636f6465635f70726f66696c65223a226d61696e222c22646972656374696f6e223a2270726f64756365725f746f5f76696577657273222c22666565646261636b223a7b22666972223a66616c73652c22706c69223a66616c73657d2c22667073223a32302c22686569676874223a313934342c226b65796672616d655f696e74657276616c5f6d73223a323030302c226b696e64223a22766964656f222c226c6576656c5f6964223a3135332c226d61785f625f6672616d6573223a302c227061636b6574697a6174696f6e223a2272666337373938222c227061796c6f61645f74797065223a39362c2270726f66696c655f6964223a312c2270726f66696c655f7370616365223a302c227265706561745f706172616d657465725f73657473223a747275652c227370726f705f6d61785f646f6e5f64696666223a302c22746965725f666c6167223a302c22747261636b5f6964223a22766964656f2d6d61696e222c227769647468223a323539327d5d7d",
+      "sha256": "a5a43934d2cc8dedca5e351a1daacf68f563e31a55406b9c586731defc74379d"
+    },
+    {
+      "name": "same_descriptor_reordered",
+      "kind": "camera_descriptor",
+      "input_json": "{\"camera_contract_revision\": \"siplite-camera/1.0.0\", \"tracks\": [{\"track_id\": \"video-main\", \"kind\": \"video\", \"direction\": \"producer_to_viewers\", \"bit_depth\": 8, \"chroma\": \"420\", \"clock_rate\": 90000, \"payload_type\": 96, \"width\": 2592, \"height\": 1944, \"fps\": 20, \"feedback\": {\"pli\": false, \"fir\": false}, \"max_b_frames\": 0, \"keyframe_interval_ms\": 2000, \"repeat_parameter_sets\": true, \"codec\": \"h265\", \"codec_profile\": \"main\", \"packetization\": \"rfc7798\", \"profile_space\": 0, \"profile_id\": 1, \"tier_flag\": 0, \"level_id\": 153, \"sprop_max_don_diff\": 0}], \"profile_id\": \"default\", \"geometry_generation\": 1, \"source_id\": \"cam:ip000001\", \"source_type\": \"camera\", \"descriptor_revision\": \"00000000-0000-4000-8000-000000000003\"}",
+      "canonical_json": "{\"camera_contract_revision\":\"siplite-camera/1.0.0\",\"descriptor_revision\":\"00000000-0000-4000-8000-000000000003\",\"geometry_generation\":1,\"profile_id\":\"default\",\"source_id\":\"cam:ip000001\",\"source_type\":\"camera\",\"tracks\":[{\"bit_depth\":8,\"chroma\":\"420\",\"clock_rate\":90000,\"codec\":\"h265\",\"codec_profile\":\"main\",\"direction\":\"producer_to_viewers\",\"feedback\":{\"fir\":false,\"pli\":false},\"fps\":20,\"height\":1944,\"keyframe_interval_ms\":2000,\"kind\":\"video\",\"level_id\":153,\"max_b_frames\":0,\"packetization\":\"rfc7798\",\"payload_type\":96,\"profile_id\":1,\"profile_space\":0,\"repeat_parameter_sets\":true,\"sprop_max_don_diff\":0,\"tier_flag\":0,\"track_id\":\"video-main\",\"width\":2592}]}",
+      "canonical_utf8_hex": "7b2263616d6572615f636f6e74726163745f7265766973696f6e223a227369706c6974652d63616d6572612f312e302e30222c2264657363726970746f725f7265766973696f6e223a2230303030303030302d303030302d343030302d383030302d303030303030303030303033222c2267656f6d657472795f67656e65726174696f6e223a312c2270726f66696c655f6964223a2264656661756c74222c22736f757263655f6964223a2263616d3a6970303030303031222c22736f757263655f74797065223a2263616d657261222c22747261636b73223a5b7b226269745f6465707468223a382c226368726f6d61223a22343230222c22636c6f636b5f72617465223a39303030302c22636f646563223a2268323635222c22636f6465635f70726f66696c65223a226d61696e222c22646972656374696f6e223a2270726f64756365725f746f5f76696577657273222c22666565646261636b223a7b22666972223a66616c73652c22706c69223a66616c73657d2c22667073223a32302c22686569676874223a313934342c226b65796672616d655f696e74657276616c5f6d73223a323030302c226b696e64223a22766964656f222c226c6576656c5f6964223a3135332c226d61785f625f6672616d6573223a302c227061636b6574697a6174696f6e223a2272666337373938222c227061796c6f61645f74797065223a39362c2270726f66696c655f6964223a312c2270726f66696c655f7370616365223a302c227265706561745f706172616d657465725f73657473223a747275652c227370726f705f6d61785f646f6e5f64696666223a302c22746965725f666c6167223a302c22747261636b5f6964223a22766964656f2d6d61696e222c227769647468223a323539327d5d7d",
+      "sha256": "a5a43934d2cc8dedca5e351a1daacf68f563e31a55406b9c586731defc74379d"
+    },
+    {
+      "name": "h264_descriptor",
+      "kind": "descriptor",
+      "input_json": "{\"descriptor_revision\": \"00000000-0000-4000-8000-000000000003\", \"source_type\": \"desktop\", \"source_id\": \"display-0\", \"geometry_generation\": 1, \"profile_id\": \"low\", \"tracks\": [{\"track_id\": \"video-main\", \"kind\": \"video\", \"direction\": \"producer_to_viewers\", \"bit_depth\": 8, \"chroma\": \"420\", \"clock_rate\": 90000, \"payload_type\": 96, \"width\": 1280, \"height\": 720, \"fps\": 15, \"feedback\": {\"pli\": true, \"fir\": false}, \"max_b_frames\": 0, \"keyframe_interval_ms\": 2000, \"repeat_parameter_sets\": true, \"codec\": \"h264\", \"codec_profile\": \"baseline\", \"packetization\": \"rfc6184\", \"profile_level_id\": \"42e01f\", \"packetization_mode\": 1}]}",
+      "canonical_json": "{\"descriptor_revision\":\"00000000-0000-4000-8000-000000000003\",\"geometry_generation\":1,\"profile_id\":\"low\",\"source_id\":\"display-0\",\"source_type\":\"desktop\",\"tracks\":[{\"bit_depth\":8,\"chroma\":\"420\",\"clock_rate\":90000,\"codec\":\"h264\",\"codec_profile\":\"baseline\",\"direction\":\"producer_to_viewers\",\"feedback\":{\"fir\":false,\"pli\":true},\"fps\":15,\"height\":720,\"keyframe_interval_ms\":2000,\"kind\":\"video\",\"max_b_frames\":0,\"packetization\":\"rfc6184\",\"packetization_mode\":1,\"payload_type\":96,\"profile_level_id\":\"42e01f\",\"repeat_parameter_sets\":true,\"track_id\":\"video-main\",\"width\":1280}]}",
+      "canonical_utf8_hex": "7b2264657363726970746f725f7265766973696f6e223a2230303030303030302d303030302d343030302d383030302d303030303030303030303033222c2267656f6d657472795f67656e65726174696f6e223a312c2270726f66696c655f6964223a226c6f77222c22736f757263655f6964223a22646973706c61792d30222c22736f757263655f74797065223a226465736b746f70222c22747261636b73223a5b7b226269745f6465707468223a382c226368726f6d61223a22343230222c22636c6f636b5f72617465223a39303030302c22636f646563223a2268323634222c22636f6465635f70726f66696c65223a22626173656c696e65222c22646972656374696f6e223a2270726f64756365725f746f5f76696577657273222c22666565646261636b223a7b22666972223a66616c73652c22706c69223a747275657d2c22667073223a31352c22686569676874223a3732302c226b65796672616d655f696e74657276616c5f6d73223a323030302c226b696e64223a22766964656f222c226d61785f625f6672616d6573223a302c227061636b6574697a6174696f6e223a2272666336313834222c227061636b6574697a6174696f6e5f6d6f6465223a312c227061796c6f61645f74797065223a39362c2270726f66696c655f6c6576656c5f6964223a22343265303166222c227265706561745f706172616d657465725f73657473223a747275652c22747261636b5f6964223a22766964656f2d6d61696e222c227769647468223a313238307d5d7d",
+      "sha256": "a6ee946c33642e150f551682ef8030014eb3cfff833e229c5cacb85a64890bba"
+    },
+    {
+      "name": "utf16_property_order",
+      "kind": "serialization_probe",
+      "input_json": "{\"\\ue000\":1,\"\\ud83d\\ude00\":2,\"a\":3}",
+      "canonical_json": "{\"a\":3,\"\ud83d\ude00\":2,\"\ue000\":1}",
+      "canonical_utf8_hex": "7b2261223a332c22f09f9880223a322c22ee8080223a317d",
+      "sha256": "84495633024b0992798250783e7ccb01ab2875649ab22f353f14c0d6a8389fc2"
+    },
+    {
+      "name": "unicode_no_normalization",
+      "kind": "serialization_probe",
+      "input_json": "{\"label\":\"\\u00e9\",\"decomposed\":\"e\\u0301\",\"camera\":\"\u041a\u0430\u043c\u0435\u0440\u0430\"}",
+      "canonical_json": "{\"camera\":\"\u041a\u0430\u043c\u0435\u0440\u0430\",\"decomposed\":\"e\u0301\",\"label\":\"\u00e9\"}",
+      "canonical_utf8_hex": "7b2263616d657261223a22d09ad0b0d0bcd0b5d180d0b0222c226465636f6d706f736564223a2265cc81222c226c6162656c223a22c3a9227d",
+      "sha256": "6c18152241aa41ed49ded6fad1132f5f018fed3d1a5143fded13445cd468368f"
+    },
+    {
+      "name": "escaping",
+      "kind": "serialization_probe",
+      "input_json": "{\"s\":\"\\u000f\\b\\t\\n\\f\\r\\\"\\\\/\",\"html\":\"</script>\"}",
+      "canonical_json": "{\"html\":\"</script>\",\"s\":\"\\u000f\\b\\t\\n\\f\\r\\\"\\\\/\"}",
+      "canonical_utf8_hex": "7b2268746d6c223a223c2f7363726970743e222c2273223a225c75303030665c625c745c6e5c665c725c225c5c2f227d",
+      "sha256": "7d8ec9a449572f22e08c26905da6b34147b9b8802b9beb30a69cfbcac732e07d"
+    },
+    {
+      "name": "safe_integers_and_negative_zero",
+      "kind": "serialization_probe",
+      "input_json": "{\"z\":-0,\"max\":9007199254740991,\"min\":-9007199254740991}",
+      "canonical_json": "{\"max\":9007199254740991,\"min\":-9007199254740991,\"z\":0}",
+      "canonical_utf8_hex": "7b226d6178223a393030373139393235343734303939312c226d696e223a2d393030373139393235343734303939312c227a223a307d",
+      "sha256": "684dc96089a21731668079f3033beab8023eac2afc413c77c306be30dcbb472d"
+    },
+    {
+      "name": "nested_array_order",
+      "kind": "serialization_probe",
+      "input_json": "{\"z\":[{\"b\":2,\"a\":1},false,null,true],\"a\":[]}",
+      "canonical_json": "{\"a\":[],\"z\":[{\"a\":1,\"b\":2},false,null,true]}",
+      "canonical_utf8_hex": "7b2261223a5b5d2c227a223a5b7b2261223a312c2262223a327d2c66616c73652c6e756c6c2c747275655d7d",
+      "sha256": "eba896e86437c3730af8f54b612eb1225915849f9bbdde5f0821a7284c8e2416"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "duplicate_key",
+      "input_json": "{\"codec\":\"h265\",\"codec\":\"h264\"}"
+    },
+    {
+      "name": "lone_surrogate",
+      "input_json": "{\"s\":\"\\udead\"}"
+    },
+    {
+      "name": "unsafe_integer",
+      "input_json": "{\"n\":9007199254740992}"
+    },
+    {
+      "name": "float_outside_descriptor_subset",
+      "input_json": "{\"fps\":20.0}"
+    },
+    {
+      "name": "exponent_outside_descriptor_subset",
+      "input_json": "{\"fps\":2e1}"
+    },
+    {
+      "name": "nonfinite",
+      "input_json": "{\"n\":NaN}"
+    }
+  ]
+}
