@@ -1,0 +1,12 @@
+{
+  "revision": "camera-cadence/0.3.0-proposed",
+  "status": "minimal-declared-nominal-implementation-candidate",
+  "previous_revision": "camera-cadence/0.2.0-proposed",
+  "actual_delivery_fps": "telemetry-only",
+  "history_ring_bytes": 0,
+  "files": {
+    "README.md": "ef6af16da41e639df821a583cf666a5c3498e0ca2157094640d87973ed72b93d",
+    "vectors.json": "af60612c89d9ad9d07c192b4cce53de0d3985b60499c592b4c8f9278bc682cf8",
+    "verify.py": "ea59b8900081b7e689f12c6f32e756e5f738d73d1e3979dddbca4d49cd9cb3b1"
+  }
+}
