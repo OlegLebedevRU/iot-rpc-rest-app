@@ -328,6 +328,8 @@ class CameraRuntime:
 
     @staticmethod
     async def publish(sn: str, message: dict, ttl_ms: int) -> None:
+        if type(ttl_ms) is not int or not 0 < ttl_ms <= 60000:
+            raise ValueError("camera_transport_ttl_invalid")
         from core.topologys.declare import topic_publisher
 
         correlation = message.get(
@@ -337,7 +339,10 @@ class CameraRuntime:
             routing_key=f"{settings.rmq.prefix_srv}.{sn}.{settings.rmq.suffix_control}",
             message=message,
             correlation_id=UUID(correlation),
-            expiration=ttl_ms,
+            # RabbitMQ maps AMQP persistent delivery to MQTT QoS1. aio-pika's
+            # numeric expiration is seconds; retain the original remaining ms.
+            persist=True,
+            expiration=timedelta(milliseconds=ttl_ms),
             headers={"correlationData": correlation, "ctl_type": message["type"]},
         )
 
