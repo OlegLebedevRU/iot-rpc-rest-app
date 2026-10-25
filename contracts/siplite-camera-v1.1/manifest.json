@@ -1,0 +1,7 @@
+{
+  "revision": "siplite-camera/1.1.0",
+  "cadence_revision": "camera-cadence/0.1.0-proposed",
+  "status": "implementation candidate; gates off",
+  "schema_sha256": "bfd71ec96cf8de81657fd319c603f91a4769209887e32297fff4193752e3c62e",
+  "baseline_media_sha256": "38aad5ac4bef09c7efec09115ea81717454c6bd21a3060a8d82e6083e4fb4da8"
+}

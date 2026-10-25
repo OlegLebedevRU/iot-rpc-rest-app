@@ -1,14 +1,25 @@
 """Negotiated HTTP reader for native camera state, independent of MFT inventory."""
 
+import copy
 from datetime import UTC, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from sqlalchemy import select
 
 from core.camera.admission import camera_from_gauge, validate_gauge
 from core.camera.contract import REVISION
+from core.camera.native_contract import (
+    CAPABILITIES,
+    CAPABILITIES3,
+    MEDIA11,
+    MEDIA12,
+    MEDIA3,
+    validate11,
+    validate12,
+)
 from core.camera.start_policy import start_enabled
+from core.config import settings
 from core.models.devices import DeviceConnection, DeviceGauge
 
 
@@ -23,9 +34,50 @@ class CameraCapabilityView(BaseModel):
     producer_adapter: dict[str, Any]
 
 
+class CameraCapabilityView11(CameraCapabilityView):
+    camera_contract_revision: Literal["siplite-camera/1.1.0"] = MEDIA11
+    camera_observation: dict[str, Any] | None
+    camera_capabilities: dict[str, Any]
+
+    @model_validator(mode="after")
+    def validate_native(self):
+        validate11("camera_capabilities", self.camera_capabilities)
+        if self.camera_observation is not None:
+            validate11("camera_observation", self.camera_observation)
+            if (
+                self.camera is None
+                or self.camera_observation["source_id"] != self.camera["camera_id"]
+            ):
+                raise ValueError("camera_observation_source_mismatch")
+        return self
+
+
+class CameraCapabilityView12(CameraCapabilityView11):
+    camera_contract_revision: Literal["siplite-camera/1.2.0"] = MEDIA12
+    contract_version: Literal[3] = 3
+    media_contract_revision: Literal["l4-media/3.0.0"] = MEDIA3
+
+    @model_validator(mode="after")
+    def validate_native(self):
+        validate12("camera_capabilities", self.camera_capabilities)
+        if self.camera_observation is not None:
+            validate12("camera_observation", self.camera_observation)
+            if (
+                self.camera is None
+                or self.camera_observation["source_id"] != self.camera["camera_id"]
+            ):
+                raise ValueError("camera_observation_source_mismatch")
+        return self
+
+
 async def camera_capability(
-    session, device_id: int, *, authorized_sn: str | None = None
-) -> CameraCapabilityView:
+    session,
+    device_id: int,
+    *,
+    authorized_sn: str | None = None,
+    native: bool = False,
+    media_version: int = 2,
+) -> CameraCapabilityView | CameraCapabilityView11 | CameraCapabilityView12:
     connection = await session.scalar(
         select(DeviceConnection).where(DeviceConnection.device_id == device_id)
     )
@@ -40,22 +92,44 @@ async def camera_capability(
         )
     )
     camera = None
+    observation = None
     fresh = False
     if gauge is not None:
         try:
             validate_gauge(gauge.gauges)
             observed = camera_from_gauge(gauge.gauges, "cam:ip000001")
             if observed and observed.get("camera_contract_revision") == REVISION:
-                camera = observed
+                camera = copy.deepcopy(observed)
+            matches = [
+                item
+                for record in gauge.gauges.get("300", [])
+                for item in record.get("450", {}).get("media_observations", [])
+                if item["source_id"] == "cam:ip000001"
+            ]
+            if native and len(matches) == 1:
+                observation = (validate12 if media_version == 3 else validate11)(
+                    "camera_observation", matches[0]
+                )
+                if camera:
+                    camera["actual_track"] = None
             updated = gauge.updated_at
             if updated.tzinfo is None:
                 updated = updated.replace(tzinfo=UTC)
             fresh = (
                 camera is not None
-                and 0 <= (datetime.now(UTC) - updated).total_seconds() <= 60
+                and (not native or observation is not None)
+                and 0
+                <= (datetime.now(UTC) - updated).total_seconds()
+                <= (30 if media_version == 3 else 60)
             )
         except ValueError, TypeError, AttributeError, KeyError:
             camera = None
+            observation = None
+    actual_track = (
+        observation.get("actual_track")
+        if native and observation
+        else None if native else camera.get("actual_track") if camera else None
+    )
     reason = (
         "camera_main_app_offline"
         if not online
@@ -64,7 +138,7 @@ async def camera_capability(
             if not fresh
             else (
                 "camera_actual_track_unknown"
-                if camera.get("actual_track") is None
+                if actual_track is None
                 else (
                     "camera_writers_disabled"
                     if not start_enabled(authorized_sn)
@@ -73,7 +147,27 @@ async def camera_capability(
             )
         )
     )
-    return CameraCapabilityView(
+    if native and reason is None and not settings.camera.monotonic_runtime_enabled:
+        reason = "camera_monotonic_runtime_disabled"
+    if native and reason is None and not settings.camera.native_auto_enabled:
+        reason = "camera_native_auto_disabled"
+    view_type = (
+        (CameraCapabilityView12 if media_version == 3 else CameraCapabilityView11)
+        if native
+        else CameraCapabilityView
+    )
+    extra = (
+        {
+            "camera_observation": observation,
+            "camera_capabilities": copy.deepcopy(
+                CAPABILITIES3 if media_version == 3 else CAPABILITIES
+            ),
+        }
+        if native
+        else {}
+    )
+    return view_type(
+        **extra,
         camera=camera,
         main_app_online=online,
         fresh=fresh,

@@ -1,0 +1,46 @@
+{
+  "revision": "camera-media-clock/1.0.0-proposed",
+  "rounding": "floor seconds",
+  "clock_id": "00000000-0000-4000-8000-000000000030",
+  "initial": {
+    "wall_ms": 1800000000000,
+    "issuer_mono_ms": 1000,
+    "media_mono_ms": 5000,
+    "media_lease_expires_at": 1800000007,
+    "media_remaining_ms": 7000,
+    "media_deadline_mono_ms": 12000
+  },
+  "renewals": [
+    {
+      "utc_jump_ms": -3600000,
+      "issuer_mono_ms": 3000,
+      "media_mono_ms": 7000,
+      "media_lease_expires_at": 1800000017,
+      "media_remaining_ms": 15000,
+      "media_deadline_mono_ms": 22000
+    },
+    {
+      "utc_jump_ms": 3600000,
+      "issuer_mono_ms": 3000,
+      "media_mono_ms": 7000,
+      "media_lease_expires_at": 1800000017,
+      "media_remaining_ms": 15000,
+      "media_deadline_mono_ms": 22000
+    }
+  ],
+  "duplicate": {
+    "media_lease_expires_at": 1800000017,
+    "media_deadline_mono_ms": 22000
+  },
+  "delayed_start": {
+    "prepared_media_lease_expires_at": 1800000007,
+    "coordinate_now_ms": 1800000002000,
+    "current_lease_remaining_ms": 15000,
+    "maximum_start_ttl_ms": 5000
+  },
+  "expired_start": {
+    "prepared_media_lease_expires_at": 1800000007,
+    "coordinate_now_ms": 1800000007000,
+    "accepted": false
+  }
+}

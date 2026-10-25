@@ -1,0 +1,51 @@
+{
+  "camera_id": "cam:ip000001",
+  "revision": null,
+  "discovery": {
+    "generation": 3,
+    "state": "ready",
+    "physical_port": 2,
+    "ethernet_mode": "switch",
+    "candidates": [
+      {
+        "candidate_id": "native-port2",
+        "mac": "02:00:00:00:00:01",
+        "ip": "192.0.2.1",
+        "native_api": "supported",
+        "auth": "verified",
+        "port_verified": true
+      }
+    ]
+  },
+  "auth_source": "native",
+  "has_credentials": true,
+  "actual_track": null,
+  "config": null,
+  "capabilities": {
+    "methods": [
+      160,
+      161,
+      162,
+      163,
+      164,
+      165,
+      166,
+      167
+    ],
+    "ingest": [
+      "rtp_push",
+      "rtsp_tcp",
+      "rtsp_udp"
+    ],
+    "fields": [],
+    "illumination": {
+      "white": "unverified",
+      "ir": "unverified",
+      "global_enable": "unverified",
+      "pwm": "unknown"
+    },
+    "commissioning_candidates": []
+  },
+  "operation": null,
+  "camera_contract_revision": "siplite-camera/1.0.0"
+}

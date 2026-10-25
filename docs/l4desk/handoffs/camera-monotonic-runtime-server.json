@@ -1,0 +1,43 @@
+{
+  "date": "2026-10-24",
+  "base_commit": "fdfa36862ecaa2c63f56ac2ff32b7e1d3d90b8c5",
+  "merged_pr139": true,
+  "runtime_gate_default": false,
+  "migration": "0013_camera_authority",
+  "pytest": {
+    "passed": 883,
+    "skipped": 7,
+    "warnings": 4,
+    "elapsed_seconds": 84.16,
+    "additional_warning": "pre-existing unawaited AsyncMock at GC"
+  },
+  "new_runtime_tests": 42,
+  "postgres_tests": {
+    "passed": 3,
+    "server": "176",
+    "version": "18.6",
+    "database": "camera_runtime_test",
+    "isolation": "disposable schemas in temporary loopback-only container",
+    "temporary_container_removed": true
+  },
+  "ruff": {
+    "new_runtime_and_tests": "passed",
+    "changed_files_baseline_diagnostics": 45,
+    "changed_files_current_diagnostics": 45,
+    "introduced_diagnostics": 0
+  },
+  "black": {
+    "changed_python_files": 18,
+    "result": "passed"
+  },
+  "immutable_contract_packages_unchanged": true,
+  "legacy_camera_producer_unchanged": true,
+  "production_deployed": false,
+  "firmware_writers_enabled": false,
+  "sn_allowlist_expanded": false,
+  "limitations": [
+    "native terminal/MQTT broker substituted by tests",
+    "real4623 firmware and video acceptance still required",
+    "rollout gate requires deliberate enablement after migration and cross-owner firmware/BFF coordination"
+  ]
+}
