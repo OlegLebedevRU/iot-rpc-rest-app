@@ -359,6 +359,25 @@ class RemoteInputService:
             if caller_session_id and lease.owner_session_id != caller_session_id:
                 raise HTTPException(status_code=403, detail="lease session mismatch")
 
+        if camera3:
+            camera_record = (await video_control.store.get(lease.sn)).get(
+                "camera_stream"
+            )
+            if lease.stream_instance_id is None:
+                if camera_record and camera_record.get("state") in (
+                    "starting",
+                    "running",
+                ):
+                    raise HTTPException(409, "camera_stream_not_live")
+            elif (
+                not camera_record
+                or camera_record.get("state") not in ("starting", "running")
+                or camera_record["start"]["lease_id"] != str(lease.lease_id)
+                or camera_record["start"]["publisher"]["stream_instance_id"]
+                != str(lease.stream_instance_id)
+            ):
+                raise HTTPException(409, "camera_stream_not_live")
+
         ttl_sec = getattr(lease, "ttl_sec", None) or settings.remote_input.lease_ttl_sec
         old_expires_at = lease.expires_at
         touched = (
@@ -368,6 +387,11 @@ class RemoteInputService:
         )
         if touched is None:
             raise HTTPException(status_code=404, detail="lease not found or expired")
+
+        if camera3 and touched.stream_instance_id is None:
+            # The acquired publisher lease has not reserved a camera attempt yet.
+            # This is lease-only keepalive, never a claimed camera RENEW.
+            return self._build_lease_response(touched, renew_status="server_accepted")
 
         video_state = (await video_control.store.get(touched.sn)).get("stream")
         if (
@@ -418,8 +442,11 @@ class RemoteInputService:
         if camera3 and (
             not camera_record
             or camera_record.get("state") not in ("starting", "running")
+            or camera_record["start"]["lease_id"] != str(touched.lease_id)
+            or camera_record["start"]["publisher"]["stream_instance_id"]
+            != str(touched.stream_instance_id)
         ):
-            return self._build_lease_response(touched, renew_status="server_accepted")
+            raise HTTPException(409, "camera_stream_not_live")
         if (
             camera_record
             and camera_record["start"]["lease_id"] == str(touched.lease_id)
@@ -429,16 +456,25 @@ class RemoteInputService:
             from core.camera.control import epoch_of
             from core.camera.producer import renew_command
 
+            camera_epoch = epoch_of(camera_record)
             if camera_record.get("admission_revision"):
                 from core.camera.runtime import camera_runtime
 
-                cmd = await camera_runtime.command(
-                    "renew", epoch_of(camera_record), touched
-                )
+                cmd = await camera_runtime.command("renew", camera_epoch, touched)
             else:
-                cmd = renew_command(
-                    epoch_of(camera_record), touched, int(time.time() * 1000)
-                )
+                cmd = renew_command(camera_epoch, touched, int(time.time() * 1000))
+            from core.camera.control import camera_control
+
+            # Refresh only the existing publisher metadata after a validated
+            # renewal. This changes no immutable START or authority deadline.
+            retained = await camera_control.update(
+                camera_epoch,
+                expected_states=("starting", "running"),
+                authority_service=self,
+                last_renew_command_id=str(cmd.command_id),
+            )
+            if retained is None:
+                raise HTTPException(409, "camera_stream_not_live")
 
         from core.camera.runtime_wire import CameraRuntimeCommand
 

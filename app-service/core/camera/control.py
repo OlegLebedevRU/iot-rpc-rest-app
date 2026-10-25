@@ -172,7 +172,8 @@ class CameraControl:
             if (
                 valid
                 and record
-                and epoch_of(record).identity == epoch.identity
+                and epoch_of(record).start == epoch.start
+                and record.get("media_clock_id") == epoch.media_clock_id
                 and (expected_states is None or record["state"] in expected_states)
             ):
                 record.update(**changes)
