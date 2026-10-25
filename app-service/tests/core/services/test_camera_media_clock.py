@@ -226,7 +226,8 @@ async def test_camera_keepalive_uses_trusted_anchor_and_generic_touch_is_untouch
     service = RemoteInputService(
         leases=e.registry, presence=PresenceRegistry(), pending=PendingCommandRegistry()
     )
-    monkeypatch.setattr("core.remote_input.service.send_ctl_command", AsyncMock())
+    sender = AsyncMock()
+    monkeypatch.setattr("core.remote_input.service.send_ctl_command", sender)
 
     async def forbidden_generic_touch(*args):
         raise AssertionError("camera must not use generic UTC touch")
@@ -236,6 +237,7 @@ async def test_camera_keepalive_uses_trusted_anchor_and_generic_touch_is_untouch
         e.lease.lease_id, org_id=1, caller_user_id="owner", caller_session_id="session"
     )
     assert response.lease_id == e.lease.lease_id
+    sender.assert_not_awaited()  # PRE-START lease-only keepalive, no publisher yet.
     assert (await e.clock.export(e.lease)).media_remaining_ms > 59000
 
 
