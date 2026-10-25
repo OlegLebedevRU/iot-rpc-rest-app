@@ -15,9 +15,11 @@ from core.camera.native_contract import (
     ENROLLMENT02,
     ENROLLMENT03,
     ENROLLMENT04,
+    ENROLLMENT05,
     MEDIA11,
     MEDIA12,
     MEDIA13,
+    MEDIA14,
     selected_headers,
 )
 from core.remote_input.video_models import Capabilities, Descriptor, ErrorDetail
@@ -55,10 +57,10 @@ class VideoControlRoute(APIRoute):
             selected_media_version(request)
             revision = request.headers.get("X-L4-Camera-Contract")
             modern = (
-                revision in (MEDIA11, MEDIA12, MEDIA13)
+                revision in (MEDIA11, MEDIA12, MEDIA13, MEDIA14)
                 or request.headers.get("X-L4-Camera-Cadence") is not None
                 or request.headers.get("X-L4-Camera-Enrollment")
-                in (ENROLLMENT02, ENROLLMENT03, ENROLLMENT04)
+                in (ENROLLMENT02, ENROLLMENT03, ENROLLMENT04, ENROLLMENT05)
             )
             if modern:
                 try:

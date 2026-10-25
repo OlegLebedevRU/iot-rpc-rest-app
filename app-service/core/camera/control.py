@@ -16,12 +16,15 @@ from core.camera.native_contract import (
     MEDIA11,
     MEDIA12,
     MEDIA13,
+    MEDIA14,
     MEDIA3,
     CADENCE,
     SELECTED,
     SELECTED3,
     SELECTED4,
+    SELECTED5,
     CADENCE02,
+    CADENCE03,
     modern_selection,
     validate_media,
     selection_for_descriptor,
@@ -70,9 +73,13 @@ class CameraStateView(BaseModel):
         start = record["start"]
         model = (
             (
-                CameraStateView13
-                if record.get("selection") == SELECTED4
-                else CameraStateView12
+                CameraStateView14
+                if record.get("selection") == SELECTED5
+                else (
+                    CameraStateView13
+                    if record.get("selection") == SELECTED4
+                    else CameraStateView12
+                )
             )
             if start["contract_version"] == 3
             else (
@@ -116,6 +123,11 @@ class CameraStateView12(CameraStateView11):
 class CameraStateView13(CameraStateView12):
     camera_contract_revision: Literal["siplite-camera/1.3.0"] = MEDIA13
     cadence_revision: Literal["camera-cadence/0.2.0-proposed"] = CADENCE02
+
+
+class CameraStateView14(CameraStateView12):
+    camera_contract_revision: Literal["siplite-camera/1.4.0"] = MEDIA14
+    cadence_revision: Literal["camera-cadence/0.3.0-proposed"] = CADENCE03
 
 
 def epoch_of(record: dict) -> CameraEpoch:
@@ -230,7 +242,11 @@ class CameraControl:
                 {
                     "native": True,
                     "media_version": epoch.start["contract_version"],
-                    **({"camera_revision": MEDIA13} if selection == SELECTED4 else {}),
+                    **(
+                        {"camera_revision": selection["camera_contract_revision"]}
+                        if selection in (SELECTED4, SELECTED5)
+                        else {}
+                    ),
                 }
                 if native
                 else {}
@@ -551,12 +567,17 @@ class CameraControl:
                                         3 if modern_selection(selection) else 2
                                     ),
                                     **(
-                                        {"camera_revision": MEDIA13}
-                                        if selection == SELECTED4
+                                        {
+                                            "camera_revision": selection[
+                                                "camera_contract_revision"
+                                            ]
+                                        }
+                                        if selection in (SELECTED4, SELECTED5)
                                         else {}
                                     ),
                                 }
-                                if selection in (SELECTED, SELECTED3, SELECTED4)
+                                if selection
+                                in (SELECTED, SELECTED3, SELECTED4, SELECTED5)
                                 else {}
                             ),
                         )
@@ -574,7 +595,8 @@ class CameraControl:
                                         "observation": view.camera_observation,
                                         "selection": selection,
                                     }
-                                    if selection in (SELECTED, SELECTED3, SELECTED4)
+                                    if selection
+                                    in (SELECTED, SELECTED3, SELECTED4, SELECTED5)
                                     else {}
                                 ),
                             )

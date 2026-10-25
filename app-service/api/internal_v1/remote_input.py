@@ -15,6 +15,7 @@ from core.camera.control import (
     CameraStateView11,
     CameraStateView12,
     CameraStateView13,
+    CameraStateView14,
     camera_control,
 )
 from core.camera.projection import (
@@ -22,14 +23,17 @@ from core.camera.projection import (
     CameraCapabilityView11,
     CameraCapabilityView12,
     CameraCapabilityView13,
+    CameraCapabilityView14,
     camera_capability,
 )
 from core.camera.native_contract import (
     MEDIA11,
     MEDIA12,
     MEDIA13,
+    MEDIA14,
     ENROLLMENT03,
     ENROLLMENT04,
+    ENROLLMENT05,
     ENROLLMENT02,
     selected_headers,
     selection_for_descriptor,
@@ -383,7 +387,8 @@ async def get_device_inventory(
     | CameraStateView
     | CameraStateView11
     | CameraStateView12
-    | CameraStateView13,
+    | CameraStateView13
+    | CameraStateView14,
 )
 async def post_stream_start(
     lease_id: UUID,
@@ -398,6 +403,7 @@ async def post_stream_start(
     | CameraStateView11
     | CameraStateView12
     | CameraStateView13
+    | CameraStateView14
 ):
     session_id = extract_caller_session_id(request)
     caller_user_id = extract_caller_user_id(request)
@@ -428,7 +434,8 @@ async def post_stream_start(
                     readiness_nonce=readiness_nonce,
                     **(
                         {"selected": selected_headers(request.headers)}
-                        if request.headers.get("X-L4-Camera-Contract") == MEDIA13
+                        if request.headers.get("X-L4-Camera-Contract")
+                        in (MEDIA13, MEDIA14)
                         else {}
                     ),
                 )
@@ -476,7 +483,8 @@ async def post_stream_start(
     | CameraCapabilityView
     | CameraCapabilityView11
     | CameraCapabilityView12
-    | CameraCapabilityView13,
+    | CameraCapabilityView13
+    | CameraCapabilityView14,
 )
 async def get_video_capability(
     sn: str,
@@ -493,6 +501,7 @@ async def get_video_capability(
     | CameraCapabilityView11
     | CameraCapabilityView12
     | CameraCapabilityView13
+    | CameraCapabilityView14
 ):
     device_id = await DeviceRepo.get_device_id(session, sn=sn, org_id=org_id)
     if device_id is None:
@@ -501,7 +510,7 @@ async def get_video_capability(
         )
     revision = request.headers.get("X-L4-Camera-Contract")
     if revision is not None:
-        if revision in (MEDIA11, MEDIA12, MEDIA13):
+        if revision in (MEDIA11, MEDIA12, MEDIA13, MEDIA14):
             try:
                 selected_headers(request.headers)
             except ValueError as exc:
@@ -511,8 +520,12 @@ async def get_video_capability(
                 device_id,
                 authorized_sn=sn,
                 native=True,
-                media_version=3 if revision in (MEDIA12, MEDIA13) else 2,
-                **({"camera_revision": MEDIA13} if revision == MEDIA13 else {}),
+                media_version=3 if revision in (MEDIA12, MEDIA13, MEDIA14) else 2,
+                **(
+                    {"camera_revision": revision}
+                    if revision in (MEDIA13, MEDIA14)
+                    else {}
+                ),
             )
         if (
             revision != REVISION
@@ -544,7 +557,7 @@ async def get_video_lease(
     request: Request,
 ) -> VideoLeaseView | CameraLeaseView12:
     # A publisher context is bound to the exact caller, including superusers.
-    modern = request.headers.get("X-L4-Camera-Contract") in (MEDIA12, MEDIA13)
+    modern = request.headers.get("X-L4-Camera-Contract") in (MEDIA12, MEDIA13, MEDIA14)
     if modern:
         require_camera_runtime_headers(request)
     lease = await video_control.authorize(
@@ -581,7 +594,8 @@ async def get_video_lease(
     | CameraStateView
     | CameraStateView11
     | CameraStateView12
-    | CameraStateView13,
+    | CameraStateView13
+    | CameraStateView14,
 )
 async def get_video_state(
     lease_id: UUID,
@@ -594,6 +608,7 @@ async def get_video_state(
     | CameraStateView11
     | CameraStateView12
     | CameraStateView13
+    | CameraStateView14
 ):
     lease = await video_control.authorize(
         remote_input_service,
@@ -630,7 +645,8 @@ async def get_video_state(
     | CameraStateView
     | CameraStateView11
     | CameraStateView12
-    | CameraStateView13,
+    | CameraStateView13
+    | CameraStateView14,
 )
 async def post_video_stop(
     lease_id: UUID,
@@ -644,6 +660,7 @@ async def post_video_stop(
     | CameraStateView11
     | CameraStateView12
     | CameraStateView13
+    | CameraStateView14
 ):
     if isinstance(body, CameraStop):
         if request.headers.get("X-L4-Camera-Contract") not in (
@@ -651,6 +668,7 @@ async def post_video_stop(
             MEDIA11,
             MEDIA12,
             MEDIA13,
+            MEDIA14,
         ):
             raise HTTPException(422, "camera_contract_not_negotiated")
         lease = await video_control.authorize(
@@ -1589,14 +1607,15 @@ def require_camera_runtime_headers(request: Request, optional: bool = False) -> 
         and admission is None
         and enrollment is None
         and request.headers.get("X-L4-Camera-Contract")
-        not in (MEDIA11, MEDIA12, MEDIA13)
+        not in (MEDIA11, MEDIA12, MEDIA13, MEDIA14)
         and request.headers.get("X-L4-Camera-Cadence") is None
     ):
         return False
     modern = (
-        request.headers.get("X-L4-Camera-Contract") in (MEDIA11, MEDIA12, MEDIA13)
+        request.headers.get("X-L4-Camera-Contract")
+        in (MEDIA11, MEDIA12, MEDIA13, MEDIA14)
         or request.headers.get("X-L4-Camera-Cadence") is not None
-        or enrollment in (ENROLLMENT02, ENROLLMENT03, ENROLLMENT04)
+        or enrollment in (ENROLLMENT02, ENROLLMENT03, ENROLLMENT04, ENROLLMENT05)
     )
     if modern:
         try:
@@ -1626,6 +1645,7 @@ async def runtime_camera_view(sn, org_id, session, request=None):
         MEDIA11,
         MEDIA12,
         MEDIA13,
+        MEDIA14,
     )
     view = await camera_capability(
         session,
@@ -1636,12 +1656,13 @@ async def runtime_camera_view(sn, org_id, session, request=None):
                 "native": True,
                 "media_version": (
                     3
-                    if request.headers.get("X-L4-Camera-Contract") in (MEDIA12, MEDIA13)
+                    if request.headers.get("X-L4-Camera-Contract")
+                    in (MEDIA12, MEDIA13, MEDIA14)
                     else 2
                 ),
                 **(
-                    {"camera_revision": MEDIA13}
-                    if request.headers.get("X-L4-Camera-Contract") == MEDIA13
+                    {"camera_revision": request.headers.get("X-L4-Camera-Contract")}
+                    if request.headers.get("X-L4-Camera-Contract") in (MEDIA13, MEDIA14)
                     else {}
                 ),
             }
@@ -1679,7 +1700,7 @@ async def prepare_camera_admission(
                     "selection": selected_headers(request.headers),
                 }
                 if request.headers.get("X-L4-Camera-Contract")
-                in (MEDIA11, MEDIA12, MEDIA13)
+                in (MEDIA11, MEDIA12, MEDIA13, MEDIA14)
                 else {}
             ),
         )
@@ -1715,7 +1736,7 @@ async def fresh_camera_readiness(
                         "selection": selected_headers(request.headers),
                     }
                     if request.headers.get("X-L4-Camera-Contract")
-                    in (MEDIA11, MEDIA12, MEDIA13)
+                    in (MEDIA11, MEDIA12, MEDIA13, MEDIA14)
                     else {}
                 ),
             )
@@ -1760,7 +1781,7 @@ async def camera_admission_status(
         selected = (
             selected_headers(request.headers)
             if request.headers.get("X-L4-Camera-Contract")
-            in (MEDIA11, MEDIA12, MEDIA13)
+            in (MEDIA11, MEDIA12, MEDIA13, MEDIA14)
             else None
         )
         if configured and configured.get("selection") != selected:

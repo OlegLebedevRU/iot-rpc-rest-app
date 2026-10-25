@@ -188,7 +188,7 @@ async def test_real_migration_seeds_and_only_new_device_insert_creates_authority
         await engine.dispose()
 
 
-@pytest.mark.parametrize("native04", [False, True])
+@pytest.mark.parametrize("native04", [False, True, "nominal05"])
 async def test_real_postgres_actor_takeover_preserves_floors_and_fences_egress(
     monkeypatch,
     native04,
@@ -253,7 +253,10 @@ async def test_real_postgres_actor_takeover_preserves_floors_and_fences_egress(
             },
         }
         if native04:
-            from .test_camera_cadence02 import configured, fixture
+            if native04 == "nominal05":
+                from .test_camera_cadence03 import configured, fixture
+            else:
+                from .test_camera_cadence02 import configured, fixture
 
             config = configured()
             d = config["descriptor"]

@@ -1,0 +1,13 @@
+{
+  "repository": "OlegLebedevRU/etranprocessing",
+  "commit": "bbf48660a36a997f688d57fc84d5c9deeedd5bd8",
+  "files": {
+    ".gitattributes": "730a35ae3d558080083c3103d9ac8100c3f6561678092abe341701dfa331eb1d",
+    "camera.schema.json": "5829f1fc620ec589477626fd5b8bb74bce25189061528b0d8f56d2a110661950",
+    "example-h264-observation.json": "e621f82b48d31c0b91f4c46b49a3dd9f3434dc6749d787c6ad86f873641f5825",
+    "example-observation.json": "fa45775ff6c5987f33262e806e351174fa624bc7fe83dbe7406960e78d77670d",
+    "manifest.json": "76ef6804f2ec4ac7121f88ac8e8bd9af9053cc1459be936c74c68b04335c3fd9",
+    "README.md": "b76a77df60876e5cfd802cbebe64acbd5909bf0e56675147b7142debe5126707",
+    "verify.py": "69b810bd0075e4f6499b33ef497ac8873215a25022b5c260f88083bb85481556"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "revision": "camera-enrollment/0.5.0-proposed",
+  "status": "proposal-implementation-candidate",
+  "media_revision": "l4-media/3.0.0",
+  "media_owner_commit": "d7166d72721630d11d7f506b9cccb5ffb01742f3",
+  "media_schema_sha256": "b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818",
+  "admission_schema_sha256": "e75e1c7f49f0d0fc68f6720a3c47766ccb4caad83d721b5d1b8aabe3d3b58a0d",
+  "schema_sha256": "e43d57530c6f234114f8c60bb8ee17df6b54713ddfbbf61a80c601aea31e7cb7",
+  "fixtures": {
+    "commit.json": "6b976feeebcd4071d50a40df46573c3e49867638023218c2f1fbc8704d93c60d",
+    "hello.json": "c4ff2d8716789f0bbd23784de6a13578b7d5271f3a87ee7060da1c6c8a6a3036",
+    "observation.json": "0a9905502dec588ffed24135b4a1143a7300c26a7faac899d4402a846554c832",
+    "offer.json": "03dc1b6770a15653bf319c057e146ee6071e8f7ebf68888e58e54b92f78441dc",
+    "physical-camera.json": "8a7c5111354f0c0ee63ca915574e779bd49dd2f987c9f9d02d98efc5a68ccbbb",
+    "proof.json": "25a0823b1fd36643ab7f51a39ee4ec455ee1f115807f25db95f9581edd35bf3d"
+  },
+  "canonical_vectors_sha256": "25aba51f77c4d22d4fda308416e55363cd2538de5975f4c3311dd618d2c80d2d",
+  "previous_enrollment_revision": "camera-enrollment/0.4.0-proposed",
+  "previous_packet_source_commit": "c622c7cf1c2566ca25401099a9d434e45316784d",
+  "packet_files": {
+    ".gitattributes": "705fd4d6451a31d36b3df7de96f83f30ac976c9b4a6d1e51671d8e2f33e2d0da",
+    "canonical-vectors.json": "25aba51f77c4d22d4fda308416e55363cd2538de5975f4c3311dd618d2c80d2d",
+    "README.md": "b2b2a992b1fce2efbadb80a22a8bf27455a935529d095f9eaab22d199b5cf123",
+    "schema.json": "e43d57530c6f234114f8c60bb8ee17df6b54713ddfbbf61a80c601aea31e7cb7",
+    "verify.py": "ada2dd1078cb37a2905c1e811a4add4b88fa63c23994bd43a75aff0542d82b6f",
+    "fixtures/commit.json": "6b976feeebcd4071d50a40df46573c3e49867638023218c2f1fbc8704d93c60d",
+    "fixtures/hello.json": "c4ff2d8716789f0bbd23784de6a13578b7d5271f3a87ee7060da1c6c8a6a3036",
+    "fixtures/observation.json": "0a9905502dec588ffed24135b4a1143a7300c26a7faac899d4402a846554c832",
+    "fixtures/offer.json": "03dc1b6770a15653bf319c057e146ee6071e8f7ebf68888e58e54b92f78441dc",
+    "fixtures/physical-camera.json": "8a7c5111354f0c0ee63ca915574e779bd49dd2f987c9f9d02d98efc5a68ccbbb",
+    "fixtures/proof.json": "25a0823b1fd36643ab7f51a39ee4ec455ee1f115807f25db95f9581edd35bf3d"
+  },
+  "observation_owner_commit": "bbf48660a36a997f688d57fc84d5c9deeedd5bd8",
+  "observation_schema_sha256": "5829f1fc620ec589477626fd5b8bb74bce25189061528b0d8f56d2a110661950",
+  "cadence_revision": "camera-cadence/0.3.0-proposed",
+  "cadence_manifest_sha256": "d1e1544d2c9db43ce9a69c6ba013c3476c930f3323360cdbd5d753ccbb5c7764"
+}
