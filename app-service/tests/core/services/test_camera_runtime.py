@@ -951,23 +951,74 @@ async def test_one_bad_authority_does_not_starve_other_actors(environment, monke
             raise ValueError("camera_authority_corrupt")
 
     actor = SimpleNamespace(
+        owns_issuer=True,
         store=SimpleNamespace(
             candidates=AsyncMock(return_value=["corrupt", "healthy"])
         ),
         pump=AsyncMock(side_effect=pump),
     )
-    monkeypatch.setattr(module, "camera_runtime", actor)
 
     async def stop(_):
         raise asyncio.CancelledError
 
     monkeypatch.setattr(module.asyncio, "sleep", stop)
     with pytest.raises(asyncio.CancelledError):
-        await module.camera_runtime_loop()
+        await module.camera_runtime_loop(actor)
     assert [call.args[0] for call in actor.pump.await_args_list] == [
         "corrupt",
         "healthy",
     ]
+
+
+@pytest.mark.anyio
+async def test_web_clients_recycle_without_replacing_live_issuer(environment):
+    env = environment
+    await enroll(env)
+    _, command = await start(env)
+    original_owner = env.store.row.owner
+    original_clock = copy.deepcopy(env.runtime.clocks)
+    original_epoch = env.store.row.state["epoch"]
+    original_active = copy.deepcopy(env.store.row.state["active"])
+
+    # New clients represent recycled API/MQTT ingress workers. Only the separate
+    # executor processes their persisted jobs; clients cannot allocate clocks.
+    for _ in range(3):
+        client = CameraRuntime(
+            env.store,
+            env.send,
+            env.authority,
+            lambda: env.clock.tick,
+            lambda: env.clock.wall,
+            owns_issuer=False,
+        )
+        pending = asyncio.create_task(
+            client.submit(SN, "release", {"command_id": command["command_id"]})
+        )
+        await asyncio.sleep(0)
+        assert env.store.row.state["jobs"]
+        await env.runtime.pump(SN)
+        assert await pending
+        assert client.clocks == {} and client._owner == ""
+        assert env.store.row.owner == original_owner
+        assert env.store.row.state["epoch"] == original_epoch
+        assert env.store.row.state["active"] == original_active
+        assert env.runtime.clocks == original_clock
+
+
+@pytest.mark.anyio
+async def test_ingress_cannot_pump_flush_or_acquire_owner(environment):
+    env = environment
+    client = CameraRuntime(store=env.store, owns_issuer=False)
+    before = copy.deepcopy(env.store.row)
+    with pytest.raises(ValueError, match="camera_client_cannot_own_issuer"):
+        _ = client.owner
+    for operation in (client.pump, client.flush):
+        with pytest.raises(ValueError, match="camera_client_cannot_own_issuer"):
+            await operation(SN)
+    assert env.store.row == before
+    from core.camera.runtime import camera_runtime
+
+    assert not camera_runtime.owns_issuer
 
 
 def test_retired_boot_cannot_gain_a_case_alias():
