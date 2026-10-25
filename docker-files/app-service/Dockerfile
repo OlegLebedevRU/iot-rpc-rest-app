@@ -32,8 +32,10 @@ COPY contracts/camera-ctl-monotonic-v1/camera-ctl.schema.json /contracts/camera-
 COPY contracts/camera-enrollment-v0.2/schema.json /contracts/camera-enrollment-v0.2/
 COPY contracts/camera-enrollment-v0.3/schema.json /contracts/camera-enrollment-v0.3/
 COPY contracts/camera-enrollment-v0.4/schema.json /contracts/camera-enrollment-v0.4/
+COPY contracts/camera-enrollment-v0.5/schema.json /contracts/camera-enrollment-v0.5/
 COPY contracts/siplite-camera-v1.2/camera.schema.json contracts/siplite-camera-v1.2/manifest.json /contracts/siplite-camera-v1.2/
 COPY contracts/siplite-camera-v1.3/camera.schema.json contracts/siplite-camera-v1.3/manifest.json /contracts/siplite-camera-v1.3/
+COPY contracts/siplite-camera-v1.4/camera.schema.json contracts/siplite-camera-v1.4/manifest.json /contracts/siplite-camera-v1.4/
 COPY contracts/siplite-camera-v1.1/hevc.schema.json /contracts/siplite-camera-v1.1/
 # The archive provider resolves this versioned contract outside /app.
 # Include only its data files, never the documentation tree or private config.
