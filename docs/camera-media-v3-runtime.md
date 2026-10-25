@@ -81,6 +81,18 @@ media_contract_revision, camera_contract_revision1.2 and cadence_revision.
 An ACK is command_ack; actual_descriptor remains null without separate post-START
 producer evidence. RTP freshness and browser decoded frames remain independent.
 
+Camera-only lease exports add media_lease_expires_at, media_remaining_ms and an
+immutable media_clock_id; see contracts/camera-media-v3-adapter/README.md and its
+strict DTO schema/shared clock vectors. These fields never enter frozen common
+media objects. Only authenticated owner-scoped camera1.2 HTTP may create the
+anchor. Its current-UTC origin is captured once; active expiration and heartbeat
+use issuer monotonic time plus Redis PTTL. Generic desktop touch is unchanged.
+Active camera state captures the same clock ID, allowing BFF to reject a changed
+anchor before any MEDIA renew. Owner/session/SN/scope/stream and active-key fences
+remain mandatory; missing/corrupt/kernel-changed anchors never reinitialize an
+active stream. Initial START is capped by the expiry used to prepare MEDIA even
+when a heartbeat has since extended the server lease. Equality is expired.
+
 ## Release boundaries
 
 Both native_auto_enabled and monotonic_runtime_enabled default false. Existing

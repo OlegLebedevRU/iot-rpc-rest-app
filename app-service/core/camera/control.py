@@ -9,7 +9,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import HTTPException
-from pydantic import BaseModel, RootModel, model_validator
+from pydantic import BaseModel, RootModel, model_validator, UUID4
 
 from core.camera.contract import REVISION
 from core.camera.native_contract import (
@@ -85,6 +85,11 @@ class CameraStateView(BaseModel):
             state=record["state"],
             confirmation=record.get("confirmation"),
             reason=record.get("reason"),
+            **(
+                {"media_clock_id": record["media_clock_id"]}
+                if start["contract_version"] == 3
+                else {}
+            ),
         )
 
 
@@ -97,15 +102,25 @@ class CameraStateView12(CameraStateView11):
     camera_contract_revision: Literal["siplite-camera/1.2.0"] = MEDIA12
     contract_version: Literal[3] = 3
     media_contract_revision: Literal["l4-media/3.0.0"] = MEDIA3
+    media_clock_id: UUID4
 
 
 def epoch_of(record: dict) -> CameraEpoch:
     return CameraEpoch(
-        json.dumps(record["start"], sort_keys=True, separators=(",", ":"))
+        json.dumps(record["start"], sort_keys=True, separators=(",", ":")),
+        media_clock_id=record.get("media_clock_id"),
     )
 
 
 class CameraControl:
+    async def publisher_lease(self, service, identity, pipe):
+        from core.camera.media_clock import camera_media_clock
+
+        raw = await pipe.hgetall(f"l4d:lease:{identity['lease_id']}")
+        if camera_media_clock.scoped(raw) or identity.get("contract_version") == 3:
+            return await camera_media_clock.publisher_lease(service, identity, pipe)
+        return await video_control.publisher_lease(service, identity, pipe)
+
     async def record(self, sn: str) -> dict | None:
         return (await video_control.store.get(sn)).get("camera_stream")
 
@@ -120,9 +135,7 @@ class CameraControl:
 
         async def guard(pipe, document):
             nonlocal valid
-            lease = await video_control.publisher_lease(
-                authority_service, epoch.identity, pipe
-            )
+            lease = await self.publisher_lease(authority_service, epoch.identity, pipe)
             valid = (
                 lease is not None
                 and str(lease.stream_instance_id)
@@ -155,7 +168,12 @@ class CameraControl:
             lease.stream_state = "stopped"
             lease.stream_mode = None
             lease.selected_camera_id = None
-            await service.leases.save_stream(lease, stream)
+            if epoch.start["contract_version"] == 3:
+                from core.camera.media_clock import camera_media_clock
+
+                await camera_media_clock.save_stream(lease, stream)
+            else:
+                await service.leases.save_stream(lease, stream)
             record = await self.record(epoch.identity["sn"])
             if (
                 record
@@ -177,7 +195,11 @@ class CameraControl:
         readiness_nonce: str | None = None,
     ) -> dict:
         await self.reconcile(lease.sn, service, send)
-        epoch = CameraEpoch.from_start(payload, lease)
+        from core.camera.media_clock import camera_media_clock
+
+        modern = payload.get("contract_version") == 3
+        media_lease = await camera_media_clock.export(lease) if modern else None
+        epoch = CameraEpoch.from_start(payload, lease, media_lease=media_lease)
         selection = selection_for_descriptor(epoch.start["descriptor"])
         native = selection is not None
         if native and not monotonic:
@@ -198,7 +220,7 @@ class CameraControl:
         command = start_command(
             epoch,
             view.camera,
-            current_ms,
+            media_lease.coordinate_now_ms if modern else current_ms,
             **(
                 {"observation": view.camera_observation, "selection": selection}
                 if native
@@ -234,7 +256,8 @@ class CameraControl:
         stored_start = epoch.start
         stored_start.pop("pin", None)
         epoch = CameraEpoch(
-            json.dumps(stored_start, sort_keys=True, separators=(",", ":"))
+            json.dumps(stored_start, sort_keys=True, separators=(",", ":")),
+            media_clock_id=epoch.media_clock_id,
         )
 
         def reserve(doc):
@@ -256,6 +279,8 @@ class CameraControl:
                 "result": "accepted",
                 "confirmation": None,
             }
+            if modern:
+                record["media_clock_id"] = media_lease.media_clock_id
             if monotonic:
                 from core.camera.runtime_wire import ADMISSION
 
@@ -264,16 +289,17 @@ class CameraControl:
             return record
 
         async def guard(pipe, doc):
-            authoritative = await video_control.publisher_lease(
-                service, {"sn": lease.sn, "lease_id": str(lease.lease_id)}, pipe
-            )
+            authoritative = await self.publisher_lease(service, epoch.identity, pipe)
             if (
                 authoritative is None
                 or authoritative.scope != "stream"
                 or authoritative.owner_user_id != lease.owner_user_id
                 or authoritative.owner_session_id != lease.owner_session_id
-                or int(authoritative.expires_at.timestamp())
-                < stored_start["lease_expires_at"]
+                or (
+                    not modern
+                    and int(authoritative.expires_at.timestamp())
+                    < stored_start["lease_expires_at"]
+                )
             ):
                 raise HTTPException(409, "lease_invalid")
 
@@ -291,12 +317,27 @@ class CameraControl:
         # The publisher epoch is negotiated media v2; only the firmware adapter is CTL v1.
         lease.stream_contract_version = epoch.start["contract_version"]
         lease.stream_state = "starting"
-        if not await service.leases.save_stream(lease, None):
+        if not await (
+            camera_media_clock.save_stream(lease, None)
+            if modern
+            else service.leases.save_stream(lease, None)
+        ):
             await self.update(
                 epoch, state="failed", result="failed", reason="lease_invalid"
             )
             raise HTTPException(409, "lease_invalid")
-        timeout = min(15.0, stored_start["lease_expires_at"] - time.time())
+        timeout = min(
+            15.0,
+            (
+                (
+                    stored_start["lease_expires_at"] * 1000
+                    - media_lease.coordinate_now_ms
+                )
+                / 1000
+                if modern
+                else stored_start["lease_expires_at"] - time.time()
+            ),
+        )
         try:
             if timeout <= 0:
                 raise ValueError("camera_lease_expired")
@@ -408,13 +449,18 @@ class CameraControl:
         ):
             return False
         lease = await service.leases.get(UUID(epoch.identity["lease_id"]))
+        live_lease = lease is not None and lease.is_active()
+        if lease is not None and epoch.start["contract_version"] == 3:
+            from core.camera.media_clock import camera_media_clock
+
+            try:
+                await camera_media_clock.export(lease)
+                live_lease = True
+            except ValueError:
+                live_lease = False
         if event.state == "running":
             # Late running must not revive a retired epoch.
-            if (
-                record["state"] not in ("starting", "running")
-                or lease is None
-                or not lease.is_active()
-            ):
+            if record["state"] not in ("starting", "running") or not live_lease:
                 return False
             await service.presence.notify_video_event(event)
             return True
@@ -448,7 +494,7 @@ class CameraControl:
             orphan = False
             if record and record["state"] in LIVE:
                 identity = epoch_of(record).identity
-                lease = await video_control.publisher_lease(service, identity, pipe)
+                lease = await self.publisher_lease(service, identity, pipe)
                 orphan = (
                     lease is None
                     or lease.scope != "stream"

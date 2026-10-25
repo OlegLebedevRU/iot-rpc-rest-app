@@ -236,6 +236,9 @@ class CameraMachine:
         else:
             raise ValueError("camera_runtime_action")
         self.s["commands"][command["command_id"]] = {"message": copy.deepcopy(command)}
+        for name in ("media_clock_id", "media_lease_expires_at"):
+            if name in value:
+                self.s["commands"][command["command_id"]][name] = value[name]
         self.s["command_order"].append(command["command_id"])
         while len(self.s["command_order"]) > 64:
             del self.s["commands"][self.s["command_order"].pop(0)]

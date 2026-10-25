@@ -1,6 +1,6 @@
 {
   "repository": "OlegLebedevRU/etranprocessing",
-  "commit": "a115c48b5420714cf66ce10e06974dfb221f4581",
+  "commit": "be41d887c7e6bad1abfed3ab59708f08ebf92afa",
   "files": {
     ".gitattributes": "8b9c3028d6467ff3be7c793141927841d70f47f52d0590677438f488ca154992",
     "camera.schema.json": "cba222ccdc2e10c446dc99e1bb0e2338d4fc08c28220f3bc02e8a8d391789194",
@@ -8,6 +8,6 @@
     "example-observation.json": "710c646ca43a2d12876b4e246cbb47ca22b375ce2570ed3c3b01848ae58f138c",
     "manifest.json": "ea7ba021525d7ef02741bf379896e7cdcd56cddb27b7ae4c1917c55567562714",
     "README.md": "713070b2ecaf3f3c264b43a547a39641643fbd873f38e1bd2a8b2d1ed7d772ca",
-    "verify.py": "e517638a909e47236d006282679ae8d0d1db5913dee5fb7dcb68ee376e2e57aa"
+    "verify.py": "f9c520e812c1bec8233190768cdff9dabc7a266ae36b8476259fe0148f205a2a"
   }
 }

@@ -325,8 +325,21 @@ class RemoteInputService:
         timeout_sec: float | None = None,
     ) -> LeaseResponse:
         lease = await self.leases.get(lease_id)
-        if lease is None or not lease.is_active():
+        from core.camera.media_clock import camera_media_clock
+
+        raw = (
+            await camera_media_clock.client.hgetall(f"l4d:lease:{lease_id}")
+            if lease
+            else {}
+        )
+        camera3 = camera_media_clock.scoped(raw)
+        if lease is None or (not camera3 and not lease.is_active()):
             raise HTTPException(status_code=404, detail="lease not found or expired")
+        if camera3:
+            try:
+                await camera_media_clock.export(lease)
+            except ValueError as exc:
+                raise HTTPException(409, str(exc)) from None
 
         if lease.scope == "files":
             raise HTTPException(status_code=409, detail="use_file_manager_control")
@@ -348,7 +361,11 @@ class RemoteInputService:
 
         ttl_sec = getattr(lease, "ttl_sec", None) or settings.remote_input.lease_ttl_sec
         old_expires_at = lease.expires_at
-        touched = await self.leases.touch(lease_id, ttl_sec)
+        touched = (
+            await camera_media_clock.touch(lease, ttl_sec)
+            if camera3
+            else await self.leases.touch(lease_id, ttl_sec)
+        )
         if touched is None:
             raise HTTPException(status_code=404, detail="lease not found or expired")
 
@@ -398,6 +415,11 @@ class RemoteInputService:
         )
 
         camera_record = (await video_control.store.get(touched.sn)).get("camera_stream")
+        if camera3 and (
+            not camera_record
+            or camera_record.get("state") not in ("starting", "running")
+        ):
+            return self._build_lease_response(touched, renew_status="server_accepted")
         if (
             camera_record
             and camera_record["start"]["lease_id"] == str(touched.lease_id)

@@ -9,7 +9,7 @@ from fastapi import HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, UUID4
 
 from core.camera.native_contract import (
     ENROLLMENT02,
@@ -115,6 +115,14 @@ class VideoLeaseView(BaseModel):
     owner_user_id: str
     owner_session_id: str
     expires_at: datetime
+
+
+class CameraLeaseView12(VideoLeaseView):
+    active: Literal[True]
+    scope: Literal["stream"]
+    media_lease_expires_at: int = Field(strict=True, ge=1)
+    media_remaining_ms: int = Field(strict=True, ge=1, le=60000)
+    media_clock_id: UUID4
 
 
 class VideoStateView(BaseModel):

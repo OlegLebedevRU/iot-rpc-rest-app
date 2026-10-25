@@ -79,6 +79,7 @@ from core.remote_input.video_api import (
     VideoCapabilityView,
     VideoControlRoute,
     VideoLeaseView,
+    CameraLeaseView12,
     VideoStateView,
     require_media_version,
     selected_media_version,
@@ -398,7 +399,12 @@ async def post_stream_start(
     if isinstance(body, CameraStart):
         require_record_camera_headers(request, body.root["descriptor"])
         lease = await video_control.authorize(
-            remote_input_service, lease_id, org_id, caller_user_id, session_id
+            remote_input_service,
+            lease_id,
+            org_id,
+            caller_user_id,
+            session_id,
+            require_active=body.root["contract_version"] != 3,
         )
         monotonic = require_camera_runtime_headers(request, optional=True)
         readiness_nonce = request.headers.get("X-L4-Camera-Readiness")
@@ -419,6 +425,8 @@ async def post_stream_start(
             raise HTTPException(409, str(exc)) from None
         except TimeoutError:
             raise HTTPException(504, "camera_runtime_timeout") from None
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
         return CameraStateView.from_record(record)
     if isinstance(body, VideoStart):
         if request.headers.get("X-L4-Camera-Contract") is not None:
@@ -512,25 +520,40 @@ async def get_video_capability(
     )
 
 
-@router.get("/lease/{lease_id}/video-lease", response_model=VideoLeaseView)
+@router.get(
+    "/lease/{lease_id}/video-lease", response_model=VideoLeaseView | CameraLeaseView12
+)
 async def get_video_lease(
     lease_id: UUID,
     org_id: Internal_Org_dep,
     _: Internal_Auth_dep,
     request: Request,
-) -> VideoLeaseView:
+) -> VideoLeaseView | CameraLeaseView12:
     # A publisher context is bound to the exact caller, including superusers.
+    modern = request.headers.get("X-L4-Camera-Contract") == MEDIA12
+    if modern:
+        require_camera_runtime_headers(request)
     lease = await video_control.authorize(
         remote_input_service,
         lease_id,
         org_id,
         extract_caller_user_id(request),
         extract_caller_session_id(request),
+        require_active=not modern,
     )
-    return VideoLeaseView(
+    extra = {}
+    if modern:
+        from core.camera.media_clock import camera_media_clock
+
+        try:
+            extra = (await camera_media_clock.export(lease, initialize=True)).public()
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from None
+    return (CameraLeaseView12 if modern else VideoLeaseView)(
+        **extra,
         sn=lease.sn,
         lease_id=str(lease.lease_id),
-        active=lease.is_active(),
+        active=True if modern else lease.is_active(),
         scope=lease.scope,
         owner_user_id=lease.owner_user_id,
         owner_session_id=lease.owner_session_id,

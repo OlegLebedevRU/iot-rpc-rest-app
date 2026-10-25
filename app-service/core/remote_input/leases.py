@@ -1146,9 +1146,11 @@ class RedisLeaseRegistry:
             raw_data = await self._client.hgetall(f"l4d:lease:{lease_id}")
             if not raw_data:
                 return None
-            if (local and local.stream_contract_version == 2) or raw_data.get(
-                "stream_contract_version"
-            ) == "2":
+            if (
+                (local and local.stream_contract_version == 2)
+                or raw_data.get("stream_contract_version") == "2"
+                or raw_data.get("camera_media_clock_initialized") == "1"
+            ):
                 # V2 uses explicit stream CAS. A cached read must not resurrect
                 # an expired hash or overwrite another worker's revoke/renew.
                 return _dict_to_lease(raw_data) if raw_data else None
@@ -1188,7 +1190,18 @@ class RedisLeaseRegistry:
             if not active_id:
                 return None
             lease = await self.get(UUID(active_id))
-            if lease is None or not lease_blocks_acquire(lease, now):
+            if lease is None:
+                return None
+            from core.camera.media_clock import camera_media_clock
+
+            raw = await client.hgetall(f"l4d:lease:{lease.lease_id}")
+            if camera_media_clock.scoped(raw):
+                try:
+                    await camera_media_clock.export(lease)
+                except ValueError:
+                    return None
+                return lease
+            if not lease_blocks_acquire(lease, now):
                 return None
             return lease
         except (RedisConnectionError, RedisTimeoutError) as exc:
@@ -1219,7 +1232,17 @@ class RedisLeaseRegistry:
                     await client.delete(akey)
                     continue
 
-                if lease.is_expired(now):
+                from core.camera.media_clock import camera_media_clock
+
+                raw = await client.hgetall(f"l4d:lease:{lease.lease_id}")
+                camera3 = camera_media_clock.scoped(raw)
+                expired_camera = False
+                if camera3:
+                    try:
+                        await camera_media_clock.export(lease)
+                    except ValueError:
+                        expired_camera = True
+                if expired_camera or (not camera3 and lease.is_expired(now)):
                     revoked_lease = await self.revoke(lease.lease_id, reason="expired")
                     if revoked_lease:
                         expired.append((revoked_lease, "expired"))

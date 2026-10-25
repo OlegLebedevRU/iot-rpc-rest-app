@@ -8,3 +8,6 @@ uv.lock linguist-generated=true
 examples/** linguist-vendored=true
 
 contracts/hevc-v2/** text eol=lf
+
+# Preserve raw owner proposal bytes, including their pinned CRLF encoding.
+contracts/siplite-camera-v1.2/** -text whitespace=cr-at-eol

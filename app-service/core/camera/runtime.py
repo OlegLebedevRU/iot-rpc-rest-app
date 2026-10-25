@@ -167,7 +167,16 @@ class CameraRuntime:
                     continue
                 if message["type"] in ("stream_start", "lease_renew"):
                     try:
-                        lease_budget = await self.authority(sn, message)
+                        receipt = row.state["commands"].get(message["command_id"], {})
+                        authority_value = {
+                            **message,
+                            **{
+                                k: receipt[k]
+                                for k in ("media_clock_id", "media_lease_expires_at")
+                                if k in receipt
+                            },
+                        }
+                        lease_budget = await self.authority(sn, authority_value)
                         remaining = entry["deadline"] - self.monotonic()
                         if remaining <= 0 or lease_budget < remaining:
                             # A shorter transport TTL cannot repair a stale wire
@@ -189,6 +198,12 @@ class CameraRuntime:
     ) -> CameraRuntimeCommand:
         identity = epoch.identity
         value = {k: identity[k] for k in ("sn", "lease_id", "stream_instance_id")}
+        if epoch.start["contract_version"] == 3:
+            if not epoch.media_clock_id:
+                raise ValueError("camera_media_clock_required")
+            value["media_clock_id"] = epoch.media_clock_id
+            if action == "start":
+                value["media_lease_expires_at"] = epoch.start["lease_expires_at"]
         if action == "start":
             value.update(
                 command_id=epoch.start["operation_id"],
@@ -255,9 +270,22 @@ class CameraRuntime:
         from core.remote_input.leases import lease_registry
 
         lease = await lease_registry.get(UUID(value["lease_id"]))
+        from core.camera.media_clock import camera_media_clock
+
+        raw = (
+            await camera_media_clock.client.hgetall(f"l4d:lease:{value['lease_id']}")
+            if lease
+            else {}
+        )
+        camera3 = camera_media_clock.scoped(raw)
+        media_lease = None
+        if camera3:
+            media_lease = await camera_media_clock.export(lease)
+            if value.get("media_clock_id") != media_lease.media_clock_id:
+                raise ValueError("camera_media_clock_mismatch")
         if (
             not lease
-            or not lease.is_active()
+            or (not camera3 and not lease.is_active())
             or lease.sn != sn
             or lease.scope != "stream"
         ):
@@ -282,6 +310,20 @@ class CameraRuntime:
         remaining -= time.monotonic_ns() // 1000000 - before
         if active != value["lease_id"] or remaining <= 0:
             raise ValueError("camera_lease_invalid")
+        if media_lease is not None:
+            elapsed = camera_media_clock.monotonic() - media_lease.sampled_mono_ms
+            if elapsed < 0:
+                raise ValueError("camera_media_clock_lost_or_expired")
+            remaining = min(remaining, media_lease.media_remaining_ms - elapsed)
+            if "media_lease_expires_at" in value:
+                expiry = value["media_lease_expires_at"]
+                if type(expiry) is not int:
+                    raise ValueError("camera_media_lease_invalid")
+                remaining = min(
+                    remaining, expiry * 1000 - media_lease.coordinate_now_ms - elapsed
+                )
+            if remaining <= 0:
+                raise ValueError("camera_lease_invalid")
         return min(60000, remaining)
 
     @staticmethod

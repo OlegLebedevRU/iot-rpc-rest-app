@@ -111,9 +111,12 @@ class CameraEpoch:
     # Canonical immutable JSON prevents later caller mutation of the descriptor.
     start_json: str
     route_generation: int | None = None
+    media_clock_id: str | None = None
 
     @classmethod
-    def from_start(cls, payload: dict, lease, now_ms: int | None = None):
+    def from_start(
+        cls, payload: dict, lease, now_ms: int | None = None, *, media_lease=None
+    ):
         value = validate_media("media_start", payload)
         descriptor = value["descriptor"]
         if (
@@ -121,19 +124,35 @@ class CameraEpoch:
             and descriptor.get("camera_contract_revision") not in (REVISION, MEDIA11)
         ) or descriptor["source_type"] != "camera":
             raise ValueError("negotiated_camera_descriptor_required")
+        modern = value["contract_version"] == 3
+        if modern and media_lease is None:
+            raise ValueError("camera_media_clock_required")
         if (
             lease.scope != "stream"
-            or not lease.is_active()
+            or (
+                getattr(lease, "revoked_reason", None) is not None
+                if modern
+                else not lease.is_active()
+            )
             or str(lease.lease_id) != value["lease_id"]
             or lease.sn != value["publisher"]["sn"]
-            or value["lease_expires_at"] != int(lease.expires_at.timestamp())
+            or (
+                value["lease_expires_at"] > media_lease.media_lease_expires_at
+                if modern
+                else value["lease_expires_at"] != int(lease.expires_at.timestamp())
+            )
         ):
             raise ValueError("camera_lease_mismatch")
         if value["lease_expires_at"] * 1000 <= (
-            now_ms if now_ms is not None else int(time.time() * 1000)
+            media_lease.coordinate_now_ms
+            if modern
+            else now_ms if now_ms is not None else int(time.time() * 1000)
         ):
             raise ValueError("camera_lease_expired")
-        return cls(json.dumps(value, sort_keys=True, separators=(",", ":")))
+        return cls(
+            json.dumps(value, sort_keys=True, separators=(",", ":")),
+            media_clock_id=media_lease.media_clock_id if modern else None,
+        )
 
     @property
     def start(self) -> dict:
@@ -257,11 +276,22 @@ class CameraMediaAdapter:
             raise ValueError("camera_media_selection_mismatch")
         return value
 
-    async def prepare(self, epoch: CameraEpoch) -> tuple[CameraEpoch, dict]:
+    async def prepare(
+        self, epoch: CameraEpoch, *, media_lease=None
+    ) -> tuple[CameraEpoch, dict]:
         # No firmware command is emitted here. Capability resolution and the actual
         # SPS-derived descriptor must already have completed before media prepare.
         self.require_epoch(epoch)
-        if epoch.start["lease_expires_at"] <= time.time():
+        if self.revision == MEDIA12:
+            if (
+                media_lease is None
+                or media_lease.media_clock_id != epoch.media_clock_id
+                or epoch.start["lease_expires_at"] > media_lease.media_lease_expires_at
+                or epoch.start["lease_expires_at"] * 1000
+                <= media_lease.coordinate_now_ms
+            ):
+                raise ValueError("camera_media_clock_mismatch_or_expired")
+        elif epoch.start["lease_expires_at"] <= time.time():
             raise ValueError("camera_lease_expired")
         capabilities = await self.capabilities()
         require_server_format(capabilities, epoch.start["descriptor"])
@@ -278,7 +308,12 @@ class CameraMediaAdapter:
             except ValueError:
                 pass  # The immutable server lease deadline remains the final cleanup.
             raise
-        return CameraEpoch(epoch.start_json, response["route_generation"]), response
+        return (
+            CameraEpoch(
+                epoch.start_json, response["route_generation"], epoch.media_clock_id
+            ),
+            response,
+        )
 
     async def health(self, epoch: CameraEpoch) -> dict:
         self.require_epoch(epoch)
@@ -295,18 +330,31 @@ class CameraMediaAdapter:
         epoch.check_response(response)
         return response  # READY, RTP freshness and browser decode remain separate.
 
-    async def renew(self, epoch: CameraEpoch, lease) -> dict:
+    async def renew(self, epoch: CameraEpoch, lease, *, media_lease=None) -> dict:
         self.require_epoch(epoch)
+        modern = self.revision == MEDIA12
         if (
-            not lease.is_active()
+            (lease.revoked_reason is not None if modern else not lease.is_active())
             or lease.scope != "stream"
             or lease.sn != epoch.identity["sn"]
             or str(lease.lease_id) != epoch.identity["lease_id"]
         ):
             raise ValueError("camera_lease_mismatch")
+        if modern and (
+            media_lease is None
+            or media_lease.media_clock_id != epoch.media_clock_id
+            or media_lease.media_remaining_ms <= 0
+            or media_lease.media_lease_expires_at * 1000
+            <= media_lease.coordinate_now_ms
+        ):
+            raise ValueError("camera_media_clock_mismatch_or_expired")
         payload = {
             **epoch.identity,
-            "lease_expires_at": int(lease.expires_at.timestamp()),
+            "lease_expires_at": (
+                media_lease.media_lease_expires_at
+                if modern
+                else int(lease.expires_at.timestamp())
+            ),
         }
         validate_media("media_renew", payload, self.revision)
         response = await self._call(

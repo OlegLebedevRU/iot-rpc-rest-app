@@ -776,8 +776,12 @@ async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack
             )
         ),
     )
+    from core.remote_input.leases import RedisLeaseRegistry
+
     service = RemoteInputService(
-        leases=LeaseRegistry(),
+        leases=(
+            RedisLeaseRegistry() if isinstance(native_bundle, str) else LeaseRegistry()
+        ),
         presence=PresenceRegistry(),
         pending=PendingCommandRegistry(),
     )
@@ -804,7 +808,16 @@ async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack
         payload["descriptor"] = native_configured()["descriptor"]
         if isinstance(native_bundle, str):
             payload["contract_version"] = 3
-    epoch = CameraEpoch.from_start(payload, lease)
+    media_lease = None
+    if isinstance(native_bundle, str):
+        from core.camera.media_clock import camera_media_clock
+
+        monkeypatch.setattr(
+            camera_media_clock, "boot", lambda: "11111111-1111-4111-8111-111111111111"
+        )
+        media_lease = await camera_media_clock.export(lease, initialize=True)
+        payload["lease_expires_at"] = media_lease.media_lease_expires_at
+    epoch = CameraEpoch.from_start(payload, lease, media_lease=media_lease)
     if native_bundle:
         await e.runtime.submit(SN, "configure", native_configured())
         message = fixture("hello")
@@ -881,7 +894,9 @@ async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack
             timestamp=datetime.now(UTC).isoformat(),
         )
         assert await control.camera_control.event(SN, event, service)
-        assert not lease.is_active()  # a subsequent attempt must acquire a new lease
+        assert not (
+            await service.leases.get(lease.lease_id)
+        ).is_active()  # a subsequent attempt needs a fresh lease
     finally:
         await asyncio.gather(*tasks)
         keys = await video_control.store.client.keys(video_control.store.key(SN) + "*")

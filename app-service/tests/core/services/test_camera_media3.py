@@ -19,6 +19,7 @@ from core.camera.admission import validate_gauge
 from core.camera.authority_state import load_state
 from core.camera.control import CameraStart, CameraStateView
 from core.camera.media import CameraEpoch, CameraMediaAdapter
+from core.camera.media_clock import MediaLease
 from core.camera.native_contract import (
     CAPABILITIES3,
     MEDIA12,
@@ -336,7 +337,13 @@ async def test_camera_media_lifecycle_uses_only_common_media_headers(profile, co
     body = old.start
     body["contract_version"] = 3
     body["descriptor"] = configured(profile, codec)["descriptor"]
-    epoch = CameraEpoch.from_start(body, lease)
+    media_lease = MediaLease(
+        body["lease_expires_at"],
+        30000,
+        str(uuid4()),
+        body["lease_expires_at"] * 1000 - 30000,
+    )
+    epoch = CameraEpoch.from_start(body, lease, media_lease=media_lease)
     calls = []
 
     def handler(request):
@@ -388,11 +395,17 @@ async def test_camera_media_lifecycle_uses_only_common_media_headers(profile, co
         adapter = CameraMediaAdapter(
             client, "fixture-service-token", selection=SELECTED3
         )
-        epoch, response = await adapter.prepare(epoch)
+        epoch, response = await adapter.prepare(epoch, media_lease=media_lease)
         assert response["descriptor"] == configured(profile, codec)["descriptor"]
         assert epoch.identity["contract_version"] == 3
         await adapter.health(epoch)
-        await adapter.renew(epoch, lease)
+        lease.expires_at -= timedelta(days=365)
+        assert not lease.is_active()
+        await adapter.renew(epoch, lease, media_lease=media_lease)
+        renewal = json.loads(calls[-1].content)
+        assert renewal["lease_expires_at"] == media_lease.media_lease_expires_at
+        with pytest.raises(ValueError, match="clock_mismatch"):
+            await adapter.renew(epoch, lease)
         await adapter.stop(epoch, "test_complete")
     state = CameraStateView.from_record(
         {
@@ -400,6 +413,7 @@ async def test_camera_media_lifecycle_uses_only_common_media_headers(profile, co
             "result": "started",
             "state": "running",
             "confirmation": "command_ack",
+            "media_clock_id": media_lease.media_clock_id,
         }
     )
     assert (
