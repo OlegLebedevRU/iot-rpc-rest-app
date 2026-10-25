@@ -74,3 +74,16 @@ async def test_worker_connection_failure_never_executes_jobs(dependencies, monke
     broker.stop.assert_awaited_once()
     redis.close_pool.assert_awaited_once()
     db.dispose.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_shutdown_failure_still_closes_database_and_redis(
+    dependencies, monkeypatch
+):
+    broker, redis, db = dependencies
+    broker.stop.side_effect = OSError("shutdown failed")
+    monkeypatch.setattr(module, "camera_runtime_loop", AsyncMock())
+    with pytest.raises(OSError, match="shutdown failed"):
+        await module.run_worker()
+    redis.close_pool.assert_awaited_once()
+    db.dispose.assert_awaited_once()

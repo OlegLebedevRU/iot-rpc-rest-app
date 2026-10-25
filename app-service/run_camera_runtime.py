@@ -35,9 +35,13 @@ async def run_worker() -> None:
     finally:
         # Cancellation leaves the durable owner deadline intact. A successor
         # must perform the existing fenced epoch takeover, never resume clocks.
-        await fs_router.broker.stop()
-        await redis_helper.close_pool()
-        await db_helper.dispose()
+        try:
+            await fs_router.broker.stop()
+        finally:
+            try:
+                await redis_helper.close_pool()
+            finally:
+                await db_helper.dispose()
 
 
 async def main() -> None:
