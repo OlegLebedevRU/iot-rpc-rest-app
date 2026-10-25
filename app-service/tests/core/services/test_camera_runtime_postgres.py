@@ -310,6 +310,10 @@ async def test_real_postgres_actor_takeover_preserves_floors_and_fences_egress(
         assert command["admission_seq"] == 42
         await runtime.submit(sn, "release", {"command_id": command["command_id"]})
         before = await store.get(sn)
+        if native04 == "nominal05":
+            from .camera_worker_recycle import assert_web_recycles_while_issuer_survives
+
+            await assert_web_recycles_while_issuer_survives(runtime, store, sn)
         async with sessions() as session, session.begin():
             await session.execute(
                 update(CameraAuthority).values(

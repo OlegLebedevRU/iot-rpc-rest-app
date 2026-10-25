@@ -39,6 +39,23 @@ services:
       - redis_network
     volumes:
       - ./logs:/var/log/app
+  camera-runtime:
+    # Same immutable image/config as app1 in the release overlay; no HTTP ports.
+    image: ghcr.io/oleglebedevru/iot-rpc-rest-app/app-service:${IMAGE_TAG:-latest}
+    profiles: [camera-runtime]
+    entrypoint: [python, run_camera_runtime.py]
+    command: []
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 15s
+    env_file:
+      - ./app-service/.env
+    networks:
+      - rabbitmq_network
+      - pg_network
+      - redis_network
+    volumes:
+      - ./logs/camera-runtime:/var/log/app
   rabbitmq:
     image: rabbitmq:4-management
     container_name: rabbitmq

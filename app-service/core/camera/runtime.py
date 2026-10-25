@@ -1,4 +1,4 @@
-"""Fenced per-SN actor with durable inbox/outbox, shared by all app workers."""
+"""Durable camera clients and a separately owned per-SN issuer executor."""
 
 from __future__ import annotations
 
@@ -21,7 +21,14 @@ log = logging.getLogger(__name__)
 
 class CameraRuntime:
     def __init__(
-        self, store=None, send=None, authority=None, monotonic=None, wall=None
+        self,
+        store=None,
+        send=None,
+        authority=None,
+        monotonic=None,
+        wall=None,
+        *,
+        owns_issuer: bool = True,
     ):
         self.store = store or AuthorityStore()
         self.send = send or self.publish
@@ -31,9 +38,12 @@ class CameraRuntime:
         self._pid = None
         self._owner = ""
         self.clocks = {}
+        self.owns_issuer = owns_issuer
 
     @property
     def owner(self) -> str:
+        if not self.owns_issuer:
+            raise ValueError("camera_client_cannot_own_issuer")
         # Gunicorn preload must not clone a process identity/clock into children.
         if self._pid != os.getpid():
             self._pid = os.getpid()
@@ -66,7 +76,8 @@ class CameraRuntime:
         while self.monotonic() < deadline:
             if self.monotonic() < began:
                 raise ValueError("camera_issuer_clock_regressed")
-            await self.pump(sn)
+            if self.owns_issuer:
+                await self.pump(sn)
             result = (await self.store.get(sn))["results"].get(job_id)
             if result is not None:
                 if "error" in result:
@@ -76,6 +87,8 @@ class CameraRuntime:
         raise TimeoutError("camera_runtime_job_timeout")
 
     async def pump(self, sn: str) -> None:
+        if not self.owns_issuer:
+            raise ValueError("camera_client_cannot_own_issuer")
         # All workers may enqueue. Exactly one owner interprets local monotonic
         # fields. Takeover invalidates these fields before reading any requests.
         owner = self.owner
@@ -140,6 +153,8 @@ class CameraRuntime:
         await self.flush(sn)
 
     async def flush(self, sn: str) -> None:
+        if not self.owns_issuer:
+            raise ValueError("camera_client_cannot_own_issuer")
         async with self.store.locked(sn) as (row, db_now):
             if (
                 row.owner != self.owner
@@ -347,16 +362,20 @@ class CameraRuntime:
         )
 
 
-camera_runtime = CameraRuntime()
+# HTTP/MQTT ingress workers only enqueue and await durable results. They must
+# never allocate an issuer clock or assume ownership when Gunicorn recycles.
+camera_runtime = CameraRuntime(owns_issuer=False)
 
 
-async def camera_runtime_loop() -> None:
+async def camera_runtime_loop(runtime: CameraRuntime) -> None:
+    if not runtime.owns_issuer:
+        raise ValueError("camera_client_cannot_own_issuer")
     while True:
         try:
             if settings.camera.monotonic_runtime_enabled:
-                for sn in await camera_runtime.store.candidates():
+                for sn in await runtime.store.candidates():
                     try:
-                        await camera_runtime.pump(sn)
+                        await runtime.pump(sn)
                     except asyncio.CancelledError:
                         raise
                     except Exception:
