@@ -7,6 +7,8 @@ def get_app_options(
     timeout: int,
     workers: int,
     log_level: str,
+    *,
+    camera_runtime_enabled: bool = False,
 ) -> dict:
     return {
         "accesslog": "-",
@@ -19,6 +21,9 @@ def get_app_options(
         "worker_class": "uvicorn.workers.UvicornWorker",
         "keepalive": 5,
         "graceful_timeout": 15,
-        "max_requests": 1000,
-        "max_requests_jitter": 100,
+        # A monotonic camera issuer cannot survive its owning worker. Recycling
+        # after an arbitrary HTTP request count would retire a healthy stream.
+        # Actual shutdown/death still uses the existing durable takeover fences.
+        "max_requests": 0 if camera_runtime_enabled else 1000,
+        "max_requests_jitter": 0 if camera_runtime_enabled else 100,
     }

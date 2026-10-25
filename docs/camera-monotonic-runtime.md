@@ -191,3 +191,24 @@ files with the base shows45 pre-existing Ruff diagnostics and no introduced
 ones. Black passes all18 changed Python files. The original contract packages,
 uv.lock and legacy camera producer are unchanged. The temporary176 PostgreSQL
 container and local SSH tunnel were removed after verification.
+
+## Owning worker lifetime
+
+The monotonic camera issuer is process-owned. A real worker exit/restart still
+invalidates its epoch and requires the existing durable takeover/enrollment;
+original deadlines, counters, ownership fences and replay rules are unchanged.
+
+When the existing `camera.monotonic_runtime_enabled` setting is true, the
+`run_main` entrypoint selects Gunicorn `max_requests=0` and
+`max_requests_jitter=0`. This disables only automatic HTTP-request-count recycling:
+otherwise the previous 1000+0..100 policy deliberately kills a healthy owning
+worker during an active camera stream. A production trace demonstrated that
+exact failure: request limit1001 terminated the worker, its10second authority
+heartbeat expired, and a legitimate successor cleared enrollment; keepalive
+then failed with `camera_enrollment_required`. Extending TTL or keeping a dead
+owner alive would bypass the intended fencing and does not fix that cause.
+
+With the camera runtime disabled or the new function argument omitted, historical
+1000/100 recycling remains. No new environment option or gate is introduced.
+Intentional shutdown, crash, deployment and actual ownership loss continue to
+end that authority; the change does not promise seamless streaming across restart.

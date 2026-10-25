@@ -17,6 +17,7 @@ def main():
             timeout=settings.gunicorn.timeout,
             workers=settings.gunicorn.workers,
             log_level=settings.logging.log_level,
+            camera_runtime_enabled=settings.camera.monotonic_runtime_enabled,
         ),
     ).run()
 
