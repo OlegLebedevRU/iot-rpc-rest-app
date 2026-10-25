@@ -23,9 +23,11 @@ Boot/issuer/floor, physical binding, R/I and lease deadlines remain unchanged.
 
 Normative cadence0.3 and enrollment0.5 are owned by IoT in their corresponding
 versioned packets. Cadence0.3 obtains declared nominal FPS from the authenticated,
-selected video media section of the actual camera SDP (`a=framerate`, exact
-integer1..120). The parser/source adapter must bind the metadata to that selected
-track and camera session; unrelated media sections, ambiguous/invalid values,
+selected video media section of the actual camera SDP (`a=framerate`, numeric
+integer1..120; equivalent20 and20.000 declarations agree). The parser/source adapter must bind the metadata to that selected
+track and camera session. Session-level, audio and unselected media metadata
+are ignored. Malformed/conflicting selected declarations make nominal unavailable,
+not a transport failure. Missing/out-of-range nominal rejects admission explicitly;
 configuration Auto sentinel and arbitrary rounded achieved means are not nominal
 authority. Real source evidence for the current camera declares framerate20.
 This is a declared target, not an achieved-rate ceiling. Common track.fps carries
@@ -36,8 +38,11 @@ There are no2% tolerances,4s/32s rate windows, inferred unique-F candidates,
 constant-rate lattice or105% GOP growth requirement in this new policy. READY
 requires one complete validated GOP with two verified IDR+parameter-set boundaries,
 real SPS/profile/level/geometry, full AU, no B frames and supported packetization.
-Observed nominal GOP is represented within250..5000ms; that scalar is not an
-instantaneous equality or constant-runtime-GOP promise. A bounded30s IO acquisition
+At startup project ceil(original GOP ticks/90) into250..5000ms; otherwise remain
+PENDING and update the verified IDR anchor within the original30s deadline, without
+clamp or deadline reset. The scalar is not an instantaneous equality or constant
+runtime GOP promise. After READY neither105% nor absolute5s actual GOP periodicity
+is enforced; validated AU/PS/no-B and other source authority checks remain. A bounded30s IO acquisition
 budget supports discovery and a5s GOP and is not an FPS gate or a new lease budget.
 Full bitstream/PS/codec/geometry/physical-port2 authority and lease safeguards stay
 mandatory; source/authority changes retire the attempt. Owner vectors define the

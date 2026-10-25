@@ -30,7 +30,7 @@
     "fixtures/physical-camera.json": "8a7c5111354f0c0ee63ca915574e779bd49dd2f987c9f9d02d98efc5a68ccbbb",
     "fixtures/proof.json": "25a0823b1fd36643ab7f51a39ee4ec455ee1f115807f25db95f9581edd35bf3d"
   },
-  "observation_owner_commit": "685c63cef90297ba97888560816c26bc73704d0b",
+  "observation_owner_commit": "bbf48660a36a997f688d57fc84d5c9deeedd5bd8",
   "observation_schema_sha256": "5829f1fc620ec589477626fd5b8bb74bce25189061528b0d8f56d2a110661950",
   "cadence_revision": "camera-cadence/0.3.0-proposed",
   "cadence_manifest_sha256": "d1e1544d2c9db43ce9a69c6ba013c3476c930f3323360cdbd5d753ccbb5c7764"
