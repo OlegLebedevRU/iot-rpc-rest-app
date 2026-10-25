@@ -1,5 +1,6 @@
 """Camera record retention follows validated renewal, never grants authority."""
 
+import asyncio
 import copy
 import json
 import time
@@ -264,3 +265,14 @@ async def test_metadata_refresh_does_not_extend_authority_deadline_or_ttl(camera
     clock_after = await env.e.clock.export(env.e.lease)
     assert clock_after.media_clock_id == clock_before.media_clock_id
     assert clock_after.media_lease_expires_at == clock_before.media_lease_expires_at
+
+
+@pytest.mark.anyio
+async def test_refreshed_metadata_survives_its_original_short_expiry(camera_env):
+    env = camera_env
+    await env.e.clock.client.pexpire(env.key, 1500)
+    await keepalive(env)
+    await asyncio.sleep(1.6)
+    assert await camera_control.record(env.e.lease.sn)
+    assert await env.e.clock.client.ttl(env.key) >= 297
+    assert await env.e.clock.client.pttl(f"l4d:lease:active:{env.e.lease.sn}") < 59000
