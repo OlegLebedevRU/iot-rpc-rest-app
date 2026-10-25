@@ -1,0 +1,33 @@
+{
+  "revision": "camera-enrollment/0.4.0-proposed",
+  "status": "proposal-implementation-candidate",
+  "media_revision": "l4-media/3.0.0",
+  "media_owner_commit": "d7166d72721630d11d7f506b9cccb5ffb01742f3",
+  "media_schema_sha256": "b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818",
+  "admission_schema_sha256": "e75e1c7f49f0d0fc68f6720a3c47766ccb4caad83d721b5d1b8aabe3d3b58a0d",
+  "schema_sha256": "45ae401d6c16605a69c9823d4e76b4ca056c74664682c7fa31d03fc87d1d2bdf",
+  "fixtures": {
+    "commit.json": "c34613792568565e227d5d2be76649ffd8082f5c1e989f521e7565c5935835ef",
+    "hello.json": "4bf24225720fb004312b8680db00084917ad3126338e2464f5582dc1e756d8b0",
+    "observation.json": "ee5b8600aee04df648b3e24ebf2afab57ca9fa975b7889fcd88c3198e79da4cc",
+    "offer.json": "1be66e00c4d1d87f3f32e452a58f7179dd137c4b487e041e87c2c80194abf9df",
+    "physical-camera.json": "8a7c5111354f0c0ee63ca915574e779bd49dd2f987c9f9d02d98efc5a68ccbbb",
+    "proof.json": "6a5b6ebbe07cdaf74f758ccf89f72587b73ddd6456cc90b1337514e6db5010ec"
+  },
+  "canonical_vectors_sha256": "9f9f20992bf3f0c761f179e184b4e181e2311b6f934767a0ed2d240373b6b4ee",
+  "previous_enrollment_revision": "camera-enrollment/0.3.0-proposed",
+  "previous_packet_source_commit": "f1fe461d1b37bf2467ef63d94e6e66088df9ba8b",
+  "packet_files": {
+    ".gitattributes": "705fd4d6451a31d36b3df7de96f83f30ac976c9b4a6d1e51671d8e2f33e2d0da",
+    "canonical-vectors.json": "9f9f20992bf3f0c761f179e184b4e181e2311b6f934767a0ed2d240373b6b4ee",
+    "fixtures/commit.json": "c34613792568565e227d5d2be76649ffd8082f5c1e989f521e7565c5935835ef",
+    "fixtures/hello.json": "4bf24225720fb004312b8680db00084917ad3126338e2464f5582dc1e756d8b0",
+    "fixtures/observation.json": "ee5b8600aee04df648b3e24ebf2afab57ca9fa975b7889fcd88c3198e79da4cc",
+    "fixtures/offer.json": "1be66e00c4d1d87f3f32e452a58f7179dd137c4b487e041e87c2c80194abf9df",
+    "fixtures/physical-camera.json": "8a7c5111354f0c0ee63ca915574e779bd49dd2f987c9f9d02d98efc5a68ccbbb",
+    "fixtures/proof.json": "6a5b6ebbe07cdaf74f758ccf89f72587b73ddd6456cc90b1337514e6db5010ec",
+    "README.md": "fefe50057850ecc68ecc7bd096f4974cd0667c0c839d726cc10ae53cd2b4fa38",
+    "schema.json": "45ae401d6c16605a69c9823d4e76b4ca056c74664682c7fa31d03fc87d1d2bdf",
+    "verify.py": "3d82866465c311e38ec432ee3da7f8eebc316333ffb7a870a53f1a1713e8f636"
+  }
+}

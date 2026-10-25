@@ -1,0 +1,386 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "hello": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "type",
+        "sn",
+        "boot_id",
+        "enrollment_id",
+        "supported_ctl",
+        "admission_high_water",
+        "camera_contract_revisions",
+        "camera_cadence_revisions",
+        "media_contract_revisions"
+      ],
+      "properties": {
+        "revision": {
+          "const": "camera-enrollment/0.4.0-proposed"
+        },
+        "type": {
+          "const": "camera_enrollment_hello"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "boot_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "enrollment_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "supported_ctl": {
+          "type": "array",
+          "items": {
+            "const": "camera-ctl-monotonic/0.2.0-proposed"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "admission_high_water": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "camera_contract_revisions": {
+          "type": "array",
+          "items": {
+            "const": "siplite-camera/1.3.0"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "camera_cadence_revisions": {
+          "type": "array",
+          "items": {
+            "const": "camera-cadence/0.2.0-proposed"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "media_contract_revisions": {
+          "type": "array",
+          "items": {
+            "const": "l4-media/3.0.0"
+          },
+          "minItems": 1,
+          "maxItems": 1
+        }
+      }
+    },
+    "offer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "type",
+        "sn",
+        "boot_id",
+        "enrollment_id",
+        "ctl_revision",
+        "server_challenge",
+        "issuer_generation",
+        "issuer_epoch",
+        "binding_hash",
+        "admission_floor",
+        "camera_contract_revision",
+        "cadence_revision",
+        "descriptor",
+        "binding",
+        "media_contract_revision"
+      ],
+      "properties": {
+        "revision": {
+          "const": "camera-enrollment/0.4.0-proposed"
+        },
+        "type": {
+          "const": "camera_enrollment_offer"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "boot_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "enrollment_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "ctl_revision": {
+          "const": "camera-ctl-monotonic/0.2.0-proposed"
+        },
+        "server_challenge": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "issuer_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "issuer_epoch": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "binding_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "admission_floor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "camera_contract_revision": {
+          "const": "siplite-camera/1.3.0"
+        },
+        "cadence_revision": {
+          "const": "camera-cadence/0.2.0-proposed"
+        },
+        "descriptor": {
+          "$ref": "urn:leo4:l4-media:3.0.0#/$defs/descriptor"
+        },
+        "binding": {
+          "$ref": "urn:leo4:camera-admission:0.2.0#/$defs/binding"
+        },
+        "media_contract_revision": {
+          "const": "l4-media/3.0.0"
+        }
+      }
+    },
+    "proof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "type",
+        "sn",
+        "boot_id",
+        "enrollment_id",
+        "ctl_revision",
+        "server_challenge",
+        "issuer_generation",
+        "issuer_epoch",
+        "binding_hash",
+        "admission_floor",
+        "admission_high_water",
+        "camera_contract_revision",
+        "cadence_revision",
+        "descriptor",
+        "binding",
+        "media_contract_revision"
+      ],
+      "properties": {
+        "revision": {
+          "const": "camera-enrollment/0.4.0-proposed"
+        },
+        "type": {
+          "const": "camera_enrollment_proof"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "boot_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "enrollment_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "ctl_revision": {
+          "const": "camera-ctl-monotonic/0.2.0-proposed"
+        },
+        "server_challenge": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "issuer_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "issuer_epoch": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "binding_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "admission_floor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "admission_high_water": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "camera_contract_revision": {
+          "const": "siplite-camera/1.3.0"
+        },
+        "cadence_revision": {
+          "const": "camera-cadence/0.2.0-proposed"
+        },
+        "descriptor": {
+          "$ref": "urn:leo4:l4-media:3.0.0#/$defs/descriptor"
+        },
+        "binding": {
+          "$ref": "urn:leo4:camera-admission:0.2.0#/$defs/binding"
+        },
+        "media_contract_revision": {
+          "const": "l4-media/3.0.0"
+        }
+      }
+    },
+    "commit": {
+      "type": "object",
+      "$comment": "Stateful admission rule: commit admission_floor must be >= max(accepted offer admission_floor, proof admission_high_water, current device high-water, durable server counter). Device checks its observable offer/proof/current values; server checks its durable counter. Rejection must preserve pending exchange and original timeout. These cross-message checks are not expressible by this per-message schema.",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "type",
+        "sn",
+        "boot_id",
+        "enrollment_id",
+        "ctl_revision",
+        "server_challenge",
+        "issuer_generation",
+        "issuer_epoch",
+        "binding_hash",
+        "admission_floor",
+        "admission_high_water",
+        "camera_contract_revision",
+        "cadence_revision",
+        "descriptor",
+        "binding",
+        "media_contract_revision"
+      ],
+      "properties": {
+        "revision": {
+          "const": "camera-enrollment/0.4.0-proposed"
+        },
+        "type": {
+          "const": "camera_enrollment_commit"
+        },
+        "sn": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "boot_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "enrollment_id": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "ctl_revision": {
+          "const": "camera-ctl-monotonic/0.2.0-proposed"
+        },
+        "server_challenge": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "issuer_generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "issuer_epoch": {
+          "type": "string",
+          "format": "uuid",
+          "minLength": 36,
+          "maxLength": 36
+        },
+        "binding_hash": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "admission_floor": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "admission_high_water": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "camera_contract_revision": {
+          "const": "siplite-camera/1.3.0"
+        },
+        "cadence_revision": {
+          "const": "camera-cadence/0.2.0-proposed"
+        },
+        "descriptor": {
+          "$ref": "urn:leo4:l4-media:3.0.0#/$defs/descriptor"
+        },
+        "binding": {
+          "$ref": "urn:leo4:camera-admission:0.2.0#/$defs/binding"
+        },
+        "media_contract_revision": {
+          "const": "l4-media/3.0.0"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/hello"
+    },
+    {
+      "$ref": "#/$defs/offer"
+    },
+    {
+      "$ref": "#/$defs/proof"
+    },
+    {
+      "$ref": "#/$defs/commit"
+    }
+  ],
+  "$id": "urn:leo4:camera-enrollment:0.4.0",
+  "title": "Camera full-offer enrollment 0.4 for unified media-v3",
+  "$comment": "Bounds4096 bytes/depth8 and exact digest/identity relations are enforced by the stateful reader. Descriptor and binding resources are pinned by manifest.json; floor must not weaken accepted offer or current/proof/server high-water."
+}
