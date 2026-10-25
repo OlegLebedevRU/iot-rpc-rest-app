@@ -8,9 +8,9 @@ from core.camera.media import CameraEpoch
 from core.camera.native_contract import (
     MEDIA11,
     SELECTED,
-    SELECTED3,
+    modern_selection,
+    observation_validator,
     validate11,
-    validate12,
     validate3,
 )
 from core.camera.start_policy import start_enabled
@@ -37,14 +37,16 @@ def start_command(
     modern = descriptor.get("contract_version") == 3
     native = modern or descriptor.get("camera_contract_revision") == MEDIA11
     if native:
-        if selection != (SELECTED3 if modern else SELECTED):
+        if (modern and not modern_selection(selection)) or (
+            not modern and selection != SELECTED
+        ):
             raise ValueError("camera11_incomplete_revision_bundle")
         (validate3 if modern else validate11)(
             "descriptor" if modern else "camera_descriptor", descriptor
         )
         if modern and descriptor["source_type"] != "camera":
             raise ValueError("camera_source_type_required")
-        (validate12 if modern else validate11)("camera_observation", observation)
+        observation_validator(selection)("camera_observation", observation)
         if modern and descriptor["profile_id"] not in {
             q["profile_id"] for q in observation["capabilities"]["quality_options"]
         }:

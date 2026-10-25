@@ -4,8 +4,10 @@ from core.camera.contract import REVISION, validate_definition
 from core.camera.native_contract import (
     SELECTED,
     SELECTED3,
+    SELECTED4,
+    modern_selection,
+    observation_validator,
     validate11,
-    validate12,
     validate3,
 )
 from core.camera.runtime_wire import digest
@@ -21,15 +23,15 @@ def configuration(
 ) -> dict:
     native = selection is not None
     if native:
-        if selection not in (SELECTED, SELECTED3):
+        if selection not in (SELECTED, SELECTED3, SELECTED4):
             raise ValueError("camera11_incomplete_revision_bundle")
-        modern = selection == SELECTED3
+        modern = modern_selection(selection)
         (validate3 if modern else validate11)(
             "descriptor" if modern else "camera_descriptor", descriptor
         )
         if modern and descriptor["source_type"] != "camera":
             raise ValueError("camera_source_type_required")
-        (validate12 if modern else validate11)("camera_observation", observation)
+        observation_validator(selection)("camera_observation", observation)
         if modern and descriptor["profile_id"] not in {
             q["profile_id"] for q in observation["capabilities"]["quality_options"]
         }:

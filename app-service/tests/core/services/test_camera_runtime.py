@@ -714,7 +714,10 @@ async def test_new_runtime_http_endpoints_preserve_org_authorization(
 
 
 @pytest.mark.anyio
-@pytest.mark.parametrize("native_bundle", [False, True, "media3-low", "media3-default"])
+@pytest.mark.parametrize(
+    "native_bundle",
+    [False, True, "media3-low", "media3-default", "media4-low", "media4-default"],
+)
 async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack(
     environment, monkeypatch, native_bundle
 ):
@@ -748,12 +751,19 @@ async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack
         },
     }
     observation = None
+    modern04 = isinstance(native_bundle, str) and native_bundle.startswith("media4-")
     if native_bundle:
         if isinstance(native_bundle, str):
-            from .test_camera_media3 import fixture, configured as base_configured
+            if modern04:
+                from .test_camera_cadence02 import (
+                    fixture,
+                    configured as base_configured,
+                )
+            else:
+                from .test_camera_media3 import fixture, configured as base_configured
 
             def native_configured():
-                return base_configured(native_bundle.removeprefix("media3-"))
+                return base_configured(native_bundle.split("-", 1)[1])
 
         else:
             from .test_camera_native_auto11 import (
@@ -848,18 +858,27 @@ async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack
             send_ctl_command,
             monotonic=True,
             readiness_nonce=query["readiness_nonce"],
+            **({"selected": native_configured()["selection"]} if modern04 else {}),
         )
         assert record["state"] == "running" and record["confirmation"] == "command_ack"
         if native_bundle:
             view = control.CameraStateView.from_record(record)
             assert view.camera_contract_revision == (
-                "siplite-camera/1.2.0"
-                if isinstance(native_bundle, str)
-                else "siplite-camera/1.1.0"
+                "siplite-camera/1.3.0"
+                if modern04
+                else (
+                    "siplite-camera/1.2.0"
+                    if isinstance(native_bundle, str)
+                    else "siplite-camera/1.1.0"
+                )
             )
             if isinstance(native_bundle, str):
                 assert view.contract_version == 3 and view.actual_descriptor is None
-            assert view.cadence_revision == "camera-cadence/0.1.0-proposed"
+            assert view.cadence_revision == (
+                "camera-cadence/0.2.0-proposed"
+                if modern04
+                else "camera-cadence/0.1.0-proposed"
+            )
             assert view.descriptor == payload["descriptor"]
         assert record["admission_revision"] == ADMISSION
         assert not service.pending._pending

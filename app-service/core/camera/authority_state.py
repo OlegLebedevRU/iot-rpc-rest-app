@@ -12,8 +12,10 @@ from core.camera.contract import bounded_json, validate_definition
 from core.camera.native_contract import (
     SELECTED,
     SELECTED3,
+    SELECTED4,
+    modern_selection,
+    observation_validator,
     validate11,
-    validate12,
     validate3,
 )
 from core.camera.runtime_state import initial_state
@@ -56,15 +58,15 @@ def checked_configuration(raw: str) -> None:
         raise ValueError("configuration_keys")
     descriptor, binding = value["descriptor"], value["binding"]
     if value.get("selection") is not None:
-        if value["selection"] not in (SELECTED, SELECTED3):
+        if value["selection"] not in (SELECTED, SELECTED3, SELECTED4):
             raise ValueError("configuration_selection")
-        modern = value["selection"] == SELECTED3
+        modern = modern_selection(value["selection"])
         (validate3 if modern else validate11)(
             "descriptor" if modern else "camera_descriptor", descriptor
         )
         if modern and descriptor["source_type"] != "camera":
             raise ValueError("camera_source_type_required")
-        observation = (validate12 if modern else validate11)(
+        observation = observation_validator(value["selection"])(
             "camera_observation", value["observation"]
         )
         if modern and descriptor["profile_id"] not in {

@@ -58,6 +58,73 @@ CAPABILITIES3 = {
 }
 SCHEMA12_SHA = "cba222ccdc2e10c446dc99e1bb0e2338d4fc08c28220f3bc02e8a8d391789194"
 MEDIA3_SHA = "b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818"
+MEDIA13 = "siplite-camera/1.3.0"
+CADENCE02 = "camera-cadence/0.2.0-proposed"
+ENROLLMENT04 = "camera-enrollment/0.4.0-proposed"
+SELECTED4 = {
+    **SELECTED3,
+    "camera_contract_revision": MEDIA13,
+    "cadence_revision": CADENCE02,
+    "enrollment_revision": ENROLLMENT04,
+}
+CAPABILITIES4 = {
+    **CAPABILITIES3,
+    "camera_contract_revisions": [MEDIA13],
+    "camera_cadence_revisions": [CADENCE02],
+    "camera_enrollment_revisions": [ENROLLMENT04],
+}
+SCHEMA13_SHA = "ed026e15251900f060b1a7550cb6e6f60c5c9631785979aef95fa11e713a446a"
+
+
+def modern_selection(selection):
+    return selection in (SELECTED3, SELECTED4)
+
+
+def observation_validator(selection):
+    if selection == SELECTED4:
+        return validate13
+    if selection == SELECTED3:
+        return validate12
+    if selection == SELECTED:
+        return validate11
+    raise ValueError("unsupported_camera_selection")
+
+
+@lru_cache
+def validator13(definition: str) -> StrictValidator:
+    package = PACKAGE11.parent / "siplite-camera-v1.3"
+    raw = (package / "camera.schema.json").read_bytes()
+    manifest = json.loads((package / "manifest.json").read_text())
+    if (
+        hashlib.sha256(raw).hexdigest() != SCHEMA13_SHA
+        or manifest["files"]["camera.schema.json"] != SCHEMA13_SHA
+    ):
+        raise ValueError("camera13_schema_pin_mismatch")
+    schema = json.loads(raw)
+    registry = Registry().with_resource(
+        "urn:leo4:l4-media:3.0.0", Resource.from_contents(schema3())
+    )
+    return StrictValidator(
+        {"$defs": schema["$defs"], "$ref": "#/$defs/" + definition},
+        registry=registry,
+        format_checker=FormatChecker(),
+    )
+
+
+def validate13(definition: str, value: dict, limit: int = 32768) -> dict:
+    bounded_json(value, limit)
+    if not validator13(definition).is_valid(value):
+        raise ValueError("invalid_camera13_" + definition)
+    return copy.deepcopy(value)
+
+
+def headers4() -> dict:
+    return {
+        **headers3(),
+        "X-L4-Camera-Contract": MEDIA13,
+        "X-L4-Camera-Cadence": CADENCE02,
+        "X-L4-Camera-Enrollment": ENROLLMENT04,
+    }
 
 
 @lru_cache
@@ -158,6 +225,17 @@ def validate11(definition: str, value: dict, limit: int = 32768) -> dict:
 
 
 def selected_headers(headers) -> dict:
+    if any(
+        headers.get(k) == v
+        for k, v in (
+            ("X-L4-Camera-Contract", MEDIA13),
+            ("X-L4-Camera-Cadence", CADENCE02),
+            ("X-L4-Camera-Enrollment", ENROLLMENT04),
+        )
+    ):
+        if any(headers.get(k) != v for k, v in headers4().items()):
+            raise ValueError("camera4_incomplete_revision_bundle")
+        return copy.deepcopy(SELECTED4)
     if (
         headers.get("X-L4-Media-Contract") is not None
         or headers.get("X-L4-Camera-Contract") == MEDIA12
@@ -187,7 +265,7 @@ def headers11() -> dict:
 
 
 def validate_media(definition: str, value: dict, revision: str | None = None) -> dict:
-    if revision in (MEDIA12, MEDIA3) or (
+    if revision in (MEDIA12, MEDIA13, MEDIA3) or (
         isinstance(value, dict) and value.get("contract_version") == 3
     ):
         return validate3(

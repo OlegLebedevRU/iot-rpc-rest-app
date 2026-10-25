@@ -1,0 +1,59 @@
+{
+  "camera_contract_revision": "siplite-camera/1.3.0",
+  "media_contract_revision": "l4-media/3.0.0",
+  "cadence_revision": "camera-cadence/0.2.0-proposed",
+  "source_id": "cam:ip000001",
+  "geometry_generation": 7,
+  "actual_track": {
+    "track_id": "video-main",
+    "kind": "video",
+    "direction": "producer_to_viewers",
+    "bit_depth": 8,
+    "chroma": "420",
+    "clock_rate": 90000,
+    "payload_type": 97,
+    "width": 2592,
+    "height": 1944,
+    "fps": 20,
+    "feedback": {
+      "pli": false,
+      "fir": false
+    },
+    "max_b_frames": 0,
+    "keyframe_interval_ms": 1000,
+    "repeat_parameter_sets": true,
+    "codec": "h265",
+    "codec_profile": "main",
+    "packetization": "rfc7798",
+    "profile_space": 0,
+    "profile_id": 1,
+    "tier_flag": 0,
+    "level_id": 153,
+    "sprop_max_don_diff": 0
+  },
+  "capabilities": {
+    "camera_contract_revisions": [
+      "siplite-camera/1.3.0"
+    ],
+    "camera_cadence_revisions": [
+      "camera-cadence/0.2.0-proposed"
+    ],
+    "camera_enrollment_revisions": [
+      "camera-enrollment/0.4.0-proposed"
+    ],
+    "camera_admission_revisions": [
+      "camera-ctl-monotonic/0.2.0-proposed"
+    ],
+    "media_contract_versions": [
+      3
+    ],
+    "quality_options": [
+      {
+        "profile_id": "low"
+      },
+      {
+        "profile_id": "default"
+      }
+    ]
+  }
+}

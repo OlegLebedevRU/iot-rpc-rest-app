@@ -9,7 +9,13 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from core.camera.contract import REVISION, bounded_json, validate_definition
-from core.camera.native_contract import validate11, validate12, MEDIA12
+from core.camera.native_contract import (
+    validate11,
+    validate12,
+    validate13,
+    MEDIA12,
+    MEDIA13,
+)
 from core.config import settings
 from core.models.devices import DeviceConnection, DeviceGauge
 from core.rpc_redaction import redact_rpc
@@ -36,9 +42,13 @@ def validate_gauge(payload: Any) -> dict:
             raise ValueError("camera_observation_bounds")
         for observation in observations:
             (
-                validate12
-                if observation.get("camera_contract_revision") == MEDIA12
-                else validate11
+                validate13
+                if observation.get("camera_contract_revision") == MEDIA13
+                else (
+                    validate12
+                    if observation.get("camera_contract_revision") == MEDIA12
+                    else validate11
+                )
             )("camera_observation", observation)
             if observation["source_id"] in seen:
                 raise ValueError("camera_observation_duplicate")
