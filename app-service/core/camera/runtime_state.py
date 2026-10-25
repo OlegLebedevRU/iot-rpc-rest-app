@@ -9,10 +9,12 @@ from core.camera.native_contract import (
     ENROLLMENT02,
     ENROLLMENT03,
     ENROLLMENT04,
+    ENROLLMENT05,
     MEDIA3,
     SELECTED,
     SELECTED3,
     SELECTED4,
+    SELECTED5,
 )
 from core.camera.runtime_wire import (
     ADMISSION,
@@ -251,15 +253,19 @@ class CameraMachine:
         if kind == "camera_enrollment_hello":
             selection = self.s["configured"].get("selection")
             expected_revision = (
-                ENROLLMENT04
-                if selection == SELECTED4
+                ENROLLMENT05
+                if selection == SELECTED5
                 else (
-                    ENROLLMENT03
-                    if selection == SELECTED3
+                    ENROLLMENT04
+                    if selection == SELECTED4
                     else (
-                        ENROLLMENT02
-                        if selection == SELECTED
-                        else "camera-enrollment/0.1.0-proposed"
+                        ENROLLMENT03
+                        if selection == SELECTED3
+                        else (
+                            ENROLLMENT02
+                            if selection == SELECTED
+                            else "camera-enrollment/0.1.0-proposed"
+                        )
                     )
                 )
             )
@@ -298,14 +304,14 @@ class CameraMachine:
                 binding_hash=digest(self.binding(message["boot_id"])),
                 admission_floor=max(counter, message["admission_high_water"]),
             )
-            if selection in (SELECTED, SELECTED3, SELECTED4):
+            if selection in (SELECTED, SELECTED3, SELECTED4, SELECTED5):
                 offer.update(
                     camera_contract_revision=(selection["camera_contract_revision"]),
                     cadence_revision=selection["cadence_revision"],
                     descriptor=copy.deepcopy(self.s["configured"]["descriptor"]),
                     binding=self.binding(message["boot_id"]),
                 )
-            if selection in (SELECTED3, SELECTED4):
+            if selection in (SELECTED3, SELECTED4, SELECTED5):
                 offer["media_contract_revision"] = MEDIA3
             self.s["pending"] = {
                 "hello": copy.deepcopy(message),

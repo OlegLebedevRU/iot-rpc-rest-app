@@ -5,6 +5,7 @@ from core.camera.native_contract import (
     SELECTED,
     SELECTED3,
     SELECTED4,
+    SELECTED5,
     modern_selection,
     observation_validator,
     validate11,
@@ -23,7 +24,7 @@ def configuration(
 ) -> dict:
     native = selection is not None
     if native:
-        if selection not in (SELECTED, SELECTED3, SELECTED4):
+        if selection not in (SELECTED, SELECTED3, SELECTED4, SELECTED5):
             raise ValueError("camera11_incomplete_revision_bundle")
         modern = modern_selection(selection)
         (validate3 if modern else validate11)(

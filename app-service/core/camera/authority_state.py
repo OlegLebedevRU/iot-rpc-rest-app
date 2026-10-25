@@ -13,6 +13,7 @@ from core.camera.native_contract import (
     SELECTED,
     SELECTED3,
     SELECTED4,
+    SELECTED5,
     modern_selection,
     observation_validator,
     validate11,
@@ -58,7 +59,7 @@ def checked_configuration(raw: str) -> None:
         raise ValueError("configuration_keys")
     descriptor, binding = value["descriptor"], value["binding"]
     if value.get("selection") is not None:
-        if value["selection"] not in (SELECTED, SELECTED3, SELECTED4):
+        if value["selection"] not in (SELECTED, SELECTED3, SELECTED4, SELECTED5):
             raise ValueError("configuration_selection")
         modern = modern_selection(value["selection"])
         (validate3 if modern else validate11)(
