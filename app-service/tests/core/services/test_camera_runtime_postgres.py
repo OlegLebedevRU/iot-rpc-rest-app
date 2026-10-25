@@ -188,8 +188,10 @@ async def test_real_migration_seeds_and_only_new_device_insert_creates_authority
         await engine.dispose()
 
 
+@pytest.mark.parametrize("native04", [False, True])
 async def test_real_postgres_actor_takeover_preserves_floors_and_fences_egress(
     monkeypatch,
+    native04,
 ):
     import json
     from pathlib import Path
@@ -250,6 +252,11 @@ async def test_real_postgres_actor_takeover_preserves_floors_and_fences_egress(
                 "descriptor_sha256": digest(d),
             },
         }
+        if native04:
+            from .test_camera_cadence02 import configured, fixture
+
+            config = configured()
+            d = config["descriptor"]
         await runtime.submit(sn, "configure", config)
 
         async def enroll(owner):
@@ -262,6 +269,13 @@ async def test_real_postgres_actor_takeover_preserves_floors_and_fences_egress(
                 "admission_high_water": 41,
                 "supported_ctl": [ADMISSION],
             }
+            if native04:
+                h = {
+                    **fixture("hello"),
+                    "sn": sn,
+                    "boot_id": boot,
+                    "enrollment_id": str(uuid4()),
+                }
             assert await owner.submit(sn, "incoming", h)
             proof = {
                 **sent[-1],

@@ -1,0 +1,158 @@
+{
+  "status": "policy-review-only",
+  "frozen_schemas_modified": false,
+  "runtime_changed": false,
+  "results": [
+    {
+      "name": "thresholds_and_memory",
+      "rate_upper_and_lower_equality_pass": true,
+      "one_tick_outside_reject": true,
+      "gop_upper_equality_pass_one_tick_over_reject": true,
+      "au_delta_endpoints_pass_outside_reject": true,
+      "checked64_overflow_reject": true,
+      "ring_capacity": 1024,
+      "peak_points_over_40seconds_at375ticks": 961,
+      "all_ring_start_alignments_tested": 1024,
+      "acquisition_deadline_equalities_reject": true,
+      "missing_au_ps_no_b_and_nonboundary_reject": true
+    },
+    {
+      "name": "exact20",
+      "candidate_fps": [
+        20
+      ]
+    },
+    {
+      "name": "bounded20_3_nominal20",
+      "candidate_fps": [
+        20
+      ]
+    },
+    {
+      "name": "sustained20_7_changes_nominal_candidate",
+      "candidate_fps": [
+        21
+      ]
+    },
+    {
+      "name": "native25_no_desktop_geometry_cap",
+      "candidate_fps": [
+        25
+      ]
+    },
+    {
+      "name": "wrap20",
+      "candidate_fps": [
+        20
+      ]
+    },
+    {
+      "name": "short_prefix",
+      "candidate_fps": []
+    },
+    {
+      "name": "duplicate_rejected",
+      "candidate_fps": []
+    },
+    {
+      "name": "backward_rejected",
+      "candidate_fps": []
+    },
+    {
+      "name": "ambiguous_half_wrap_rejected",
+      "candidate_fps": []
+    },
+    {
+      "name": "one_second_stall_rejected",
+      "candidate_fps": []
+    },
+    {
+      "name": "whole_mean20_hides_eight_seconds21_then19_rejected",
+      "candidate_fps": []
+    },
+    {
+      "name": "ambiguous29_5_rejected",
+      "candidates": [
+        29,
+        30
+      ],
+      "admission": false
+    },
+    {
+      "name": "high_fps_ambiguous_without_declaration",
+      "candidates": [
+        99,
+        100,
+        101,
+        102
+      ],
+      "admission": false
+    },
+    {
+      "name": "delayed_unique_candidate_updates_acquisition_gop_until_actual_ready",
+      "candidates": [
+        29
+      ],
+      "ready_au_index": 155,
+      "gop_reference_ticks": 108621
+    },
+    {
+      "name": "pending_ambiguity_and_rtp_local_deadline_equalities_reject",
+      "acquisition_restarts": false,
+      "passed": true
+    },
+    {
+      "name": "extra_full_validated_short_idr_timestamp_hypothesis",
+      "candidates": [
+        20
+      ],
+      "full_au_proof_required": true
+    },
+    {
+      "name": "gop_growth_after_ready_rejected",
+      "candidates": []
+    },
+    {
+      "name": "gop_above_5seconds_even_within105percent_reject",
+      "reference_ticks": 450000,
+      "later_ticks": 459000,
+      "candidates": []
+    },
+    {
+      "name": "post_start_rate_change_revokes_without_reset",
+      "initial_candidates": [
+        20
+      ],
+      "later_candidates": []
+    },
+    {
+      "name": "real_marker_trace_diagnostic_only",
+      "fps_window_only_candidates": [
+        20
+      ],
+      "candidate_fps_including_header_gop_hypothesis": [
+        20
+      ],
+      "marker_count": 256,
+      "header_irap_indices": [
+        0,
+        20,
+        40,
+        60,
+        80,
+        100,
+        120,
+        140,
+        160,
+        180,
+        200,
+        220,
+        240,
+        250
+      ],
+      "full_au_proof": false,
+      "physical_port_proof": false,
+      "admission": false
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "revision": "camera-cadence/0.2.0-proposed",
+  "status": "contract-only-implementation-candidate-no-runtime-advertisement",
+  "review_spec_sha256": "f32010d5d5246ecf52e83ed25aa55d9dbbc2d8c493e4411537618c69cfe42a93",
+  "files": {
+    ".gitattributes": "705fd4d6451a31d36b3df7de96f83f30ac976c9b4a6d1e51671d8e2f33e2d0da",
+    "fixtures/diagnostic-markers.json": "0c59d95da9bb78b1dda3db5d24ca637bba6d9162135aa910b45b4472a46bd1d5",
+    "README.md": "a8aa60f77133a1c8cb7f11900d7bffa20d1d29aaae2aadd84fbfe082e5a9df6f",
+    "results.json": "ce55fa4e388e68b177ea43c40a7b0f0d5f0547306153e91bd11810c2623b5fff",
+    "verify.py": "17a398cb8c4a780fddabb146bf29c43f9611e3d6c1ae795ce29f088d76b71207"
+  }
+}

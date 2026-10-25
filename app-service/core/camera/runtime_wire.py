@@ -14,7 +14,13 @@ from pydantic import RootModel
 from referencing import Registry, Resource
 
 from core.camera.contract import StrictValidator, bounded_json
-from core.camera.native_contract import ENROLLMENT02, ENROLLMENT03, schema11, schema3
+from core.camera.native_contract import (
+    ENROLLMENT02,
+    ENROLLMENT03,
+    ENROLLMENT04,
+    schema11,
+    schema3,
+)
 from core.remote_input.video_wire import load_object
 
 ENROLLMENT = "camera-enrollment/0.1.0-proposed"
@@ -25,14 +31,26 @@ ROOT = Path(__file__).resolve().parents[3] / "contracts"
 
 @lru_cache
 def validator(enrollment: bool | str) -> StrictValidator:
-    if enrollment in (ENROLLMENT02, ENROLLMENT03):
+    if (
+        enrollment == ENROLLMENT04
+        and hashlib.sha256(
+            (ROOT / "camera-enrollment-v0.4/schema.json").read_bytes()
+        ).hexdigest()
+        != "45ae401d6c16605a69c9823d4e76b4ca056c74664682c7fa31d03fc87d1d2bdf"
+    ):
+        raise ValueError("camera_enrollment04_schema_pin_mismatch")
+    if enrollment in (ENROLLMENT02, ENROLLMENT03, ENROLLMENT04):
         schema = json.loads(
             (
                 ROOT
                 / (
-                    "camera-enrollment-v0.3/schema.json"
-                    if enrollment == ENROLLMENT03
-                    else "camera-enrollment-v0.2/schema.json"
+                    "camera-enrollment-v0.4/schema.json"
+                    if enrollment == ENROLLMENT04
+                    else (
+                        "camera-enrollment-v0.3/schema.json"
+                        if enrollment == ENROLLMENT03
+                        else "camera-enrollment-v0.2/schema.json"
+                    )
                 )
             ).read_text(encoding="utf-8")
         )
@@ -65,21 +83,26 @@ def validate(message: dict) -> dict:
     bounded_json(message, 4096, 8)
     revision = message.get("revision")
     selector = (
-        revision if revision in (ENROLLMENT02, ENROLLMENT03) else revision == ENROLLMENT
+        revision
+        if revision in (ENROLLMENT02, ENROLLMENT03, ENROLLMENT04)
+        else revision == ENROLLMENT
     )
     if not validator(selector).is_valid(message):
         raise ValueError("invalid_camera_runtime_message")
-    if revision in (ENROLLMENT, ENROLLMENT02, ENROLLMENT03) and any(
+    if revision in (ENROLLMENT, ENROLLMENT02, ENROLLMENT03, ENROLLMENT04) and any(
         UUID(message[k]).version != 4 or str(UUID(message[k])) != message[k]
         for k in ("boot_id", "enrollment_id")
     ):
         raise ValueError("camera_enrollment_uuid_canonical_v4_required")
     if (
-        revision in (ENROLLMENT02, ENROLLMENT03)
+        revision in (ENROLLMENT02, ENROLLMENT03, ENROLLMENT04)
         and message["type"] != "camera_enrollment_hello"
     ):
         binding, descriptor = message["binding"], message["descriptor"]
-        if revision == ENROLLMENT03 and descriptor["source_type"] != "camera":
+        if (
+            revision in (ENROLLMENT03, ENROLLMENT04)
+            and descriptor["source_type"] != "camera"
+        ):
             raise ValueError("camera_source_type_required")
         if (
             binding["boot_id"] != message["boot_id"]

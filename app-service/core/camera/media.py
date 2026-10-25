@@ -13,9 +13,11 @@ from core.camera.native_contract import (
     CAPABILITIES,
     MEDIA11,
     MEDIA12,
+    MEDIA13,
     MEDIA3,
     SELECTED,
     SELECTED3,
+    SELECTED4,
     headers11,
     validate_media,
 )
@@ -200,19 +202,23 @@ class CameraMediaAdapter:
     ):
         if not service_token:
             raise ValueError("media_service_auth_required")
-        if selection is not None and selection not in (SELECTED, SELECTED3):
+        if selection is not None and selection not in (SELECTED, SELECTED3, SELECTED4):
             raise ValueError("camera11_incomplete_revision_bundle")
         self.revision = (
-            MEDIA12
-            if selection == SELECTED3
-            else MEDIA11 if selection is not None else REVISION
+            MEDIA13
+            if selection == SELECTED4
+            else (
+                MEDIA12
+                if selection == SELECTED3
+                else MEDIA11 if selection is not None else REVISION
+            )
         )
         self.client = client
         self.headers = {
             "X-L4-Camera-Contract": REVISION,
             "X-Media-Service-Token": service_token,
         }
-        if selection == SELECTED3:
+        if selection in (SELECTED3, SELECTED4):
             # MEDIA is source-symmetric. Camera admission headers stop at IoT/BFF.
             self.headers = {
                 "X-L4-Media-Contract": MEDIA3,
@@ -222,8 +228,10 @@ class CameraMediaAdapter:
             self.headers.update(headers11())
 
     def require_epoch(self, epoch: CameraEpoch) -> None:
-        if (epoch.start["contract_version"] == 3) != (self.revision == MEDIA12) or (
-            self.revision != MEDIA12
+        if (epoch.start["contract_version"] == 3) != (
+            self.revision in (MEDIA12, MEDIA13)
+        ) or (
+            self.revision not in (MEDIA12, MEDIA13)
             and epoch.start["descriptor"].get("camera_contract_revision")
             != self.revision
         ):
@@ -256,7 +264,7 @@ class CameraMediaAdapter:
         value = await self._call(
             "/api/v2/media/capabilities", "media_capabilities", method="GET"
         )
-        if self.revision == MEDIA12:
+        if self.revision in (MEDIA12, MEDIA13):
             if (
                 value.get("contract_version") != 3
                 or 3 not in value.get("media_contract_versions", [])
@@ -282,7 +290,7 @@ class CameraMediaAdapter:
         # No firmware command is emitted here. Capability resolution and the actual
         # SPS-derived descriptor must already have completed before media prepare.
         self.require_epoch(epoch)
-        if self.revision == MEDIA12:
+        if self.revision in (MEDIA12, MEDIA13):
             if (
                 media_lease is None
                 or media_lease.media_clock_id != epoch.media_clock_id
@@ -332,7 +340,7 @@ class CameraMediaAdapter:
 
     async def renew(self, epoch: CameraEpoch, lease, *, media_lease=None) -> dict:
         self.require_epoch(epoch)
-        modern = self.revision == MEDIA12
+        modern = self.revision in (MEDIA12, MEDIA13)
         if (
             (lease.revoked_reason is not None if modern else not lease.is_active())
             or lease.scope != "stream"

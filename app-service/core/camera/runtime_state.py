@@ -6,14 +6,13 @@ import copy
 from uuid import uuid4
 
 from core.camera.native_contract import (
-    CADENCE,
     ENROLLMENT02,
     ENROLLMENT03,
-    MEDIA11,
-    MEDIA12,
+    ENROLLMENT04,
     MEDIA3,
     SELECTED,
     SELECTED3,
+    SELECTED4,
 )
 from core.camera.runtime_wire import (
     ADMISSION,
@@ -89,6 +88,8 @@ class CameraMachine:
                     pending=None,
                     ready=None,
                     outbox=[],
+                    completed=None,
+                    completed_hello=None,
                 )
             return {"configured": True}
         if not self.s["configured"]:
@@ -250,12 +251,16 @@ class CameraMachine:
         if kind == "camera_enrollment_hello":
             selection = self.s["configured"].get("selection")
             expected_revision = (
-                ENROLLMENT03
-                if selection == SELECTED3
+                ENROLLMENT04
+                if selection == SELECTED4
                 else (
-                    ENROLLMENT02
-                    if selection == SELECTED
-                    else "camera-enrollment/0.1.0-proposed"
+                    ENROLLMENT03
+                    if selection == SELECTED3
+                    else (
+                        ENROLLMENT02
+                        if selection == SELECTED
+                        else "camera-enrollment/0.1.0-proposed"
+                    )
                 )
             )
             if message["revision"] != expected_revision:
@@ -293,16 +298,14 @@ class CameraMachine:
                 binding_hash=digest(self.binding(message["boot_id"])),
                 admission_floor=max(counter, message["admission_high_water"]),
             )
-            if selection in (SELECTED, SELECTED3):
+            if selection in (SELECTED, SELECTED3, SELECTED4):
                 offer.update(
-                    camera_contract_revision=(
-                        MEDIA12 if selection == SELECTED3 else MEDIA11
-                    ),
-                    cadence_revision=CADENCE,
+                    camera_contract_revision=(selection["camera_contract_revision"]),
+                    cadence_revision=selection["cadence_revision"],
                     descriptor=copy.deepcopy(self.s["configured"]["descriptor"]),
                     binding=self.binding(message["boot_id"]),
                 )
-            if selection == SELECTED3:
+            if selection in (SELECTED3, SELECTED4):
                 offer["media_contract_revision"] = MEDIA3
             self.s["pending"] = {
                 "hello": copy.deepcopy(message),

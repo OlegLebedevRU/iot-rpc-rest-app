@@ -15,10 +15,14 @@ from core.camera.contract import REVISION
 from core.camera.native_contract import (
     MEDIA11,
     MEDIA12,
+    MEDIA13,
     MEDIA3,
     CADENCE,
     SELECTED,
     SELECTED3,
+    SELECTED4,
+    CADENCE02,
+    modern_selection,
     validate_media,
     selection_for_descriptor,
 )
@@ -65,7 +69,11 @@ class CameraStateView(BaseModel):
     def from_record(cls, record: dict):
         start = record["start"]
         model = (
-            CameraStateView12
+            (
+                CameraStateView13
+                if record.get("selection") == SELECTED4
+                else CameraStateView12
+            )
             if start["contract_version"] == 3
             else (
                 CameraStateView11
@@ -103,6 +111,11 @@ class CameraStateView12(CameraStateView11):
     contract_version: Literal[3] = 3
     media_contract_revision: Literal["l4-media/3.0.0"] = MEDIA3
     media_clock_id: UUID4
+
+
+class CameraStateView13(CameraStateView12):
+    camera_contract_revision: Literal["siplite-camera/1.3.0"] = MEDIA13
+    cadence_revision: Literal["camera-cadence/0.2.0-proposed"] = CADENCE02
 
 
 def epoch_of(record: dict) -> CameraEpoch:
@@ -193,6 +206,7 @@ class CameraControl:
         *,
         monotonic: bool = False,
         readiness_nonce: str | None = None,
+        selected: dict | None = None,
     ) -> dict:
         await self.reconcile(lease.sn, service, send)
         from core.camera.media_clock import camera_media_clock
@@ -200,7 +214,11 @@ class CameraControl:
         modern = payload.get("contract_version") == 3
         media_lease = await camera_media_clock.export(lease) if modern else None
         epoch = CameraEpoch.from_start(payload, lease, media_lease=media_lease)
-        selection = selection_for_descriptor(epoch.start["descriptor"])
+        selection = (
+            selected
+            if selected is not None
+            else selection_for_descriptor(epoch.start["descriptor"])
+        )
         native = selection is not None
         if native and not monotonic:
             raise HTTPException(422, "camera11_incomplete_revision_bundle")
@@ -209,7 +227,11 @@ class CameraControl:
             lease.device_id,
             authorized_sn=lease.sn,
             **(
-                {"native": True, "media_version": epoch.start["contract_version"]}
+                {
+                    "native": True,
+                    "media_version": epoch.start["contract_version"],
+                    **({"camera_revision": MEDIA13} if selection == SELECTED4 else {}),
+                }
                 if native
                 else {}
             ),
@@ -262,7 +284,14 @@ class CameraControl:
 
         def reserve(doc):
             active = doc.get("camera_stream")
-            if active and active["start"] == stored_start:
+            if (
+                active
+                and active["start"] == stored_start
+                and active.get(
+                    "selection", selection_for_descriptor(active["start"]["descriptor"])
+                )
+                == selection
+            ):
                 return {**active, "replayed": True}
             if (active and active["state"] in LIVE) or doc.get("stream", {}).get(
                 "state"
@@ -281,6 +310,8 @@ class CameraControl:
             }
             if modern:
                 record["media_clock_id"] = media_lease.media_clock_id
+            if native:
+                record["selection"] = selection
             if monotonic:
                 from core.camera.runtime_wire import ADMISSION
 
@@ -516,9 +547,16 @@ class CameraControl:
                             **(
                                 {
                                     "native": True,
-                                    "media_version": 3 if selection == SELECTED3 else 2,
+                                    "media_version": (
+                                        3 if modern_selection(selection) else 2
+                                    ),
+                                    **(
+                                        {"camera_revision": MEDIA13}
+                                        if selection == SELECTED4
+                                        else {}
+                                    ),
                                 }
-                                if selection in (SELECTED, SELECTED3)
+                                if selection in (SELECTED, SELECTED3, SELECTED4)
                                 else {}
                             ),
                         )
@@ -536,7 +574,7 @@ class CameraControl:
                                         "observation": view.camera_observation,
                                         "selection": selection,
                                     }
-                                    if selection in (SELECTED, SELECTED3)
+                                    if selection in (SELECTED, SELECTED3, SELECTED4)
                                     else {}
                                 ),
                             )

@@ -12,11 +12,14 @@ from core.camera.contract import REVISION
 from core.camera.native_contract import (
     CAPABILITIES,
     CAPABILITIES3,
+    CAPABILITIES4,
     MEDIA11,
     MEDIA12,
+    MEDIA13,
     MEDIA3,
     validate11,
     validate12,
+    validate13,
 )
 from core.camera.start_policy import start_enabled
 from core.config import settings
@@ -70,6 +73,22 @@ class CameraCapabilityView12(CameraCapabilityView11):
         return self
 
 
+class CameraCapabilityView13(CameraCapabilityView12):
+    camera_contract_revision: Literal["siplite-camera/1.3.0"] = MEDIA13
+
+    @model_validator(mode="after")
+    def validate_native(self):
+        validate13("camera_capabilities", self.camera_capabilities)
+        if self.camera_observation is not None:
+            validate13("camera_observation", self.camera_observation)
+            if (
+                self.camera is None
+                or self.camera_observation["source_id"] != self.camera["camera_id"]
+            ):
+                raise ValueError("camera_observation_source_mismatch")
+        return self
+
+
 async def camera_capability(
     session,
     device_id: int,
@@ -77,7 +96,19 @@ async def camera_capability(
     authorized_sn: str | None = None,
     native: bool = False,
     media_version: int = 2,
-) -> CameraCapabilityView | CameraCapabilityView11 | CameraCapabilityView12:
+    camera_revision: str | None = None,
+) -> (
+    CameraCapabilityView
+    | CameraCapabilityView11
+    | CameraCapabilityView12
+    | CameraCapabilityView13
+):
+    if (
+        camera_revision not in (None, MEDIA11, MEDIA12, MEDIA13)
+        or camera_revision == MEDIA13
+        and (not native or media_version != 3)
+    ):
+        raise ValueError("unsupported_camera_projection_selection")
     connection = await session.scalar(
         select(DeviceConnection).where(DeviceConnection.device_id == device_id)
     )
@@ -107,9 +138,11 @@ async def camera_capability(
                 if item["source_id"] == "cam:ip000001"
             ]
             if native and len(matches) == 1:
-                observation = (validate12 if media_version == 3 else validate11)(
-                    "camera_observation", matches[0]
-                )
+                observation = (
+                    validate13
+                    if camera_revision == MEDIA13
+                    else validate12 if media_version == 3 else validate11
+                )("camera_observation", matches[0])
                 if camera:
                     camera["actual_track"] = None
             updated = gauge.updated_at
@@ -152,7 +185,13 @@ async def camera_capability(
     if native and reason is None and not settings.camera.native_auto_enabled:
         reason = "camera_native_auto_disabled"
     view_type = (
-        (CameraCapabilityView12 if media_version == 3 else CameraCapabilityView11)
+        (
+            CameraCapabilityView13
+            if camera_revision == MEDIA13
+            else (
+                CameraCapabilityView12 if media_version == 3 else CameraCapabilityView11
+            )
+        )
         if native
         else CameraCapabilityView
     )
@@ -160,7 +199,9 @@ async def camera_capability(
         {
             "camera_observation": observation,
             "camera_capabilities": copy.deepcopy(
-                CAPABILITIES3 if media_version == 3 else CAPABILITIES
+                CAPABILITIES4
+                if camera_revision == MEDIA13
+                else CAPABILITIES3 if media_version == 3 else CAPABILITIES
             ),
         }
         if native
