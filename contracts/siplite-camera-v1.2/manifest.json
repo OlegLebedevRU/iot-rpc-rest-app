@@ -1,0 +1,15 @@
+{
+  "revision": "siplite-camera/1.2.0",
+  "status": "proposal",
+  "media_revision": "l4-media/3.0.0",
+  "media_schema_sha256": "b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818",
+  "external_resource": "urn:leo4:l4-media:3.0.0",
+  "cadence_revision": "camera-cadence/0.1.0-proposed",
+  "enrollment_revision": "camera-enrollment/0.3.0-proposed",
+  "admission_revision": "camera-ctl-monotonic/0.2.0-proposed",
+  "files": {
+    "camera.schema.json": "cba222ccdc2e10c446dc99e1bb0e2338d4fc08c28220f3bc02e8a8d391789194",
+    "example-observation.json": "710c646ca43a2d12876b4e246cbb47ca22b375ce2570ed3c3b01848ae58f138c",
+    "example-h264-observation.json": "24f7089d19e43b585bc4ca8d7578ce61313eb75a8c0368cfa79f7b7cfbb222db"
+  }
+}

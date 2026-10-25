@@ -1,0 +1,19 @@
+{
+  "firmware_commit": "b165b4da88da66da0411643f74b080a272e40653",
+  "sources_sha256": {
+    "main/l4_camera_canonical.c": "5dc8c898fd3bd331dc8074133094d5152f5a6fc587f547d7214fc30f8139e07e",
+    "include/l4_camera_canonical.h": "8d3ced4a6216133df4ea37539ad3fef859ceb9ec5006e2d8e640ad8089bd77c9",
+    "tools/test_camera_canonical.py": "ba7d175378c2ee4d2d097c641dd6821800c83c329c6e5877445706c45268bfe0"
+  },
+  "actual_sdk_mbedtls_sha256": true,
+  "canonical_bytes_equal": true,
+  "digests": {
+    "descriptor": "6ccbddacab9d9a72c03b10ad0a4937855f1871c3246868c69f12348ad2ea1e04",
+    "binding": "e2f5a4a77a1a7eeddfccf97b9241dceff960f350a698a4832651828eaa6846be",
+    "offer": "cd8ff152a044b0230a1b64bb805ba47ce3706d8ea15141ca187a33bba08be72e",
+    "proof": "46bb0d44c88974550f47b6b72c82e7a2dd6c462ad8f1928df63c75152a397f1d",
+    "commit": "811f274c763924be5478aa8f3ba5c7c5f54aadccf921ff4cc30f51d0c2505e13"
+  },
+  "full_message4096_4097_boundary": true,
+  "device_or_video_acceptance": false
+}

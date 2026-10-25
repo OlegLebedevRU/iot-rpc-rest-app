@@ -84,11 +84,9 @@ class VideoStore:
                 reject("invalid_payload", 400)
             wire.Start.model_validate(state["start"])
         if document.get("camera_stream") is not None:
-            from core.camera.contract import validate_definition
+            from core.camera.native_contract import validate_media
 
-            validate_definition(
-                "hevc.schema.json", "media_start", document["camera_stream"]["start"]
-            )
+            validate_media("media_start", document["camera_stream"]["start"])
         return document
 
     async def change(

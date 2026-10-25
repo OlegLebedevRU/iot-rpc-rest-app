@@ -1,5 +1,9 @@
 # Camera boot enrollment and issuer fencing — review proposal
 
+Server implementation and rollout instructions: [camera monotonic runtime](camera-monotonic-runtime.md).
+It is disabled by default; firmware negotiation and real terminal acceptance
+remain separate from the reviewed proposal/model.
+
 Revision `camera-enrollment/0.1.0-proposed`, extending the reviewed PR136
 `camera-ctl-monotonic/0.2.0-proposed` without modifying its published bytes.
 Specification/offline vectors only. No runtime handlers, firmware advertisement,

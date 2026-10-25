@@ -1,0 +1,15 @@
+{
+  "revision": "camera-enrollment/0.2.0-proposed",
+  "media_owner_commit": "60a2bffc961dfc31caeea96a76bfb856484212b5",
+  "media_schema_sha256": "bfd71ec96cf8de81657fd319c603f91a4769209887e32297fff4193752e3c62e",
+  "admission_schema_sha256": "e75e1c7f49f0d0fc68f6720a3c47766ccb4caad83d721b5d1b8aabe3d3b58a0d",
+  "schema_sha256": "f1697a9506117b215d2d66fd63fd375e2ca23d7365bee5d10d2a6955f9c4e91b",
+  "fixtures": {
+    "commit.json": "8f14a7b6b282eb7e93c626da6ac8657759914b3255fdb56c72fa8d4a15c882a1",
+    "hello.json": "41c39c7461c1bf51ed7fee19456d0b691978def35f90f63def692102e203b2cb",
+    "observation.json": "eccc6cd9cb7e17866bc60f427ae2a29da9d5aa3a6a6debffdbc0d662926ef855",
+    "offer.json": "1a8cc57e26305f3198cc235ecee856ca2a4ce3c1a3fe4da6675c111d4bb89d02",
+    "physical-camera.json": "8a7c5111354f0c0ee63ca915574e779bd49dd2f987c9f9d02d98efc5a68ccbbb",
+    "proof.json": "a46cc69ae27fc5324681cec7f5c1e4f9cff278d084ff9a9565f0f17a74777ec2"
+  }
+}

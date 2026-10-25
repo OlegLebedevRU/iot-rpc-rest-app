@@ -27,6 +27,12 @@ No desktop CTL2 START or Windows capability binding enters this adapter.
 serve both; a changed profile still changes descriptor/hash and requires a new
 attempt. No configuration value or original RTP timestamp is rewritten.
 
+The unchanged admission0.2 START still contains `mode:"usb-camera"` and
+`profile:"default"`. These are fixed historical CTLv1 adapter tokens, not the
+common descriptor quality policy. Do not send `profile:"low"` under admission0.2.
+The selected common low/default policy is fenced by the complete descriptor and
+its binding hash; both can forward the same confirmed native camera format.
+
 The original exclusive local5000ms enrollment budget never resets on duplicate
 HELLO/OFFER/PROOF/COMMIT. COMMIT floor cannot be below the accepted OFFER floor,
 proof high-water, current device high-water or durable server high-water.

@@ -1,5 +1,9 @@
 # Camera CTLv1 monotonic admission — server proposal
 
+The optional [server runtime](camera-monotonic-runtime.md) implements these exact
+negotiated revisions behind a default-off gate. Firmware support/advertisement,
+cross-owner acceptance and deployment are separate; legacy CTLv1 is unchanged.
+
 Status: **proposed for coordinated review, not agreed or implemented**.
 Date: 2026-10-24. Baseline: IoT
 `b42e4844536e42de6b3347923125ccd260d97ca7`.

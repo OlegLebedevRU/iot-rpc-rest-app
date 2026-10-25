@@ -53,6 +53,13 @@ async def send_ctl_command(
     command: CtlCommand,
     ttl_ms: int,
 ) -> None:
+    from core.camera.runtime_wire import CameraRuntimeCommand
+
+    if isinstance(command, CameraRuntimeCommand):
+        from core.camera.runtime import camera_runtime
+
+        await camera_runtime.release(command)
+        return
     message_dict = command.model_dump(mode="json")
     payload_json = json.dumps(message_dict, ensure_ascii=False).encode("utf-8")
     payload_len = len(payload_json)

@@ -11,6 +11,13 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 from pydantic import BaseModel, ConfigDict, Field
 
+from core.camera.native_contract import (
+    ENROLLMENT02,
+    ENROLLMENT03,
+    MEDIA11,
+    MEDIA12,
+    selected_headers,
+)
 from core.remote_input.video_models import Capabilities, Descriptor, ErrorDetail
 from core.remote_input.video_wire import load_object
 
@@ -21,8 +28,13 @@ def selected_media_version(request: Request) -> int:
     revision = request.headers.get("X-L4-Media-Contract")
     if revision is None:
         return 2
-    if revision != MEDIA_REVISION or request.headers.get("X-L4-Camera-Contract"):
+    if revision != MEDIA_REVISION:
         raise HTTPException(422, "unsupported_media_contract")
+    if request.headers.get("X-L4-Camera-Contract") is not None:
+        try:
+            selected_headers(request.headers)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from None
     return 3
 
 
@@ -40,7 +52,18 @@ class VideoControlRoute(APIRoute):
         async def handle(request: Request) -> Response:
             selected_media_version(request)
             revision = request.headers.get("X-L4-Camera-Contract")
-            if revision is not None and revision != "siplite-camera/1.0.0":
+            modern = (
+                revision in (MEDIA11, MEDIA12)
+                or request.headers.get("X-L4-Camera-Cadence") is not None
+                or request.headers.get("X-L4-Camera-Enrollment")
+                in (ENROLLMENT02, ENROLLMENT03)
+            )
+            if modern:
+                try:
+                    selected_headers(request.headers)
+                except ValueError as exc:
+                    return JSONResponse(status_code=422, content={"detail": str(exc)})
+            elif revision is not None and revision != "siplite-camera/1.0.0":
                 return JSONResponse(
                     status_code=422, content={"detail": "unsupported_camera_contract"}
                 )

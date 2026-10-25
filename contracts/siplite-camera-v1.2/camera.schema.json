@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:leo4:siplite-camera:1.2.0",
+  "title": "Camera observation and media-v3 control adapter 1.2.0 proposal",
+  "$defs": {
+    "camera_capabilities": {
+      "type": "object",
+      "properties": {
+        "camera_contract_revisions": {
+          "type": "array",
+          "items": {
+            "const": "siplite-camera/1.2.0"
+          },
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "camera_cadence_revisions": {
+          "type": "array",
+          "items": {
+            "const": "camera-cadence/0.1.0-proposed"
+          },
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "camera_enrollment_revisions": {
+          "type": "array",
+          "items": {
+            "const": "camera-enrollment/0.3.0-proposed"
+          },
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "camera_admission_revisions": {
+          "type": "array",
+          "items": {
+            "const": "camera-ctl-monotonic/0.2.0-proposed"
+          },
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "media_contract_versions": {
+          "type": "array",
+          "items": {
+            "const": 3
+          },
+          "minItems": 1,
+          "maxItems": 1,
+          "uniqueItems": true
+        },
+        "quality_options": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:leo4:l4-media:3.0.0#/$defs/quality_options"
+          },
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "camera_contract_revisions",
+        "camera_cadence_revisions",
+        "camera_enrollment_revisions",
+        "camera_admission_revisions",
+        "media_contract_versions",
+        "quality_options"
+      ],
+      "additionalProperties": false
+    },
+    "camera_observation": {
+      "type": "object",
+      "properties": {
+        "camera_contract_revision": {
+          "const": "siplite-camera/1.2.0"
+        },
+        "media_contract_revision": {
+          "const": "l4-media/3.0.0"
+        },
+        "cadence_revision": {
+          "const": "camera-cadence/0.1.0-proposed"
+        },
+        "source_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 63
+        },
+        "geometry_generation": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2147483647
+        },
+        "actual_track": {
+          "$ref": "urn:leo4:l4-media:3.0.0#/$defs/track"
+        },
+        "capabilities": {
+          "$ref": "#/$defs/camera_capabilities"
+        }
+      },
+      "required": [
+        "camera_contract_revision",
+        "media_contract_revision",
+        "cadence_revision",
+        "source_id",
+        "geometry_generation",
+        "actual_track",
+        "capabilities"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/camera_capabilities"
+    },
+    {
+      "$ref": "#/$defs/camera_observation"
+    }
+  ]
+}
