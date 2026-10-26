@@ -257,7 +257,9 @@ async def handle_device_ctl_message(
 
             from core.remote_input.runtime_quality import runtime_quality
 
-            if await runtime_quality.reply(sn, envelope.model_dump(mode="json")):
+            if (
+                isinstance(envelope, CtlNack) or envelope.result in ("accepted", "nack")
+            ) and await runtime_quality.reply(sn, envelope.model_dump(mode="json")):
                 return True
 
             if settings.camera.monotonic_runtime_enabled:

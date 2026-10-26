@@ -35,7 +35,7 @@ classified as an unsupported driver. A fresh source report remains authoritative
 for the current rate and permits the initiator to retry with a new generation.
 Delivery throughput is not channel capacity; raw replacement is not RTP loss.
 
-Validation:15 focused ownership/epoch/generation/application/HTTP/MQTT cases,
+Validation:16 focused ownership/epoch/generation/application/HTTP/MQTT cases,
 plus the existing170 video-control cases passed. New runtime module, modified
 video control/bridge and new tests have zero Pyright errors; Black's API safety
 check passes. Pre-existing lint/type diagnostics in the large HTTP router occur

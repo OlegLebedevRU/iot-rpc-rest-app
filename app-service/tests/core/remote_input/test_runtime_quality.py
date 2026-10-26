@@ -347,3 +347,23 @@ async def test_mqtt_report_and_ack_use_the_existing_agent_connection(native_env)
             update={"sample_seq": 3, "generation": 2, "applied_kbps": 100}
         ),
     )
+
+
+@pytest.mark.anyio
+async def test_input_ack_does_not_query_the_quality_transaction(monkeypatch):
+    receiver = AsyncMock(
+        side_effect=AssertionError("Input ACK must not enter quality plane")
+    )
+    monkeypatch.setattr(runtime_quality, "reply", receiver)
+    await handle_device_ctl_message(
+        routing_key="dev.fixture.ctl",
+        payload={
+            "v": 1,
+            "type": "ack",
+            "sn": "fixture",
+            "command_id": str(uuid4()),
+            "lease_id": str(uuid4()),
+            "result": "injected",
+        },
+    )
+    receiver.assert_not_awaited()
