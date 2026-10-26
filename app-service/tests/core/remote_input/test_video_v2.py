@@ -1897,8 +1897,8 @@ async def test_cold_desktop_inventory_window_and_immediate_memory_hit(
     env, monkeypatch, version, source, budget
 ):
     import core.remote_input.video_control as control_module
-    from core.remote_input.publisher import send_ctl_command
     from core.remote_input import publisher
+    from core.remote_input.publisher import send_ctl_command
 
     service, lease, _, cap = env
     if version == 3:
@@ -1925,14 +1925,9 @@ async def test_cold_desktop_inventory_window_and_immediate_memory_hit(
         assert broker.call_args.kwargs["correlation_id"] == query.command_id
         clock += 31000 if budget == 35000 else 9500
         if budget == 35000:
-            waiting = await video_control.capability(
-                lease.sn,
-                service.presence,
-                send,
-                source_id=source,
-                contract_version=version,
-            )
-            assert not waiting["negotiated_v2"] and len(calls) == 1
+            waiting = await video_control.store.get(lease.sn)
+            assert waiting["pending"]["command_id"] == query.command_id
+            assert len(calls) == 1
         cap.update(checked_at_ms=clock, valid_until_ms=clock + 59000)
         ack = fixture("capabilities")
         ack.update(command_id=query.command_id, video_capabilities=cap)
@@ -2057,7 +2052,7 @@ async def test_cold_desktop_ready_respects_command_window_and_publish_ttl(
     "case", ["over_budget", "lease_deadline", "old_media", "usb_camera"]
 )
 async def test_cold_start_extension_preserves_other_limits(native_env, case):
-    service, lease, start, cap = native_env
+    service, lease, start, _cap = native_env
     before_deadline = lease.expires_at
     start["expires_at_ms"] = start["issued_at_ms"] + 35000
     if case == "over_budget":
