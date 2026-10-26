@@ -10,7 +10,7 @@ import time
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal, NoReturn
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, cast
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
@@ -61,7 +61,8 @@ class VideoStore:
 
     async def current_epoch(self) -> str:
         await self.client.set("l4d:video:server-epoch", SERVER_EPOCH, nx=True)
-        return await self.client.get("l4d:video:server-epoch")
+        # RedisHelper creates this connection with decode_responses=True.
+        return cast(str, await self.client.get("l4d:video:server-epoch"))
 
     async def reset_server_epoch(self) -> None:
         # Worker startup invalidates old negotiation for all workers, while
@@ -69,7 +70,7 @@ class VideoStore:
         await self.client.set("l4d:video:server-epoch", str(uuid4()))
 
     async def get(self, sn: str) -> dict[str, Any]:
-        raw = await self.client.get(self.key(sn))
+        raw = cast(str | None, await self.client.get(self.key(sn)))
         return self.decode(raw)
 
     def decode(self, raw: str | None) -> dict[str, Any]:
@@ -116,7 +117,7 @@ class VideoStore:
                     ):
                         reject("stale_capability")
                     raw = await pipe.get(key)
-                    doc = self.decode(raw)
+                    doc = self.decode(cast(str | None, raw))
                     before = json.dumps(doc, separators=(",", ":"))
                     if guard is not None:
                         await guard(pipe, doc)
@@ -266,7 +267,7 @@ class VideoControl:
 
         if isinstance(service.leases, RedisLeaseRegistry):
             data = await self.store.client.hgetall(f"l4d:lease:{lease_id}")
-            return _dict_to_lease(data) if data else None
+            return _dict_to_lease(cast(dict[str, str], data)) if data else None
         return await service.leases.get(lease_id)
 
     async def publisher_lease(
@@ -286,7 +287,7 @@ class VideoControl:
             data = await pipe.hgetall(key)
             if not data or await pipe.get(active) != start["lease_id"]:
                 return None
-            lease = _dict_to_lease(data)
+            lease = _dict_to_lease(cast(dict[str, str], data))
         else:
             lease = await service.leases.get(UUID(start["lease_id"]))
         if not lease or not lease.is_active() or lease.sn != start["sn"]:
@@ -455,8 +456,11 @@ class VideoControl:
             expires_at_ms=current + inventory_budget,
             **selection,
         )
+        joined_query: dict[str, Any] | None = None
 
         def reserve(doc: dict[str, Any]) -> bool:
+            nonlocal joined_query
+            joined_query = None
             cap = doc.get("capability")
             if doc.get("media_selection", 2) != contract_version:
                 doc.pop("capability", None)
@@ -485,6 +489,13 @@ class VideoControl:
             ):
                 return False
             if doc.get("pending", {}).get("expires_at_ms", 0) > current:
+                pending = doc["pending"]
+                if (
+                    doc.get("server_epoch") == server_epoch
+                    and pending.get("source_id") == source_id
+                    and pending.get("profile_id") == profile_id
+                ):
+                    joined_query = dict(pending)
                 return False
             if (
                 not refresh
@@ -516,6 +527,21 @@ class VideoControl:
                         doc.pop("pending", None)
 
                 await self.store.change(sn, expire)
+        elif joined_query is not None:
+            # Inventory and START can ask for the same cold display together.
+            # Join its correlated query instead of interpreting pending as an
+            # unsupported agent. A joiner never publishes or clears that query.
+            deadline = min(joined_query["expires_at_ms"], query.expires_at_ms)
+            while now_ms() < deadline:
+                doc = await self.store.get(sn)
+                if (
+                    doc.get("pending", {}).get("command_id")
+                    != joined_query["command_id"]
+                    or doc.get("media_selection", 2) != contract_version
+                    or doc.get("server_epoch") != server_epoch
+                ):
+                    break
+                await asyncio.sleep(0.05)
         doc = await self.store.get(sn)
         cap = doc.get("capability")
         test_camera = bool(
