@@ -4,7 +4,7 @@ import asyncio
 import hmac
 from contextlib import suppress
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
 from core.camera.contract import REVISION
@@ -45,6 +45,7 @@ from core.models import db_helper
 from core.remote_input.leases import lease_registry
 from core.remote_input.presence import presence_registry
 from core.remote_input.publisher import send_ctl_command
+from core.remote_input.runtime_quality import QualityRequest
 from core.remote_input.schemas import (
     ALLOWED_VK_CODES,
     ClickRequest,
@@ -97,6 +98,7 @@ from core.remote_input.video_models import Start as VideoStart
 from core.remote_input.video_models import Stop as VideoStop
 from fastapi import (
     APIRouter,
+    Header,
     HTTPException,
     Query,
     Request,
@@ -396,6 +398,9 @@ async def post_stream_start(
     org_id: Internal_Org_dep,
     _: Internal_Auth_dep,
     request: Request,
+    quality_writer_key: Annotated[
+        UUID | None, Header(alias="X-Video-Quality-Writer")
+    ] = None,
 ) -> (
     StreamStartResponse
     | VideoStateView
@@ -460,6 +465,7 @@ async def post_stream_start(
             session_id,
             send_ctl_command,
             is_request_superuser(request),
+            quality_writer_key=quality_writer_key,
         )
         return VideoStateView.from_record(record)
 
@@ -544,6 +550,42 @@ async def get_video_capability(
             profile_id=profile_id,
             contract_version=selected_media_version(request),
         )
+    )
+
+
+@router.get("/devices/{sn}/video-quality")
+async def get_video_quality(
+    sn: str,
+    stream_instance_id: UUID,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    session: Session_dep,
+) -> dict[str, Any]:
+    from core.remote_input.runtime_quality import runtime_quality
+
+    if await DeviceRepo.get_device_id(session, sn=sn, org_id=org_id) is None:
+        raise HTTPException(403, "device not available for organization")
+    return await runtime_quality.get(sn, str(stream_instance_id))
+
+
+@router.post("/lease/{lease_id}/video-quality")
+async def post_video_quality(
+    lease_id: UUID,
+    body: QualityRequest,
+    org_id: Internal_Org_dep,
+    _: Internal_Auth_dep,
+    request: Request,
+) -> dict[str, Any]:
+    from core.remote_input.runtime_quality import runtime_quality
+
+    return await runtime_quality.set(
+        remote_input_service,
+        lease_id,
+        org_id,
+        extract_caller_user_id(request),
+        extract_caller_session_id(request),
+        body,
+        send_ctl_command,
     )
 
 

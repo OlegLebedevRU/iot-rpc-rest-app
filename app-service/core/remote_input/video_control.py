@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import copy
+import hashlib
 import json
 import logging
 import time
@@ -653,6 +654,7 @@ class VideoControl:
         session: str,
         send: Any,
         superuser: bool = False,
+        quality_writer_key: UUID | None = None,
     ) -> dict[str, Any]:
         start = command.model_dump(mode="json")
         lease = await self.authorize(
@@ -752,6 +754,13 @@ class VideoControl:
                 "org_id": lease.org_id,
                 "result": "accepted",
             }
+            if (
+                quality_writer_key is not None
+                and descriptor["source_type"] == "desktop"
+            ):
+                state["quality_writer_hash"] = hashlib.sha256(
+                    str(quality_writer_key).encode()
+                ).hexdigest()
             doc["stream"] = state
             return state
 
