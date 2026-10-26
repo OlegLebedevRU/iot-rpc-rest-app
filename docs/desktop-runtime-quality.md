@@ -42,3 +42,12 @@ check passes. Pre-existing lint/type diagnostics in the large HTTP router occur
 outside changed sections and were left unchanged under the owner's scoped-check
 instruction. No broker configuration, schema migration or camera contract change.
 Coordinated deployment and browser/native constrained-link acceptance remain.
+
+Follow-up from live selection: an initial DISPLAY1 capability probe can overlap
+START for DISPLAY2. Media3 desktop requests now await the current probe and then
+measure the selected display, within the original request deadline and remaining
+MQTT TTL. They do not cancel another query, accept its source as their own, or
+restart probing after invalidation. Legacy negotiation behavior is unchanged.
+Two regression cases plus the existing capability/runtime/video cases pass:
+194 total. Ruff's existing B905 diagnostic at video_control.py's untouched zip
+is excluded from the scoped check; changed code, Pyright and Black AST safety pass.

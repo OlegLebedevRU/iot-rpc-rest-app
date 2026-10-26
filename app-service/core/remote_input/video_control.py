@@ -491,10 +491,16 @@ class VideoControl:
                 return False
             if doc.get("pending", {}).get("expires_at_ms", 0) > current:
                 pending = doc["pending"]
-                if (
-                    doc.get("server_epoch") == server_epoch
-                    and pending.get("source_id") == source_id
-                    and pending.get("profile_id") == profile_id
+                if doc.get("server_epoch") == server_epoch and (
+                    (
+                        pending.get("source_id") == source_id
+                        and pending.get("profile_id") == profile_id
+                    )
+                    or (
+                        contract_version == 3
+                        and source_id is not None
+                        and source_id.startswith("disp:")
+                    )
                 ):
                     joined_query = dict(pending)
                 return False
@@ -513,25 +519,31 @@ class VideoControl:
             doc["server_epoch"] = server_epoch
             return True
 
-        if await self.store.change(sn, reserve, expected_epoch=server_epoch):
-            try:
-                await send(sn, query, ttl_ms=inventory_budget)
-                while now_ms() < query.expires_at_ms:
-                    doc = await self.store.get(sn)
-                    if not doc.get("pending"):
-                        break
-                    await asyncio.sleep(0.05)
-            finally:
+        while now_ms() < query.expires_at_ms:
+            current = now_ms()
+            if await self.store.change(sn, reserve, expected_epoch=server_epoch):
+                try:
+                    remaining = query.expires_at_ms - now_ms()
+                    if remaining > 0:
+                        await send(sn, query, ttl_ms=remaining)
+                    while now_ms() < query.expires_at_ms:
+                        doc = await self.store.get(sn)
+                        if not doc.get("pending"):
+                            break
+                        await asyncio.sleep(0.05)
+                finally:
 
-                def expire(doc: dict[str, Any]) -> None:
-                    if doc.get("pending", {}).get("command_id") == query.command_id:
-                        doc.pop("pending", None)
+                    def expire(doc: dict[str, Any]) -> None:
+                        if doc.get("pending", {}).get("command_id") == query.command_id:
+                            doc.pop("pending", None)
 
-                await self.store.change(sn, expire)
-        elif joined_query is not None:
-            # Inventory and START can ask for the same cold display together.
-            # Join its correlated query instead of interpreting pending as an
-            # unsupported agent. A joiner never publishes or clears that query.
+                    await self.store.change(sn, expire)
+                break
+            if joined_query is None:
+                break
+            # Desktop selection can change while its initial display is being
+            # measured. Wait for that owner without cancelling its query, then
+            # reserve the selected display within this request's original budget.
             deadline = min(joined_query["expires_at_ms"], query.expires_at_ms)
             while now_ms() < deadline:
                 doc = await self.store.get(sn)
@@ -543,6 +555,18 @@ class VideoControl:
                 ):
                     break
                 await asyncio.sleep(0.05)
+            if (
+                joined_query.get("source_id") == source_id
+                and joined_query.get("profile_id") == profile_id
+            ):
+                break
+            doc = await self.store.get(sn)
+            if (
+                doc.get("server_epoch") != server_epoch
+                or doc.get("media_selection", 2) != contract_version
+                or not doc.get("capability")
+            ):
+                break  # Invalidation must not become an unsolicited new probe.
         doc = await self.store.get(sn)
         cap = doc.get("capability")
         test_camera = bool(
