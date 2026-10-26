@@ -184,6 +184,15 @@ async def handle_device_ctl_message(
 
         try:
             raw = load_object(payload, settings.remote_input.max_inbound_payload_bytes)
+            if raw.get("type") == "stream_quality_report":
+                from core.remote_input.runtime_quality import (
+                    QualityReport,
+                    runtime_quality,
+                )
+
+                return await runtime_quality.report(
+                    sn, QualityReport.model_validate(raw)
+                )
             if str(raw.get("type", "")).startswith("camera_"):
                 if not settings.camera.monotonic_runtime_enabled:
                     return False
@@ -245,6 +254,13 @@ async def handle_device_ctl_message(
                     envelope.sn,
                 )
                 return False
+
+            from core.remote_input.runtime_quality import runtime_quality
+
+            if (
+                isinstance(envelope, CtlNack) or envelope.result in ("accepted", "nack")
+            ) and await runtime_quality.reply(sn, envelope.model_dump(mode="json")):
+                return True
 
             if settings.camera.monotonic_runtime_enabled:
                 from core.camera.runtime import camera_runtime
