@@ -69,3 +69,5 @@ Handoff, планы реализации, RFC и материалы в `exceptio
 - [Camera monotonic server runtime](camera-monotonic-runtime.md) — durable enrollment, readiness and fenced command outbox; disabled by default.
 
 Camera unified media-v3 candidate: [camera-media-v3-runtime.md](camera-media-v3-runtime.md).
+
+- [Adaptive quality candidate](runtime-quality-camera-candidate.md) — proposed typed quality target/report, original-writer reuse, camera time semantics and implementation boundary.
