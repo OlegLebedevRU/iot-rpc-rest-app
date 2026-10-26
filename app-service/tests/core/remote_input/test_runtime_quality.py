@@ -22,6 +22,54 @@ env = fixtures.env
 native_env = fixtures.native_env
 
 
+@pytest.mark.anyio
+async def test_modern_software_h264_discovery_does_not_require_hevc_chain(
+    native_env, monkeypatch
+):
+    from core.config import settings
+
+    service, lease, start, cap = native_env
+    monkeypatch.setattr(settings.remote_input, "video_hevc_chain_ready", False)
+    h264 = fixtures.fixture("h264_v2_start")["descriptor"]["tracks"][0]
+    cap["video"] = [
+        {
+            "codec": "h264",
+            "backend": "openh264",
+            "hardware": False,
+            "status": "ready",
+            "reason_code": None,
+            "probe_evidence": "encoded_sequence",
+            "profiles": [{"profile_id": "low", "track": h264}],
+        }
+    ]
+    await video_control.store.change(lease.sn, lambda doc: doc.update(capability=cap))
+    send = AsyncMock()
+    result = await video_control.capability(
+        lease.sn, service.presence, send, contract_version=3
+    )
+    assert result["negotiated_v2"] and result["video_capabilities"] == cap
+    send.assert_not_awaited()
+    start["resolved_codec"] = start["codec_policy"] = "h264"
+    start["descriptor"]["tracks"] = [h264]
+
+    async def dispatch(sn, command, **kwargs):
+        assert command.type == "stream_start" and command.resolved_codec.value == "h264"
+        assert await fixtures.ready_for(service, start)
+
+    result = await video_control.start(
+        service,
+        wire.Start.model_validate(start),
+        1,
+        "owner",
+        "session",
+        AsyncMock(side_effect=dispatch),
+    )
+    assert (
+        result["state"] == "running"
+        and result["actual_descriptor"]["tracks"][0]["codec"] == "h264"
+    )
+
+
 async def running(native_env):
     service, lease, start, _ = native_env
     writer = uuid4()
@@ -62,6 +110,117 @@ async def running(native_env):
         target_bitrate_kbps=1000,
     )
     return service, lease, report, request
+
+
+@pytest.mark.anyio
+async def test_raster_change_requires_opt_in_and_keeps_start_snapshot(native_env):
+    service, lease, report, request = await running(native_env)
+    send = AsyncMock()
+    request = request.model_copy(update={"raster_step": 1, "target_bitrate_kbps": 500})
+    with pytest.raises(HTTPException) as caught:
+        await runtime_quality.set(
+            service, lease.lease_id, 1, "owner", "session", request, send
+        )
+    assert caught.value.detail == {"code": "runtime_raster_unsupported"}
+    send.assert_not_awaited()
+    start = copy.deepcopy((await video_control.store.get(lease.sn))["stream"]["start"])
+    track = start["descriptor"]["tracks"][0]
+    extended = QualityReport.model_validate(
+        dict(
+            report.model_dump(exclude_none=True),
+            sample_seq=2,
+            quality_version=2,
+            coded_width=track["width"],
+            coded_height=track["height"],
+            raster_step=0,
+            ceiling_kbps=2000,
+            last_idr_bytes=100000,
+        )
+    )
+    assert await runtime_quality.report(lease.sn, extended)
+    result = await runtime_quality.set(
+        service, lease.lease_id, 1, "owner", "session", request, send
+    )
+    assert send.call_args.args[1].raster_step == 1
+    state = await runtime_quality.get(lease.sn, str(request.stream_instance_id))
+    assert state["status"] == "pending" and state["raster_step"] == 0
+    assert not await runtime_quality.report(
+        lease.sn,
+        extended.model_copy(
+            update={
+                "sample_seq": 3,
+                "generation": result["generation"],
+                "applied_kbps": 500,
+            }
+        ),
+    )
+    applied = extended.model_copy(
+        update={
+            "sample_seq": 3,
+            "generation": result["generation"],
+            "applied_kbps": 500,
+            "coded_width": (track["width"] >> 1) & ~1,
+            "coded_height": (track["height"] >> 1) & ~1,
+            "raster_step": 1,
+            "last_idr_bytes": 20000,
+        }
+    )
+    assert await runtime_quality.report(lease.sn, applied)
+    state = await runtime_quality.get(lease.sn, str(request.stream_instance_id))
+    assert (
+        state["status"] == "limited"
+        and state["raster_step"] == 1
+        and state["last_idr_bytes"] == 20000
+    )
+    assert (await video_control.store.get(lease.sn))["stream"]["start"] == start
+
+
+@pytest.mark.anyio
+async def test_raster_report_cannot_change_capture_extent_or_raise_ceiling(native_env):
+    _, lease, report, _ = await running(native_env)
+    start = (await video_control.store.get(lease.sn))["stream"]["start"]
+    track = start["descriptor"]["tracks"][0]
+    extended = QualityReport.model_validate(
+        dict(
+            report.model_dump(exclude_none=True),
+            sample_seq=2,
+            quality_version=2,
+            coded_width=(track["width"] >> 1) & ~1,
+            coded_height=(track["height"] >> 1) & ~1,
+            raster_step=1,
+            ceiling_kbps=2000,
+            last_idr_bytes=1000,
+        )
+    )
+    for changes in ({"coded_width": track["width"] + 2}, {"ceiling_kbps": 4000}):
+        assert not await runtime_quality.report(
+            lease.sn, extended.model_copy(update=changes)
+        )
+
+
+def test_partial_raster_report_is_not_feature_advertisement():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="Incomplete raster quality report"):
+        QualityReport.model_validate(
+            dict(
+                v=1,
+                type="stream_quality_report",
+                sn="test",
+                lease_id=uuid4(),
+                stream_instance_id=uuid4(),
+                agent_instance_id=uuid4(),
+                sample_seq=1,
+                generation=0,
+                applied_kbps=500,
+                status=0,
+                transport_age_ms=0,
+                delivery_kbps=0,
+                flags=1,
+                raw_replaced=0,
+                quality_version=2,
+            )
+        )
 
 
 @pytest.mark.anyio

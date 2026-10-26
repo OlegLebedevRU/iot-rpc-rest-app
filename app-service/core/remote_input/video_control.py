@@ -424,6 +424,7 @@ class VideoControl:
         if (
             not settings.remote_input.video_hevc_chain_ready
             and sn not in settings.remote_input.video_test_camera_sns
+            and contract_version != 3
         ):
             # Close new HEVC negotiation before BFF commits a concrete codec.
             # Keep measured capability and existing v2 traffic/state intact.
@@ -432,9 +433,22 @@ class VideoControl:
         if not view.online or "video_contract_v2" not in (view.capabilities or []):
             await self.invalidate(sn)
             return unavailable
-        inventory_budget = 10000
+        native_discovery = False
+        inventory = None
         if contract_version == 3 and view.desktop_available:
             inventory = await presence.get_inventory(sn)
+            native_discovery = source_id is None or any(
+                display.desktop_id == source_id for display in inventory.displays
+            )
+        if (
+            not settings.remote_input.video_hevc_chain_ready
+            and sn not in settings.remote_input.video_test_camera_sns
+            and not native_discovery
+        ):
+            return unavailable
+        inventory_budget = 10000
+        if contract_version == 3 and view.desktop_available:
+            inventory = inventory or await presence.get_inventory(sn)
             if source_id is None or any(
                 d.desktop_id == source_id for d in inventory.displays
             ):
@@ -582,7 +596,19 @@ class VideoControl:
             and (not source_id or cap["source_id"] == source_id)
             and doc.get("server_epoch") == await self.store.current_epoch()
             and cap["checked_at_ms"] <= now_ms() < cap["valid_until_ms"]
-            and (settings.remote_input.video_hevc_chain_ready or test_camera)
+            and (
+                settings.remote_input.video_hevc_chain_ready
+                or test_camera
+                or (
+                    native_discovery
+                    and any(
+                        entry["codec"] == "h264"
+                        and entry["status"] == "ready"
+                        and entry["probe_evidence"] == "encoded_sequence"
+                        for entry in cap.get("video", [])
+                    )
+                )
+            )
         )
         result = {"negotiated_v2": fresh, "video_capabilities": cap if fresh else None}
         if contract_version == 3:

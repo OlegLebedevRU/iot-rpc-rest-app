@@ -51,3 +51,28 @@ restart probing after invalidation. Legacy negotiation behavior is unchanged.
 Two regression cases plus the existing capability/runtime/video cases pass:
 194 total. Ruff's existing B905 diagnostic at video_control.py's untouched zip
 is excluded from the scoped check; changed code, Pyright and Black AST safety pass.
+
+## Coded raster extension (candidate, not yet deployed)
+
+The same CTLv1 command optionally carries `raster_step`. Its source must first
+report `quality_version:2` with all of `coded_width`, `coded_height`, `raster_step`,
+`ceiling_kbps` and `last_idr_bytes`. Original writer/tenant/user/session/lease/epoch
+checks are unchanged. An old command omits the new field; legacy agents do not
+need runtime quality support to start or continue H264.
+
+Every tier halves the initial coded dimensions and rounds only to even4:2:0.
+app1 validates this geometry against the immutable START track and rejects a
+reported ceiling above the selected profile. A lower source ceiling is respected.
+Initial START/READY snapshots are not rewritten. Pending geometry is confirmed
+only by a source report after its first new IDR has been sent, not by an ACK.
+This source-side confirmation does not imply that a browser has cleared backlog.
+
+Modern desktop H264 discovery can proceed with the HEVC chain flag disabled when
+an independently measured H264 capability exists. Its START still requires the
+same fresh exact capability and normal ownership/lease checks; HEVC admission
+retains its own chain gate. No camera or frozen media schema is changed.
+
+Current scoped validation:20 quality cases include raster opt-in, complete reports,
+pending/application, immutable START, effective ceiling and modern software H264
+START without the HEVC chain. The combined video/quality suite previously passed190
+cases. Coordinated native/browser acceptance of this extension remains pending.
