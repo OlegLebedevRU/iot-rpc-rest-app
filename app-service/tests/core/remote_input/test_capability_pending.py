@@ -99,6 +99,90 @@ async def test_cancelled_joiner_does_not_clear_query_owned_by_other_request(nati
 
 
 @pytest.mark.anyio
+async def test_selected_desktop_waits_for_other_display_without_resetting_budget(
+    native_env, monkeypatch
+):
+    import core.remote_input.video_control as control
+
+    service, lease, cap, previous_query = await pending_for(native_env)
+    clock = control.now_ms
+    offset = 0
+    monkeypatch.setattr(control, "now_ms", lambda: clock() + offset)
+    observed = []
+
+    async def send(sn, query, *, ttl_ms):
+        observed.append((query, ttl_ms))
+        selected = copy.deepcopy(cap)
+        selected.update(
+            source_id="disp:second",
+            checked_at_ms=control.now_ms(),
+            valid_until_ms=control.now_ms() + 59000,
+        )
+        ack = fixture("capabilities")
+        ack.update(command_id=query.command_id, video_capabilities=selected)
+        assert await video_control.accept_capability(
+            sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+
+    task = asyncio.create_task(
+        video_control.capability(
+            lease.sn,
+            service.presence,
+            send,
+            source_id="disp:second",
+            profile_id="low",
+            contract_version=3,
+        )
+    )
+    try:
+        await asyncio.sleep(0.02)
+        assert not task.done()
+        ack = fixture("capabilities")
+        cap.update(checked_at_ms=clock(), valid_until_ms=clock() + 59000)
+        ack.update(command_id=previous_query.command_id, video_capabilities=cap)
+        assert await video_control.accept_capability(
+            lease.sn, wire.CapabilitiesAck.model_validate(ack)
+        )
+        offset = 500
+        result = await asyncio.wait_for(task, 1)
+        assert result["negotiated_v2"]
+        assert result["video_capabilities"]["source_id"] == "disp:second"
+        assert len(observed) == 1
+        query, ttl = observed[0]
+        assert query.source_id == "disp:second"
+        assert 0 < ttl <= query.expires_at_ms - query.issued_at_ms - 500
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.anyio
+async def test_display_wait_does_not_restart_probe_after_invalidation(native_env):
+    service, lease, _, _ = await pending_for(native_env)
+    sender = AsyncMock()
+    task = asyncio.create_task(
+        video_control.capability(
+            lease.sn,
+            service.presence,
+            sender,
+            source_id="disp:second",
+            profile_id="low",
+            contract_version=3,
+        )
+    )
+    try:
+        await asyncio.sleep(0.02)
+        assert not task.done()
+        await video_control.invalidate(lease.sn)
+        result = await asyncio.wait_for(task, 1)
+        assert not result["negotiated_v2"]
+        sender.assert_not_called()
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+@pytest.mark.anyio
 @pytest.mark.parametrize("difference", ["source", "profile", "expiry", "invalidation"])
 async def test_pending_wait_keeps_source_deadline_and_invalidation_guards(
     native_env, monkeypatch, difference
