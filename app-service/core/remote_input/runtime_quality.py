@@ -8,7 +8,7 @@ from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from core.remote_input.video_control import now_ms, video_control
 
@@ -23,6 +23,7 @@ class QualitySet(BaseModel):
     stream_instance_id: UUID
     generation: int = Field(gt=0, le=2**32 - 1)
     target_bitrate_kbps: int = Field(ge=100, le=4000)
+    raster_step: int | None = Field(default=None, ge=0, le=31)
     issued_at_ms: int
     expires_at_ms: int
 
@@ -32,6 +33,7 @@ class QualityRequest(BaseModel):
     stream_instance_id: UUID
     writer_key: UUID
     target_bitrate_kbps: int = Field(ge=100, le=4000)
+    raster_step: int | None = Field(default=None, ge=0, le=31)
 
 
 class QualityReport(BaseModel):
@@ -50,6 +52,28 @@ class QualityReport(BaseModel):
     delivery_kbps: int = Field(ge=0, le=2**32 - 1)
     flags: int = Field(ge=0, le=7)
     raw_replaced: int = Field(ge=0, le=2**32 - 1)
+    quality_version: Literal[2] | None = None
+    coded_width: int | None = Field(default=None, gt=0, le=16384)
+    coded_height: int | None = Field(default=None, gt=0, le=16384)
+    raster_step: int | None = Field(default=None, ge=0, le=31)
+    ceiling_kbps: int | None = Field(default=None, ge=100, le=4000)
+    last_idr_bytes: int | None = Field(default=None, ge=0, le=2097152)
+
+    @model_validator(mode="after")
+    def complete_raster_extension(self) -> QualityReport:
+        fields = (
+            self.coded_width,
+            self.coded_height,
+            self.raster_step,
+            self.ceiling_kbps,
+            self.last_idr_bytes,
+        )
+        if self.quality_version == 2:
+            if any(value is None for value in fields):
+                raise ValueError("Incomplete raster quality report")
+        elif any(value is not None for value in fields):
+            raise ValueError("Raster fields require quality_version=2")
+        return self
 
 
 def desktop_record(doc: dict[str, Any], stream: str) -> dict[str, Any]:
@@ -70,9 +94,18 @@ def ceiling(start: dict[str, Any]) -> int:
     return 4000 if start["descriptor"]["profile_id"] == "default" else 2000
 
 
+def raster(start: dict[str, Any], step: int) -> tuple[int, int]:
+    track = start["descriptor"]["tracks"][0]
+    return (track["width"] >> step) & ~1, (track["height"] >> step) & ~1
+
+
+def effective_ceiling(start: dict[str, Any], report: dict[str, Any]) -> int:
+    return min(ceiling(start), report.get("ceiling_kbps") or ceiling(start))
+
+
 class RuntimeQuality:
     async def report(self, sn: str, report: QualityReport) -> bool:
-        value = report.model_dump(mode="json")
+        value = report.model_dump(mode="json", exclude_none=True)
 
         def accept(doc: dict[str, Any]) -> bool:
             try:
@@ -81,6 +114,24 @@ class RuntimeQuality:
                 return False
             old = doc.get("runtime_quality") or {}
             pending = doc.get("quality_pending") or {}
+            if report.quality_version == 2:
+                if (
+                    raster(start, report.raster_step or 0)
+                    != (report.coded_width, report.coded_height)
+                    or (report.ceiling_kbps or 0) > ceiling(start)
+                    or report.applied_kbps > (report.ceiling_kbps or 0)
+                ):
+                    return False
+                if (
+                    report.status == 0
+                    and report.generation > 0
+                    and pending.get("stream_instance_id")
+                    == str(report.stream_instance_id)
+                    and report.generation == pending.get("generation")
+                    and pending.get("raster_step") is not None
+                    and report.raster_step != pending["raster_step"]
+                ):
+                    return False
             max_generation = (
                 pending.get("generation", 0)
                 if pending.get("stream_instance_id") == str(report.stream_instance_id)
@@ -142,7 +193,12 @@ class RuntimeQuality:
         pending = doc.get("quality_pending") or {}
         if pending.get("stream_instance_id") != stream:
             pending = {}
-        status = "limited" if report["applied_kbps"] < ceiling(start) else "nominal"
+        status = (
+            "limited"
+            if report["applied_kbps"] < effective_ceiling(start, report)
+            or report.get("raster_step", 0)
+            else "nominal"
+        )
         if pending.get("ack") == "nack" and pending.get("code") == "unsupported":
             status = "unsupported"
         elif pending.get("ack") in ("nack", "publish_failed"):
@@ -154,7 +210,14 @@ class RuntimeQuality:
         transport = age < 3000 and bool(report["flags"] & 4)
         return {
             "available": True,
-            "ceiling_kbps": ceiling(start),
+            "ceiling_kbps": effective_ceiling(start, report),
+            "raster_available": report.get("quality_version") == 2,
+            "raster_step": report.get("raster_step"),
+            "coded_width": report.get("coded_width"),
+            "coded_height": report.get("coded_height"),
+            "initial_width": start["descriptor"]["tracks"][0]["width"],
+            "initial_height": start["descriptor"]["tracks"][0]["height"],
+            "last_idr_bytes": report.get("last_idr_bytes"),
             "applied_kbps": report["applied_kbps"],
             "generation": report["generation"],
             "requested_generation": pending.get("generation", 0),
@@ -211,7 +274,14 @@ class RuntimeQuality:
                 or not report.get("flags", 0) & 1
             ):
                 raise HTTPException(409, detail={"code": "runtime_quality_unsupported"})
-            if body.target_bitrate_kbps > ceiling(start):
+            if body.raster_step is not None:
+                if report.get("quality_version") != 2:
+                    raise HTTPException(
+                        409, detail={"code": "runtime_raster_unsupported"}
+                    )
+                if not all(raster(start, body.raster_step)):
+                    raise HTTPException(422, detail={"code": "invalid_raster_step"})
+            if body.target_bitrate_kbps > effective_ceiling(start, report):
                 raise HTTPException(
                     422, detail={"code": "quality_above_selected_profile"}
                 )
@@ -229,6 +299,7 @@ class RuntimeQuality:
                 stream_instance_id=body.stream_instance_id,
                 generation=generation,
                 target_bitrate_kbps=body.target_bitrate_kbps,
+                raster_step=body.raster_step,
                 issued_at_ms=now,
                 expires_at_ms=min(now + 5000, int(lease.expires_at.timestamp() * 1000)),
             )

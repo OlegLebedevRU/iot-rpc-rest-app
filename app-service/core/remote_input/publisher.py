@@ -61,6 +61,8 @@ async def send_ctl_command(
         await camera_runtime.release(command)
         return
     message_dict = command.model_dump(mode="json")
+    if command.type == "stream_quality_set" and message_dict.get("raster_step") is None:
+        message_dict.pop("raster_step", None)
     payload_json = json.dumps(message_dict, ensure_ascii=False).encode("utf-8")
     payload_len = len(payload_json)
 
