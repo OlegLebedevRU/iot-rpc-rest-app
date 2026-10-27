@@ -7,6 +7,19 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
 
+def _ircut_read_only(parsed: dict) -> bool:
+    if parsed.get("method_code") not in (168, 169):
+        return False
+    payload = parsed.get("payload")
+    dt = payload.get("dt") if isinstance(payload, dict) else None
+    return (
+        isinstance(dt, list)
+        and len(dt) == 1
+        and isinstance(dt[0], dict)
+        and dt[0].get("action") in ("inspect", "status")
+    )
+
+
 class CameraTaskRoute(APIRoute):
     def get_route_handler(self):
         original = super().get_route_handler()
@@ -27,8 +40,12 @@ class CameraTaskRoute(APIRoute):
                     parsed = json.loads(body, object_pairs_hook=unique)
                     if (
                         isinstance(parsed, dict)
-                        and parsed.get("camera_contract_revision") is not None
+                        and (
+                            parsed.get("camera_contract_revision") is not None
+                            or parsed.get("method_code") in (168, 169)
+                        )
                         and parsed.get("method_code") != 160
+                        and not _ircut_read_only(parsed)
                         and (
                             request.headers.get("X-Role", "").lower() in ("viewer", "4")
                             or request.headers.get("X-Role-Id") == "4"
@@ -41,7 +58,7 @@ class CameraTaskRoute(APIRoute):
                     if (
                         isinstance(parsed, dict)
                         and type(parsed.get("method_code")) is int
-                        and parsed["method_code"] in range(160, 168)
+                        and parsed["method_code"] in range(160, 170)
                     ):
                         if len(body) > 12288:
                             raise ValueError("camera_request_too_large")

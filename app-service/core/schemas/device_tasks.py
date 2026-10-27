@@ -113,6 +113,14 @@ class TaskCreate(TaskHeader):
                     "RPC TTL must be positive and no longer than remaining PIN lifetime"
                 )
             self.payload = payload.model_dump(mode="json")
+        elif self.method_code in (168, 169):
+            from core.camera.ircut_contract import validate_ircut
+
+            if self.camera_contract_revision is not None:
+                raise ValueError("IR-cut uses its own ircut_revision")
+            self.payload = validate_ircut(self.method_code, self.payload)
+            if self.ttl < 1:
+                raise ValueError("IR-cut operations require a positive TTL")
         elif self.method_code in range(160, 168):
             if self.camera_contract_revision is not None:
                 from core.camera.contract import validate_rpc
