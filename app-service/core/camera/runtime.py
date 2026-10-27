@@ -136,7 +136,12 @@ class CameraRuntime:
                     if datetime.fromisoformat(job["until"]) <= db_now:
                         raise ValueError("camera_job_expired")
                     value = copy.deepcopy(job["value"])
-                    if job["action"] in ("start", "renew"):
+                    if job["action"] == "quality":
+                        from core.camera.quality_policy import quality_enabled
+
+                        if not quality_enabled(sn):
+                            raise ValueError("camera_quality_disabled")
+                    if job["action"] in ("start", "renew", "quality"):
                         value["budget_ms"] = await self.authority(sn, value)
                     updated = copy.deepcopy(state)
                     result = CameraMachine(
@@ -178,9 +183,18 @@ class CameraRuntime:
                     pending.append(entry)
                     continue
                 message = entry["message"]
+                if message["type"] == "stream_quality_set":
+                    from core.camera.quality_policy import quality_enabled
+
+                    if not quality_enabled(sn):
+                        continue
                 if message["issuer_epoch"] != row.state["epoch"]:
                     continue
-                if message["type"] in ("stream_start", "lease_renew"):
+                if message["type"] in (
+                    "stream_start",
+                    "lease_renew",
+                    "stream_quality_set",
+                ):
                     try:
                         receipt = row.state["commands"].get(message["command_id"], {})
                         authority_value = {

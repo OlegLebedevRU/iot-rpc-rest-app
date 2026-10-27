@@ -46,6 +46,7 @@ from core.remote_input.leases import lease_registry
 from core.remote_input.presence import presence_registry
 from core.remote_input.publisher import send_ctl_command
 from core.remote_input.runtime_quality import QualityRequest
+from core.camera.quality_contract import QualityRequest as CameraQualityRequest
 from core.remote_input.schemas import (
     ALLOWED_VK_CODES,
     ClickRequest,
@@ -436,6 +437,7 @@ async def post_stream_start(
                     body.root,
                     send_ctl_command,
                     monotonic=monotonic,
+                    quality_writer_key=quality_writer_key,
                     readiness_nonce=readiness_nonce,
                     **(
                         {"selected": selected_headers(request.headers)}
@@ -565,19 +567,35 @@ async def get_video_quality(
 
     if await DeviceRepo.get_device_id(session, sn=sn, org_id=org_id) is None:
         raise HTTPException(403, "device not available for organization")
-    return await runtime_quality.get(sn, str(stream_instance_id))
+    result = await runtime_quality.get(sn, str(stream_instance_id))
+    if not result.get("available"):
+        from core.camera.quality import camera_quality
+
+        return await camera_quality.get(sn, str(stream_instance_id))
+    return result
 
 
 @router.post("/lease/{lease_id}/video-quality")
 async def post_video_quality(
     lease_id: UUID,
-    body: QualityRequest,
+    body: QualityRequest | CameraQualityRequest,
     org_id: Internal_Org_dep,
     _: Internal_Auth_dep,
     request: Request,
 ) -> dict[str, Any]:
     from core.remote_input.runtime_quality import runtime_quality
 
+    if isinstance(body, CameraQualityRequest):
+        from core.camera.quality import camera_quality
+
+        return await camera_quality.set(
+            remote_input_service,
+            lease_id,
+            org_id,
+            extract_caller_user_id(request),
+            extract_caller_session_id(request),
+            body,
+        )
     return await runtime_quality.set(
         remote_input_service,
         lease_id,

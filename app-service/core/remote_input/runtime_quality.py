@@ -103,6 +103,25 @@ def effective_ceiling(start: dict[str, Any], report: dict[str, Any]) -> int:
     return min(ceiling(start), report.get("ceiling_kbps") or ceiling(start))
 
 
+def original_writer(
+    original: dict, current: Any, org: int, user: str, session: str, key: UUID
+) -> bool:
+    """Same original-initiator proof for desktop and camera; no SU override."""
+    return bool(
+        current is not None
+        and current.org_id == org
+        and current.owner_user_id == user
+        and current.owner_session_id == session
+        and original.get("org_id") == org
+        and original.get("owner_user_id") == user
+        and original.get("owner_session_id") == session
+        and hmac.compare_digest(
+            original.get("quality_writer_hash", ""),
+            hashlib.sha256(str(key).encode()).hexdigest(),
+        )
+    )
+
+
 class RuntimeQuality:
     async def report(self, sn: str, report: QualityReport) -> bool:
         value = report.model_dump(mode="json", exclude_none=True)
@@ -253,15 +272,8 @@ class RuntimeQuality:
             if (
                 current is None
                 or current.scope not in ("stream", "input")
-                or current.org_id != org_id
-                or current.owner_user_id != user
-                or current.owner_session_id != session
-                or original.get("org_id") != org_id
-                or original.get("owner_user_id") != user
-                or original.get("owner_session_id") != session
-                or not hmac.compare_digest(
-                    original.get("quality_writer_hash", ""),
-                    hashlib.sha256(str(body.writer_key).encode()).hexdigest(),
+                or not original_writer(
+                    original, current, org_id, user, session, body.writer_key
                 )
             ):
                 raise HTTPException(403, detail={"code": "quality_publisher_required"})

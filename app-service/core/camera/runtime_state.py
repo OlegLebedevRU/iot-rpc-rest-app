@@ -115,6 +115,8 @@ class CameraMachine:
             return value["command_id"] in self.s["commands"]
         if action == "ack":
             receipt = self.s["commands"].get(value["command_id"])
+            if receipt and receipt["message"]["type"] == "stream_quality_set":
+                return False  # Quality completion is an ordered source report.
             if (
                 not receipt
                 or receipt["message"]["issuer_epoch"] != self.s["epoch"]
@@ -141,6 +143,8 @@ class CameraMachine:
             return True
         if not self.s["enrolled"]:
             raise ValueError("camera_enrollment_required")
+        if action == "quality":
+            return self.quality(value)
         base = {
             "v": 1,
             "camera_admission_revision": ADMISSION,
@@ -246,6 +250,49 @@ class CameraMachine:
         while len(self.s["command_order"]) > 64:
             del self.s["commands"][self.s["command_order"].pop(0)]
         return self.emit(command, self.now + ttl, held=True)
+
+    def quality(self, value: dict) -> dict:
+        from core.camera.quality_contract import (
+            CameraQualitySet,
+            REVISION,
+            command_deadline,
+        )
+
+        active = self.s["active"]
+        if not active or any(
+            value[k] != active["start"][k]
+            for k in ("sn", "lease_id", "stream_instance_id")
+        ):
+            raise ValueError("camera_stream_not_live")
+        if value["generation"] <= active.get("quality_generation", 0):
+            raise ValueError("camera_quality_stale")
+        start = active["start"]
+        expires = command_deadline(
+            self.issued, min(value["budget_ms"], active["deadline"] - self.now), 15000
+        )
+        command = CameraQualitySet(
+            quality_revision=REVISION,
+            sn=start["sn"],
+            command_id=value["command_id"],
+            lease_id=start["lease_id"],
+            stream_instance_id=start["stream_instance_id"],
+            boot_id=start["binding"]["boot_id"],
+            issuer_epoch=start["issuer_epoch"],
+            admission_seq=start["admission_seq"],
+            generation=value["generation"],
+            issued_at_ms=self.issued,
+            expires_at_ms=expires,
+            target=value["target"],
+        ).model_dump(mode="json", exclude_none=True)
+        active["quality_generation"] = value["generation"]
+        self.s["commands"][command["command_id"]] = {
+            "message": copy.deepcopy(command),
+            **{key: value[key] for key in ("media_clock_id",) if key in value},
+        }
+        self.s["command_order"].append(command["command_id"])
+        while len(self.s["command_order"]) > 64:
+            del self.s["commands"][self.s["command_order"].pop(0)]
+        return self.emit(command, self.now + expires - self.issued)
 
     def incoming(self, message: dict) -> bool:
         validate(message)

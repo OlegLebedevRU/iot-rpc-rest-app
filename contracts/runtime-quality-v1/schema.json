@@ -1,0 +1,620 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:leo4:l4-quality:1.0.0",
+  "title": "Candidate runtime quality extension (not media descriptor)",
+  "$defs": {
+    "QualityTarget": {
+      "additionalProperties": false,
+      "description": "A partial target; omitted axes retain their last requested value.\n\nZero bitrate/FPS and empty size mean native Auto. A preset supplies defaults;\nexplicit axes override those defaults. Presets are not admissible-mode lists.",
+      "properties": {
+        "target_bitrate_kbps": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Bitrate Kbps"
+        },
+        "target_fps": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Fps"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "pattern": "^(?:|[1-9][0-9]*x[1-9][0-9]*)$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        },
+        "preset_id": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preset Id"
+        },
+        "codec_policy": {
+          "anyOf": [
+            {
+              "enum": [
+                "auto",
+                "h264",
+                "h265"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codec Policy"
+        },
+        "rate_control": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rate Control"
+        },
+        "gop_seconds": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gop Seconds"
+        }
+      },
+      "title": "QualityTarget",
+      "type": "object",
+      "anyOf": [
+        {
+          "required": [
+            "target_bitrate_kbps"
+          ],
+          "properties": {
+            "target_bitrate_kbps": {
+              "not": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "target_fps"
+          ],
+          "properties": {
+            "target_fps": {
+              "not": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "size"
+          ],
+          "properties": {
+            "size": {
+              "not": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "preset_id"
+          ],
+          "properties": {
+            "preset_id": {
+              "not": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "codec_policy"
+          ],
+          "properties": {
+            "codec_policy": {
+              "not": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "rate_control"
+          ],
+          "properties": {
+            "rate_control": {
+              "not": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "required": [
+            "gop_seconds"
+          ],
+          "properties": {
+            "gop_seconds": {
+              "not": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "QualityRequest": {
+      "additionalProperties": false,
+      "description": "Same original-writer proof and stream fence as desktop quality requests.",
+      "properties": {
+        "quality_revision": {
+          "const": "l4-quality/1.0.0",
+          "title": "Quality Revision",
+          "type": "string"
+        },
+        "stream_instance_id": {
+          "format": "uuid",
+          "title": "Stream Instance Id",
+          "type": "string"
+        },
+        "writer_key": {
+          "format": "uuid",
+          "title": "Writer Key",
+          "type": "string"
+        },
+        "target": {
+          "$ref": "#/$defs/QualityTarget"
+        }
+      },
+      "required": [
+        "quality_revision",
+        "stream_instance_id",
+        "writer_key",
+        "target"
+      ],
+      "title": "QualityRequest",
+      "type": "object"
+    },
+    "CameraQualitySet": {
+      "additionalProperties": false,
+      "description": "Camera-specific adapter envelope on the existing CTL topic.\n\nissuer_epoch/admission_seq bind the active START; generation orders quality\nrequests, independently of sample_seq. No writer credential reaches firmware.",
+      "properties": {
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        },
+        "type": {
+          "const": "stream_quality_set",
+          "default": "stream_quality_set",
+          "title": "Type",
+          "type": "string"
+        },
+        "quality_revision": {
+          "const": "l4-quality/1.0.0",
+          "title": "Quality Revision",
+          "type": "string"
+        },
+        "sn": {
+          "minLength": 1,
+          "title": "Sn",
+          "type": "string"
+        },
+        "command_id": {
+          "format": "uuid",
+          "title": "Command Id",
+          "type": "string"
+        },
+        "lease_id": {
+          "format": "uuid",
+          "title": "Lease Id",
+          "type": "string"
+        },
+        "stream_instance_id": {
+          "format": "uuid",
+          "title": "Stream Instance Id",
+          "type": "string"
+        },
+        "boot_id": {
+          "format": "uuid",
+          "title": "Boot Id",
+          "type": "string"
+        },
+        "issuer_epoch": {
+          "format": "uuid",
+          "title": "Issuer Epoch",
+          "type": "string"
+        },
+        "admission_seq": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "title": "Admission Seq",
+          "type": "integer"
+        },
+        "generation": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "title": "Generation",
+          "type": "integer"
+        },
+        "issued_at_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Issued At Ms",
+          "type": "integer"
+        },
+        "expires_at_ms": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "target": {
+          "$ref": "#/$defs/QualityTarget"
+        }
+      },
+      "required": [
+        "quality_revision",
+        "sn",
+        "command_id",
+        "lease_id",
+        "stream_instance_id",
+        "boot_id",
+        "issuer_epoch",
+        "admission_seq",
+        "generation",
+        "issued_at_ms",
+        "expires_at_ms",
+        "target"
+      ],
+      "title": "CameraQualitySet",
+      "type": "object"
+    },
+    "QualityActual": {
+      "additionalProperties": false,
+      "description": "Confirmed encoder settings; observed traffic is not encoder target.",
+      "properties": {
+        "configured": {
+          "$ref": "#/$defs/QualityTarget"
+        },
+        "applied_bitrate_kbps": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Applied Bitrate Kbps"
+        },
+        "coded_width": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Coded Width"
+        },
+        "coded_height": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Coded Height"
+        },
+        "nominal_fps": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Nominal Fps"
+        },
+        "codec": {
+          "anyOf": [
+            {
+              "enum": [
+                "h264",
+                "h265"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Codec"
+        }
+      },
+      "required": [
+        "configured"
+      ],
+      "title": "QualityActual",
+      "type": "object"
+    },
+    "CameraQualityReport": {
+      "additionalProperties": false,
+      "properties": {
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        },
+        "type": {
+          "const": "stream_quality_report",
+          "default": "stream_quality_report",
+          "title": "Type",
+          "type": "string"
+        },
+        "quality_revision": {
+          "const": "l4-quality/1.0.0",
+          "title": "Quality Revision",
+          "type": "string"
+        },
+        "sn": {
+          "minLength": 1,
+          "title": "Sn",
+          "type": "string"
+        },
+        "lease_id": {
+          "format": "uuid",
+          "title": "Lease Id",
+          "type": "string"
+        },
+        "stream_instance_id": {
+          "format": "uuid",
+          "title": "Stream Instance Id",
+          "type": "string"
+        },
+        "boot_id": {
+          "format": "uuid",
+          "title": "Boot Id",
+          "type": "string"
+        },
+        "issuer_epoch": {
+          "format": "uuid",
+          "title": "Issuer Epoch",
+          "type": "string"
+        },
+        "admission_seq": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "title": "Admission Seq",
+          "type": "integer"
+        },
+        "sample_seq": {
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991,
+          "title": "Sample Seq",
+          "type": "integer"
+        },
+        "generation": {
+          "maximum": 9007199254740991,
+          "minimum": 0,
+          "title": "Generation",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "applied",
+            "limited",
+            "unsupported",
+            "unconfirmed"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "requested": {
+          "$ref": "#/$defs/QualityTarget"
+        },
+        "actual": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/QualityActual"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "origin": {
+          "enum": [
+            "initiator",
+            "source_pressure",
+            "source_recovery"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "supported_targets": {
+          "items": {
+            "enum": [
+              "target_bitrate_kbps",
+              "size",
+              "target_fps",
+              "preset_id",
+              "codec_policy",
+              "rate_control",
+              "gop_seconds"
+            ],
+            "type": "string"
+          },
+          "title": "Supported Targets",
+          "type": "array"
+        },
+        "bitrate_min_kbps": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bitrate Min Kbps"
+        },
+        "bitrate_max_kbps": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bitrate Max Kbps"
+        },
+        "persistence": {
+          "anyOf": [
+            {
+              "enum": [
+                "camera_config",
+                "volatile"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Persistence"
+        },
+        "transport_pressure": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transport Pressure"
+        }
+      },
+      "required": [
+        "quality_revision",
+        "sn",
+        "lease_id",
+        "stream_instance_id",
+        "boot_id",
+        "issuer_epoch",
+        "admission_seq",
+        "sample_seq",
+        "generation",
+        "status",
+        "requested",
+        "origin"
+      ],
+      "title": "CameraQualityReport",
+      "type": "object"
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/QualityRequest"
+    },
+    {
+      "$ref": "#/$defs/CameraQualitySet"
+    },
+    {
+      "$ref": "#/$defs/CameraQualityReport"
+    }
+  ]
+}
