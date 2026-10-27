@@ -4,11 +4,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from fastapi import HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from core.camera.ircut_contract import REVISION, require_ircut, validate_ircut
 from core.camera.admission import admit_task
+from core.camera.task_route import CameraTaskRoute
 from core.config import settings
 from core.schemas.device_tasks import TaskCreate
 
@@ -160,3 +162,27 @@ async def test_registered_admission_uses_online_gauge(
             task,
             "synthetic-sn",
         )
+
+
+@pytest.mark.parametrize("method", [168, 169])
+@pytest.mark.parametrize("action", ["inspect", "status", "start", "cancel", "recover"])
+def test_viewer_can_inspect_but_not_actuate(method, action):
+    app = FastAPI()
+    router = APIRouter(route_class=CameraTaskRoute)
+
+    @router.post("/tasks")
+    async def accept(task: TaskCreate):
+        return {"method": task.method_code}
+
+    app.include_router(router)
+    response = TestClient(app).post(
+        "/tasks",
+        headers={"X-Role": "viewer"},
+        json={
+            "ext_task_id": "ircut",
+            "device_id": 4623,
+            "method_code": method,
+            "payload": {"dt": [item(action)]},
+        },
+    )
+    assert response.status_code == (200 if action in ("inspect", "status") else 403)

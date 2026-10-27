@@ -7,6 +7,19 @@ from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
 
+def _ircut_read_only(parsed: dict) -> bool:
+    if parsed.get("method_code") not in (168, 169):
+        return False
+    payload = parsed.get("payload")
+    dt = payload.get("dt") if isinstance(payload, dict) else None
+    return (
+        isinstance(dt, list)
+        and len(dt) == 1
+        and isinstance(dt[0], dict)
+        and dt[0].get("action") in ("inspect", "status")
+    )
+
+
 class CameraTaskRoute(APIRoute):
     def get_route_handler(self):
         original = super().get_route_handler()
@@ -32,6 +45,7 @@ class CameraTaskRoute(APIRoute):
                             or parsed.get("method_code") in (168, 169)
                         )
                         and parsed.get("method_code") != 160
+                        and not _ircut_read_only(parsed)
                         and (
                             request.headers.get("X-Role", "").lower() in ("viewer", "4")
                             or request.headers.get("X-Role-Id") == "4"
