@@ -287,7 +287,11 @@ class CameraMachine:
         active["quality_generation"] = value["generation"]
         self.s["commands"][command["command_id"]] = {
             "message": copy.deepcopy(command),
-            **{key: value[key] for key in ("media_clock_id",) if key in value},
+            **{
+                key: value[key]
+                for key in ("media_clock_id", "owner_user_id", "owner_session_id")
+                if key in value
+            },
         }
         self.s["command_order"].append(command["command_id"])
         while len(self.s["command_order"]) > 64:
