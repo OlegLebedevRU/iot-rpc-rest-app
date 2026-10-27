@@ -201,7 +201,12 @@ class CameraRuntime:
                             **message,
                             **{
                                 k: receipt[k]
-                                for k in ("media_clock_id", "media_lease_expires_at")
+                                for k in (
+                                    "media_clock_id",
+                                    "media_lease_expires_at",
+                                    "owner_user_id",
+                                    "owner_session_id",
+                                )
                                 if k in receipt
                             },
                         }

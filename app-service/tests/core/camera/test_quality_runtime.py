@@ -193,3 +193,36 @@ async def test_source_down_and_recovery_keep_target_and_do_not_claim_new_generat
     actual = await camera_quality.get(sn, raw["stream_instance_id"])
     assert actual["applied_kbps"] == 3000 and actual["requested_kbps"] == 0
     assert actual["ceiling_kbps"] == 5000 and actual["generation"] == 0
+
+
+@pytest.mark.anyio
+async def test_quality_rechecks_original_lease_owner_before_publication(environment):
+    e = environment
+    await runtime_fixtures.enroll(e)
+    value, _ = await runtime_fixtures.start(e)
+    seen = []
+
+    async def authority(sn, payload):
+        seen.append(dict(payload))
+        if len(seen) > 1:
+            assert payload["owner_user_id"] == "original-user"
+            assert payload["owner_session_id"] == "original-session"
+            raise ValueError("camera_lease_owner_changed")
+        return 60000
+
+    e.runtime.authority = authority
+    sent = len(e.sent)
+    await e.runtime.submit(
+        runtime_fixtures.SN,
+        "quality",
+        {
+            **value,
+            "generation": 1,
+            "command_id": str(uuid4()),
+            "owner_user_id": "original-user",
+            "owner_session_id": "original-session",
+            "target": {"target_bitrate_kbps": 1000},
+        },
+    )
+    assert len(seen) == 2 and len(e.sent) == sent
+    assert not e.store.row.state["outbox"]
