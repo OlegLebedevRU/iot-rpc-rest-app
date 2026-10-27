@@ -27,7 +27,10 @@ class CameraTaskRoute(APIRoute):
                     parsed = json.loads(body, object_pairs_hook=unique)
                     if (
                         isinstance(parsed, dict)
-                        and parsed.get("camera_contract_revision") is not None
+                        and (
+                            parsed.get("camera_contract_revision") is not None
+                            or parsed.get("method_code") in (168, 169)
+                        )
                         and parsed.get("method_code") != 160
                         and (
                             request.headers.get("X-Role", "").lower() in ("viewer", "4")
@@ -41,7 +44,7 @@ class CameraTaskRoute(APIRoute):
                     if (
                         isinstance(parsed, dict)
                         and type(parsed.get("method_code")) is int
-                        and parsed["method_code"] in range(160, 168)
+                        and parsed["method_code"] in range(160, 170)
                     ):
                         if len(body) > 12288:
                             raise ValueError("camera_request_too_large")

@@ -142,7 +142,8 @@ def require_camera_operation(method: int, item: dict, camera: dict) -> None:
 
 
 async def admit_task(session, task, sn: str) -> None:
-    if task.camera_contract_revision is None:
+    ircut = task.method_code in (168, 169)
+    if task.camera_contract_revision is None and not ircut:
         return
     item = task.payload["dt"][0]
     connection = await session.scalar(
@@ -167,6 +168,23 @@ async def admit_task(session, task, sn: str) -> None:
         updated = updated.replace(tzinfo=UTC)
     if updated is None or not 0 <= (now - updated).total_seconds() <= 60:
         raise HTTPException(409, "camera_capabilities_stale")
+    if ircut:
+        from core.camera.ircut_contract import require_ircut
+
+        try:
+            validate_gauge(gauge.gauges)
+            observation = next(
+                (
+                    record["450"]["ircut"]
+                    for record in gauge.gauges.get("300", [])
+                    if isinstance(record.get("450", {}).get("ircut"), dict)
+                ),
+                None,
+            )
+            require_ircut(task.method_code, item, observation)
+        except ValueError, TypeError, KeyError, AttributeError:
+            raise HTTPException(409, "camera_capabilities_invalid") from None
+        return
     try:
         validate_gauge(gauge.gauges)
         camera = camera_from_gauge(gauge.gauges, item["camera_id"])
