@@ -507,6 +507,7 @@ class CameraConfig(BaseModel):
     monotonic_runtime_enabled: bool = False
     # TASK-30 deploys readers first; firmware writers are enabled in a later gate.
     writers_enabled: bool = False
+    quality_sn_allowlist: list[str] = Field(default_factory=list)
     # Temporary server-readiness producers only. Never enables camera RPC writes.
     test_start_sn_allowlist: list[str] = Field(default_factory=list, max_length=16)
 

@@ -1,0 +1,9 @@
+{
+  "revision": "l4-quality/1.0.0",
+  "status": "runtime-release-candidate",
+  "schema_sha256": "80b2866c985b48141011b054bb1094c4b2bed581e832561d0f9b8a2227066d85",
+  "media_contract": "l4-media/3.0.0",
+  "media_schema_sha256": "b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818",
+  "runtime_handler_registered": true,
+  "deployed": false
+}

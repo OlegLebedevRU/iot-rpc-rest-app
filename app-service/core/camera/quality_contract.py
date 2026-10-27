@@ -1,4 +1,4 @@
-"""Candidate shared quality payloads. Not an activated camera control handler.
+"""Negotiated quality payloads; actual source capability selects implemented axes.
 
 The existing desktop v1/v2 envelopes remain unchanged. Bounds below describe
 JSON/wire representation, never a quality policy or a camera mode whitelist.
@@ -11,7 +11,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-REVISION = "l4-quality/0.1.0-proposed"
+REVISION = "l4-quality/1.0.0"
 Integer = Annotated[int, Field(strict=True, ge=0, le=2**53 - 1)]
 Positive = Annotated[int, Field(strict=True, gt=0, le=2**53 - 1)]
 
@@ -48,7 +48,7 @@ class QualityRequest(BaseModel):
     """Same original-writer proof and stream fence as desktop quality requests."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
-    quality_revision: Literal["l4-quality/0.1.0-proposed"]
+    quality_revision: Literal["l4-quality/1.0.0"]
     stream_instance_id: UUID
     writer_key: UUID
     target: QualityTarget
@@ -64,7 +64,7 @@ class CameraQualitySet(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     v: Literal[1] = 1
     type: Literal["stream_quality_set"] = "stream_quality_set"
-    quality_revision: Literal["l4-quality/0.1.0-proposed"]
+    quality_revision: Literal["l4-quality/1.0.0"]
     sn: str = Field(min_length=1)
     command_id: UUID
     lease_id: UUID
@@ -108,7 +108,7 @@ class CameraQualityReport(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     v: Literal[1] = 1
     type: Literal["stream_quality_report"] = "stream_quality_report"
-    quality_revision: Literal["l4-quality/0.1.0-proposed"]
+    quality_revision: Literal["l4-quality/1.0.0"]
     sn: str = Field(min_length=1)
     lease_id: UUID
     stream_instance_id: UUID
@@ -123,6 +123,21 @@ class CameraQualityReport(BaseModel):
     actual: QualityActual | None = None
     # A local bitrate recovery uses the same accepted generation, a new sample.
     origin: Literal["initiator", "source_pressure", "source_recovery"]
+    supported_targets: list[
+        Literal[
+            "target_bitrate_kbps",
+            "size",
+            "target_fps",
+            "preset_id",
+            "codec_policy",
+            "rate_control",
+            "gop_seconds",
+        ]
+    ] = Field(default_factory=list)
+    bitrate_min_kbps: Integer | None = None
+    bitrate_max_kbps: Positive | None = None
+    persistence: Literal["camera_config", "volatile"] | None = None
+    transport_pressure: bool | None = None
 
     @model_validator(mode="after")
     def confirmed_actual(self) -> CameraQualityReport:
@@ -195,7 +210,7 @@ def protocol_schema() -> dict:
     ]
     return {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "urn:leo4:l4-quality:0.1.0-proposed",
+        "$id": "urn:leo4:l4-quality:1.0.0",
         "title": "Candidate runtime quality extension (not media descriptor)",
         "$defs": definitions,
         "oneOf": [

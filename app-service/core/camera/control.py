@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import time
 from typing import Any, Literal
@@ -218,6 +219,7 @@ class CameraControl:
         send,
         *,
         monotonic: bool = False,
+        quality_writer_key: UUID | None = None,
         readiness_nonce: str | None = None,
         selected: dict | None = None,
     ) -> dict:
@@ -324,6 +326,14 @@ class CameraControl:
                 "state": "starting",
                 "result": "accepted",
                 "confirmation": None,
+                "org_id": lease.org_id,
+                "owner_user_id": lease.owner_user_id,
+                "owner_session_id": lease.owner_session_id,
+                "quality_writer_hash": (
+                    hashlib.sha256(str(quality_writer_key).encode()).hexdigest()
+                    if quality_writer_key
+                    else ""
+                ),
             }
             if modern:
                 record["media_clock_id"] = media_lease.media_clock_id
@@ -431,6 +441,17 @@ class CameraControl:
                 state="running",
                 result=ack.result,
                 confirmation="command_ack",
+                **(
+                    {
+                        "quality_authority": {
+                            "boot_id": command.root["binding"]["boot_id"],
+                            "issuer_epoch": command.root["issuer_epoch"],
+                            "admission_seq": command.root["admission_seq"],
+                        }
+                    }
+                    if monotonic
+                    else {}
+                ),
             )
             if record is None:
                 raise ValueError("camera_epoch_replaced")

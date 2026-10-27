@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:leo4:l4-quality:0.1.0-proposed",
+  "$id": "urn:leo4:l4-quality:1.0.0",
   "title": "Candidate runtime quality extension (not media descriptor)",
   "$defs": {
     "QualityTarget": {
@@ -198,7 +198,7 @@
       "description": "Same original-writer proof and stream fence as desktop quality requests.",
       "properties": {
         "quality_revision": {
-          "const": "l4-quality/0.1.0-proposed",
+          "const": "l4-quality/1.0.0",
           "title": "Quality Revision",
           "type": "string"
         },
@@ -242,7 +242,7 @@
           "type": "string"
         },
         "quality_revision": {
-          "const": "l4-quality/0.1.0-proposed",
+          "const": "l4-quality/1.0.0",
           "title": "Quality Revision",
           "type": "string"
         },
@@ -422,7 +422,7 @@
           "type": "string"
         },
         "quality_revision": {
-          "const": "l4-quality/0.1.0-proposed",
+          "const": "l4-quality/1.0.0",
           "title": "Quality Revision",
           "type": "string"
         },
@@ -514,6 +514,78 @@
           ],
           "title": "Origin",
           "type": "string"
+        },
+        "supported_targets": {
+          "items": {
+            "enum": [
+              "target_bitrate_kbps",
+              "size",
+              "target_fps",
+              "preset_id",
+              "codec_policy",
+              "rate_control",
+              "gop_seconds"
+            ],
+            "type": "string"
+          },
+          "title": "Supported Targets",
+          "type": "array"
+        },
+        "bitrate_min_kbps": {
+          "anyOf": [
+            {
+              "maximum": 9007199254740991,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bitrate Min Kbps"
+        },
+        "bitrate_max_kbps": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bitrate Max Kbps"
+        },
+        "persistence": {
+          "anyOf": [
+            {
+              "enum": [
+                "camera_config",
+                "volatile"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Persistence"
+        },
+        "transport_pressure": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transport Pressure"
         }
       },
       "required": [

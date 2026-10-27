@@ -1,7 +1,8 @@
-# Runtime quality candidate 0.1
+# Runtime quality 1.0 — release candidate
 
-**Not activated.** This packet is a proposed extension to existing quality
-set/report messages, not a replacement media descriptor or frozen camera schema.
+This extends existing quality set/report messages. Runtime handlers implement
+the bitrate axis; the source advertises its actual supported axes and native
+bounds. Deployment/acceptance is recorded separately in the release handoff.
 
 - `schema.json`: structural JSON Schema generated from the typed candidate.
 - `manifest.json`: exact candidate and unchanged common media schema pins.
@@ -15,7 +16,7 @@ set/report messages, not a replacement media descriptor or frozen camera schema.
 Run from the repository root with its uv environment:
 
 ```powershell
-uv run python contracts/runtime-quality-proposal/verify.py
+uv run python contracts/runtime-quality-v1/verify.py
 uv run pytest app-service/tests/core/camera/test_quality_contract.py -q
 ```
 

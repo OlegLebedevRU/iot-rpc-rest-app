@@ -195,6 +195,7 @@ def load_state(value: dict) -> dict:
             if name == "active" and (
                 not number(item["seq"])
                 or item["seq"] < 1
+                or not number(item.get("quality_generation", 0))
                 or item["start"]["admission_seq"] > value["counter"]
             ):
                 raise ValueError("active_counter")

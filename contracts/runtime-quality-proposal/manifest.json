@@ -1,9 +1,0 @@
-{
-  "revision": "l4-quality/0.1.0-proposed",
-  "status": "candidate-offline-only",
-  "schema_sha256": "4c80fcc16f5e74ab4ebd954e0598e162d23e3ce5bead29a49c81fc6dca66e4c0",
-  "media_contract": "l4-media/3.0.0",
-  "media_schema_sha256": "b86ca6f066fcdecb09cf7145a7fb23d87b77311a53c7ea04f0fb6e8a905b2818",
-  "runtime_handler_registered": false,
-  "deployed": false
-}

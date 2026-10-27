@@ -187,7 +187,7 @@ def test_unconfirmed_report_does_not_invent_actual_or_zero_metrics():
 
 
 def test_checked_schema_matches_models_and_accepts_non_desktop_target():
-    root = Path(__file__).resolve().parents[4] / "contracts/runtime-quality-proposal"
+    root = Path(__file__).resolve().parents[4] / "contracts/runtime-quality-v1"
     schema = json.loads((root / "schema.json").read_text(encoding="utf-8"))
     validator = Draft202012Validator(schema, format_checker=FormatChecker())
     validator.validate(command().model_dump(mode="json", exclude_none=True))

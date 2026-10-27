@@ -93,6 +93,11 @@ def validator(enrollment: bool | str) -> StrictValidator:
 
 def validate(message: dict) -> dict:
     bounded_json(message, 4096, 8)
+    if message.get("quality_revision") is not None:
+        from core.camera.quality_contract import CameraQualitySet
+
+        CameraQualitySet.model_validate(message)
+        return message
     revision = message.get("revision")
     selector = (
         revision

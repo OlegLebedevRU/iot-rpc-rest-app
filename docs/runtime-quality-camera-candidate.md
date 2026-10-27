@@ -1,12 +1,14 @@
-# Camera adaptive quality: candidate 0.1
+# Camera adaptive quality: runtime1.0 release candidate
 
-Status: **proposal and offline preparation**, not a negotiated runtime revision.
-User authorized preparation without deployment or browser START on 2026-10-27.
+Status: runtime implementation under validation. The user authorized deployment,
+visible Chrome acceptance and release after the initial preparation stage.
 
-Canonical candidate: `contracts/runtime-quality-proposal/schema.json`.
+Canonical candidate: `contracts/runtime-quality-v1/schema.json`.
 This extends quality control; it does not replace or fork `l4-media/3.0.0`.
 Existing desktop quality v1/v2, camera enrollment0.5, admission0.2 and camera1.4
-remain byte-for-byte unchanged. The candidate is not accepted by their handlers.
+schemas remain byte-for-byte unchanged. Quality1.0 is a separate explicit envelope
+on the existing CTL transport. Source capability currently advertises bitrate;
+the broader target schema does not claim active raster/FPS/codec support.
 
 ## Reuse and ownership
 
@@ -28,7 +30,7 @@ Existing main_app presence and RPC RES+gauge84 are preserved.
 
 ## Fields and semantics
 
-`quality_revision=l4-quality/0.1.0-proposed` is required explicitly. Omitted
+`quality_revision=l4-quality/1.0.0` is required explicitly. Omitted
 revision is not inferred from a camera mode or a successful old START.
 `target` is partial: omitted axes preserve their last requested settings.
 The initiator target and actual encoder state remain separate.
@@ -90,17 +92,35 @@ with the existing Janus offer and Chrome must be verified separately.
 
 ## Implementation boundary and rollout
 
-Prepared: candidate typed payloads/schema, native field projection and fixed
-deadline arithmetic with offline vectors. No handler, capability advertisement,
-automatic quality loop, new writer, source actuator or live descriptor update is
-enabled by this patch. `/api/v1/live` refused native bitrate in the hardware probe;
-config POST is persistent. Do not publish a periodic config writer as a transient
-queue-control actuator without addressing write persistence/rate and recovery.
+Implemented: source-specific quality HTTP dispatch, immutable original-writer
+digest at camera START, durable issuer generation/outbox/deadline, ordered fenced
+reports, existing camera-worker native POST/readback and original-initiator BFF/UI
+feedback. No writer credential reaches MQTT. A successor START waits for previous
+camera HTTP work to drain; STOP cancels a queued write before execution.
 
-Next: agree exact camera extension revisions; implement fenced camera quality
-commands and reports, bounded actuator with explicit persistence policy and
-down/up behavior, then BFF/UI reuse of the original initiating writer. Preserve
-desktop v1/v2 compatibility. MEDIA changes only if live raster requires them.
-Owners review and deploy their changed stacks after coordination; current task
-does not deploy, activate gates, install another firmware or start browser video.
-Offline models/vectors are not runtime or hardware acceptance.
+The source uses measured packet age in its actual TLS sending queue. Sustained
+pressure can reduce bitrate; clear conditions restore it toward the latest
+initiator target under the same generation. Receiver adaptation reuses desktop
+policy and source-declared minimum rather than imposing desktop100..4000 limits.
+The initial confirmed native encoder target supplies the default recovery goal;
+this is browser policy, not a server admission ceiling or a tariff constraint.
+
+`/api/v1/live` refused native bitrate in the hardware probe; config POST is
+persistent. Reports explicitly declare persistence=camera_config. The source
+coalesces changes with five-second write spacing, verifies once after the only
+POST and never blindly retries a mutation. This is not a flash-free actuator.
+Requested native Auto and actual configured/encoder target are reported separately.
+
+Remaining capability work: active raster/FPS/encoder-controls need a negotiated
+mutable binding and real stream/decoder qualification. Current active source
+capability does not advertise those axes. Native idle configuration is retained.
+No descriptor equality check is weakened to pretend this work is complete.
+MEDIA is unchanged for bitrate. Runtime/hardware results, exact source/image/
+firmware hashes and deployment are recorded in the release handoff separately;
+offline vectors alone are not hardware acceptance.
+
+Physical quality activation is scoped separately from START-only admission. Set
+`APP_CONFIG__CAMERA__QUALITY_SN_ALLOWLIST` for the explicit test SN in both app1
+and camera-runtime; ordinary camera RPC writers stay disabled. START performs
+read-only discovery. The original initiator grants source adaptation by sending
+the current native target through the same quality SET before local mutations.

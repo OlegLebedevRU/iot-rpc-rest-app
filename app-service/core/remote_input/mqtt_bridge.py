@@ -185,6 +185,14 @@ async def handle_device_ctl_message(
         try:
             raw = load_object(payload, settings.remote_input.max_inbound_payload_bytes)
             if raw.get("type") == "stream_quality_report":
+                if raw.get("quality_revision") is not None:
+                    from core.camera.quality import camera_quality
+                    from core.camera.quality_contract import CameraQualityReport
+
+                    report = CameraQualityReport.model_validate(raw)
+                    if correlation_id != str(report.stream_instance_id):
+                        return False
+                    return await camera_quality.report(sn, report)
                 from core.remote_input.runtime_quality import (
                     QualityReport,
                     runtime_quality,

@@ -27,6 +27,12 @@ MQTT topic `dev/a3b1234567c10221d290825/req` соответствует AMQP rou
 
 `out` — поток без истории DeviceEvent. Управление диагностикой остаётся в RPC. `ctl` имеет собственные lease/TTL/ACK правила; presence может быть retained, команды сервера — без retain. `fmc/fmr` — отдельное исключение для L4FM v2, без retain: файлы и S3 URL через эти топики не передаются.
 
+Camera quality1.0 reuses `srv/<SN>/ctl` set and `dev/<SN>/ctl` source reports,
+QoS1/no retain, main_app connection. The original initiating writer is checked
+in HTTP; camera boot/issuer/stream and monotonic deadlines remain separate from
+desktop UTC commands. No new RPC/event is introduced. See
+[runtime quality](runtime-quality-camera-candidate.md).
+
 ## 🔐 Идентичность и ограничения
 
 Используйте только топики своего SN. Идентичность задаётся сертификатом и маршрутизацией брокера; SN в payload не заменяет transport identity. MQTT client ID совпадает с SN.
