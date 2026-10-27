@@ -72,6 +72,8 @@
 | `165` | `CMD_IP_CAMERA_DISCOVERY` | Port-2 scan/cancel; RES + gauge84 | — | ✅ | — | [Camera control](siplite-camera-control.md) |
 | `166` | `CMD_IP_CAMERA_CONNECTION` | Bind и write-only credential profile; RES + gauge84 | — | ✅ | — | [Camera control](siplite-camera-control.md) |
 | `167` | `CMD_IP_CAMERA_ILLUMINATION` | Verified LED/PWM и commissioning; RES + gauge84 | — | ✅ | — | [Camera control](siplite-camera-control.md) |
+| `168` | `CMD_IP_CAMERA_IRCUT_SEARCH` | IR-cut inspect/search/status/cancel/apply/recover; RES + gauge84 | — | ✅ | — | [IR-cut RPC](camera-ircut-rpc.md) |
+| `169` | `CMD_IP_CAMERA_IRCUT_DIAGNOSTICS` | Inspect/test existing IR-cut assignment only; RES + gauge84 | — | ✅ | — | [IR-cut RPC](camera-ircut-rpc.md) |
 | `170` | `CMD_AUDIO_GET_STATE` | Audio state and capabilities; RES only | ? | ? | ? | [`Audio control`](audio-control.md) |
 | `171` | `CMD_AUDIO_SET_CONFIG` | Verified independent audio configuration; RES only | ? | ? | ? | [`Audio control`](audio-control.md) |
 | `172` | `CMD_AUDIO_SESSION` | Leased LAN one-way/duplex audio debugging; RES only | ? | ? | ? | [`Audio control`](audio-control.md) |

@@ -163,3 +163,5 @@ Probe использует существующие `req/rsp/evt/eva`, но им
 RPC170/171/172 use the existing correlated RES path without new events or topics.
 See [live audio control](audio-control.md) for config/readback, two-device leases,
 local HTTP parity and authenticated LAN media framing.
+
+IR-cut RPC168/169: [device search and configured-wiring diagnostics](camera-ircut-rpc.md), separate revision `siplite-ircut/1.0.0`, existing main_app RES + gauge84; no new event type. Consumer is unassigned.
