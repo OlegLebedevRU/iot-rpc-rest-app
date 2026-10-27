@@ -90,6 +90,14 @@ available. Live null removal was checked on an already absent ISP field without
 changing effective ISP configuration. These observations do not yet prove the
 ESP32 implementation or wiring on a different camera.
 
+Subsequent native tests: AWB `/live` is refused despite schema `x-live:true`;
+successful `/config` has an empty HTTP200 body. Journaled config writes were
+checked for AWB manual/null/auto and a temporary numeric exposure. A full
+AE/AWB/gain hold retained identical hardware metrics across two samples, then
+the exact original configuration and video0 were restored. Readback rounds
+gain5.431640625 to5.43164; firmware compares within half the declared native
+metric unit. These camera API checks are not ESP32 RPC or GPIO acceptance.
+
 ## Prepared admission
 
 RPC168/169 are registered independently of the frozen camera/media revisions.
