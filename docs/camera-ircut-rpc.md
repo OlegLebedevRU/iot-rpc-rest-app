@@ -52,7 +52,10 @@ so status/cancel do not wait for an entire scan. Active forwarding rejects
 commissioning; the operation does not silently stop another viewer. Physical
 port2/MAC/IP and current native/custom credentials are checked before access.
 
-Use native GPIO pair pulses and park/float, not continuous coil activation.
+Use native GPIO pair drive immediately followed by park/float, not a held level
+across optical capture or queued RPC processing. Electrical pulse duration and
+native camera watchdog behaviour still require hardware verification; HTTP
+acceptance alone does not establish them.
 Unknown ownership, avoid/assigned pins, non-GPIO mux or an API refusal prevents a
 pulse. A/B/A with repeated frames must show a repeatable optical transition above
 the measured within-stage noise. Darkness, clipping, motion, insufficient colour
@@ -86,3 +89,14 @@ Hardware facts used in design: current native camera returns NV21 at2592x1944,
 available. Live null removal was checked on an already absent ISP field without
 changing effective ISP configuration. These observations do not yet prove the
 ESP32 implementation or wiring on a different camera.
+
+## Prepared admission
+
+RPC168/169 are registered independently of the frozen camera/media revisions.
+The strict payload validator rejects credentials, arbitrary fields, malformed
+IDs and replacement pairs on diagnostics. Admission requires a fresh main_app
+gauge advertising `ircut_revision` and `methods:[168,169]`. Physical start/apply
+retain the existing camera writer gate and exact boot/revision checks. Cleanup
+remains available for the matching camera/session after that gate is disabled.
+No gate, UI or deployment is activated by this PR. Firmware is a separate PR;
+host vectors and a successful build do not constitute hardware acceptance.
