@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import datetime
+from typing import cast
 
 from sqlalchemy import func, or_, select
 
@@ -27,7 +28,7 @@ class AuthorityStore:
             )
             if row is None:
                 raise ValueError("camera_authority_not_provisioned")
-            now = await session.scalar(select(func.clock_timestamp()))
+            now = cast(datetime, await session.scalar(select(func.clock_timestamp())))
             row.state = load_state(row.state)
             yield row, now
             # JSONB is assigned a new object so nested edits are always persisted.
