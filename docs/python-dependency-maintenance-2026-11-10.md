@@ -34,3 +34,5 @@ coordinated local/builder/production maintenance. Source base master179872f.
   in bounded post-release app/runtime logs. No other infrastructure recreated.
 - Precise local .python-version now pins the already tested3.14.10; this follow-up
   changes developer interpreter selection/documentation only and needs no rebuild.
+- User subsequently confirmed everything visually works after deployment. This is
+  operator acceptance; no additional automated browser/decode test is claimed.
