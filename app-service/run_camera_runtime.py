@@ -46,7 +46,6 @@ async def run_worker() -> None:
         connect_args={
             "timeout": 5,
             "command_timeout": 5,
-            "server_settings": {"statement_timeout": "5000", "lock_timeout": "2000"},
         },
     )
     runtime = CameraRuntime(AuthorityStore(worker_db.session_factory), owns_issuer=True)
