@@ -11,6 +11,7 @@ from datetime import timedelta
 from uuid import UUID, uuid4
 
 from core.camera.contract import bounded_json
+from core.camera.runtime_inbox import enqueue
 from core.camera.runtime_state import CameraMachine, increase
 from core.camera.runtime_store import AuthorityStore
 from core.camera.runtime_wire import CameraRuntimeCommand, digest
@@ -39,6 +40,7 @@ class CameraRuntime:
         self._owner = ""
         self.clocks = {}
         self.owns_issuer = owns_issuer
+        self.worker_progress = time.monotonic()
 
     @property
     def owner(self) -> str:
@@ -59,17 +61,13 @@ class CameraRuntime:
         bounded_json(value, 32768, 12)
         if value.get("sn", sn) != sn:
             raise ValueError("camera_runtime_sn_mismatch")
-        job_id = str(uuid4())
         async with self.store.locked(sn) as (row, now):
-            if len(row.state["jobs"]) >= 64:
-                raise ValueError("camera_inbox_busy")
-            row.state["jobs"].append(
-                {
-                    "id": job_id,
-                    "action": action,
-                    "value": copy.deepcopy(value),
-                    "until": (now + timedelta(seconds=timeout)).isoformat(),
-                }
+            job_id = enqueue(
+                row.state,
+                action,
+                copy.deepcopy(value),
+                now,
+                now + timedelta(seconds=timeout),
             )
         began = self.monotonic()
         deadline = began + int(timeout * 1000)
@@ -250,6 +248,8 @@ class CameraRuntime:
                 owner_session_id=lease.owner_session_id,
             )
         result = await self.submit(identity["sn"], action, value)
+        if not isinstance(result, dict):
+            raise ValueError("camera_command_invalid")
         return CameraRuntimeCommand(result)
 
     async def release(self, command: CameraRuntimeCommand) -> None:
@@ -345,6 +345,8 @@ class CameraRuntime:
         if active != value["lease_id"] or remaining <= 0:
             raise ValueError("camera_lease_invalid")
         if media_lease is not None:
+            if media_lease.sampled_mono_ms is None:
+                raise ValueError("camera_media_clock_lost_or_expired")
             elapsed = camera_media_clock.monotonic() - media_lease.sampled_mono_ms
             if elapsed < 0:
                 raise ValueError("camera_media_clock_lost_or_expired")
@@ -353,6 +355,8 @@ class CameraRuntime:
                 expiry = value["media_lease_expires_at"]
                 if type(expiry) is not int:
                     raise ValueError("camera_media_lease_invalid")
+                if media_lease.coordinate_now_ms is None:
+                    raise ValueError("camera_media_clock_lost_or_expired")
                 remaining = min(
                     remaining, expiry * 1000 - media_lease.coordinate_now_ms - elapsed
                 )
@@ -372,7 +376,9 @@ class CameraRuntime:
         await topic_publisher.publish(
             routing_key=f"{settings.rmq.prefix_srv}.{sn}.{settings.rmq.suffix_control}",
             message=message,
-            correlation_id=UUID(correlation),
+            correlation_id=UUID(
+                correlation
+            ),  # pyright: ignore[reportArgumentType] -- pinned UUID wire contract
             # RabbitMQ maps AMQP persistent delivery to MQTT QoS1. aio-pika's
             # numeric expiration is seconds; retain the original remaining ms.
             persist=True,
@@ -389,18 +395,31 @@ camera_runtime = CameraRuntime(owns_issuer=False)
 async def camera_runtime_loop(runtime: CameraRuntime) -> None:
     if not runtime.owns_issuer:
         raise ValueError("camera_client_cannot_own_issuer")
+    delay = 0.1
     while True:
+        failed = False
         try:
             if settings.camera.monotonic_runtime_enabled:
-                for sn in await runtime.store.candidates():
+                async with asyncio.timeout(10):
+                    candidates = await runtime.store.candidates()
+                runtime.worker_progress = time.monotonic()
+                for sn in candidates:
                     try:
-                        await runtime.pump(sn)
+                        async with asyncio.timeout(40):
+                            await runtime.pump(sn)
                     except asyncio.CancelledError:
                         raise
                     except Exception:
+                        failed = True
+                        runtime.clocks.pop(sn, None)
                         log.exception("Camera runtime authority failed: sn=%s", sn)
+                    runtime.worker_progress = time.monotonic()
         except asyncio.CancelledError:
             raise
         except Exception:
+            failed = True
+            runtime.clocks.clear()
             log.exception("Camera runtime pump failed")
-        await asyncio.sleep(0.1)
+        runtime.worker_progress = time.monotonic()
+        delay = min(5, max(1, delay * 2)) if failed else 0.1
+        await asyncio.sleep(delay)

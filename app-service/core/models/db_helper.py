@@ -1,11 +1,11 @@
 import logging
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
-    create_async_engine,
     AsyncEngine,
-    async_sessionmaker,
     AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
 )
 
 from core.config import settings
@@ -21,6 +21,8 @@ class DatabaseHelper:
         echo_pool: bool = False,
         pool_size: int = 5,
         max_overflow: int = 10,
+        pool_timeout: float = 30,
+        connect_args: dict | None = None,
     ) -> None:
         self.engine: AsyncEngine = create_async_engine(
             hide_parameters=True,
@@ -30,6 +32,8 @@ class DatabaseHelper:
             pool_size=pool_size,
             max_overflow=max_overflow,
             pool_pre_ping=True,
+            pool_timeout=pool_timeout,
+            connect_args=connect_args or {},
         )
         self.session_factory: async_sessionmaker[AsyncSession] = async_sessionmaker(
             bind=self.engine,
@@ -42,18 +46,18 @@ class DatabaseHelper:
         await self.engine.dispose()
         log.info("Database engine disposed")
 
-    async def session_getter(self) -> AsyncGenerator[AsyncSession, None]:
+    async def session_getter(self) -> AsyncGenerator[AsyncSession]:
         async with self.session_factory() as session:
             yield session
 
 
 """"
 InterfaceError
-Exception raised for errors that are related to the database interface rather than the database itself.
+Exception raised for errors related to the database interface rather than the database itself.
 
 This error is a DBAPI Error and originates from the database driver (DBAPI), not SQLAlchemy itself.
 
-The InterfaceError is sometimes raised by drivers in the context of the database connection being dropped, 
+The InterfaceError is sometimes raised by drivers when the database connection is dropped,
 or not being able to connect to the database. 
 For tips on how to deal with this, see the section Dealing with Disconnects.
 https://docs.sqlalchemy.org/en/20/core/pooling.html#dealing-with-disconnects
