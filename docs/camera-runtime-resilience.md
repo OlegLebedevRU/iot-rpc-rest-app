@@ -1,7 +1,9 @@
 # Camera runtime recovery
 
 The dedicated issuer uses its own one-connection PostgreSQL pool:5s connect,
-command and pool waits,5s statement timeout,2s lock timeout. API pools retain
+command and pool waits. SQL waits, including locks, use the driver's5s command
+budget; no server startup settings are sent because the managed proxy rejects
+statement_timeout at startup. API pools retain
 their existing configuration. Candidate discovery has a10s budget and each
 per-device pump40s (including the existing bounded16-message outbox batch).
 Failures retire local clock state before fenced reacquisition and retry with
