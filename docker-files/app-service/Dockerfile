@@ -1,8 +1,6 @@
-# Use a Python image with uv pre-installed
-#FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
-# Install uv
-FROM python:3.14-slim@sha256:51dafde81dbdb6ebde285137a295cf18a47ca95234fe388a343719cb97305b3d
-COPY --from=ghcr.io/astral-sh/uv:0.12.5@sha256:db2d5999728c5837e1bf9ba278ee6b05cef1e95e82a20e27b0c915cb4478b9d7 /uv /uvx /bin/
+# Runtime and dependency installer are pinned to reviewed immutable images.
+FROM python:3.14.10-slim@sha256:9aaa474097d094040649f2162a627c0049b408f52138d980916788d80f04802f
+COPY --from=ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 /uv /uvx /bin/
 ARG SOURCE_REVISION
 ARG SOURCE_ARCHIVE_SHA256
 # BuildKit also normalizes image/layer timestamps from this argument. Exposing
