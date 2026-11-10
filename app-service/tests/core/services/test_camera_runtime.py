@@ -756,19 +756,24 @@ async def test_actual_camera_control_uses_negotiated_outbox_and_cross_worker_ack
         if isinstance(native_bundle, str):
             if modern04:
                 from .test_camera_cadence02 import (
-                    fixture,
                     configured as base_configured,
                 )
+                from .test_camera_cadence02 import (
+                    fixture,
+                )
             else:
-                from .test_camera_media3 import fixture, configured as base_configured
+                from .test_camera_media3 import configured as base_configured
+                from .test_camera_media3 import fixture
 
             def native_configured():
                 return base_configured(native_bundle.split("-", 1)[1])
 
         else:
             from .test_camera_native_auto11 import (
-                fixture,
                 configured as native_configured,
+            )
+            from .test_camera_native_auto11 import (
+                fixture,
             )
 
         camera = fixture("physical-camera")
@@ -952,6 +957,7 @@ async def test_one_bad_authority_does_not_starve_other_actors(environment, monke
 
     actor = SimpleNamespace(
         owns_issuer=True,
+        clocks={},
         store=SimpleNamespace(
             candidates=AsyncMock(return_value=["corrupt", "healthy"])
         ),
@@ -1025,3 +1031,52 @@ def test_retired_boot_cannot_gain_a_case_alias():
     h = hello("AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA")
     with pytest.raises(ValueError, match="canonical_v4"):
         decode(h, SN, h["enrollment_id"])
+
+
+@pytest.mark.anyio
+async def test_worker_timeout_retires_local_clock_and_continues(monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from core.camera import runtime as module
+
+    monkeypatch.setattr(settings.camera, "monotonic_runtime_enabled", True)
+
+    timeout = asyncio.timeout
+    monkeypatch.setattr(module.asyncio, "timeout", lambda _: timeout(0.01))
+
+    async def pump(sn):
+        if sn == "wedged":
+            await asyncio.Event().wait()
+
+    actor = SimpleNamespace(
+        owns_issuer=True,
+        clocks={"wedged": (1, 2, "old")},
+        store=SimpleNamespace(candidates=AsyncMock(return_value=["wedged", "healthy"])),
+        pump=AsyncMock(side_effect=pump),
+    )
+
+    async def stop(delay):
+        assert delay >= 1
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(module.asyncio, "sleep", stop)
+    with pytest.raises(asyncio.CancelledError):
+        await module.camera_runtime_loop(actor)
+    assert actor.clocks == {}
+    assert [c.args[0] for c in actor.pump.await_args_list] == ["wedged", "healthy"]
+
+
+def test_independent_watchdog_exits_a_stalled_worker(monkeypatch):
+    import run_camera_runtime as worker
+
+    monkeypatch.setattr(worker.time, "monotonic", lambda: 61)
+
+    def exit_process(code):
+        assert code == 1
+        raise RuntimeError("watchdog exit")
+
+    monkeypatch.setattr(worker.os, "_exit", exit_process)
+    with pytest.raises(RuntimeError, match="watchdog exit"):
+        worker.watch_progress(
+            SimpleNamespace(worker_progress=0), SimpleNamespace(wait=lambda _: False)
+        )
