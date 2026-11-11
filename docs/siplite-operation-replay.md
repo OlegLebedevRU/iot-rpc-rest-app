@@ -11,3 +11,7 @@ The exact RES body/status/result_uid is committed before publication. The result
 Eight shared slots retain unacknowledged results. A valid matching CMT may release a slot. Reuse advances a persisted created_at watermark: unknown older identities are rejected, never silently executed. Queue loss, disconnected broker and lost CMT only cause paced result retries; no repeated flash writes or reboot merely because MQTT is absent. The existing parser owns journal updates and retry, without another task.
 
 Terminal event durability/reconciliation remains a separate implementation obligation; this admission fence does not claim exactly-once physical effects or reliable terminal-event delivery. Local HTTP operations without the task envelope remain outside this MQTT receipt journal.
+
+## Existing API_CODE_INPUT (RPC35)
+
+RPC35 retains its per-item admission results and existing frontend semantics. Before the first item is enqueued, a private sixteen-entry UUID/created_at fence is committed for the whole batch. A repeated or evicted old batch is rejected with409 and cannot replay an already admitted prefix. Storage failure prevents all frontend admission. Interrupted or partly published batches have an uncertain outcome: do not claim atomicity, physical completion or complete per-item result replay. Reconcile the external effect and submit a new task UUID for an explicitly new intent. The fence stores no input/PIN values and uses the existing positive integral created_at field. Local frontend input is unchanged; no new event or STM32 command is introduced.
