@@ -11,7 +11,7 @@ In particular, the l4-hmi UI-Catalog implementation of17 is unaffected.
 
 A valid request for one of these unsupported operations completes with the
 existing correlated RES envelope and transport status_code=501.
-The body uses the normal ERROR/method_code/message/esp_err representation and
+The body uses the normal status=ERROR, method-name, message and error-name representation and
 explicitly states that the operation is not implemented by this firmware.
 No UART, I2C, database, log erasure or other external side effect is performed.
 No completion EVT is emitted for an operation which was never executed.
