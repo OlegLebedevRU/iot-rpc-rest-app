@@ -15,3 +15,7 @@ Terminal event durability/reconciliation remains a separate implementation oblig
 ## Existing API_CODE_INPUT (RPC35)
 
 RPC35 retains its per-item admission results and existing frontend semantics. Before the first item is enqueued, a private sixteen-entry UUID/created_at fence is committed for the whole batch. A repeated or evicted old batch is rejected with409 and cannot replay an already admitted prefix. Storage failure prevents all frontend admission. Interrupted or partly published batches have an uncertain outcome: do not claim atomicity, physical completion or complete per-item result replay. Reconcile the external effect and submit a new task UUID for an explicitly new intent. The fence stores no input/PIN values and uses the existing positive integral created_at field. Local frontend input is unchanged; no new event or STM32 command is introduced.
+
+## Legacy batch bounds and unsupported subrequests
+
+RPC20 SUB_REQUEST and RPC35 API_CODE_INPUT accept1..16 items per batch. RPC20 currently implements only mt=0 (HELLO snapshot); its other historical mt values have no active backing executor and must return501 before publishing a success-looking result. Unknown/malformed mt or an empty/oversized batch returns400/422. Preflight covers the whole SUB_REQUEST batch before any partial snapshot result. Repeating the read-only HELLO query may produce a fresh snapshot; it does not invoke hardware mutations. No new RPC/event/STM32 contract is introduced.
