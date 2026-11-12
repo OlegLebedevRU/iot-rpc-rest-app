@@ -15,8 +15,8 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from redis.exceptions import WatchError
 
-from core.redis_helper import redis_helper
 from core.config import settings
+from core.redis_helper import redis_helper
 from core.remote_input.leases import Lease, lease_registry
 from core.topologys.declare import topic_publisher
 
@@ -26,6 +26,36 @@ class Navigation(BaseModel):
     action: Literal["list", "stop"] = "list"
     path: str = Field(min_length=3, max_length=1024)
     offset: int = Field(default=0, ge=0, le=1_000_000)
+
+
+class ReadinessProbe(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: UUID
+    expires_at: datetime
+
+
+async def dispatch_probe(sn: str, body: ReadinessProbe) -> None:
+    now = datetime.now(UTC)
+    if (
+        body.expires_at.tzinfo is None
+        or not 0 < (body.expires_at - now).total_seconds() <= 10
+    ):
+        raise HTTPException(422, "Invalid probe deadline")
+    # QoS1 broker redelivery is handled by terminal/PB request UUID dedup.
+    # This metadata-only command never reserves a remote-control lease.
+    await topic_publisher.publish(
+        routing_key=f"{settings.rmq.prefix_srv}.{sn}.{settings.rmq.suffix_fm_command}",
+        message={
+            "v": 2,
+            "action": "probe",
+            "command_id": str(body.request_id),
+            "expires_at": int(body.expires_at.timestamp()),
+        },
+        expiration=timedelta(
+            seconds=max(1, int((body.expires_at - now).total_seconds()))
+        ),
+        persist=False,
+    )
 
 
 class Entry(BaseModel):
