@@ -1,20 +1,25 @@
 """File-manager control only. No file bytes or storage URLs pass through IoT."""
 
-from datetime import UTC, datetime
 import secrets
+from datetime import UTC, datetime
 from typing import Literal
 from uuid import UUID
 
+from core.config import settings
+from core.crud.device_repo import DeviceRepo
+from core.file_manager_navigation import (
+    Navigation,
+    ReadinessProbe,
+    dispatch_probe,
+    navigate,
+)
+from core.remote_input.leases import LeaseConflictError, lease_registry
+from core.schemas.device_tasks import TaskCreate
+from core.services.device_tasks import DeviceTasksService
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from api.internal_v1.internal_depends import Session_dep
-from core.config import settings
-from core.crud.device_repo import DeviceRepo
-from core.remote_input.leases import LeaseConflictError, lease_registry
-from core.schemas.device_tasks import TaskCreate
-from core.services.device_tasks import DeviceTasksService
-from core.file_manager_navigation import Navigation, navigate
 
 
 async def service_auth(x_internal_service_key: str = Header(default="")) -> None:
@@ -131,6 +136,18 @@ async def acquire(device_id: int, body: Acquire, request: Request, db: Session_d
         "expires_at": lease.expires_at.isoformat(),
         "keepalive_sec": 15,
     }
+
+
+@router.post("/devices/{device_id}/readiness-probes")
+async def readiness_probe(
+    device_id: int, body: ReadinessProbe, request: Request, db: Session_dep
+):
+    tenant, _, _, _ = actor(request)
+    sn = await DeviceRepo.get_device_sn(db, device_id=device_id, org_id=tenant)
+    if sn is None:
+        raise HTTPException(404, "Device not found")
+    await dispatch_probe(sn, body)
+    return {"request_id": str(body.request_id), "dispatched": True}
 
 
 @router.get("/sessions/{lease_id}")

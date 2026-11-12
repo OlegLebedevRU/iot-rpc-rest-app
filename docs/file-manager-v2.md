@@ -1,5 +1,22 @@
 # L4FM v2: итоговый контракт IoT/app1
 
+## On-demand readiness — additive implementation 2026-11-12
+
+Service-auth `POST /api/internal/v1/file-manager/devices/{device_id}/readiness-probes`
+accepts request_id and a UTC expires_at no more than10 s ahead. Trusted actor
+tenant scopes DeviceRepo SN lookup. Only after PB has persisted pending state,
+MB calls this dispatcher; it publishes v2/action=probe/command_id/expires_at on
+existing srv/{SN}/fmc, no retain and bounded broker expiration. Probe has no
+lease_id and never creates a lease, task, file operation or storage URL.
+
+The agent replies through current-certificate mTLS to PB, not through a new MQTT
+topic or DeviceEvent. PUBACK is not readiness. Existing list/stop still require
+lease_id and retain their response/stop ACK rules. Existing extra_service
+presence and RPC7021/7023 remain unchanged. Target idle agents and fleet UI do
+not poll FM; active freshness is the existing validated start/renew ACK.
+
+Source implementation and tests are separate from deployment evidence.
+
 Актуально 2026-10-05. Реализация app1 выпущена из master
 `6209faf870d9d05028255c9e92f30017a33be781`. Серверная документация не означает
 новый deploy: обновление master само по себе не заменяет работающий образ.
