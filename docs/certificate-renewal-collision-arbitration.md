@@ -9,7 +9,8 @@ payloads change. No PIN, CSR, credential or task payload is read by arbitration.
 A rotation permit requires method7011 for the exact device, status LOCK (RSP
 issued), an unexpired task, and creation/locked timestamps within the preceding
 300 seconds. The creation bound prevents repeated REQ from extending the window.
-READY/PENDING/DONE/deleted/expired tasks do not create a permit.
+READY/PENDING/deleted/expired tasks do not create a fresh permit. DONE is not
+a general exception; the recovery rule below requires committed evidence.
 
 To consume it, the incoming socket must appear in a complete, fresh RabbitMQ
 Management snapshot for that SN. Its broker user, TLS flag, certificate validity
@@ -19,13 +20,29 @@ Another active certificate is never exempt, including on the same NAT address.
 Missing/inconsistent broker evidence defers materialization without asserting a
 security incident from historical data alone. No automatic unblock occurs.
 
-The existing tb_variables table stores one server-owned bounded JSON record per
+The existing tb_persistent_variables table stores one server-owned bounded JSON record per
 device (key renewal.collision.<device_id>): current validity, up to8 retired
 validities, consumed task UUID and acceptance timestamp. Device and connection
 row locks serialize decisions through the existing connection-state commit.
 The task permits exactly one new generation. Returning to a retired certificate
 is rejected even after restart or outside the detector's180-second history.
 Reconciliation cannot erase this record. No schema migration is introduced.
+
+RabbitMQ's per-user connections endpoint can return summaries without TLS
+metadata. Missing detail is hydrated by exact connection name, never by a fallback
+to another socket. Limit16 sockets,4 concurrent lookups,64KiB/response and4s total;
+failure/closed socket is unknown, not an empty authoritative snapshot.
+
+If the first connection event was deferred but the terminal already completed
+renewal, recovery requires all of: DONE7011 plus stored200/applied, and event75
+for this device/current tenant/SN with exactly the candidate NotAfter. The event
+must have been received by the server after RSP lock and within300s of task
+creation. Only tasks from the preceding24h are considered. Device timestamps or
+a newly submitted inventory cannot extend that execution window. This recovers
+the already evidenced generation; it never repeats RPC/PB operations or grants
+an arbitrary later certificate. The same one-use/retired/concurrent-socket checks
+apply. Changed generations in background reconciliation use this same arbiter,
+with the per-device time budget checked and locks released promptly.
 
 RabbitMQ currently exposes peer_cert_validity/subject to this detector; validity
 is NOT a cryptographic fingerprint. The arbitration uses this existing broker
@@ -59,6 +76,9 @@ Tests cover sequential rotation, overlap on same NAT, old-certificate replay,
 one-use permits, new-task generation, missing broker snapshot, stale event,
 foreign tenant/device identity, invalid TLS metadata, restart with stale telemetry,
 strict bounded broker snapshots, and event-handler ALLOW/BLOCK/DEFER behavior.
+Coverage includes real summary/detail shape, socket disappearing during lookup,
+detail identity mismatch, deferred completed-task recovery, tenant-bound server
+event timestamps and reconciliation ALLOW/BLOCK/DEFER.
 
 Deploy only app1 from accepted origin/master via builder/registry immutable
 digest. Preserve the full running Compose override chain and neighbor container

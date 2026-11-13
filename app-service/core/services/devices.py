@@ -465,6 +465,8 @@ class DeviceService:
 
             chunk = db_connections[i : i + chunk_sz]
             for conn_row in chunk:
+                if time.monotonic() - start_time >= budget:
+                    break
                 sn = conn_row.client_id
                 if not sn:
                     continue
@@ -477,6 +479,25 @@ class DeviceService:
 
                 if sn in active_map:
                     raw_conn = active_map[sn]
+                    baseline = (
+                        (conn_row.details or {}).get("peer_cert_validity")
+                        if isinstance(conn_row.details, dict)
+                        else None
+                    )
+                    if baseline and (
+                        "peer_cert_validity" not in raw_conn
+                        or "peer_cert_subject" not in raw_conn
+                    ):
+                        detail = await RmqAdminApi.get_single_connection_details(
+                            conn_name=raw_conn.get("name"), timeout_sec=2.0
+                        )
+                        if (
+                            not detail
+                            or detail.get("name") != raw_conn.get("name")
+                            or detail.get("user") != sn
+                        ):
+                            continue
+                        raw_conn = {**raw_conn, **detail}
                     conn_name = raw_conn.get("name")
                     connected_at_raw = raw_conn.get("connected_at")
                     dt_conn = None
@@ -509,6 +530,40 @@ class DeviceService:
                         "send_oct": raw_conn.get("send_oct"),
                     }
 
+                    transitioned = bool(
+                        baseline
+                        and telemetry.get("peer_cert_validity")
+                        and baseline != telemetry["peer_cert_validity"]
+                    )
+                    if transitioned:
+                        # Flush previous devices before an arbitration rollback;
+                        # changed generations use the same lock/proof path as AMQP.
+                        await session.commit()
+                        decision = await arbitrate_renewal(session, sn, telemetry)
+                        if decision is Decision.DEFER:
+                            await session.rollback()
+                            continue
+                        if decision is Decision.BLOCK:
+                            await DeviceRepo.mark_device_blocked(
+                                session=session,
+                                sn=sn,
+                                violation_type="SN_COLLISION",
+                                violation_details={
+                                    "violation_type": "SN_COLLISION",
+                                    "detected_at": datetime.now(
+                                        timezone.utc
+                                    ).isoformat(),
+                                    "reason": "Certificate transition rejected by renewal arbitration",
+                                },
+                                actor="system/detector",
+                            )
+                            await session.commit()
+                            await RmqAdminApi.block_device_user(sn)
+                            reconciled_offline += 1
+                            continue
+                        if decision is Decision.ALLOW:
+                            clear_device_connection_history(sn)
+
                     if not conn_row.last_checked_result:
                         conn_row.last_checked_result = True
                         reconciled_online += 1
@@ -524,11 +579,7 @@ class DeviceService:
                         if isinstance(conn_row.details, dict)
                         else {}
                     )
-                    # Reconciliation is telemetry, not authorization of a new
-                    # certificate generation. Preserve the baseline until the
-                    # connection event passes renewal arbitration.
-                    baseline = current_details.get("peer_cert_validity")
-                    if baseline and telemetry.get("peer_cert_validity") != baseline:
+                    if baseline and not telemetry.get("peer_cert_validity"):
                         telemetry.pop("peer_cert_validity", None)
                         telemetry.pop("peer_cert_subject", None)
                     current_details.update(
@@ -536,6 +587,8 @@ class DeviceService:
                     )
                     conn_row.details = current_details
                     updated_telemetry += 1
+                    if transitioned:
+                        await session.commit()
                 else:
                     if conn_row.last_checked_result:
                         conn_row.last_checked_result = False

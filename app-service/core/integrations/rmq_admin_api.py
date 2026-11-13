@@ -232,24 +232,60 @@ class RmqAdminApi:
     ) -> list[dict[str, Any]] | None:
         """Complete bounded snapshot for arbitration; failure is not an empty list."""
         try:
-            async with httpx.AsyncClient(
-                base_url=cls._admin_url(), timeout=2.0
-            ) as client:
-                response = await client.get(
-                    f"api/connections/username/{cls._quote_path(sn)}"
-                )
-                if response.status_code != 200 or len(response.content) > 65536:
-                    return None
-                data = response.json()
-                if not isinstance(data, list) or len(data) > 16:
-                    return None
-                if any(
-                    not isinstance(c, dict) or c.get("user") != sn or not c.get("name")
-                    for c in data
-                ):
-                    return None
-                return data
-        except httpx.HTTPError, ValueError:
+            async with asyncio.timeout(4):
+                async with httpx.AsyncClient(
+                    base_url=cls._admin_url(),
+                    timeout=2.0,
+                    limits=httpx.Limits(max_connections=4, max_keepalive_connections=4),
+                ) as client:
+                    response = await client.get(
+                        f"api/connections/username/{cls._quote_path(sn)}"
+                    )
+                    if response.status_code != 200 or len(response.content) > 65536:
+                        return None
+                    data = response.json()
+                    if not isinstance(data, list) or len(data) > 16:
+                        return None
+                    if any(
+                        not isinstance(c, dict)
+                        or c.get("user") != sn
+                        or not isinstance(c.get("name"), str)
+                        or not c["name"]
+                        for c in data
+                    ):
+                        return None
+                    if len({c["name"] for c in data}) != len(data):
+                        return None
+                    semaphore = asyncio.Semaphore(4)
+
+                    async def hydrate(summary):
+                        if all(
+                            key in summary
+                            for key in (
+                                "ssl",
+                                "peer_cert_subject",
+                                "peer_cert_validity",
+                            )
+                        ):
+                            return summary
+                        async with semaphore:
+                            reply = await client.get(
+                                f"api/connections/{cls._quote_path(summary['name'])}"
+                            )
+                        if reply.status_code != 200 or len(reply.content) > 65536:
+                            return None
+                        detail = reply.json()
+                        if (
+                            not isinstance(detail, dict)
+                            or detail.get("name") != summary["name"]
+                            or detail.get("user") != sn
+                        ):
+                            return None
+                        return detail
+
+                    hydrated = await asyncio.gather(*(hydrate(item) for item in data))
+                    return None if any(item is None for item in hydrated) else hydrated
+        except httpx.HTTPError, ValueError, TimeoutError:
             return None
 
     @classmethod

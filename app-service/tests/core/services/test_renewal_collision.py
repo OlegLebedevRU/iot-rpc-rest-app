@@ -240,3 +240,148 @@ async def test_strict_snapshot_never_treats_failure_as_empty(
     )
     monkeypatch.setattr("httpx.AsyncClient", lambda **kw: manager)
     assert await arbiter.RmqAdminApi.get_device_connections_strict(SN) == expected
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize(
+    "failure", [None, "closed", "wrong_name", "wrong_user", "oversized", "timeout"]
+)
+async def test_summary_snapshot_loads_tls_detail_for_each_socket(monkeypatch, failure):
+    import httpx
+
+    summary = {"user": SN, "name": "new"}
+    detail = connection()
+    if failure == "wrong_name":
+        detail["name"] = "another"
+    if failure == "wrong_user":
+        detail["user"] = "another"
+
+    async def get(path):
+        if "/username/" in path:
+            return SimpleNamespace(
+                status_code=200, content=b"[]", json=lambda: [summary]
+            )
+        if failure == "timeout":
+            raise httpx.ReadTimeout("synthetic")
+        return SimpleNamespace(
+            status_code=404 if failure == "closed" else 200,
+            content=b"x" * (65537 if failure == "oversized" else 2),
+            json=lambda: detail,
+        )
+
+    client = SimpleNamespace(get=AsyncMock(side_effect=get))
+    manager = MagicMock(
+        __aenter__=AsyncMock(return_value=client), __aexit__=AsyncMock()
+    )
+    monkeypatch.setattr("httpx.AsyncClient", lambda **kw: manager)
+    result = await arbiter.RmqAdminApi.get_device_connections_strict(SN)
+    assert result == ([detail] if failure is None else None)
+    assert client.get.await_count == 2
+
+
+@pytest.mark.anyio
+async def test_completed_recovery_requires_committed_result_and_window_bound_inventory():
+    from sqlalchemy.dialects import postgresql
+
+    task = uuid4()
+    session = SimpleNamespace(
+        execute=AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=task))
+        )
+    )
+    assert await arbiter.completed_handover_task(session, 1234567, SN, NEW, NOW) == str(
+        task
+    )
+    statement = session.execute.await_args.args[0]
+    sql = str(
+        statement.compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    for required in [
+        "tb_dev_events",
+        "locked_at",
+        "created_at",
+        "org_id",
+        "443",
+        "324",
+        "applied",
+        "200",
+        "7011",
+    ]:
+        assert required in sql
+    assert "tb_dev_task_payload" not in sql and "pin" not in sql.lower()
+    session.execute.return_value.scalar_one_or_none.return_value = None
+    assert await arbiter.completed_handover_task(session, 1234567, SN, NEW, NOW) is None
+    session.execute.reset_mock()
+    assert (
+        await arbiter.completed_handover_task(session, 1234567, SN, "bad", NOW) is None
+    )
+    session.execute.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_deferred_handover_recovers_completed_task_without_new_execution(
+    monkeypatch,
+):
+    row = SimpleNamespace(details=connection(OLD, "old"), is_blocked=False)
+    task = uuid4()
+
+    def result(value):
+        return MagicMock(scalar_one_or_none=MagicMock(return_value=value))
+
+    session = SimpleNamespace(
+        execute=AsyncMock(
+            side_effect=[
+                result(SimpleNamespace(device_id=1234567)),
+                result(row),
+                result(None),
+                result(None),
+                result(task),
+            ]
+        ),
+        add=MagicMock(),
+    )
+    monkeypatch.setattr(
+        arbiter.RmqAdminApi,
+        "get_device_connections_strict",
+        AsyncMock(return_value=[connection()]),
+    )
+    assert await arbiter.arbitrate_renewal(session, SN, connection()) is Decision.ALLOW
+    import json
+
+    assert json.loads(session.add.call_args.args[0].var_val)["task_id"] == str(task)
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("decision", [Decision.ALLOW, Decision.BLOCK, Decision.DEFER])
+async def test_reconciliation_uses_same_generation_arbitration(monkeypatch, decision):
+    row = SimpleNamespace(
+        client_id=SN,
+        details=connection(OLD, "old"),
+        is_blocked=False,
+        last_checked_result=False,
+        checked_at=None,
+        connected_at=None,
+    )
+    monkeypatch.setattr(
+        devices.DeviceRepo, "get_all_connections", AsyncMock(return_value=[row])
+    )
+    monkeypatch.setattr(
+        devices.RmqAdminApi,
+        "get_all_connections",
+        AsyncMock(return_value=[connection()]),
+    )
+    arbitrate = AsyncMock(return_value=decision)
+    monkeypatch.setattr(devices, "arbitrate_renewal", arbitrate)
+    block = AsyncMock()
+    monkeypatch.setattr(devices.DeviceRepo, "mark_device_blocked", block)
+    monkeypatch.setattr(devices.RmqAdminApi, "block_device_user", AsyncMock())
+    session = SimpleNamespace(commit=AsyncMock(), rollback=AsyncMock())
+    stats = await devices.DeviceService.reconcile_device_connections(
+        session, time_budget=10, chunk_size=10
+    )
+    arbitrate.assert_awaited_once()
+    assert block.await_count == int(decision is Decision.BLOCK)
+    assert stats["updated_telemetry"] == int(decision is Decision.ALLOW)
+    assert row.last_checked_result == (decision is Decision.ALLOW)
