@@ -227,6 +227,32 @@ class RmqAdminApi:
         return None
 
     @classmethod
+    async def get_device_connections_strict(
+        cls, sn: str
+    ) -> list[dict[str, Any]] | None:
+        """Complete bounded snapshot for arbitration; failure is not an empty list."""
+        try:
+            async with httpx.AsyncClient(
+                base_url=cls._admin_url(), timeout=2.0
+            ) as client:
+                response = await client.get(
+                    f"api/connections/username/{cls._quote_path(sn)}"
+                )
+                if response.status_code != 200 or len(response.content) > 65536:
+                    return None
+                data = response.json()
+                if not isinstance(data, list) or len(data) > 16:
+                    return None
+                if any(
+                    not isinstance(c, dict) or c.get("user") != sn or not c.get("name")
+                    for c in data
+                ):
+                    return None
+                return data
+        except httpx.HTTPError, ValueError:
+            return None
+
+    @classmethod
     async def get_all_connections(
         cls,
         time_budget_sec: float = 10.0,

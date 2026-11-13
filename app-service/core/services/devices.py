@@ -17,6 +17,7 @@ from core.integrations.rmq_admin_api import (
 )
 from core.logging_config import setup_module_logger
 from core.schemas.devices import DeviceTagPut, DeviceListResponse
+from core.services.renewal_collision import Decision, arbitrate_renewal
 
 log = setup_module_logger(__name__, "srv_devices.log")
 
@@ -311,6 +312,25 @@ class DeviceService:
                 conn_name=conn_name,
             )
 
+            arbitration = await arbitrate_renewal(session, device_sn, details)
+            if arbitration is Decision.DEFER:
+                await session.rollback()
+                log.warning(
+                    "Deferred certificate arbitration for SN=%s; broker snapshot unavailable or event stale",
+                    device_sn,
+                )
+                return False
+            if arbitration is Decision.ALLOW and violation_type == "SN_COLLISION":
+                violation_type, violation_details = None, None
+                clear_device_connection_history(device_sn)
+            elif arbitration is Decision.BLOCK:
+                violation_type = "SN_COLLISION"
+                violation_details = {
+                    "detected_at": datetime.now(timezone.utc).isoformat(),
+                    "violation_type": violation_type,
+                    "reason": "Certificate transition rejected by renewal arbitration",
+                }
+
             if violation_type and violation_details:
                 log.warning(
                     "Violation %s detected for device SN=%s: %s. Blocking device in RMQ and DB.",
@@ -504,6 +524,13 @@ class DeviceService:
                         if isinstance(conn_row.details, dict)
                         else {}
                     )
+                    # Reconciliation is telemetry, not authorization of a new
+                    # certificate generation. Preserve the baseline until the
+                    # connection event passes renewal arbitration.
+                    baseline = current_details.get("peer_cert_validity")
+                    if baseline and telemetry.get("peer_cert_validity") != baseline:
+                        telemetry.pop("peer_cert_validity", None)
+                        telemetry.pop("peer_cert_subject", None)
                     current_details.update(
                         {k: v for k, v in telemetry.items() if v is not None}
                     )
