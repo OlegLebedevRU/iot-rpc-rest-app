@@ -137,6 +137,12 @@ async def test_reconcile_device_connections_time_budget(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_handle_connection_created_event(monkeypatch):
+    from core.services.renewal_collision import Decision
+
+    monkeypatch.setattr(
+        "core.services.devices.arbitrate_renewal",
+        AsyncMock(return_value=Decision.UNCHANGED),
+    )
     mock_session = AsyncMock(spec=AsyncSession)
     mock_row = DeviceConnection(
         device_id=10,
@@ -334,6 +340,12 @@ def test_device_connection_availability_computation():
 
 @pytest.mark.asyncio
 async def test_handle_connection_created_fetches_and_updates_cert_details(monkeypatch):
+    from core.services.renewal_collision import Decision
+
+    monkeypatch.setattr(
+        "core.services.devices.arbitrate_renewal",
+        AsyncMock(return_value=Decision.UNCHANGED),
+    )
     mock_session = AsyncMock(spec=AsyncSession)
     mock_row = DeviceConnection(
         device_id=10,
