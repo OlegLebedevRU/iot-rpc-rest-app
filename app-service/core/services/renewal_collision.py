@@ -8,16 +8,18 @@ import json
 from datetime import UTC, datetime, timedelta
 from enum import Enum
 
-from sqlalchemy import select
+from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from core.integrations.rmq_admin_api import RmqAdminApi
-from core.models.devices import Device, DeviceConnection
-from core.models.device_tasks import DevTask, DevTaskStatus
+from core.models.devices import Device, DeviceConnection, DeviceOrgBind
+from core.models.device_tasks import DevTask, DevTaskStatus, DevTaskResult
+from core.models.device_events import DevEvent
 from core.models.common import PersistentVariable
 
 ROTATION_KEY = "certificate_rotation"
 HANDOVER_SECONDS = 300
+RECOVERY_SECONDS = 86400
 
 
 class Decision(Enum):
@@ -131,6 +133,58 @@ def decide_handover(
     }
 
 
+async def completed_handover_task(
+    session: AsyncSession, device_id: int, sn: str, validity: object, now: datetime
+) -> str | None:
+    """Recover only an already successful, inventory-bound handover; no new permit.
+
+    Inventory must have been stored by the server inside the original execution
+    window, not published now to extend a historical task's authority.
+    """
+    period = validity_period(validity)
+    if not period:
+        return None
+    expires = period[1].astimezone(UTC).isoformat()
+    org = (
+        select(DeviceOrgBind.org_id)
+        .where(DeviceOrgBind.device_id == device_id)
+        .scalar_subquery()
+    )
+    inventory = exists().where(
+        DevEvent.device_id == device_id,
+        DevEvent.org_id == org,
+        DevEvent.event_type_code == 75,
+        DevEvent.created_at >= DevTaskStatus.locked_at,
+        DevEvent.created_at <= DevTask.created_at + timedelta(seconds=HANDOVER_SECONDS),
+        DevEvent.payload["300"][0]["324"].astext == sn,
+        DevEvent.payload["300"][0]["443"].astext.in_(
+            [expires, expires.replace("+00:00", "Z")]
+        ),
+    )
+    task = (
+        await session.execute(
+            select(DevTask.id)
+            .join(DevTaskStatus, DevTaskStatus.task_id == DevTask.id)
+            .join(DevTaskResult, DevTaskResult.task_id == DevTask.id)
+            .where(
+                DevTask.device_id == device_id,
+                DevTask.method_code == 7011,
+                DevTask.is_deleted.is_(False),
+                DevTask.created_at >= now - timedelta(seconds=RECOVERY_SECONDS),
+                DevTask.created_at <= now,
+                DevTaskStatus.status == 3,
+                DevTaskStatus.locked_at.is_not(None),
+                DevTaskResult.status_code == 200,
+                DevTaskResult.result["state"].astext == "applied",
+                inventory,
+            )
+            .order_by(DevTask.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return str(task) if task else None
+
+
 async def arbitrate_renewal(
     session: AsyncSession,
     sn: str,
@@ -210,6 +264,10 @@ async def arbitrate_renewal(
             )
         ).scalar_one_or_none()
         task_id = str(task) if task else None
+        if task_id is None:
+            task_id = await completed_handover_task(
+                session, device.device_id, sn, after, now
+            )
     connections = await RmqAdminApi.get_device_connections_strict(sn)
     decision, state = decide_handover(
         sn=sn,
@@ -223,9 +281,7 @@ async def arbitrate_renewal(
     if decision is Decision.ALLOW:
         encoded = json.dumps(state, separators=(",", ":"))
         if record is None:
-            session.add(
-                PersistentVariable(var_key=key, var_val=encoded, var_typ="JSON")
-            )
+            session.add(PersistentVariable(var_key=key, var_val=encoded, var_typ="STR"))
         elif record.var_val != encoded:
             record.var_val = encoded
     return decision
