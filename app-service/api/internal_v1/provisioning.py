@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
+import secrets
 
 from api.internal_v1.internal_depends import Internal_Auth_dep, Session_dep
 from core.config import settings
@@ -15,6 +16,7 @@ from core.schemas.provisioning import (
     TerminalProvisionResult,
     TerminalStatusQuery,
 )
+from core.services.identity_transfer import IdentityTransferRequest, transfer_identity
 from core.services.provisioning import ProvisioningService
 from core.services.org_reservation import reserve_org_id
 
@@ -137,3 +139,19 @@ async def delete_org_api_key(
             detail=f"API key for organization {org_id} not found",
         )
     return {"status": "deleted", "org_id": org_id}
+
+
+@router.post("/identity-transfers", response_model=dict)
+async def transfer_terminal_identity(
+    request: IdentityTransferRequest,
+    http_request: Request,
+    session: Session_dep,
+    _: Internal_Auth_dep,
+) -> dict:
+    # This new mutation never inherits the generic local-development auth bypass.
+    if not settings.auth.internal_service_key:
+        raise HTTPException(503, "identity_service_auth_not_configured")
+    provided = http_request.headers.get("X-Internal-Service-Key", "")
+    if not secrets.compare_digest(provided, settings.auth.internal_service_key):
+        raise HTTPException(403, "identity_service_auth_required")
+    return await transfer_identity(session, request)

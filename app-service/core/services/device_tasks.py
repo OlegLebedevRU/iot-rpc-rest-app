@@ -49,7 +49,9 @@ class DeviceTasksService:
                 task_create.device_id,
             )
             raise HTTPException(status_code=404, detail="device_id not found")
-        receipt = await TasksRepository.camera_receipt(self.session, task_create)
+        receipt = await TasksRepository.camera_receipt(
+            self.session, task_create, org_id=self.org_id
+        )
         if receipt is not None:
             return TaskResponse(id=receipt[0], created_at=int(receipt[1]))
         from core.camera.admission import admit_task
@@ -58,6 +60,7 @@ class DeviceTasksService:
         created = await TasksRepository.create_task(
             session=self.session,
             task=task_create,
+            org_id=self.org_id,
         )
         if created is None:
             raise HTTPException(status_code=503, detail="Task could not be persisted")

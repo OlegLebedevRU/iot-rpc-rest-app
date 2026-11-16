@@ -209,7 +209,9 @@ class RemoteInputService:
         norm_role = str(owner_role).strip().lower()
         self._validate_role_and_scope(norm_role, scope, is_superuser=is_superuser)
 
-        device_id = await DeviceRepo.get_device_id(session, sn=sn, org_id=org_id)
+        device_id = await DeviceRepo.get_device_id(
+            session, sn=sn, org_id=org_id, lock_binding=True
+        )
         if device_id is None:
             raise HTTPException(
                 status_code=403,

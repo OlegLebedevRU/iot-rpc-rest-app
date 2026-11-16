@@ -17,11 +17,16 @@ from core.models.common import TaskTTL
 
 
 class DevTask(Base):
+    __table_args__ = (
+        Index("ix_dev_tasks_org_device_created", "org_id", "device_id", "created_at"),
+    )
     # __tablename__ = "tb_dev_tasks"
     id: Mapped[uuid.UUID] = mapped_column(
         Uuid, primary_key=True, index=True, default=uuid.uuid4
     )
     device_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    # Immutable owner at creation; legacy access is frozen during explicit transfer.
+    org_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     method_code: Mapped[int] = mapped_column(Integer, default=0)
     ext_task_id: Mapped[str] = mapped_column(String, nullable=True)
     created_at = mapped_column(

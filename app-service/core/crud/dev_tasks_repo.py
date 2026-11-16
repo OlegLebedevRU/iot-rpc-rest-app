@@ -20,6 +20,7 @@ from sqlalchemy import (
     func,
     Integer,
     and_,
+    or_,
     case,
     exists,
     literal,
@@ -100,25 +101,29 @@ class TasksRepository:
         return {"value": result}
 
     @staticmethod
+    def _current_owner_condition():
+        current = (
+            select(DeviceOrgBind.org_id)
+            .where(DeviceOrgBind.device_id == DevTask.device_id)
+            .correlate(DevTask)
+            .scalar_subquery()
+        )
+        return or_(DevTask.org_id.is_(None), DevTask.org_id == current)
+
+    @staticmethod
     def _apply_org_filter(query: Any, org_id: int | None) -> Any:
-        """
-        Применяет фильтр по организации с безопасным JOIN.
-        Использует LEFT JOIN, если org_id не задан, чтобы избежать потери данных.
-        """
-        if org_id and org_id > 0:
-            return (
-                query.join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
-                .join(
-                    Org,
-                    and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted.is_(False)),
-                )
-                .where(Org.org_id == org_id)
-            )
-        return query.outerjoin(
+        # Current binding is a compatibility fallback only for untransferred
+        # legacy rows; stored history owners never follow a later device owner.
+        query = query.outerjoin(
             DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id
         ).outerjoin(
-            Org, and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted.is_(False))
+            Org,
+            and_(
+                func.coalesce(DevTask.org_id, DeviceOrgBind.org_id) == Org.org_id,
+                Org.is_deleted.is_(False),
+            ),
         )
+        return query.where(Org.org_id == org_id) if org_id and org_id > 0 else query
 
     @staticmethod
     def _base_task_query():
@@ -150,7 +155,9 @@ class TasksRepository:
         ).select_from(DevTask)
 
     @classmethod
-    async def camera_receipt(cls, session: AsyncSession, task: TaskCreate):
+    async def camera_receipt(
+        cls, session: AsyncSession, task: TaskCreate, *, org_id: int | None = None
+    ):
         if task.camera_contract_revision is None or task.method_code not in (
             165,
             166,
@@ -162,6 +169,7 @@ class TasksRepository:
             await session.execute(
                 select(
                     DevTask.device_id,
+                    DevTask.org_id,
                     DevTask.method_code,
                     DevTask.is_deleted,
                     DevTaskPayload.payload,
@@ -178,6 +186,12 @@ class TasksRepository:
         if existing is None:
             return None
         if (
+            org_id is not None
+            and org_id > 0
+            and getattr(existing, "org_id", None) not in (None, org_id)
+        ):
+            raise HTTPException(409, "task_owner_conflict")
+        if (
             existing.device_id != task.device_id
             or existing.method_code != task.method_code
             or existing.payload != task.payload
@@ -190,8 +204,22 @@ class TasksRepository:
 
     @classmethod
     async def create_task(
-        cls, session: AsyncSession, task: TaskCreate
+        cls, session: AsyncSession, task: TaskCreate, *, org_id: int | None = None
     ) -> tuple[UUID4, float] | None:
+        owner = (
+            select(DeviceOrgBind.org_id)
+            .where(DeviceOrgBind.device_id == task.device_id)
+            .scalar_subquery()
+        )
+        if org_id is not None:
+            binding = select(DeviceOrgBind.org_id).where(
+                DeviceOrgBind.device_id == task.device_id
+            )
+            if org_id > 0:
+                binding = binding.where(DeviceOrgBind.org_id == org_id)
+            owner = await session.scalar(binding.with_for_update(of=DeviceOrgBind))
+            if owner is None:
+                raise HTTPException(403, "device not available for organization")
         operation = None
         if task.camera_contract_revision is not None and task.method_code in (
             165,
@@ -209,6 +237,7 @@ class TasksRepository:
                 await session.execute(
                     select(
                         DevTask.device_id,
+                        DevTask.org_id,
                         DevTask.method_code,
                         DevTask.is_deleted,
                         DevTaskPayload.payload,
@@ -223,6 +252,11 @@ class TasksRepository:
                 )
             ).one_or_none()
             if existing is not None:
+                if org_id is not None and getattr(existing, "org_id", None) not in (
+                    None,
+                    owner,
+                ):
+                    raise HTTPException(409, "task_owner_conflict")
                 if (
                     existing.device_id != task.device_id
                     or existing.method_code != task.method_code
@@ -242,6 +276,7 @@ class TasksRepository:
                 ext_task_id=task.ext_task_id,
                 created_at=func.current_timestamp(),
                 device_id=task.device_id,
+                org_id=owner,
                 method_code=task.method_code,
             )
             .returning(
@@ -358,6 +393,7 @@ class TasksRepository:
             .join(DevTaskPayload)
             .where(
                 DevTask.is_deleted.is_(False),
+                cls._current_owner_condition(),
                 DevTaskStatus.status < TaskStatus.DONE,
                 DevTaskStatus.expires_at > func.clock_timestamp(),
                 DevTask.method_code <= method_le,
@@ -441,18 +477,8 @@ class TasksRepository:
         id: UUID4,
         org_id: int,
     ) -> TaskResponseDeleted | None:
-        exists_q = (
-            select(1)
-            .select_from(DevTask)
-            .join(DeviceOrgBind, DevTask.device_id == DeviceOrgBind.device_id)
-            .join(
-                Org, and_(DeviceOrgBind.org_id == Org.org_id, Org.is_deleted.is_(False))
-            )
-            .where(
-                DevTask.id == id,
-                DevTask.is_deleted.is_(False),
-                Org.org_id == org_id,
-            )
+        exists_q = cls._apply_org_filter(select(1).select_from(DevTask), org_id).where(
+            DevTask.id == id, DevTask.is_deleted.is_(False)
         )
         exists_result = await session.execute(exists_q)
         if not exists_result.first():
@@ -548,6 +574,7 @@ class TasksRepository:
                         DevTask.is_deleted.is_(False),
                         Device.sn == sn,
                         Device.is_deleted.is_(False),
+                        cls._current_owner_condition(),
                     )
                 )
             )
@@ -585,6 +612,7 @@ class TasksRepository:
                         DevTask.is_deleted.is_(False),
                         Device.sn == sn,
                         Device.is_deleted.is_(False),
+                        cls._current_owner_condition(),
                     )
                     .with_for_update(of=DevTask)
                 )
@@ -624,6 +652,7 @@ class TasksRepository:
                 DevTask.id == task_id,
                 Device.sn == sn,
                 Device.is_deleted.is_(False),
+                cls._current_owner_condition(),
             )
             .with_for_update(of=DevTask)
         )
@@ -747,7 +776,11 @@ class TasksRepository:
                     select(literal(result_id), OrgWebhook.id)
                     .select_from(DevTask)
                     .join(DeviceOrgBind, DeviceOrgBind.device_id == DevTask.device_id)
-                    .join(OrgWebhook, OrgWebhook.org_id == DeviceOrgBind.org_id)
+                    .join(
+                        OrgWebhook,
+                        OrgWebhook.org_id
+                        == func.coalesce(DevTask.org_id, DeviceOrgBind.org_id),
+                    )
                     .where(
                         DevTask.id == task_id,
                         OrgWebhook.event_type == "msg-task-result",

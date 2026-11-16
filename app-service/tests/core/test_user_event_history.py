@@ -124,9 +124,7 @@ async def test_transfer_unknown_history_and_duplicate_owner(event_db):
         ] == [first.id]
         await session.execute(update(DeviceOrgBind).values(org_id=2))
         await session.commit()
-        assert not (
-            await svc.search_user_events(UserEventSearchRequest(device_id=70001))
-        ).items
+        assert [item.id for item in (await svc.search_user_events(UserEventSearchRequest(device_id=70001))).items] == [first.id]
         assert not await EventRepository.add_event(session, event(1))
         await session.refresh(first)
         assert first.org_id == 1

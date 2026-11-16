@@ -265,7 +265,12 @@ class DeviceRepo:
 
     @classmethod
     async def get_device_id(
-        cls, session: AsyncSession, sn: str | None = "", org_id: int | None = 0
+        cls,
+        session: AsyncSession,
+        sn: str | None = "",
+        org_id: int | None = 0,
+        *,
+        lock_binding: bool = False,
     ) -> int | None:
         if not sn:
             return None
@@ -273,8 +278,12 @@ class DeviceRepo:
         stmt = select(Device.device_id).where(
             Device.sn == sn, Device.is_deleted.is_(False)
         )
-        if org_id > 0:
+        if org_id and org_id > 0:
             stmt = stmt.join(Device.org_bind).where(DeviceOrgBind.org_id == org_id)
+        elif lock_binding:
+            stmt = stmt.join(Device.org_bind)
+        if lock_binding:
+            stmt = stmt.with_for_update(of=DeviceOrgBind)
 
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
@@ -760,6 +769,25 @@ class DeviceRepo:
             {"device_id": int(d["device_id"]), "client_id": str(d["sn"])}
             for d in terminals_data
         ]
+
+        # Tenant reassignment must use the dedicated history/session-safe operation.
+        from fastapi import HTTPException
+
+        existing = (
+            await session.execute(
+                select(Device.device_id, Device.sn, DeviceOrgBind.org_id)
+                .join(DeviceOrgBind, DeviceOrgBind.device_id == Device.device_id)
+                .where(
+                    Device.device_id.in_([int(d["device_id"]) for d in terminals_data])
+                )
+                .with_for_update(of=DeviceOrgBind)
+            )
+        ).all()
+        desired = {int(d["device_id"]): d for d in terminals_data}
+        for device_id, sn, owner_org_id in existing:
+            candidate = desired[device_id]
+            if sn != str(candidate["sn"]) or owner_org_id != int(candidate["org_id"]):
+                raise HTTPException(409, "identity_transfer_required")
 
         # 1. Upsert Orgs
         await session.execute(

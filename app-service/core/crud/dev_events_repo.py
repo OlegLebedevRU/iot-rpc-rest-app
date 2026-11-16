@@ -106,16 +106,10 @@ class EventRepository:
 
     @staticmethod
     def tenant_conditions(org_id: int) -> tuple:
-        """Current device access AND the immutable owner of each stored event."""
+        """Immutable event owner; changing current device ownership never transfers history."""
         if org_id <= 0:
             raise ValueError("A positive tenant org_id is required")
-        current_owner = select(DeviceOrgBind.device_id).where(
-            DeviceOrgBind.org_id == org_id
-        )
-        return (
-            DevEvent.org_id == org_id,
-            DevEvent.device_id.in_(current_owner),
-        )
+        return (DevEvent.org_id == org_id,)
 
     @classmethod
     async def search_user_events(

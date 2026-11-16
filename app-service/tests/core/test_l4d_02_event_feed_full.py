@@ -155,6 +155,9 @@ class InMemoryAsyncSession:
             def first(self) -> Any:
                 return self._rows[0] if self._rows else None
 
+            def scalar_one_or_none(self) -> Any:
+                return self._rows[0][0] if self._rows else None
+
             def all(self) -> list[Any]:
                 return self._rows
 

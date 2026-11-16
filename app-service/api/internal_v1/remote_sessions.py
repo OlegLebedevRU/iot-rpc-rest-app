@@ -108,6 +108,15 @@ async def create_remote_session(
     session: Session_dep,
     _: Internal_Auth_dep,
 ) -> RemoteSessionResponse:
+    from core.crud.device_repo import DeviceRepo
+
+    if (
+        await DeviceRepo.get_device_id(
+            session, sn=data.sn, org_id=data.tenant_id, lock_binding=True
+        )
+        is None
+    ):
+        raise HTTPException(403, "device not available for organization")
     try:
         created = await remote_session_event_service.create_session(session, data)
         await session.commit()

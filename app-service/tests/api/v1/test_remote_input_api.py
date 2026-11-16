@@ -274,7 +274,7 @@ async def cleanup_registries():
 
 @pytest.mark.asyncio
 async def test_rest_auth_and_roles(monkeypatch):
-    async def mock_get_dev(session, sn, org_id):
+    async def mock_get_dev(session, sn, org_id, *, lock_binding=False):
         if org_id == 1 and sn == "SN123":
             return 773
         return None
@@ -367,7 +367,7 @@ async def test_rest_auth_and_roles(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_rest_happy_path_and_conflict(monkeypatch):
-    async def mock_get_dev(session, sn, org_id):
+    async def mock_get_dev(session, sn, org_id, *, lock_binding=False):
         return 773 if (org_id == 1 and sn == "SN123") else None
 
     monkeypatch.setattr("core.crud.device_repo.DeviceRepo.get_device_id", mock_get_dev)
@@ -492,7 +492,7 @@ async def test_rest_happy_path_and_conflict(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_stream_start_stop_and_timeout(monkeypatch):
-    async def mock_get_dev(session, sn, org_id):
+    async def mock_get_dev(session, sn, org_id, *, lock_binding=False):
         return 773 if (org_id == 1 and sn == "SN123") else None
 
     monkeypatch.setattr("core.crud.device_repo.DeviceRepo.get_device_id", mock_get_dev)
@@ -600,7 +600,7 @@ async def test_stream_start_stop_and_timeout(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_key_event_api_and_whitelist(monkeypatch):
-    async def mock_get_dev(session, sn, org_id):
+    async def mock_get_dev(session, sn, org_id, *, lock_binding=False):
         return 773 if (org_id == 1 and sn == "SN123") else None
 
     monkeypatch.setattr("core.crud.device_repo.DeviceRepo.get_device_id", mock_get_dev)
@@ -668,7 +668,7 @@ async def test_key_event_api_and_whitelist(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_inventory_api_and_delete_by_owner(monkeypatch):
-    async def mock_get_dev(session, sn, org_id):
+    async def mock_get_dev(session, sn, org_id, *, lock_binding=False):
         return 773 if (org_id == 1 and sn == "SN123") else None
 
     monkeypatch.setattr("core.crud.device_repo.DeviceRepo.get_device_id", mock_get_dev)
