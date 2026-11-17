@@ -699,3 +699,40 @@ REST-история и результат рекурсивно маскирую�
 Служебный consumer передаёт непустое подмножество `7001,7002,7003,7011,7021,7023,7030,7031,7032,7033` в `rpc_methods`. Отсутствующий или невалидный header оставляет legacy-ограничения. [Алгоритм выбора](mqtt-rpc-protocol.md).
 
 Сверено с валидаторами и выборкой IoT в `master` на 09.10.2026. Поддержка и смысл device-specific команд определяются контрактом прошивки/агента.
+
+## Siplite RPC21 reliable restart
+
+RPC21 is a standalone siplite operation. It does not require a new event or a
+sip_periph contract. Normal peripheral shutdown is performed by existing firmware
+owners; this command does not add STM32 registers or commands.
+
+The device persists acceptance before initiating restart. RES status_code=200
+with payload `{"status":"accepted","method_code":21}` means the restart request
+has been accepted, not that a new boot has already completed. The task UUID is
+also the stable result_uid for this single logical result. A repeat returns the
+same status, UID and payload; PUBACK is not a substitute for CMT.
+
+The full RSP envelope must contain its nonzero UUID and positive integral
+created_at Unix seconds (uint32). The operation has no variable restart effect:
+payload fields cannot select an alternate action. Nested restart through batch
+RPC20 is rejected with 400 because it has no independent durable task envelope.
+
+A small durable receipt window is allowed. After eviction, the device retains a
+created_at watermark and rejects unknown tasks at or below that watermark with
+409 rather than executing a possible old duplicate. A legitimate delayed task
+may consequently be rejected; issue a new task with a later creation timestamp.
+A retained UUID with inconsistent created_at is also rejected with 409.
+Missing/invalid correlation or timestamp is a validation error; storage failure
+returns 500 and must not initiate restart.
+
+A receipt records the boot in which it was accepted. A repeat in a later boot
+returns the stored acceptance result without another restart. A repeat in the
+same boot may finish the still-pending restart, including reconciliation after
+an ambiguous storage commit. A bounded result flush delay is permitted but
+server availability must not hold restart indefinitely. Firmware must not
+require CMT before reboot; a lost RES is recoverable on repeated delivery.
+Normal startup presence/version observations are separate evidence of reboot.
+
+This is a siplite reliability contract clarification. Device testing must cover
+lost RES, repeated RSP before/after reboot, storage failures, receipt eviction
+and the same UUID carrying a different timestamp.
