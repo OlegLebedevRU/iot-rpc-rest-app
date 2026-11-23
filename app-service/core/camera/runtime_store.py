@@ -29,13 +29,12 @@ class AuthorityStore:
             if row is None:
                 raise ValueError("camera_authority_not_provisioned")
             now = cast(datetime, await session.scalar(select(func.clock_timestamp())))
-            row.state = load_state(row.state)
+            original = row.state
+            row.state = load_state(original)
             yield row, now
             # JSONB is assigned a new object so nested edits are always persisted.
-            from sqlalchemy.orm.attributes import flag_modified
-
-            flag_modified(row, "state")
-            row.state = load_state(row.state)
+            if row.state != original:
+                row.state = load_state(row.state)
 
     async def get(self, sn: str) -> dict:
         async with self.sessions() as session:

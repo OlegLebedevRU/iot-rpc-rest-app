@@ -10,6 +10,7 @@ import time
 from datetime import timedelta
 from uuid import UUID, uuid4
 
+from core import worker_wake
 from core.camera.contract import bounded_json
 from core.camera.runtime_inbox import enqueue
 from core.camera.runtime_state import CameraMachine, increase
@@ -39,6 +40,8 @@ class CameraRuntime:
         self._pid = None
         self._owner = ""
         self.clocks = {}
+        self.last_ticks = {}
+        self.due = {}
         self.owns_issuer = owns_issuer
         self.worker_progress = time.monotonic()
 
@@ -51,6 +54,8 @@ class CameraRuntime:
             self._pid = os.getpid()
             self._owner = str(uuid4())
             self.clocks = {}
+            self.last_ticks.clear()
+            self.due.clear()
         return self._owner
 
     async def submit(
@@ -69,6 +74,8 @@ class CameraRuntime:
                 now,
                 now + timedelta(seconds=timeout),
             )
+        if not self.owns_issuer:
+            await worker_wake.notify(worker_wake.CAMERA, sn)
         began = self.monotonic()
         deadline = began + int(timeout * 1000)
         while self.monotonic() < deadline:
@@ -110,12 +117,14 @@ class CameraRuntime:
                 )
                 row.owner = owner
                 self.clocks[sn] = (self.monotonic(), self.wall(), state["epoch"])
-                state["last_tick"] = self.clocks[sn][0]
+                self.last_ticks[sn] = state["last_tick"] = self.clocks[sn][0]
             origin = self.clocks.get(sn)
             if not origin or origin[2] != state["epoch"]:
                 raise ValueError("camera_issuer_clock_lost")
             tick = self.monotonic()
-            if tick < origin[0] or tick < state.get("last_tick", origin[0]):
+            if tick < origin[0] or tick < self.last_ticks.get(
+                sn, state.get("last_tick", origin[0])
+            ):
                 # Do not publish or rebase on a regressed clock.
                 state.update(
                     enrolled=False, pending=None, ready=None, active=None, outbox=[]
@@ -123,8 +132,11 @@ class CameraRuntime:
                 row.owner_until = db_now
                 self.clocks.pop(sn, None)
                 return
-            state["last_tick"] = tick
-            row.owner_until = db_now + timedelta(seconds=10)
+            self.last_ticks[sn] = tick
+            if row.owner_until is None or row.owner_until <= db_now + timedelta(
+                seconds=5
+            ):
+                row.owner_until = db_now + timedelta(seconds=10)
             CameraMachine(state, tick, origin[1] + tick - origin[0]).expire()
             from datetime import datetime
 
@@ -152,8 +164,15 @@ class CameraRuntime:
                 state["result_order"].append(job["id"])
                 while len(state["result_order"]) > 64:
                     del state["results"][state["result_order"].pop(0)]
-        # Previous transaction has durably committed every outbound payload.
-        await self.flush(sn)
+            # Previous transaction has durably committed every outbound payload.
+            deadlines = [
+                state[k]["deadline"] for k in ("active", "ready", "pending") if state[k]
+            ]
+            deadlines.extend(entry["deadline"] for entry in state["outbox"])
+            self.due[sn] = min([tick + 4000, *deadlines])
+            needs_flush = bool(state["outbox"])
+        if needs_flush:
+            await self.flush(sn)
 
     async def flush(self, sn: str) -> None:
         if not self.owns_issuer:
@@ -169,7 +188,7 @@ class CameraRuntime:
             if not origin or origin[2] != row.state["epoch"]:
                 return
             tick = self.monotonic()
-            if tick < row.state["last_tick"]:
+            if tick < self.last_ticks.get(sn, row.state["last_tick"]):
                 return
             pending = []
             for entry in row.state["outbox"]:
@@ -223,6 +242,8 @@ class CameraRuntime:
                 except Exception:  # noqa: BLE001
                     # Ambiguous delivery retries identical bytes/ID, still fenced.
                     pending.append(entry)
+            if any(not entry["held"] for entry in pending):
+                self.due[sn] = min(self.due.get(sn, tick + 250), tick + 250)
             row.state["outbox"] = pending
 
     async def command(
@@ -249,7 +270,7 @@ class CameraRuntime:
             )
         result = await self.submit(identity["sn"], action, value)
         if not isinstance(result, dict):
-            raise ValueError("camera_command_invalid")
+            raise ValueError("camera_command_invalid")  # noqa: TRY004 - Domain error contract.
         return CameraRuntimeCommand(result)
 
     async def release(self, command: CameraRuntimeCommand) -> None:
@@ -376,9 +397,7 @@ class CameraRuntime:
         await topic_publisher.publish(
             routing_key=f"{settings.rmq.prefix_srv}.{sn}.{settings.rmq.suffix_control}",
             message=message,
-            correlation_id=UUID(
-                correlation
-            ),  # pyright: ignore[reportArgumentType] -- pinned UUID wire contract
+            correlation_id=UUID(correlation),  # pyright: ignore[reportArgumentType] -- pinned UUID wire contract
             # RabbitMQ maps AMQP persistent delivery to MQTT QoS1. aio-pika's
             # numeric expiration is seconds; retain the original remaining ms.
             persist=True,
@@ -392,20 +411,36 @@ class CameraRuntime:
 camera_runtime = CameraRuntime(owns_issuer=False)
 
 
-async def camera_runtime_loop(runtime: CameraRuntime) -> None:
+async def camera_runtime_loop(runtime: CameraRuntime, wait=None) -> None:
     if not runtime.owns_issuer:
         raise ValueError("camera_client_cannot_own_issuer")
     delay = 0.1
+    reconcile_at = 0.0
+    hints = set()
     while True:
         failed = False
         try:
             if settings.camera.monotonic_runtime_enabled:
-                async with asyncio.timeout(10):
-                    candidates = await runtime.store.candidates()
+                if time.monotonic() >= reconcile_at:
+                    async with asyncio.timeout(10):
+                        candidates = await runtime.store.candidates()
+                    reconcile_at = time.monotonic() + 4
+                else:
+                    candidates = list(
+                        hints
+                        | {
+                            sn
+                            for sn, deadline in runtime.due.items()
+                            if deadline <= runtime.monotonic()
+                        }
+                    )
+                hints.clear()
                 runtime.worker_progress = time.monotonic()
                 for sn in candidates:
                     try:
                         async with asyncio.timeout(40):
+                            if wait is not None:
+                                runtime.due.pop(sn, None)
                             await runtime.pump(sn)
                     except asyncio.CancelledError:
                         raise
@@ -422,4 +457,13 @@ async def camera_runtime_loop(runtime: CameraRuntime) -> None:
             log.exception("Camera runtime pump failed")
         runtime.worker_progress = time.monotonic()
         delay = min(5, max(1, delay * 2)) if failed else 0.1
-        await asyncio.sleep(delay)
+        if wait is None:
+            await asyncio.sleep(delay)
+        else:
+            timeout = max(0, reconcile_at - time.monotonic())
+            if runtime.due:
+                timeout = min(
+                    timeout,
+                    max(0, (min(runtime.due.values()) - runtime.monotonic()) / 1000),
+                )
+            hints = await wait(delay if failed else timeout)

@@ -136,9 +136,7 @@ async def deliver_one(session: AsyncSession) -> bool:
             response.raise_for_status()
         delivery.finished_at = now
         delivery.last_error = None
-    except (
-        Exception
-    ) as exc:  # noqa: BLE001 - Isolate the private worker and persist retry state.
+    except Exception as exc:  # noqa: BLE001 - Isolate delivery and retain retry state.
         code = (
             exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
         )
@@ -205,12 +203,18 @@ async def delivery_loop() -> None:
     try:
         async with asyncio.timeout(60):
             await bootstrap_inventory()
-    except (
-        Exception
-    ) as exc:  # noqa: BLE001 - Replay cannot prevent application startup or public delivery.
+    except Exception as exc:  # noqa: BLE001 - Isolate delivery and retain retry state.
         log.error("Internal inventory bootstrap failed: %s", type(exc).__name__)
+    from core import worker_wake
+
+    async with worker_wake.listen(worker_wake.INVENTORY) as wait:
+        await _deliver_until_cancelled(wait)
+
+
+async def _deliver_until_cancelled(wait) -> None:
     last_cleanup = 0.0
     while True:
+        drained_batch = False
         if settings.inventory_delivery.url and settings.inventory_delivery.token:
             try:
                 if time.monotonic() - last_cleanup > 3600:
@@ -232,12 +236,17 @@ async def delivery_loop() -> None:
                         await session.commit()
                     last_cleanup = time.monotonic()
                 for _ in range(20):
-                    async with db_helper.session_factory() as session:
-                        async with session.begin():
-                            if not await deliver_one(session):
-                                break
-            except (
-                Exception
-            ) as exc:  # noqa: BLE001 - Isolate the private worker and persist retry state.
+                    async with db_helper.session_factory() as session, session.begin():
+                        if not await deliver_one(session):
+                            break
+                else:
+                    drained_batch = True
+            except Exception as exc:  # noqa: BLE001 - Isolate delivery and retain retry state.
                 log.error("Internal inventory worker failed: %s", type(exc).__name__)
-        await asyncio.sleep(2)
+        await wait(
+            0
+            if settings.inventory_delivery.url
+            and settings.inventory_delivery.token
+            and drained_batch
+            else 15
+        )

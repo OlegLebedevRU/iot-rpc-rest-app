@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-
 import run_camera_runtime as module
 
 
@@ -30,7 +29,8 @@ async def test_worker_is_owned_executor_and_closes_resources_on_cancel(
     broker, redis, db = dependencies
     seen = []
 
-    async def loop(runtime):
+    async def loop(runtime, wait):
+        assert callable(wait)
         seen.append(runtime)
         raise asyncio.CancelledError
 

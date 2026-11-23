@@ -2,13 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-from fastapi import APIRouter, HTTPException, Query, status
-import sqlalchemy as sa
 
-from api.internal_v1.internal_depends import (
-    Internal_Auth_dep,
-    Session_dep,
-)
 from core.schemas.remote_sessions import (
     ConsoleCommandCompleteRequest,
     ConsoleCommandStartRequest,
@@ -27,6 +21,13 @@ from core.services.remote_session_event_service import (
     RemoteSessionIdentityMismatchError,
     RemoteSessionTeardownError,
     remote_session_event_service,
+)
+from fastapi import APIRouter, HTTPException, Query, status
+from sqlalchemy.exc import IntegrityError
+
+from api.internal_v1.internal_depends import (
+    Internal_Auth_dep,
+    Session_dep,
 )
 
 router = APIRouter(tags=["Internal Remote Sessions & Events"])
@@ -78,8 +79,8 @@ async def get_remote_session_events_reconciliation(
     tenant_id: int | None = Query(None, description="Filter by tenant ID"),
     from_cursor: int | None = Query(None, ge=0, description="Start cursor (inclusive)"),
     to_cursor: int | None = Query(None, ge=0, description="End cursor (inclusive)"),
-    from_time: datetime | None = Query(None, description="Start time UTC"),
-    to_time: datetime | None = Query(None, description="End time UTC"),
+    from_time: datetime | None = Query(None, description="Start time UTC"),  # noqa: B008 - FastAPI route default.
+    to_time: datetime | None = Query(None, description="End time UTC"),  # noqa: B008 - FastAPI route default.
 ) -> RemoteSessionReconciliationResponse:
     return await remote_session_event_service.get_reconciliation_summary(
         session,
@@ -128,7 +129,7 @@ async def create_remote_session(
             status_code=status.HTTP_409_CONFLICT,
             detail=exc.to_dict(),
         ) from exc
-    except sa.exc.IntegrityError as exc:
+    except IntegrityError as exc:
         await session.rollback()
         active = await remote_session_event_service.get_active_session_for_sn(
             session, data.sn
@@ -167,7 +168,7 @@ async def start_remote_session(
     session_id: str,
     session: Session_dep,
     _: Internal_Auth_dep,
-    body: RemoteSessionStart = RemoteSessionStart(),
+    body: RemoteSessionStart = RemoteSessionStart.model_validate({}),  # noqa: B008 - FastAPI route default.
 ) -> RemoteSessionResponse:
     try:
         rec = await remote_session_event_service.start_session(
@@ -202,7 +203,15 @@ async def get_remote_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Remote session '{session_id}' not found",
         )
-    return RemoteSessionResponse.model_validate(rec)
+    response = RemoteSessionResponse.model_validate(rec)
+    if rec.status in remote_session_event_service.ACTIVE_LIFECYCLE_STATES:
+        cached = await remote_session_event_service.cached_heartbeat(session_id)
+        if cached and (
+            response.last_heartbeat_at is None
+            or cached.timestamp() > response.last_heartbeat_at.timestamp()
+        ):
+            response.last_heartbeat_at = cached
+    return response
 
 
 @router.post(
@@ -220,7 +229,7 @@ async def stop_remote_session(
     session_id: str,
     session: Session_dep,
     _: Internal_Auth_dep,
-    body: RemoteSessionStop = RemoteSessionStop(),
+    body: RemoteSessionStop = RemoteSessionStop.model_validate({}),  # noqa: B008 - FastAPI route default.
 ) -> RemoteSessionResponse:
     try:
         rec = await remote_session_event_service.stop_session(session, session_id, body)
@@ -261,9 +270,9 @@ async def heartbeat_remote_session(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Remote session '{session_id}' not found",
         )
+    response = RemoteSessionResponse.model_validate(rec)
     await session.commit()
-    await session.refresh(rec)
-    return RemoteSessionResponse.model_validate(rec)
+    return response
 
 
 @router.post(
