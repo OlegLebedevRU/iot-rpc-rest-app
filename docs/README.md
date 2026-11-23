@@ -12,6 +12,7 @@
 | Разработчику приложения | [REST API](rest-api.md) → [Задачи](1-task-workflow-doc.md) → [События](2-events-api-format-description.md) → [Webhooks](3-webhooks.md) |
 | Разработчику устройства | [MQTT RPC](mqtt-rpc-protocol.md) → [Методы](method-codes-reference.md) → [Корреляция](correlation-data-guide.md) → [События MQTT](event-protocol-mqtt.md) |
 | Серверному интегратору | [Руководство интеграции](server-integration-guide.md) → [Межсервисный API](internal-api-contract-v1.md) |
+| Дежурному DevOps | [Карта production](production-architecture.md) → [Выпуск app1](manual-app1-deploy-runbook.md) → [Восстановление ACL](rabbitmq-acl-recovery.md) |
 | Инженеру сопровождения | [Диагностика](remote-diagnostics-protocol.md) → [Сеансы и ввод](remote-input-protocol.md) → [Файловый менеджер v2](file-manager-v2.md) |
 
 ## 📡 Команды и результаты
