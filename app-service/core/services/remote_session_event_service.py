@@ -316,6 +316,9 @@ class RemoteSessionEventService:
         )
 
         session.add(event_record)
+        if (sync_session := getattr(session, "sync_session", None)) is not None and sn:
+            from core.portal_changes import mark_feed
+            mark_feed(sync_session, sn)
         await session.flush()
         log.debug(
             "Recorded remote session event cursor=%s event_id=%s type=%s sn=%s",

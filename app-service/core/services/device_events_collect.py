@@ -116,6 +116,10 @@ class DeviceEventsCollect:
                 type=str(event_type_code),
                 gauges=payload_dict,
             )
+            if event_type_code == 84:
+                from core.portal_changes import changed
+
+                changed(self.sn, "camera")
         else:
             # Только здесь нужно создавать DevEventBody
             event = DevEventBody(

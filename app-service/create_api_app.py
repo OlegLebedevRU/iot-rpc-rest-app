@@ -329,6 +329,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     cold_boot_task = asyncio.create_task(_initial_device_connections_sync_cold_boot())
     remote_input_cleanup_task = asyncio.create_task(_remote_input_cleanup_loop())
     rpc_webhook_task = asyncio.create_task(delivery_loop())
+    from core import portal_changes
+
+    portal_change_task = asyncio.create_task(portal_changes.run())
     inventory_delivery_task = asyncio.create_task(inventory_delivery_loop())
     scheduler = AsyncIOScheduler()
     scheduler.configure(jobstores={"default": MemoryJobStore()})
@@ -365,6 +368,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     yield
 
+    portal_change_task.cancel()
+    await asyncio.gather(portal_change_task, return_exceptions=True)
     inventory_delivery_task.cancel()
     with suppress(asyncio.CancelledError, Exception):
         await inventory_delivery_task

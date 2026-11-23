@@ -1,51 +1,49 @@
-import json
 import hashlib
-from math import ceil
-from datetime import datetime, timedelta
-from dataclasses import dataclass
-
-from core.logging_config import setup_module_logger
+import json
 import uuid
-from typing import Any
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from math import ceil
+from typing import Any, cast
 
 from fastapi import HTTPException
 from fastapi_pagination import Page
 from fastapi_pagination.ext.sqlalchemy import apaginate
 from pydantic import UUID4
 from sqlalchemy import (
-    select,
-    update,
-    asc,
-    desc,
-    func,
     Integer,
     and_,
-    or_,
+    asc,
     case,
+    desc,
     exists,
+    func,
     literal,
+    or_,
+    select,
+    update,
 )
 from sqlalchemy.dialects.postgresql import insert
-from sqlalchemy.ext.asyncio.session import AsyncSession
 from sqlalchemy.engine import CursorResult
-from typing import cast
+from sqlalchemy.ext.asyncio.session import AsyncSession
 
 from core import settings
+from core.logging_config import setup_module_logger
 from core.models import Device, Org
 from core.models.common import TaskStatus
 from core.models.device_tasks import (
-    DevTaskStatus,
     DevTask,
-    DevTaskResult,
     DevTaskPayload,
+    DevTaskResult,
+    DevTaskStatus,
     RpcResultWebhook,
 )
-from core.models.webhook import OrgWebhook
 from core.models.devices import DeviceOrgBind
+from core.models.webhook import OrgWebhook
 from core.schemas.device_tasks import (
     TaskCreate,
-    TaskResponseDeleted,
     TaskListOut,
+    TaskResponseDeleted,
 )
 
 log = setup_module_logger(__name__, "repo_dev_tasks.log")
@@ -792,6 +790,9 @@ class TasksRepository:
         if getattr(owner, "method_code", 0) == 7011:
             await cls.scrub_renewal_payload(session, [task_id])
         await session.commit()
+        if getattr(owner, "method_code", 0) in {160, 161, 162, 163, 164, 165, 166, 169}:
+            from core.portal_changes import changed
+            changed(sn, "command")
         return StoredTaskResult(
             result_id, ext_id, status_code, parsed, True, send_webhook
         )
