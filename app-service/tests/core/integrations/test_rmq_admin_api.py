@@ -360,3 +360,11 @@ async def test_get_single_connection_details(monkeypatch):
     # 3. Пустой вызов
     res3 = await RmqAdminApi.get_single_connection_details()
     assert res3 is None
+
+
+def test_portal_service_roles_are_exact_identities():
+    from core.integrations.rmq_admin_api import is_ignored_or_service_identity
+
+    for name in ("portal_watch_v1", "portal_files_v1"):
+        assert is_ignored_or_service_identity(name)
+        assert not is_ignored_or_service_identity(name + "_device")
