@@ -4,7 +4,12 @@ from unittest.mock import AsyncMock
 import pytest
 from core.remote_input.mqtt_bridge import handle_device_ctl_message
 from core.remote_input.presence import RedisPresenceRegistry
-from core.remote_input.schemas import CtlPresence, InventoryInfo, ScreenInfo
+from core.remote_input.schemas import (
+    CtlPresence,
+    CtlSnapshot,
+    InventoryInfo,
+    ScreenInfo,
+)
 
 
 @pytest.mark.asyncio
@@ -28,7 +33,7 @@ async def test_compact_presence_lifecycle(monkeypatch):
     assert send.await_count == 1
     assert not (await store.get(sn)).online
 
-    full = CtlPresence(
+    full = CtlSnapshot(
         timestamp=datetime.now(UTC).isoformat(),
         presence_rev=revision,
         inventory=InventoryInfo(),
