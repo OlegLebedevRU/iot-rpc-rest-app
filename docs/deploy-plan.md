@@ -1,5 +1,7 @@
 # План оптимизации деплоя и миграции на GitHub Packages
 
+**Исторический план миграции.** Текущий порядок поставки app1 через builder и registry приведён в [production runbook](manual-app1-deploy-runbook.md).
+
 Документ — результат исследования инфраструктурных деклараций репозитория
 (`compose.yaml`, `docker-files/**/Dockerfile`, `docker-files/rmq/compose.yaml`,
 `pyproject.toml`, `app-service/prestart.sh`, `app-service/appup`) и сводный

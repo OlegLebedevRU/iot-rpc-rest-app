@@ -11,7 +11,7 @@
 ![REST](https://img.shields.io/badge/API-REST-009688)
 ![Security](https://img.shields.io/badge/Device_security-mTLS-2E7D32)
 
-[📚 Документация](docs/README.md) · [📡 RPC](docs/mqtt-rpc-protocol.md) · [🔌 REST API](docs/rest-api.md) · [📨 События](docs/event-protocol-mqtt.md)
+[📚 Документация](docs/README.md) · [Эксплуатация](docs/production-architecture.md) · [📡 RPC](docs/mqtt-rpc-protocol.md) · [🔌 REST API](docs/rest-api.md) · [📨 События](docs/event-protocol-mqtt.md)
 
 </div>
 

@@ -63,7 +63,7 @@ UUID448 не заменяет MQTT correlationData и не является ра
 checkout на выделенном builder, `deploy/registry_app1.py`, private registry
 и immutable digest. Production получает digest через общий deployer;
 пересоздаётся только app1 с no-deps/no-build/pull-never, миграция выполняется
-prestart. Подробности: [runbook §0](manual-app1-deploy-runbook.md#0-production-единый-порядок-доставки).
+prestart. Подробности: [порядок выпуска app1](manual-app1-deploy-runbook.md).
 Первоначально пользователь потребовал остановку перед деплоем; выпуск
 выполнен только после отдельного решения «деплой».
 
