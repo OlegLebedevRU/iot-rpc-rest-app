@@ -1,15 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
 from datetime import UTC, datetime
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.internal_v1.internal_depends import Session_dep
-from api.internal_v1.remote_input import extract_caller_role
 from core import settings
 from core.crud.device_repo import DeviceRepo
 from core.diagnostics.schemas import (
@@ -23,7 +23,7 @@ from core.diagnostics.schemas import (
 from core.diagnostics.service import DeviceTaskDiagnosticTaskSender, DiagnosticService
 from core.diagnostics.sessions import DiagnosticSession, registry
 from core.logging_config import setup_module_logger
-from core.remote_input.leases import LeaseConflictError, lease_registry
+from core.remote_input.leases import lease_registry
 
 log = setup_module_logger(__name__, "api_internal_diagnostics.log")
 router = APIRouter(
@@ -45,38 +45,16 @@ async def close_diagnostics_ws_for_sn(sn: str, reason: str = "lease_revoked") ->
 
 
 async def _resolve_websocket_org_id(websocket: WebSocket) -> int | None:
-    """Resolve org_id from the trusted headers injected by internal auth gateway."""
-    caller_role = extract_caller_role(websocket)
-    is_superuser = caller_role == "superuser"
-    is_owner = caller_role == "l4desk_owner"
-    if not is_superuser and not is_owner:
-        log.warning("Diagnostics websocket rejected: role not allowed")
+    """Accept only the internal gateway with a successful MenuBuilder decision."""
+    secret = settings.auth.internal_service_key
+    supplied = websocket.headers.get("X-Internal-Service-Key", "")
+    if not secret or not secrets.compare_digest(secret.encode(), supplied.encode()):
         return None
-
-    query_org_id = websocket.query_params.get("org_id")
-    if query_org_id and is_superuser:
-        try:
-            return int(query_org_id)
-        except ValueError:
-            pass
-
-    org_id = (
-        websocket.headers.get("orgId")
-        or websocket.headers.get("orgid")
-        or websocket.headers.get("X-Org-Id")
-        or websocket.headers.get("x-org-id")
-        or websocket.headers.get("jwt-org")
-        or websocket.headers.get("org")
-    )
-    if org_id is not None:
-        try:
-            resolved_org_id = int(org_id)
-            if query_org_id and int(query_org_id) != resolved_org_id:
-                return None
-            return resolved_org_id
-        except ValueError:
-            return None
-    return None
+    try:
+        org = int(websocket.headers.get("X-Console-Org", ""))
+    except ValueError:
+        return None
+    return org if org > 0 else None
 
 
 async def _is_websocket_device_allowed(
@@ -151,85 +129,46 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    caller_user_id = (
-        websocket.headers.get("X-User-Id")
-        or websocket.query_params.get("user_id")
-        or "superuser"
-    )
-    caller_session_id = websocket.headers.get(
-        "X-Session-Id"
-    ) or websocket.query_params.get("session_id")
-    lease_id_raw = websocket.query_params.get("lease_id") or websocket.headers.get(
-        "X-Lease-Id"
-    )
-
-    if extract_caller_role(websocket) == "l4desk_owner" and not lease_id_raw:
+    try:
+        grant_expiry = int(websocket.headers.get("X-Console-Expires", ""))
+    except ValueError:
+        grant_expiry = 0
+    if grant_expiry <= datetime.now(UTC).timestamp():
+        await websocket.close(code=4401, reason="admission_expired")
+        return
+    caller_user_id = websocket.headers.get("X-Console-User")
+    caller_session_id = websocket.headers.get("X-Console-Session")
+    raw_id = websocket.query_params.get("lease_id")
+    if not raw_id:
         await websocket.close(code=4409, reason="lease_required")
         return
-
-    implicit_lease = False
-    if lease_id_raw:
-        try:
-            lease_id = UUID(lease_id_raw)
-        except ValueError:
-            await websocket.close(code=4409, reason="invalid_lease_id")
-            return
-
-        lease = await lease_registry.get(lease_id)
-        if (
-            lease is None
-            or not lease.is_active()
-            or lease.sn != sn
-            or lease.org_id != org_id
-        ):
-            await websocket.close(code=4409, reason="lease_inactive")
-            return
-        if (
-            extract_caller_role(websocket) == "l4desk_owner"
-            and lease.owner_role != "l4desk_owner"
-        ):
-            await websocket.close(code=4409, reason="lease_role_mismatch")
-            return
-        if lease.scope != "console":
-            await websocket.close(code=4409, reason="scope_mismatch")
-            return
-        if lease.owner_user_id != caller_user_id:
-            await websocket.close(code=4409, reason="lease_not_owner")
-            return
-        if caller_session_id and lease.owner_session_id != caller_session_id:
-            await websocket.close(code=4409, reason="lease_session_mismatch")
-            return
-    else:
-        if not settings.diagnostics.implicit_console_lease:
-            await websocket.close(code=4409, reason="lease_required")
-            return
-
-        device_id = (
-            await DeviceRepo.get_device_id(session=session, sn=sn, org_id=org_id) or 0
-        )
-        implicit_session = caller_session_id or str(uuid4())
-        try:
-            lease = await lease_registry.acquire(
-                org_id=org_id,
-                device_id=device_id,
-                sn=sn,
-                owner_user_id=caller_user_id,
-                owner_role="superuser",
-                ttl_sec=settings.remote_input.lease_ttl_sec,
-                scope="console",
-                owner_session_id=implicit_session,
-            )
-            implicit_lease = True
-        except LeaseConflictError:
-            await websocket.close(code=4409, reason="lease_busy")
-            return
+    try:
+        lease_id = UUID(raw_id)
+    except ValueError:
+        await websocket.close(code=4409, reason="invalid_lease_id")
+        return
+    lease = await lease_registry.get(lease_id)
+    if (
+        lease is None
+        or not lease.is_active()
+        or lease.sn != sn
+        or lease.org_id != org_id
+    ):
+        await websocket.close(code=4409, reason="lease_inactive")
+        return
+    if lease.scope != "console":
+        await websocket.close(code=4409, reason="scope_mismatch")
+        return
+    if not caller_user_id or lease.owner_user_id != caller_user_id:
+        await websocket.close(code=4409, reason="lease_not_owner")
+        return
+    if not caller_session_id or lease.owner_session_id != caller_session_id:
+        await websocket.close(code=4409, reason="lease_session_mismatch")
+        return
 
     await websocket.accept()
     active_diagnostics_ws[sn] = websocket
     await lease_registry.mark_ws_connected(lease.lease_id)
-
-    if implicit_lease:
-        await websocket.send_json({"type": "lease", "lease_id": str(lease.lease_id)})
 
     service = DiagnosticService(
         registry,
@@ -244,7 +183,21 @@ async def diagnostics_ws(websocket: WebSocket, sn: str, session: Session_dep) ->
 
     try:
         while True:
-            raw_message = await websocket.receive_text()
+            remaining = grant_expiry - datetime.now(UTC).timestamp()
+            if remaining <= 0:
+                await websocket.close(code=4401, reason="admission_expired")
+                break
+            try:
+                raw_message = await asyncio.wait_for(
+                    websocket.receive_text(), remaining
+                )
+            except TimeoutError:
+                await websocket.close(code=4401, reason="admission_expired")
+                break
+            current = await lease_registry.get(lease.lease_id)
+            if current is None or not current.is_active() or current.scope != "console":
+                await websocket.close(code=4409, reason="lease_inactive")
+                break
             try:
                 message = BrowserMessageAdapter.validate_json(raw_message)
             except ValidationError as exc:
