@@ -58,7 +58,7 @@ async def run() -> None:
                         persist=False,
                         mandatory=False,
                     )
-        except Exception:  # noqa: BLE001 - A best-effort hint must not block device ingestion.
+        except Exception:
             log.warning(
                 "Portal change batch unavailable; readers reconcile", exc_info=True
             )
