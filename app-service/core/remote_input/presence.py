@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import Protocol
 from uuid import uuid4
@@ -12,12 +13,14 @@ from redis.exceptions import (
 from redis.exceptions import (
     TimeoutError as RedisTimeoutError,
 )
+from redis.exceptions import WatchError
 
 from core.config import settings
 from core.logging_config import setup_module_logger
 from core.redis_helper import redis_helper
 from core.remote_input.schemas import (
     AgentStatusView,
+    CtlHeartbeat,
     CtlPresence,
     CtlStreamEvent,
     DisplayInfo,
@@ -30,6 +33,8 @@ log = setup_module_logger(__name__, "remote_input.log")
 
 
 class PresenceRegistryProtocol(Protocol):
+    async def heartbeat(self, sn: str, beat: CtlHeartbeat) -> bool: ...
+
     async def notify_video_event(self, event: CtlStreamEvent) -> None: ...
     async def update(
         self, sn: str, presence: CtlPresence
@@ -60,16 +65,44 @@ class PresenceRegistryProtocol(Protocol):
     ) -> None: ...
 
 
+def _received_at(value: bytes | str) -> datetime:
+    return datetime.fromisoformat(
+        value.decode("ascii") if isinstance(value, bytes) else value
+    )
+
+
 def _parse_timestamp(ts: str | None) -> datetime | None:
     if not ts:
         return None
     try:
-        return datetime.fromisoformat(ts.replace("Z", "+00:00"))
-    except Exception:
+        return datetime.fromisoformat(ts)
+    except TypeError, ValueError:
         return None
 
 
 class PresenceRegistry:
+    async def heartbeat(self, sn: str, beat: CtlHeartbeat) -> bool:
+        async with self._lock:
+            previous = self._presence.get(sn)
+            now = datetime.now(UTC)
+            if previous:
+                state, seen = previous
+                if (
+                    state.status == "online"
+                    and state.presence_rev == beat.presence_rev
+                    and (now - seen).total_seconds()
+                    < settings.remote_input.presence_stale_sec
+                ):
+                    if beat.seq > self._beat_seq.get(sn, 0):
+                        self._presence[sn] = state, now
+                        self._beat_seq[sn] = beat.seq
+                    return False
+            last = self._resync.get(sn)
+            if last and (now - last).total_seconds() < 60:
+                return False
+            self._resync[sn] = now
+            return True
+
     async def notify_video_event(self, event: CtlStreamEvent) -> None:
         """Invalidate video consumers without storing HEVC in a legacy stream record."""
         notification = WsStreamState(
@@ -79,12 +112,14 @@ class PresenceRegistry:
             timestamp=event.timestamp,
         )
         async with self._lock:
-            queues = list(self._stream_listeners.get(event.sn, []))
+            queues = list(self._stream_listeners.get(event.sn or "", []))
         for queue in queues:
             queue.put_nowait(notification)
 
     def __init__(self) -> None:
         self._presence: dict[str, tuple[CtlPresence, datetime]] = {}
+        self._beat_seq: dict[str, int] = {}
+        self._resync: dict[str, datetime] = {}
         self._last_inventory: dict[str, InventoryInfo] = {}
         self._last_stream: dict[str, StreamInfo] = {}
         self._listeners: dict[str, list[asyncio.Queue[AgentStatusView]]] = {}
@@ -106,30 +141,33 @@ class PresenceRegistry:
         inventory = (
             (presence.inventory or self._last_inventory.get(sn)) if online else None
         )
-        if online and (
-            inventory is None or (not inventory.displays and not inventory.cameras)
-        ):
-            if presence.screen or presence.desktop_available:
-                w = presence.screen.virtual_width if presence.screen else 1920
-                h = presence.screen.virtual_height if presence.screen else 1080
-                x = presence.screen.virtual_x if presence.screen else 0
-                y = presence.screen.virtual_y if presence.screen else 0
-                inventory = InventoryInfo(
-                    displays=[
-                        DisplayInfo(
-                            desktop_id="0",
-                            name="Основной экран",
-                            primary=True,
-                            x=x,
-                            y=y,
-                            width=w,
-                            height=h,
-                            session_id=presence.session_id,
-                            policy="input",
-                        )
-                    ],
-                    cameras=[],
-                )
+        if (
+            online
+            and (
+                inventory is None
+                or (not inventory.displays and (not inventory.cameras))
+            )
+        ) and (presence.screen or presence.desktop_available):
+            w = presence.screen.virtual_width if presence.screen else 1920
+            h = presence.screen.virtual_height if presence.screen else 1080
+            x = presence.screen.virtual_x if presence.screen else 0
+            y = presence.screen.virtual_y if presence.screen else 0
+            inventory = InventoryInfo(
+                displays=[
+                    DisplayInfo(
+                        desktop_id="0",
+                        name="Основной экран",
+                        primary=True,
+                        x=x,
+                        y=y,
+                        width=w,
+                        height=h,
+                        session_id=presence.session_id,
+                        policy="input",
+                    )
+                ],
+                cameras=[],
+            )
         stream = (presence.stream or self._last_stream.get(sn)) if online else None
 
         return AgentStatusView(
@@ -141,7 +179,9 @@ class PresenceRegistry:
             screen=screen,
             inventory=inventory,
             stream=stream,
-            last_seen_at=presence.timestamp,
+            last_seen_at=received_at.isoformat()
+            if presence.presence_rev
+            else presence.timestamp,
             stale=stale,
         )
 
@@ -186,22 +226,23 @@ class PresenceRegistry:
             if presence.stream is not None:
                 prev_stream = self._last_stream.get(sn)
                 stale_running = False
-                if prev_stream is not None and prev_stream.state in (
-                    "stopped",
-                    "failed",
+                if (
+                    (
+                        prev_stream is not None
+                        and prev_stream.state in ("stopped", "failed")
+                    )
+                    and presence.stream.state == "running"
+                ) and (
+                    presence.stream.stream_instance_id is not None
+                    and prev_stream.stream_instance_id
+                    == presence.stream.stream_instance_id
                 ):
-                    if presence.stream.state == "running":
-                        if (
-                            presence.stream.stream_instance_id is not None
-                            and prev_stream.stream_instance_id
-                            == presence.stream.stream_instance_id
-                        ):
-                            stale_running = True
-                            log.warning(
-                                "Ignoring stale presence stream running for sn=%s on already stopped stream_instance_id=%s",
-                                sn,
-                                prev_stream.stream_instance_id,
-                            )
+                    stale_running = True
+                    log.warning(
+                        "Ignoring stale presence stream running for sn=%s on already stopped stream_instance_id=%s",
+                        sn,
+                        prev_stream.stream_instance_id,
+                    )
                 if not stale_running:
                     self._last_stream[sn] = presence.stream
                     if (
@@ -209,12 +250,15 @@ class PresenceRegistry:
                         or prev_stream.state != presence.stream.state
                     ):
                         stream_event_to_dispatch = WsStreamState(
-                            stream_instance_id=presence.stream.stream_instance_id,
+                            stream_instance_id=presence.stream.stream_instance_id
+                            or None,
                             state=presence.stream.state,
                             reason=presence.stream.reason,
                             timestamp=presence.timestamp,
                         )
 
+            if not prev or prev[0].presence_rev != presence.presence_rev:
+                self._beat_seq[sn] = 0
             self._presence[sn] = (presence, now)
             view = self._build_view(sn, presence, now, now)
 
@@ -239,17 +283,13 @@ class PresenceRegistry:
             )
 
         for q in listeners:
-            try:
+            with suppress(asyncio.QueueFull, asyncio.QueueShutDown):
                 q.put_nowait(view)
-            except Exception:
-                pass
 
         if stream_event_to_dispatch:
             for sq in stream_listeners:
-                try:
+                with suppress(asyncio.QueueFull, asyncio.QueueShutDown):
                     sq.put_nowait(stream_event_to_dispatch)
-                except Exception:
-                    pass
 
         return changed, view
 
@@ -276,7 +316,7 @@ class PresenceRegistry:
                     current_stream.stream_instance_id,
                 )
                 return WsStreamState(
-                    stream_instance_id=current_stream.stream_instance_id,
+                    stream_instance_id=current_stream.stream_instance_id or None,
                     state=current_stream.state,
                     reason=current_stream.reason,
                     timestamp=now.isoformat(),
@@ -295,7 +335,7 @@ class PresenceRegistry:
                 p.stream = current_stream
 
             ws_state = WsStreamState(
-                stream_instance_id=current_stream.stream_instance_id,
+                stream_instance_id=current_stream.stream_instance_id or None,
                 state=event.state,
                 reason=event.reason,
                 timestamp=event.timestamp,
@@ -312,17 +352,13 @@ class PresenceRegistry:
                 view = None
 
         for sq in stream_listeners:
-            try:
+            with suppress(asyncio.QueueFull, asyncio.QueueShutDown):
                 sq.put_nowait(ws_state)
-            except Exception:
-                pass
 
         if view is not None:
             for q in status_listeners:
-                try:
+                with suppress(asyncio.QueueFull, asyncio.QueueShutDown):
                     q.put_nowait(view)
-                except Exception:
-                    pass
 
         log.info(
             "Stream event updated for sn=%s: state=%s instance=%s reason=%s",
@@ -468,6 +504,37 @@ class _CompatibilityStreamDict(dict):
 
 
 class RedisPresenceRegistry:
+    async def heartbeat(self, sn: str, beat: CtlHeartbeat) -> bool:
+        """Atomically touch the matching online snapshot or elect one resync sender."""
+        key = f"l4d:presence:{sn}"
+        async with self._client.pipeline() as pipe:
+            try:
+                await pipe.watch(key)
+                revision, previous = await pipe.hmget(key, "presence_rev", "beat_seq")
+                if beat.presence_rev != revision:
+                    await pipe.unwatch()
+                    return bool(
+                        await self._client.set(
+                            f"l4d:presence_resync:{sn}", "1", nx=True, ex=60
+                        )
+                    )
+                if beat.seq <= int(previous or 0):
+                    return False
+                pipe.multi()
+                pipe.hset(
+                    key,
+                    mapping={
+                        "beat_seq": beat.seq,
+                        "received_at": datetime.now(UTC).isoformat(),
+                    },
+                )
+                pipe.expire(key, settings.remote_input.presence_stale_sec)
+                await pipe.execute()
+            except WatchError:
+                # The concurrent writer owns the newer state.
+                return False
+        return False
+
     async def notify_video_event(self, event: CtlStreamEvent) -> None:
         notification = WsStreamState(
             stream_instance_id=event.stream_instance_id,
@@ -476,7 +543,7 @@ class RedisPresenceRegistry:
             timestamp=event.timestamp,
         )
         async with self._lock:
-            queues = list(self._stream_listeners.get(event.sn, []))
+            queues = list(self._stream_listeners.get(event.sn or "", []))
         for queue in queues:
             queue.put_nowait(notification)
         await self._client.publish(
@@ -541,7 +608,7 @@ class RedisPresenceRegistry:
             keys += await client.keys("l4d:stream:*")
             if keys:
                 await client.delete(*keys)
-        except Exception as exc:
+        except (RedisConnectionError, RedisTimeoutError) as exc:
             log.debug("Failed deleting all presence redis keys: %s", exc)
 
     async def _build_view_async(
@@ -568,30 +635,33 @@ class RedisPresenceRegistry:
             else:
                 inventory = await self.get_inventory(sn)
 
-        if online and (
-            inventory is None or (not inventory.displays and not inventory.cameras)
-        ):
-            if presence.screen or presence.desktop_available:
-                w = presence.screen.virtual_width if presence.screen else 1920
-                h = presence.screen.virtual_height if presence.screen else 1080
-                x = presence.screen.virtual_x if presence.screen else 0
-                y = presence.screen.virtual_y if presence.screen else 0
-                inventory = InventoryInfo(
-                    displays=[
-                        DisplayInfo(
-                            desktop_id="0",
-                            name="Основной экран",
-                            primary=True,
-                            x=x,
-                            y=y,
-                            width=w,
-                            height=h,
-                            session_id=presence.session_id,
-                            policy="input",
-                        )
-                    ],
-                    cameras=[],
-                )
+        if (
+            online
+            and (
+                inventory is None
+                or (not inventory.displays and (not inventory.cameras))
+            )
+        ) and (presence.screen or presence.desktop_available):
+            w = presence.screen.virtual_width if presence.screen else 1920
+            h = presence.screen.virtual_height if presence.screen else 1080
+            x = presence.screen.virtual_x if presence.screen else 0
+            y = presence.screen.virtual_y if presence.screen else 0
+            inventory = InventoryInfo(
+                displays=[
+                    DisplayInfo(
+                        desktop_id="0",
+                        name="Основной экран",
+                        primary=True,
+                        x=x,
+                        y=y,
+                        width=w,
+                        height=h,
+                        session_id=presence.session_id,
+                        policy="input",
+                    )
+                ],
+                cameras=[],
+            )
 
         stream: StreamInfo | None = None
         if online:
@@ -609,7 +679,9 @@ class RedisPresenceRegistry:
             screen=screen,
             inventory=inventory,
             stream=stream,
-            last_seen_at=presence.timestamp,
+            last_seen_at=received_at.isoformat()
+            if presence.presence_rev
+            else presence.timestamp,
             stale=stale,
         )
 
@@ -630,8 +702,8 @@ class RedisPresenceRegistry:
             if prev_raw and "data" in prev_raw:
                 try:
                     prev_p = CtlPresence.model_validate_json(prev_raw["data"])
-                    prev_at = datetime.fromisoformat(prev_raw["received_at"])
-                except Exception as parse_err:
+                    prev_at = _received_at(prev_raw["received_at"])
+                except (ValueError, TypeError, KeyError) as parse_err:
                     log.debug("Error parsing prev presence from redis: %s", parse_err)
 
             prev_status = prev_p.status if prev_p else None
@@ -677,22 +749,23 @@ class RedisPresenceRegistry:
                     else None
                 )
                 stale_running = False
-                if prev_stream is not None and prev_stream.state in (
-                    "stopped",
-                    "failed",
+                if (
+                    (
+                        prev_stream is not None
+                        and prev_stream.state in ("stopped", "failed")
+                    )
+                    and presence.stream.state == "running"
+                ) and (
+                    presence.stream.stream_instance_id is not None
+                    and prev_stream.stream_instance_id
+                    == presence.stream.stream_instance_id
                 ):
-                    if presence.stream.state == "running":
-                        if (
-                            presence.stream.stream_instance_id is not None
-                            and prev_stream.stream_instance_id
-                            == presence.stream.stream_instance_id
-                        ):
-                            stale_running = True
-                            log.warning(
-                                "Ignoring stale presence stream running for sn=%s on already stopped stream_instance_id=%s",
-                                sn,
-                                prev_stream.stream_instance_id,
-                            )
+                    stale_running = True
+                    log.warning(
+                        "Ignoring stale presence stream running for sn=%s on already stopped stream_instance_id=%s",
+                        sn,
+                        prev_stream.stream_instance_id,
+                    )
                 if not stale_running:
                     stream_ttl = 90 if presence.stream.state == "running" else 300
                     await client.set(
@@ -707,7 +780,8 @@ class RedisPresenceRegistry:
                         or prev_stream.state != presence.stream.state
                     ):
                         stream_event_to_dispatch = WsStreamState(
-                            stream_instance_id=presence.stream.stream_instance_id,
+                            stream_instance_id=presence.stream.stream_instance_id
+                            or None,
                             state=presence.stream.state,
                             reason=presence.stream.reason,
                             timestamp=presence.timestamp,
@@ -718,6 +792,14 @@ class RedisPresenceRegistry:
                 presence_key,
                 mapping={
                     "data": presence.model_dump_json(),
+                    "presence_rev": (presence.presence_rev or "")
+                    if is_incoming_online
+                    else "",
+                    **(
+                        {"beat_seq": 0}
+                        if not prev_p or prev_p.presence_rev != presence.presence_rev
+                        else {}
+                    ),
                     "received_at": now.isoformat(),
                 },
             )
@@ -750,17 +832,13 @@ class RedisPresenceRegistry:
                 )
 
             for q in listeners:
-                try:
+                with suppress(asyncio.QueueFull, asyncio.QueueShutDown):
                     q.put_nowait(view)
-                except Exception:
-                    pass
 
             if stream_event_to_dispatch:
                 for sq in stream_listeners:
-                    try:
+                    with suppress(asyncio.QueueFull, asyncio.QueueShutDown):
                         sq.put_nowait(stream_event_to_dispatch)
-                    except Exception:
-                        pass
 
             return changed, view
         except (RedisConnectionError, RedisTimeoutError) as exc:
@@ -797,7 +875,7 @@ class RedisPresenceRegistry:
                     current_stream.stream_instance_id,
                 )
                 return WsStreamState(
-                    stream_instance_id=current_stream.stream_instance_id,
+                    stream_instance_id=current_stream.stream_instance_id or None,
                     state=current_stream.state,
                     reason=current_stream.reason,
                     timestamp=now.isoformat(),
@@ -818,7 +896,7 @@ class RedisPresenceRegistry:
             rec_view: AgentStatusView | None = None
             if prev_raw and "data" in prev_raw:
                 p = CtlPresence.model_validate_json(prev_raw["data"])
-                r_at = datetime.fromisoformat(prev_raw["received_at"])
+                r_at = _received_at(prev_raw["received_at"])
                 p.stream = current_stream
                 await client.hset(
                     presence_key,
@@ -832,7 +910,7 @@ class RedisPresenceRegistry:
                 rec_view = await self._build_view_async(sn, p, r_at, now)
 
             ws_state = WsStreamState(
-                stream_instance_id=current_stream.stream_instance_id,
+                stream_instance_id=current_stream.stream_instance_id or None,
                 state=event.state,
                 reason=event.reason,
                 timestamp=event.timestamp,
@@ -845,17 +923,13 @@ class RedisPresenceRegistry:
                 )
 
             for sq in stream_listeners:
-                try:
+                with suppress(asyncio.QueueFull, asyncio.QueueShutDown):
                     sq.put_nowait(ws_state)
-                except Exception:
-                    pass
 
             if rec_view is not None:
                 for q in status_listeners:
-                    try:
+                    with suppress(asyncio.QueueFull, asyncio.QueueShutDown):
                         q.put_nowait(rec_view)
-                    except Exception:
-                        pass
 
             log.info(
                 "Stream event updated (redis) for sn=%s: state=%s instance=%s reason=%s",
@@ -885,7 +959,7 @@ class RedisPresenceRegistry:
             prev_raw = await client.hgetall(presence_key)
             if prev_raw and "data" in prev_raw:
                 p = CtlPresence.model_validate_json(prev_raw["data"])
-                r_at = datetime.fromisoformat(prev_raw["received_at"])
+                r_at = _received_at(prev_raw["received_at"])
                 p.inventory = inventory
                 await client.hset(
                     presence_key,
@@ -922,7 +996,7 @@ class RedisPresenceRegistry:
                     stale=True,
                 )
             presence = CtlPresence.model_validate_json(raw["data"])
-            received_at = datetime.fromisoformat(raw["received_at"])
+            received_at = _received_at(raw["received_at"])
             async with self._lock:
                 self._presence[sn] = (presence, received_at)
             return await self._build_view_async(sn, presence, received_at, now)
@@ -950,6 +1024,8 @@ class RedisPresenceRegistry:
             raw = await client.hgetall(presence_key)
             if raw and "data" in raw:
                 p = CtlPresence.model_validate_json(raw["data"])
+                if p.presence_rev and p.inventory is not None:
+                    return p.inventory
                 if p.screen or p.desktop_available:
                     w = p.screen.virtual_width if p.screen else 1920
                     h = p.screen.virtual_height if p.screen else 1080

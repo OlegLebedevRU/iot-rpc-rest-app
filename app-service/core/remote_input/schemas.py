@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 from uuid import UUID, uuid4
 
 from pydantic import (
@@ -283,10 +283,9 @@ class CtlLeaseRenew(StrictBaseModel):
     @model_validator(mode="before")
     @classmethod
     def _map_legacy_cmd_id(cls, data: Any) -> Any:
-        if isinstance(data, dict):
-            if "cmd_id" in data and "command_id" not in data:
-                data = dict(data)
-                data["command_id"] = data.pop("cmd_id")
+        if (isinstance(data, dict)) and ("cmd_id" in data and "command_id" not in data):
+            data = dict(data)
+            data["command_id"] = data.pop("cmd_id")
         return data
 
 
@@ -328,7 +327,20 @@ class CtlNack(StrictBaseModel):
     terminal_time_ms: int | None = None
 
 
+PresenceRevision = Annotated[
+    str, Field(pattern=r"^[0-9a-f]{16}$", min_length=16, max_length=16)
+]
+
+
+class CtlHeartbeat(StrictBaseModel):
+    v: Literal[1]
+    type: Literal["heartbeat"]
+    presence_rev: PresenceRevision
+    seq: int = Field(strict=True, ge=1, le=4294967295)
+
+
 class CtlPresence(StrictBaseModel):
+    presence_rev: PresenceRevision | None = None
     v: Literal[1] = 1
     type: Literal["presence"] = "presence"
     agent: Literal["l4desk"] | str = "l4desk"
@@ -355,7 +367,7 @@ class CtlStreamEvent(StrictBaseModel):
 
 
 CtlInboundMessage = Annotated[
-    Union[CtlAck, CtlNack, CtlPresence, CtlStreamEvent],
+    CtlAck | CtlNack | CtlPresence | CtlHeartbeat | CtlStreamEvent,
     Field(discriminator="type"),
 ]
 
@@ -590,16 +602,14 @@ class WsRelease(StrictBaseModel):
 
 
 WsInboundMessage = Annotated[
-    Union[
-        WsPointerMove,
-        WsMouseClick,
-        WsMouseDrag,
-        WsMouseWheel,
-        WsShortcutAction,
-        WsKeyEvent,
-        WsKeepalive,
-        WsRelease,
-    ],
+    WsPointerMove
+    | WsMouseClick
+    | WsMouseDrag
+    | WsMouseWheel
+    | WsShortcutAction
+    | WsKeyEvent
+    | WsKeepalive
+    | WsRelease,
     Field(discriminator="type"),
 ]
 
