@@ -22,6 +22,7 @@ from core.remote_input.schemas import (
     AgentStatusView,
     CtlHeartbeat,
     CtlPresence,
+    CtlSnapshot,
     CtlStreamEvent,
     DisplayInfo,
     InventoryInfo,
@@ -65,6 +66,10 @@ class PresenceRegistryProtocol(Protocol):
     ) -> None: ...
 
 
+def _revision(presence: CtlPresence) -> str | None:
+    return presence.presence_rev if isinstance(presence, CtlSnapshot) else None
+
+
 def _received_at(value: bytes | str) -> datetime:
     return datetime.fromisoformat(
         value.decode("ascii") if isinstance(value, bytes) else value
@@ -89,7 +94,7 @@ class PresenceRegistry:
                 state, seen = previous
                 if (
                     state.status == "online"
-                    and state.presence_rev == beat.presence_rev
+                    and _revision(state) == beat.presence_rev
                     and (now - seen).total_seconds()
                     < settings.remote_input.presence_stale_sec
                 ):
@@ -180,7 +185,7 @@ class PresenceRegistry:
             inventory=inventory,
             stream=stream,
             last_seen_at=received_at.isoformat()
-            if presence.presence_rev
+            if _revision(presence)
             else presence.timestamp,
             stale=stale,
         )
@@ -257,7 +262,7 @@ class PresenceRegistry:
                             timestamp=presence.timestamp,
                         )
 
-            if not prev or prev[0].presence_rev != presence.presence_rev:
+            if not prev or _revision(prev[0]) != _revision(presence):
                 self._beat_seq[sn] = 0
             self._presence[sn] = (presence, now)
             view = self._build_view(sn, presence, now, now)
@@ -680,7 +685,7 @@ class RedisPresenceRegistry:
             inventory=inventory,
             stream=stream,
             last_seen_at=received_at.isoformat()
-            if presence.presence_rev
+            if _revision(presence)
             else presence.timestamp,
             stale=stale,
         )
@@ -701,7 +706,7 @@ class RedisPresenceRegistry:
             prev_at: datetime | None = None
             if prev_raw and "data" in prev_raw:
                 try:
-                    prev_p = CtlPresence.model_validate_json(prev_raw["data"])
+                    prev_p = CtlSnapshot.model_validate_json(prev_raw["data"])
                     prev_at = _received_at(prev_raw["received_at"])
                 except (ValueError, TypeError, KeyError) as parse_err:
                     log.debug("Error parsing prev presence from redis: %s", parse_err)
@@ -792,12 +797,12 @@ class RedisPresenceRegistry:
                 presence_key,
                 mapping={
                     "data": presence.model_dump_json(),
-                    "presence_rev": (presence.presence_rev or "")
+                    "presence_rev": (_revision(presence) or "")
                     if is_incoming_online
                     else "",
                     **(
                         {"beat_seq": 0}
-                        if not prev_p or prev_p.presence_rev != presence.presence_rev
+                        if not prev_p or _revision(prev_p) != _revision(presence)
                         else {}
                     ),
                     "received_at": now.isoformat(),
@@ -895,7 +900,7 @@ class RedisPresenceRegistry:
             prev_raw = await client.hgetall(presence_key)
             rec_view: AgentStatusView | None = None
             if prev_raw and "data" in prev_raw:
-                p = CtlPresence.model_validate_json(prev_raw["data"])
+                p = CtlSnapshot.model_validate_json(prev_raw["data"])
                 r_at = _received_at(prev_raw["received_at"])
                 p.stream = current_stream
                 await client.hset(
@@ -958,7 +963,7 @@ class RedisPresenceRegistry:
 
             prev_raw = await client.hgetall(presence_key)
             if prev_raw and "data" in prev_raw:
-                p = CtlPresence.model_validate_json(prev_raw["data"])
+                p = CtlSnapshot.model_validate_json(prev_raw["data"])
                 r_at = _received_at(prev_raw["received_at"])
                 p.inventory = inventory
                 await client.hset(
@@ -995,7 +1000,7 @@ class RedisPresenceRegistry:
                     last_seen_at=None,
                     stale=True,
                 )
-            presence = CtlPresence.model_validate_json(raw["data"])
+            presence = CtlSnapshot.model_validate_json(raw["data"])
             received_at = _received_at(raw["received_at"])
             async with self._lock:
                 self._presence[sn] = (presence, received_at)
@@ -1023,7 +1028,7 @@ class RedisPresenceRegistry:
 
             raw = await client.hgetall(presence_key)
             if raw and "data" in raw:
-                p = CtlPresence.model_validate_json(raw["data"])
+                p = CtlSnapshot.model_validate_json(raw["data"])
                 if p.presence_rev and p.inventory is not None:
                     return p.inventory
                 if p.screen or p.desktop_available:

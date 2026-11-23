@@ -340,7 +340,6 @@ class CtlHeartbeat(StrictBaseModel):
 
 
 class CtlPresence(StrictBaseModel):
-    presence_rev: PresenceRevision | None = None
     v: Literal[1] = 1
     type: Literal["presence"] = "presence"
     agent: Literal["l4desk"] | str = "l4desk"
@@ -356,6 +355,10 @@ class CtlPresence(StrictBaseModel):
     timestamp: str
 
 
+class CtlSnapshot(CtlPresence):
+    presence_rev: PresenceRevision | None = None
+
+
 class CtlStreamEvent(StrictBaseModel):
     v: Literal[1] = 1
     type: Literal["stream_event"] = "stream_event"
@@ -367,7 +370,7 @@ class CtlStreamEvent(StrictBaseModel):
 
 
 CtlInboundMessage = Annotated[
-    CtlAck | CtlNack | CtlPresence | CtlHeartbeat | CtlStreamEvent,
+    CtlAck | CtlNack | CtlSnapshot | CtlHeartbeat | CtlStreamEvent,
     Field(discriminator="type"),
 ]
 
