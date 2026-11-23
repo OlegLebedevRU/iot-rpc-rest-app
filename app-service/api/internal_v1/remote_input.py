@@ -294,9 +294,13 @@ async def upgrade_lease_scope(
     )
 
 
+class LeaseWithVideo(LeaseResponse):
+    video_state: CameraStateView14 | CameraStateView13 | CameraStateView12 | CameraStateView11 | CameraStateView | VideoStateView
+
+
 @router.post(
     "/lease/{lease_id}/keepalive",
-    response_model=LeaseResponse,
+    response_model=LeaseWithVideo | LeaseResponse,
 )
 async def keepalive_lease(
     lease_id: UUID,
@@ -304,11 +308,12 @@ async def keepalive_lease(
     _: Internal_Auth_dep,
     request: Request,
     wait_ack: bool = False,
-) -> LeaseResponse:
+    include_video: bool = False,
+) -> LeaseResponse | LeaseWithVideo:
     session_id = extract_caller_session_id(request)
     caller_user_id = extract_caller_user_id(request)
 
-    return await remote_input_service.keepalive(
+    result = await remote_input_service.keepalive(
         lease_id=lease_id,
         org_id=org_id,
         caller_user_id=caller_user_id,
@@ -316,6 +321,15 @@ async def keepalive_lease(
         is_superuser=is_request_superuser(request),
         wait_ack=wait_ack,
     )
+    if not include_video or not result.stream_instance_id or result.scope == "view":
+        return result
+    try:
+        video = await get_video_state(lease_id, org_id, _, request)
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            raise
+        return result
+    return LeaseWithVideo(**result.model_dump(), video_state=video)
 
 
 @router.delete(

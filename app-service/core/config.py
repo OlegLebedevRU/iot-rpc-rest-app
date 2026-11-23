@@ -450,7 +450,8 @@ class RemoteInputConfig(BaseModel):
 
 
 class DiagnosticsConfig(BaseModel):
-    implicit_console_lease: bool = True
+    # Accepted for compatibility with installed environments. Browser leases are explicit.
+    implicit_console_lease: bool = False
 
 
 class RedisConfig(BaseModel):

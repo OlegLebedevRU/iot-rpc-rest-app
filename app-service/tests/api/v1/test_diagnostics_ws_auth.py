@@ -69,27 +69,21 @@ async def test_resolve_websocket_org_id_does_not_accept_api_key() -> None:
 
 
 @pytest.mark.asyncio
-async def test_resolve_websocket_org_id_from_forwarded_header() -> None:
-    cases = [
-        ({"X-Role": "superuser", "orgId": "42"}, {}, 42),
-        ({"X-Role": "admin", "orgid": "43"}, {}, None),
-        ({"X-User-Id": "1", "orgId": "44"}, {}, None),
-        ({"jwt-role": "admin", "jwt-org": "45"}, {}, None),
-        ({"X-Role-Id": "1", "X-Org-Id": "46"}, {}, 46),
-        ({"X-Role": "superuser"}, {"org_id": "47"}, 47),
-        ({"X-Role": "superuser", "orgId": "bad"}, {}, None),
-        ({"X-Role": "l4desk_owner", "X-Org-Id": "7"}, {"org_id": "7"}, 7),
-        ({"X-Role": "l4desk_owner", "X-Org-Id": "7"}, {"org_id": "8"}, None),
-        ({"X-Role": "superuser"}, {}, None),
-        ({"orgId": "42"}, {}, None),  # Rejected because not superuser
-        ({}, {}, None),
-    ]
+async def test_resolve_websocket_org_requires_gateway_and_decision(monkeypatch) -> None:
+    from uuid import uuid4
 
-    for headers, query_params, expected in cases:
-        websocket = DummyWebSocket(headers, query_params=query_params)
-
+    gateway = str(uuid4())
+    monkeypatch.setattr(settings.auth, "internal_service_key", gateway)
+    for headers, expected in [
+        ({"X-Role": "superuser", "X-Org-Id": "7"}, None),
+        ({"X-Console-Org": "7"}, None),
+        ({"X-Internal-Service-Key": gateway}, None),
+        ({"X-Internal-Service-Key": gateway, "X-Console-Org": "7"}, 7),
+    ]:
         assert (
-            await diagnostics_api._resolve_websocket_org_id(cast(WebSocket, websocket))
+            await diagnostics_api._resolve_websocket_org_id(
+                cast(WebSocket, DummyWebSocket(headers))
+            )
             == expected
         )
 
@@ -144,8 +138,19 @@ async def test_diagnostics_ws_rejects_foreign_device_before_accept(monkeypatch) 
     assert websocket.close_code == status.WS_1008_POLICY_VIOLATION
 
 
+@pytest.fixture
+def gateway_key(monkeypatch):
+    from uuid import uuid4
+
+    key = str(uuid4())
+    monkeypatch.setattr(settings.auth, "internal_service_key", key)
+    return key
+
+
 @pytest.mark.asyncio
-async def test_diagnostics_ws_with_valid_console_lease(monkeypatch) -> None:
+async def test_diagnostics_ws_with_valid_console_lease(
+    monkeypatch, gateway_key
+) -> None:
     async def fake_allowed(*a, **k):
         return True
 
@@ -164,10 +169,12 @@ async def test_diagnostics_ws_with_valid_console_lease(monkeypatch) -> None:
 
     websocket = DummyWebSocket(
         headers={
+            "X-Internal-Service-Key": gateway_key,
+            "X-Console-Expires": str(int(datetime.now(UTC).timestamp()) + 60),
             "X-Role": "superuser",
-            "orgId": "7",
-            "X-User-Id": "su_admin",
-            "X-Session-Id": "sess_123",
+            "X-Console-Org": "7",
+            "X-Console-User": "su_admin",
+            "X-Console-Session": "sess_123",
         },
         query_params={"lease_id": str(lease.lease_id)},
     )
@@ -182,6 +189,7 @@ async def test_diagnostics_ws_with_valid_console_lease(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_owner_console_requires_matching_explicit_tenant_lease(
     monkeypatch,
+    gateway_key,
 ) -> None:
     async def fake_allowed(*a, **k):
         return True
@@ -198,10 +206,12 @@ async def test_owner_console_requires_matching_explicit_tenant_lease(
         owner_session_id="owner-session",
     )
     headers = {
+        "X-Internal-Service-Key": gateway_key,
+        "X-Console-Expires": str(int(datetime.now(UTC).timestamp()) + 60),
         "X-Role": "l4desk_owner",
-        "X-Org-Id": "7",
-        "X-User-Id": "owner",
-        "X-Session-Id": "owner-session",
+        "X-Console-Org": "7",
+        "X-Console-User": "owner",
+        "X-Console-Session": "owner-session",
     }
     owner_ws = DummyWebSocket(headers, {"lease_id": str(lease.lease_id)})
     await diagnostics_api.diagnostics_ws(
@@ -217,7 +227,7 @@ async def test_owner_console_requires_matching_explicit_tenant_lease(
     assert no_lease_ws.close_reason == "lease_required"
 
     foreign_ws = DummyWebSocket(
-        {**headers, "X-Org-Id": "8"}, {"lease_id": str(lease.lease_id)}
+        {**headers, "X-Console-Org": "8"}, {"lease_id": str(lease.lease_id)}
     )
     await diagnostics_api.diagnostics_ws(
         cast(WebSocket, foreign_ws), "SN001", cast(AsyncSession, object())
@@ -227,7 +237,9 @@ async def test_owner_console_requires_matching_explicit_tenant_lease(
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_ws_implicit_console_lease(monkeypatch) -> None:
+async def test_superuser_console_requires_explicit_lease(
+    monkeypatch, gateway_key
+) -> None:
     async def fake_allowed(*a, **k):
         return True
 
@@ -237,14 +249,15 @@ async def test_diagnostics_ws_implicit_console_lease(monkeypatch) -> None:
         return 123
 
     monkeypatch.setattr(diagnostics_api.DeviceRepo, "get_device_id", fake_get_dev)
-    monkeypatch.setattr(settings.diagnostics, "implicit_console_lease", True)
 
     websocket = DummyWebSocket(
         headers={
+            "X-Internal-Service-Key": gateway_key,
+            "X-Console-Expires": str(int(datetime.now(UTC).timestamp()) + 60),
             "X-Role": "superuser",
-            "orgId": "7",
-            "X-User-Id": "su_admin",
-            "X-Session-Id": "sess_implicit",
+            "X-Console-Org": "7",
+            "X-Console-User": "su_admin",
+            "X-Console-Session": "sess_implicit",
         },
     )
 
@@ -252,20 +265,13 @@ async def test_diagnostics_ws_implicit_console_lease(monkeypatch) -> None:
         cast(WebSocket, websocket), "SN001", cast(AsyncSession, object())
     )
 
-    assert websocket.accepted is True
-    # First message sent over WS must be {"type": "lease", "lease_id": ...}
-    assert len(websocket.sent_messages) >= 1
-    first_msg = websocket.sent_messages[0]
-    assert first_msg["type"] == "lease"
-    assert "lease_id" in first_msg
-
-    active = await lease_registry.get_active("SN001")
-    assert active is not None
-    assert active.scope == "console"
+    assert not websocket.accepted
+    assert websocket.close_reason == "lease_required"
+    assert await lease_registry.get_active("SN001") is None
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_ws_rejects_foreign_lease(monkeypatch) -> None:
+async def test_diagnostics_ws_rejects_foreign_lease(monkeypatch, gateway_key) -> None:
     async def fake_allowed(*a, **k):
         return True
 
@@ -285,10 +291,12 @@ async def test_diagnostics_ws_rejects_foreign_lease(monkeypatch) -> None:
     # Different user connects with this lease_id
     websocket = DummyWebSocket(
         headers={
+            "X-Internal-Service-Key": gateway_key,
+            "X-Console-Expires": str(int(datetime.now(UTC).timestamp()) + 60),
             "X-Role": "superuser",
-            "orgId": "7",
-            "X-User-Id": "su_admin_2",
-            "X-Session-Id": "sess_2",
+            "X-Console-Org": "7",
+            "X-Console-User": "su_admin_2",
+            "X-Console-Session": "sess_2",
         },
         query_params={"lease_id": str(lease.lease_id)},
     )
@@ -303,7 +311,9 @@ async def test_diagnostics_ws_rejects_foreign_lease(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_ws_rejects_active_stream_lease(monkeypatch) -> None:
+async def test_diagnostics_ws_rejects_active_stream_lease(
+    monkeypatch, gateway_key
+) -> None:
     async def fake_allowed(*a, **k):
         return True
 
@@ -328,10 +338,12 @@ async def test_diagnostics_ws_rejects_active_stream_lease(monkeypatch) -> None:
     # Superuser tries to connect without lease_id (implicit acquire hits conflict)
     websocket = DummyWebSocket(
         headers={
+            "X-Internal-Service-Key": gateway_key,
+            "X-Console-Expires": str(int(datetime.now(UTC).timestamp()) + 60),
             "X-Role": "superuser",
-            "orgId": "7",
-            "X-User-Id": "su_admin",
-            "X-Session-Id": "sess_su",
+            "X-Console-Org": "7",
+            "X-Console-User": "su_admin",
+            "X-Console-Session": "sess_su",
         },
     )
 
@@ -341,15 +353,17 @@ async def test_diagnostics_ws_rejects_active_stream_lease(monkeypatch) -> None:
 
     assert websocket.accepted is False
     assert websocket.close_code == 4409
-    assert websocket.close_reason == "lease_busy"
+    assert websocket.close_reason == "lease_required"
 
     # Superuser passes stream lease_id -> rejected due to scope mismatch
     ws_stream_id = DummyWebSocket(
         headers={
+            "X-Internal-Service-Key": gateway_key,
+            "X-Console-Expires": str(int(datetime.now(UTC).timestamp()) + 60),
             "X-Role": "superuser",
-            "orgId": "7",
-            "X-User-Id": "operator",
-            "X-Session-Id": "sess_op",
+            "X-Console-Org": "7",
+            "X-Console-User": "operator",
+            "X-Console-Session": "sess_op",
         },
         query_params={"lease_id": str(stream_lease.lease_id)},
     )
@@ -364,7 +378,9 @@ async def test_diagnostics_ws_rejects_active_stream_lease(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_diagnostics_ws_disconnect_grace_and_revoke(monkeypatch) -> None:
+async def test_diagnostics_ws_disconnect_grace_and_revoke(
+    monkeypatch, gateway_key
+) -> None:
     async def fake_allowed(*a, **k):
         return True
 
@@ -383,10 +399,12 @@ async def test_diagnostics_ws_disconnect_grace_and_revoke(monkeypatch) -> None:
 
     websocket = DummyWebSocket(
         headers={
+            "X-Internal-Service-Key": gateway_key,
+            "X-Console-Expires": str(int(datetime.now(UTC).timestamp()) + 60),
             "X-Role": "superuser",
-            "orgId": "7",
-            "X-User-Id": "su_admin",
-            "X-Session-Id": "sess_diag",
+            "X-Console-Org": "7",
+            "X-Console-User": "su_admin",
+            "X-Console-Session": "sess_diag",
         },
         query_params={"lease_id": str(lease.lease_id)},
     )
