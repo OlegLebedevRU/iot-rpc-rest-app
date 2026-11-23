@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import Any
+from uuid import uuid4
 
 from core.config import settings
 from core.logging_config import setup_module_logger
@@ -21,11 +23,13 @@ from core.remote_input.presence import (
 )
 from core.remote_input.schemas import (
     CtlAck,
+    CtlHeartbeat,
     CtlInboundAdapter,
     CtlInboundMessage,
     CtlNack,
     CtlPresence,
     CtlStreamEvent,
+    InventoryGetCommand,
 )
 from core.remote_input.video_control import video_control
 from core.remote_input.video_wire import load_object
@@ -113,8 +117,8 @@ def _extract_malformed_ctl_diagnostics(
                 ),
                 "reason": reason,
             }
-    except Exception:
-        pass
+    except ValueError, RecursionError:
+        log.debug("Malformed CTL diagnostic payload")
     return {
         "reason": "unparseable_json",
         "type": "unknown",
@@ -141,7 +145,9 @@ def decode_ctl_payload(payload: bytes | str | dict[str, Any]) -> DecodedCtlMessa
                     else (
                         video_wire.Error
                         if kind == "stream_event"
-                        else video_wire.Nack if kind == "nack" else None
+                        else video_wire.Nack
+                        if kind == "nack"
+                        else None
                     )
                 )
             )
@@ -210,7 +216,7 @@ async def handle_device_ctl_message(
                 message = decode(payload, sn, correlation_id)
                 return bool(await camera_runtime.submit(sn, "incoming", message))
             envelope = decode_ctl_payload(payload)
-        except Exception as exc:
+        except (ValueError, TypeError, RecursionError) as exc:
             diag = _extract_malformed_ctl_diagnostics(payload)
             log.warning(
                 "Drop invalid ctl payload from sn=%s: reason=%s command_type=%s command_id=%s latency_ms=%s transport=mqtt error=%s",
@@ -368,6 +374,23 @@ async def handle_device_ctl_message(
                     )
                 return resolved
 
+        elif isinstance(envelope, CtlHeartbeat):
+            if await p_registry.heartbeat(sn, envelope):
+                from core.remote_input.publisher import send_ctl_command
+
+                issued = int(time.time() * 1000)
+                await send_ctl_command(
+                    sn,
+                    InventoryGetCommand(
+                        command_id=uuid4(),
+                        sn=sn,
+                        issued_at_ms=issued,
+                        expires_at_ms=issued + 10000,
+                    ),
+                    ttl_ms=10000,
+                )
+            return True
+
         elif isinstance(envelope, CtlPresence):
             v2_state = (await video_control.store.get(sn)).get("stream")
             if (
@@ -391,7 +414,7 @@ async def handle_device_ctl_message(
                 else:
                     _SN_STATUS[sn].agent.online = True
 
-            changed, view = await p_registry.update(sn, envelope)
+            _, view = await p_registry.update(sn, envelope)
             await video_control.observe_presence(sn, envelope)
             if sn not in _SN_STATUS:
                 _SN_STATUS[sn] = SnStatus(online=view.online)
