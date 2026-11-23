@@ -314,6 +314,8 @@ class RabbitQXConfig(BaseModel):
         "null",
         "none",
         "etran_service",
+        "portal_watch_v1",
+        "portal_files_v1",
     }
     service_user_prefixes: list[str] = ["etran", "menubuilder"]
 

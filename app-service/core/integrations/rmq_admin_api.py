@@ -26,6 +26,8 @@ IGNORED_USERS: frozenset[str] = frozenset(
         "null",
         "none",
         "etran_service",
+        "portal_watch_v1",
+        "portal_files_v1",
     }
 )
 
