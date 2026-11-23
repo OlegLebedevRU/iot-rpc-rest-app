@@ -224,11 +224,13 @@ if _REGISTER_SUBSCRIBERS:
         )
         if accepted:
             try:
-                kind = json.loads(msg.body).get("type")
+                data = json.loads(msg.body)
+                kind = data.get("type")
             except (AttributeError, ValueError, TypeError):
                 return
             if kind == "stream_quality_report":
-                changed(sn, "quality")
+                from core.portal_changes import quality_changed
+                quality_changed(sn, data.get("stream_instance_id"), data.get("quality_revision") is not None)
             elif kind in {"camera_enrollment_hello", "camera_enrollment_proof", "camera_readiness_proof"}:
                 changed(sn, "enrollment")
             elif kind == "stream_state":
