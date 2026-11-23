@@ -170,4 +170,6 @@ async def accept_result(sn: str, payload: bytes) -> None:
         return
     value = result.model_dump_json()
     # First complete response wins. Identical broker duplicates have no side effects.
-    await client.set(f"{key}:result", value, ex=10, nx=True)
+    if await client.set(f"{key}:result", value, ex=10, nx=True):
+        from core.portal_changes import changed
+        changed(sn, "files")

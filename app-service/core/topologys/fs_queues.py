@@ -29,6 +29,7 @@ from core.topologys.declare import (
     q_result,
     q_svc,
 )
+from core.portal_changes import changed
 from core.topologys.fs_depends import Corr_id_dep, Session_dep, Sn_dep
 
 log = setup_module_logger(__name__, "topology_queues.log")
@@ -216,11 +217,22 @@ if _REGISTER_SUBSCRIBERS:
     @fs_router.subscriber(q_ctl)
     async def remote_input_ctl(msg: RabbitMessage, sn: Sn_dep, corr_id: Corr_id_dep):
         routing_key = getattr(msg, "routing_key", None) or f"dev.{sn}.ctl"
-        await handle_device_ctl_message(
+        accepted = await handle_device_ctl_message(
             routing_key=routing_key,
             payload=msg.body,
             correlation_id=str(corr_id) if corr_id else None,
         )
+        if accepted:
+            try:
+                kind = json.loads(msg.body).get("type")
+            except (AttributeError, ValueError, TypeError):
+                return
+            if kind == "stream_quality_report":
+                changed(sn, "quality")
+            elif kind in {"camera_enrollment_hello", "camera_enrollment_proof", "camera_readiness_proof"}:
+                changed(sn, "enrollment")
+            elif kind == "stream_state":
+                changed(sn, "stream")
 
     @fs_router.subscriber(q_app)
     async def app_connect_handler(
@@ -270,6 +282,7 @@ if _REGISTER_SUBSCRIBERS:
                 correlation_id=getattr(msg, "correlation_id", None),
             )
         await session.commit()
+        changed(sn, "presence")
 
     @fs_router.subscriber(q_svc)
     async def svc_connect_handler(
@@ -319,6 +332,7 @@ if _REGISTER_SUBSCRIBERS:
                 correlation_id=getattr(msg, "correlation_id", None),
             )
         await session.commit()
+        changed(sn, "presence")
 
     @fs_router.subscriber(q_device_conn_events)
     async def device_connection_events_handler(
@@ -360,6 +374,8 @@ if _REGISTER_SUBSCRIBERS:
             payload=payload,
             headers=headers,
         )
+        if device_sn:
+            changed(device_sn, "presence")
 
 
 # Логируем количество подписчиков
