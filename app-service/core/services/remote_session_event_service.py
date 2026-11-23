@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Sequence
-from dataclasses import dataclass, field
 import hashlib
 import inspect
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
@@ -203,7 +203,7 @@ class RemoteSessionEventService:
                             and res[1] is not None
                         ):
                             resolved_tenant_id = res[1]
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001 - Existing best-effort reporting boundary.
                 log.debug("Device/tenant resolution fallback for sn=%s: %s", sn, e)
 
         return resolved_tenant_id, resolved_device_id
@@ -744,8 +744,9 @@ class RemoteSessionEventService:
         sn: str,
     ) -> RemoteSession | None:
         """Find any currently active, starting, requested, or stopping session for the device sn."""
-        if hasattr(session, "sessions") and isinstance(session.sessions, dict):
-            for s in session.sessions.values():
+        sessions = getattr(session, "sessions", None)
+        if isinstance(sessions, dict):
+            for s in sessions.values():
                 if s.sn == sn and s.status in self.ACTIVE_LIFECYCLE_STATES:
                     return s
 
@@ -759,7 +760,7 @@ class RemoteSessionEventService:
         )
         try:
             return await session.scalar(stmt)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - Existing best-effort reporting boundary.
             log.debug("Error querying active session for sn=%s: %s", sn, e)
             return None
 
@@ -794,6 +795,42 @@ class RemoteSessionEventService:
         elapsed = (curr - last_act).total_seconds()
         return elapsed >= timeout
 
+    async def cached_heartbeat(self, session_id: str) -> datetime | None:
+        from redis.exceptions import RedisError
+
+        from core.redis_helper import redis_helper
+
+        try:
+            raw = await redis_helper.get_client().get(
+                "app1:session:heartbeat:" + session_id
+            )
+            if raw is not None:
+                return datetime.fromtimestamp(float(raw), UTC)
+        except RedisError, ValueError, OverflowError, OSError:
+            log.debug("Session heartbeat cache unavailable", exc_info=True)
+        return None
+
+    async def _stale_under_lock(self, session, rec, now, timeout):
+        if not self.is_session_stale(rec, now=now, stale_timeout_sec=timeout):
+            return False
+        # Serialize the final eviction decision with a concurrent heartbeat.
+        locked = await session.scalar(
+            select(RemoteSession)
+            .where(RemoteSession.session_id == rec.session_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if locked is None or not self.is_session_stale(
+            locked, now=now, stale_timeout_sec=timeout
+        ):
+            return False
+        stamp = await self.cached_heartbeat(rec.session_id)
+        if stamp is not None:
+            return (now - stamp).total_seconds() >= timeout
+        # A lost cache may hide up to one checkpoint interval of accepted beats.
+        grace = min(30, self.stale_timeout_sec / 2) if locked.last_heartbeat_at else 0
+        return self.is_session_stale(locked, now=now, stale_timeout_sec=timeout + grace)
+
     async def cleanup_stale_sessions(
         self,
         session: AsyncSession,
@@ -807,7 +844,14 @@ class RemoteSessionEventService:
         evicted: list[RemoteSession] = []
         now = datetime.now(UTC)
         for s in active_sessions:
-            if self.is_session_stale(s, now=now, stale_timeout_sec=stale_timeout_sec):
+            if await self._stale_under_lock(
+                session,
+                s,
+                now,
+                self.stale_timeout_sec
+                if stale_timeout_sec is None
+                else stale_timeout_sec,
+            ):
                 log.warning("Cleaning up stale session %s on sn=%s", s.session_id, s.sn)
                 await self.mark_session_failed(
                     session,
@@ -852,7 +896,9 @@ class RemoteSessionEventService:
             # 3. Check for existing active/starting/requested/stopping session on this device
             active_existing = await self.get_active_session_for_sn(session, data.sn)
             if active_existing is not None:
-                if self.is_session_stale(active_existing):
+                if await self._stale_under_lock(
+                    session, active_existing, datetime.now(UTC), self.stale_timeout_sec
+                ):
                     log.warning(
                         "Evicting stale session %s on sn=%s (status=%s) before creating new session",
                         active_existing.session_id,
@@ -1192,11 +1238,9 @@ class RemoteSessionEventService:
                 await self._teardown_video_session(rec, reason=data.reason)
         except Exception as exc:
             await session.commit()
-            log.error(
-                "Resource teardown failed; session %s remains stopping and can be retried: %s",
+            log.exception(
+                "Resource teardown failed; session %s remains stopping and can be retried",
                 rec.session_id,
-                exc,
-                exc_info=True,
             )
             raise RemoteSessionTeardownError(rec, exc) from exc
 
@@ -1390,11 +1434,32 @@ class RemoteSessionEventService:
         session: AsyncSession,
         session_id: str,
     ) -> RemoteSession | None:
-        rec = await self.get_session(session, session_id)
-        if rec is None:
-            return None
-        rec.last_heartbeat_at = datetime.now(UTC)
-        await session.flush()
+        from redis.exceptions import RedisError
+        from sqlalchemy.orm.attributes import set_committed_value
+
+        from core.redis_helper import redis_helper
+
+        rec = await self.get_session_for_update(session, session_id)
+        if rec is None or rec.status not in self.ACTIVE_LIFECYCLE_STATES:
+            return rec
+        now = datetime.now(UTC)
+        previous = rec.last_heartbeat_at
+        checkpoint = previous is None or now.timestamp() - previous.replace(
+            tzinfo=UTC
+        ).timestamp() >= min(30, self.stale_timeout_sec / 2)
+        try:
+            await redis_helper.get_client().set(
+                "app1:session:heartbeat:" + session_id,
+                str(now.timestamp()),
+                ex=max(1, int(self.stale_timeout_sec * 2)),
+            )
+        except RedisError:
+            checkpoint = True
+        if checkpoint:
+            rec.last_heartbeat_at = now
+            await session.flush()
+        else:
+            set_committed_value(rec, "last_heartbeat_at", now)
         return rec
 
     # ── Event Feed Pagination Query ──────────────────────────────────────────────
@@ -1574,17 +1639,16 @@ async def safe_record_device_online(
 ) -> None:
     """Safely record device_online in background without disrupting message transport."""
     try:
-        async with db_helper.session_factory() as session:
-            async with session.begin():
-                await remote_session_event_service.record_device_online(
-                    session,
-                    sn=sn,
-                    tenant_id=tenant_id,
-                    terminal_id=terminal_id,
-                    device_id=device_id,
-                    correlation_id=correlation_id,
-                )
-    except Exception as exc:
+        async with db_helper.session_factory() as session, session.begin():
+            await remote_session_event_service.record_device_online(
+                session,
+                sn=sn,
+                tenant_id=tenant_id,
+                terminal_id=terminal_id,
+                device_id=device_id,
+                correlation_id=correlation_id,
+            )
+    except Exception as exc:  # noqa: BLE001 - Existing best-effort reporting boundary.
         log.warning(
             "Failed to record background device_online event for sn=%s: %s", sn, exc
         )

@@ -61,7 +61,10 @@ async def run_worker() -> None:
         # connected, aio-pika's existing robust connection handles reconnects.
         await asyncio.wait_for(fs_router.broker.start(), timeout=15)
         log.info("Dedicated camera issuer started")
-        await camera_runtime_loop(runtime)
+        from core import worker_wake
+
+        async with worker_wake.listen(worker_wake.CAMERA) as wait:
+            await camera_runtime_loop(runtime, wait)
     finally:
         # Cancellation leaves the durable owner deadline intact. A successor
         # must perform the existing fenced epoch takeover, never resume clocks.

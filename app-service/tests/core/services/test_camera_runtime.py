@@ -452,7 +452,9 @@ async def test_proof_exact_correlation(environment, field):
         else (
             "b" * 64
             if field == "binding_hash"
-            else "other" if field == "sn" else str(uuid4())
+            else "other"
+            if field == "sn"
+            else str(uuid4())
         )
     )
     bad = {**proof, field: different}
@@ -1080,3 +1082,17 @@ def test_independent_watchdog_exits_a_stalled_worker(monkeypatch):
         worker.watch_progress(
             SimpleNamespace(worker_progress=0), SimpleNamespace(wait=lambda _: False)
         )
+
+
+@pytest.mark.anyio
+async def test_idle_owner_keeps_ticks_local_and_refreshes_fence(environment):
+    e = environment
+    await e.runtime.pump(SN)
+    before = copy.deepcopy(e.store.row)
+    e.clock.advance(4000)
+    await e.runtime.pump(SN)
+    assert e.store.row == before
+    e.clock.advance(2000)
+    await e.runtime.pump(SN)
+    assert e.store.row.state == before.state
+    assert e.store.row.owner_until > before.owner_until

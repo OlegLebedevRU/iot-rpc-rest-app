@@ -48,10 +48,14 @@ class EventRepository:
                 await enqueue_inventory(
                     session,
                     device_id=event.device_id,
-                    payload=event.payload,
+                    payload=event.payload or {},
                     correlation_data=correlation_data,
                 )
             await session.commit()
+            if event.event_type_code == 75:
+                from core import worker_wake
+
+                await worker_wake.notify(worker_wake.INVENTORY)
             return True
         except IntegrityError as e:
             await session.rollback()
@@ -66,10 +70,13 @@ class EventRepository:
                     await enqueue_inventory(
                         session,
                         device_id=event.device_id,
-                        payload=event.payload,
+                        payload=event.payload or {},
                         correlation_data=correlation_data,
                     )
                     await session.commit()
+                    from core import worker_wake
+
+                    await worker_wake.notify(worker_wake.INVENTORY)
                 log.info(
                     "Idempotent duplicate: device_id=%d dev_event_id=%d — skipped",
                     event.device_id,
@@ -293,7 +300,7 @@ class EventRepository:
                     .values(device_id=dev_id, last_event_id=max_id)
                     .on_conflict_do_update(
                         index_elements=["device_id"],
-                        set_=dict(last_event_id=max_id),
+                        set_={"last_event_id": max_id},
                     )
                 )
                 await session.execute(upsert_stmt)
